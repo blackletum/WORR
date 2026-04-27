@@ -743,6 +743,13 @@ static void CG_SCR_DrawChar(int x, int y, int scale, int num, bool shadow)
     int draw_flags = shadow ? UI_DROPSHADOW : 0;
     int glyph_scale = scale > 0 ? scale : 1;
 
+    if (Font_DrawBlackBackgroundEnabled()) {
+        R_DrawFill32(x - glyph_scale, y - glyph_scale,
+                     CONCHAR_WIDTH * glyph_scale + glyph_scale * 2,
+                     CONCHAR_HEIGHT * glyph_scale + glyph_scale * 2,
+                     COLOR_BLACK);
+    }
+
     R_DrawStretchChar(x, y,
                       CONCHAR_WIDTH * glyph_scale,
                       CONCHAR_HEIGHT * glyph_scale,
@@ -752,6 +759,10 @@ static void CG_SCR_DrawChar(int x, int y, int scale, int num, bool shadow)
 static void CG_SCR_DrawCharStretch(int x, int y, int w, int h, int flags, int ch, const rgba_t *color)
 {
     color_t draw_color = apply_scr_alpha(color ? *color : COLOR_WHITE);
+    if (Font_DrawBlackBackgroundEnabled()) {
+        int pad = max(1, min(max(w, h), CONCHAR_HEIGHT) / CONCHAR_HEIGHT);
+        R_DrawFill32(x - pad, y - pad, w + pad * 2, h + pad * 2, COLOR_BLACK);
+    }
     R_DrawStretchChar(x, y, w, h, flags, ch, draw_color, scr.ui_font_pic);
 }
 

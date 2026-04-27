@@ -143,8 +143,8 @@ static std::vector<font_t *> g_fonts;
 static int g_font_seq = 0;
 static cvar_t *cl_debug_fonts = nullptr;
 static cvar_t *cl_font_scale_boost = nullptr;
-static cvar_t *cl_font_draw_black_background = nullptr;
-static cvar_t *ui_acc_contrast = nullptr;
+static cvar_t *ui_high_visibility_text = nullptr;
+static cvar_t *ui_text_typeface = nullptr;
 static cvar_t *cl_font_fallback_kfont = nullptr;
 static cvar_t *cl_font_fallback_legacy = nullptr;
 
@@ -191,18 +191,26 @@ static float font_scale_boost(void) {
                              : 1.5f;
 }
 
-static bool font_draw_black_background_enabled(void) {
-	if (!cl_font_draw_black_background) {
-		cl_font_draw_black_background =
-			Cvar_Get("cl_font_draw_black_background", "1", CVAR_ARCHIVE);
-	}
-	if (cl_font_draw_black_background &&
-		Cvar_ClampInteger(cl_font_draw_black_background, 0, 1) != 0)
-		return true;
+static bool font_high_visibility_text_enabled(void) {
+  if (!ui_high_visibility_text)
+    ui_high_visibility_text =
+        Cvar_Get("ui_high_visibility_text", "1", CVAR_ARCHIVE);
+  return ui_high_visibility_text &&
+         Cvar_ClampInteger(ui_high_visibility_text, 0, 1) != 0;
+}
 
-	if (!ui_acc_contrast)
-		ui_acc_contrast = Cvar_WeakGet("ui_acc_contrast");
-	return ui_acc_contrast && Cvar_ClampInteger(ui_acc_contrast, 0, 1) != 0;
+static font_typeface_t font_requested_typeface(void) {
+  if (!ui_text_typeface)
+    ui_text_typeface = Cvar_Get("ui_text_typeface", "2", CVAR_ARCHIVE);
+  int mode = ui_text_typeface
+                 ? Cvar_ClampInteger(ui_text_typeface, FONT_TYPEFACE_LEGACY,
+                                     FONT_TYPEFACE_TRUETYPE)
+                 : FONT_TYPEFACE_TRUETYPE;
+  return static_cast<font_typeface_t>(mode);
+}
+
+static bool font_draw_black_background_enabled(void) {
+  return font_high_visibility_text_enabled();
 }
 
 static bool font_uses_ttf_layout_fast_path(const font_t *font) {
@@ -1281,6 +1289,16 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
   if (virtual_line_height <= 0)
     virtual_line_height = CONCHAR_HEIGHT;
 
+  const char *load_path = path;
+  font_typeface_t typeface = Font_EffectiveTypeface();
+  if (typeface == FONT_TYPEFACE_LEGACY) {
+    if (fallback_legacy && *fallback_legacy)
+      load_path = fallback_legacy;
+  } else if (typeface == FONT_TYPEFACE_KEX) {
+    if (fallback_kfont && *fallback_kfont)
+      load_path = fallback_kfont;
+  }
+
   font_t *font = new font_t();
   font->id = ++g_font_seq;
   font->virtual_line_height = virtual_line_height;
@@ -1288,9 +1306,9 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
   font->fixed_advance = fixed_advance > 0 ? fixed_advance : 0;
   font->registered = register_font;
 
-  if (font_ext_is(path, "ttf") || font_ext_is(path, "otf")) {
+  if (font_ext_is(load_path, "ttf") || font_ext_is(load_path, "otf")) {
 #if USE_SDL3_TTF
-    if (font_load_ttf(font, path)) {
+    if (font_load_ttf(font, load_path)) {
       if (fallback_kfont && *fallback_kfont) {
         font->fallback_kfont = font_load_internal(
             fallback_kfont, virtual_line_height, pixel_scale, fixed_advance,
@@ -1327,9 +1345,9 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
     }
     font->unit_scale =
         (float)(virtual_line_height * font->pixel_scale) / (float)CONCHAR_HEIGHT;
-  } else if (font_ext_is(path, "kfont")) {
+  } else if (font_ext_is(load_path, "kfont")) {
     font->kind = FONT_KFONT;
-    if (!font_load_kfont(font, path)) {
+    if (!font_load_kfont(font, load_path)) {
       font->kind = FONT_LEGACY;
       font->legacy_handle = font_register_legacy(fallback_legacy, fallback_legacy);
       if (!font->legacy_handle) {
@@ -1345,7 +1363,7 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
     }
   } else {
     font->kind = FONT_LEGACY;
-    font->legacy_handle = font_register_legacy(path, fallback_legacy);
+    font->legacy_handle = font_register_legacy(load_path, fallback_legacy);
     if (!font->legacy_handle) {
       delete font;
       return nullptr;
@@ -1487,6 +1505,7 @@ void Font_Init(void) {
   (void)font_debug_enabled();
   (void)font_scale_boost();
   (void)font_draw_black_background_enabled();
+  (void)font_requested_typeface();
 	if (!cl_font_fallback_kfont)
 		cl_font_fallback_kfont =
 			Cvar_Get("cl_font_fallback_kfont", k_default_font_fallback_kfont, CVAR_ARCHIVE);
@@ -1878,6 +1897,27 @@ int Font_LineHeight(const font_t *font, int scale) {
 
 bool Font_DrawBlackBackgroundEnabled(void) {
   return font_draw_black_background_enabled();
+}
+
+bool Font_HighVisibilityTextEnabled(void) {
+  return font_high_visibility_text_enabled();
+}
+
+font_typeface_t Font_EffectiveTypeface(void) {
+  if (font_high_visibility_text_enabled())
+    return FONT_TYPEFACE_TRUETYPE;
+  return font_requested_typeface();
+}
+
+int Font_SettingsGeneration(void) {
+  (void)font_high_visibility_text_enabled();
+  (void)font_requested_typeface();
+  int high_vis_count =
+      ui_high_visibility_text ? ui_high_visibility_text->modified_count : 0;
+  int typeface_count = ui_text_typeface ? ui_text_typeface->modified_count : 0;
+  return (high_vis_count * 31) ^ (typeface_count * 131) ^
+         ((int)Font_EffectiveTypeface() * 17) ^
+         (Font_HighVisibilityTextEnabled() ? 1 : 0);
 }
 
 bool Font_GetDebugMetrics(const font_t *font, int scale,

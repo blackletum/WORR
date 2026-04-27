@@ -173,15 +173,15 @@ static void DrawMainMenuBackdrop(int menuTop, int menuBottom)
         return;
 
     DrawVerticalGradientFill(0, menuTop, uis.width, height,
-                             COLOR_RGBA(20, 24, 28, 255),
-                             COLOR_RGBA(54, 40, 28, 255),
+                             COLOR_RGBA(5, 8, 10, 255),
+                             COLOR_RGBA(12, 16, 18, 255),
                              48);
 
     int horizonTop = menuTop + Q_rint(height * 0.18f);
     int horizonHeight = max(1, Q_rint(height * 0.42f));
     DrawVerticalGradientFill(0, horizonTop, uis.width, horizonHeight,
-                             COLOR_RGBA(118, 82, 40, 180),
-                             COLOR_RGBA(28, 32, 36, 40),
+                             COLOR_RGBA(16, 28, 24, 255),
+                             COLOR_RGBA(8, 10, 12, 255),
                              28);
 
     int centerGlowWidth = max(320, Q_rint(uis.width * 0.42f));
@@ -189,8 +189,8 @@ static void DrawMainMenuBackdrop(int menuTop, int menuBottom)
     int centerGlowX = (uis.width - centerGlowWidth) / 2;
     int centerGlowY = menuTop + Q_rint(height * 0.24f);
     DrawVerticalGradientFill(centerGlowX, centerGlowY, centerGlowWidth, centerGlowHeight,
-                             COLOR_RGBA(168, 126, 62, 96),
-                             COLOR_RGBA(22, 24, 28, 32),
+                             COLOR_RGBA(18, 32, 28, 255),
+                             COLOR_RGBA(8, 10, 12, 255),
                              20);
 
     int panelWidth = max(360, Q_rint(uis.width * 0.42f));
@@ -198,11 +198,11 @@ static void DrawMainMenuBackdrop(int menuTop, int menuBottom)
     int panelHeight = max(220, Q_rint(height * 0.34f));
     int panelX = (uis.width - panelWidth) / 2;
     int panelY = menuTop + Q_rint(height * 0.34f);
-    R_DrawFill32(panelX, panelY, panelWidth, panelHeight, COLOR_RGBA(18, 22, 26, 220));
-    R_DrawFill32(panelX, panelY, panelWidth, 1, COLOR_RGBA(188, 138, 74, 128));
-    R_DrawFill32(panelX, panelY + panelHeight - 1, panelWidth, 1, COLOR_RGBA(188, 138, 74, 96));
-    R_DrawFill32(panelX, panelY, 1, panelHeight, COLOR_RGBA(110, 92, 68, 96));
-    R_DrawFill32(panelX + panelWidth - 1, panelY, 1, panelHeight, COLOR_RGBA(110, 92, 68, 96));
+    R_DrawFill32(panelX, panelY, panelWidth, panelHeight, COLOR_RGBA(6, 9, 11, 255));
+    R_DrawFill32(panelX, panelY, panelWidth, 1, COLOR_RGBA(72, 116, 82, 255));
+    R_DrawFill32(panelX, panelY + panelHeight - 1, panelWidth, 1, COLOR_RGBA(52, 78, 60, 255));
+    R_DrawFill32(panelX, panelY, 1, panelHeight, COLOR_RGBA(36, 58, 44, 255));
+    R_DrawFill32(panelX + panelWidth - 1, panelY, 1, panelHeight, COLOR_RGBA(36, 58, 44, 255));
 
     int topShade = max(1, Q_rint(height * 0.12f));
     int bottomShade = max(1, Q_rint(height * 0.22f));

@@ -159,12 +159,36 @@
         { "type": "action", "label": "video setup", "command": "pushmenu video" },
         { "type": "action", "label": "multi-monitor", "command": "pushmenu multimonitor" },
         { "type": "action", "label": "performance", "command": "pushmenu performance" },
+        { "type": "action", "label": "accessibility", "command": "pushmenu accessibility" },
         { "type": "action", "label": "sound setup", "command": "pushmenu sound" },
         { "type": "action", "label": "effects setup", "command": "pushmenu effects" },
         { "type": "action", "label": "screen setup", "command": "pushmenu screen" },
         { "type": "action", "label": "language", "command": "pushmenu language" },
         { "type": "action", "label": "download options", "command": "pushmenu downloads" },
         { "type": "action", "label": "address book", "command": "pushmenu addressbook" }
+      ]
+    },
+    {
+      "name": "accessibility",
+      "title": "Accessibility",
+      "items": [
+        {
+          "type": "checkbox",
+          "label": "high-visibility text",
+          "cvar": "ui_high_visibility_text",
+          "status": "Adds black text backgrounds and forces TrueType"
+        },
+        {
+          "type": "dropdown",
+          "label": "typeface",
+          "cvar": "ui_text_typeface",
+          "pairs": [
+            { "label": "legacy", "value": "0" },
+            { "label": "KEX", "value": "1" },
+            { "label": "TrueType", "value": "2" }
+          ],
+          "status": "High-visibility text always uses TrueType"
+        }
       ]
     },
     {

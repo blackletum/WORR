@@ -118,8 +118,8 @@ static cvar_t *cg_maxlines;
 static cvar_t *cg_maxlines_legacy;
 static cvar_t *con_notifytime;
 static cvar_t *con_notifylines;
-static cvar_t *ui_acc_contrast;
-static cvar_t* ui_acc_alttypeface;
+static cvar_t *ui_high_visibility_text;
+static cvar_t *ui_text_typeface;
 static cvar_t *cg_obituary_time;
 static cvar_t *cg_obituary_time_legacy;
 static cvar_t *cg_obituary_fade;
@@ -140,6 +140,23 @@ static cvar_t *cl_dlight_debug_dropped;
 static cvar_t *cl_dlight_debug_shadow_requested;
 static cvar_t *cl_dlight_debug_shadow_strict_requested;
 static cvar_t *cl_dlight_draw_debug;
+
+static bool CG_HighVisibilityText(void)
+{
+    return ui_high_visibility_text && ui_high_visibility_text->integer != 0;
+}
+
+static bool CG_UseFontText(void)
+{
+    if (CG_HighVisibilityText())
+        return true;
+    int typeface = ui_text_typeface ? ui_text_typeface->integer : 2;
+    if (typeface < 0)
+        typeface = 0;
+    if (typeface > 2)
+        typeface = 2;
+    return typeface != 0;
+}
 
 // static temp data used for hud
 static struct
@@ -1094,9 +1111,9 @@ static void CG_DrawNotify(int32_t isplit, vrect_t hud_vrect, vrect_t hud_safe, i
     
     y = (hud_vrect.y * scale) + hud_safe.y;
 
-    cgi.SCR_SetAltTypeface(ui_acc_alttypeface->integer && true);
+    cgi.SCR_SetAltTypeface(false);
 
-    if (ui_acc_contrast->integer)
+    if (CG_HighVisibilityText())
     {
         for (auto& msg : data.notify)
         {
@@ -2895,15 +2912,15 @@ static int CG_DrawHUDString (const char *string, int x, int y, int centerwidth, 
 
         vec2_t size;
         
-        if (cg_usekfont->integer)
+        if (CG_UseFontText())
             size = cgi.SCR_MeasureFontString(line, scale);
         int visible_width = width;
-        if (!cg_usekfont->integer)
+        if (!CG_UseFontText())
             visible_width = static_cast<int>(CG_StrlenNoColor(line, static_cast<size_t>(width)));
 
         if (centerwidth)
         {
-            if (!cg_usekfont->integer)
+            if (!CG_UseFontText())
                 x = margin + ((centerwidth - visible_width*CONCHAR_WIDTH*scale))/2;
             else
                 x = margin + ((centerwidth - size.x))/2;
@@ -2911,7 +2928,7 @@ static int CG_DrawHUDString (const char *string, int x, int y, int centerwidth, 
         else
             x = margin;
 
-        if (!cg_usekfont->integer)
+        if (!CG_UseFontText())
         {
             rgba_t base_color = _xor ? alt_color : rgba_white;
             CG_DrawStringColored(x, y, scale, line, base_color, shadow);
@@ -2926,7 +2943,7 @@ static int CG_DrawHUDString (const char *string, int x, int y, int centerwidth, 
         {
             string++;   // skip the \n
             x = margin;
-            if (!cg_usekfont->integer)
+            if (!CG_UseFontText())
                 y += CONCHAR_WIDTH * scale;
             else
                 // TODO
@@ -2950,14 +2967,14 @@ static int CG_DrawCenterHUDString (const char *string, int x, int y, int centerw
 
         vec2_t size;
 
-        if (cg_usekfont->integer)
+        if (CG_UseFontText())
             size = cgi.SCR_MeasureCenterFontString(line, scale);
         int visible_width = width;
-        if (!cg_usekfont->integer)
+        if (!CG_UseFontText())
             visible_width = static_cast<int>(CG_StrlenNoColor(line, static_cast<size_t>(width)));
 
         if (centerwidth) {
-            if (!cg_usekfont->integer)
+            if (!CG_UseFontText())
                 x = margin + ((centerwidth - visible_width * CONCHAR_WIDTH * scale)) / 2;
             else
                 x = margin + ((centerwidth - size.x)) / 2;
@@ -2965,7 +2982,7 @@ static int CG_DrawCenterHUDString (const char *string, int x, int y, int centerw
             x = margin;
         }
 
-        if (!cg_usekfont->integer) {
+        if (!CG_UseFontText()) {
             rgba_t base_color = _xor ? alt_color : rgba_white;
             CG_DrawStringColored(x, y, scale, line, base_color, shadow);
         } else {
@@ -2977,7 +2994,7 @@ static int CG_DrawCenterHUDString (const char *string, int x, int y, int centerw
         if (*string) {
             string++;
             x = margin;
-            if (!cg_usekfont->integer)
+            if (!CG_UseFontText())
                 y += CONCHAR_WIDTH * scale;
             else
                 y += 10 * scale;
@@ -3234,8 +3251,7 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
     else
         y += 48 * scale;
 
-    int lineHeight = (cg_usekfont->integer ? 10 : 8) * scale;
-    if (ui_acc_alttypeface->integer) lineHeight *= 1.5f;
+    int lineHeight = (CG_UseFontText() ? 10 : 8) * scale;
 
     // easy!
     if (center.instant)
@@ -3244,14 +3260,13 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
         {
             auto &line = center.lines[i];
 
-            cgi.SCR_SetAltTypeface(ui_acc_alttypeface->integer && true);
+            cgi.SCR_SetAltTypeface(false);
 
-            if (ui_acc_contrast->integer && line.length())
+            if (CG_HighVisibilityText() && line.length())
             {
                 vec2_t sz = cgi.SCR_MeasureCenterFontString(line.c_str(), scale);
                 sz.x += 10; // extra padding for black bars
-                int barY = ui_acc_alttypeface->integer ? y - 8 : y;
-                cgi.SCR_DrawColorPic((hud_vrect.x + hud_vrect.width / 2) * scale - (sz.x / 2), barY, sz.x, lineHeight, "_white", rgba_black);
+                cgi.SCR_DrawColorPic((hud_vrect.x + hud_vrect.width / 2) * scale - (sz.x / 2), y, sz.x, lineHeight, "_white", rgba_black);
             }
             CG_DrawCenterHUDString(line.c_str(), (hud_vrect.x + hud_vrect.width/2 + -160) * scale, y, (320 / 2) * 2 * scale, 0, scale);
 
@@ -3306,7 +3321,7 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
 
     for (size_t i = 0; i < center.lines.size(); i++)
     {
-        cgi.SCR_SetAltTypeface(ui_acc_alttypeface->integer && true);
+        cgi.SCR_SetAltTypeface(false);
 
         auto &line = center.lines[i];
 
@@ -3319,12 +3334,11 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
 
         int blinky_x;
 
-        if (ui_acc_contrast->integer && line.length())
+        if (CG_HighVisibilityText() && line.length())
         {
             vec2_t sz = cgi.SCR_MeasureCenterFontString(line.c_str(), scale);
             sz.x += 10; // extra padding for black bars
-            int barY = ui_acc_alttypeface->integer ? y - 8 : y;
-            cgi.SCR_DrawColorPic((hud_vrect.x + hud_vrect.width / 2) * scale - (sz.x / 2), barY, sz.x, lineHeight, "_white", rgba_black);
+            cgi.SCR_DrawColorPic((hud_vrect.x + hud_vrect.width / 2) * scale - (sz.x / 2), y, sz.x, lineHeight, "_white", rgba_black);
         }
         
         if (buffer[0])
@@ -3334,7 +3348,7 @@ static void CG_DrawCenterString( const player_state_t *ps, const vrect_t &hud_vr
 
         cgi.SCR_SetAltTypeface(false);
 
-        if (i == center.current_line && !ui_acc_alttypeface->integer)
+        if (i == center.current_line)
             cgi.SCR_DrawChar(blinky_x, y, scale, 10 + ((cgi.CL_ClientRealTime() >> 8) & 1), true);
 
         y += lineHeight;
@@ -3632,19 +3646,19 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
             {
                 ping = atoi(token);
 
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x + 32 * scale, y, scale, cgi.CL_GetClientName(value));
                 else
                     cgi.SCR_DrawFontString(cgi.CL_GetClientName(value), x + 32 * scale, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
                 
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x + 32 * scale, y + 10 * scale, scale, G_Fmt("{}", score).data(), true);
                 else
                     cgi.SCR_DrawFontString(G_Fmt("{}", score).data(), x + 32 * scale, y + (10 - font_y_offset) * scale, scale, rgba_white, true, text_align_t::LEFT);
 
                 cgi.SCR_DrawPic(x + 96 * scale, y + 10 * scale, 9 * scale, 9 * scale, "ping");
                 
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x + 73 * scale + 32 * scale, y + 10 * scale, scale, G_Fmt("{}", ping).data());
                 else
                     cgi.SCR_DrawFontString (G_Fmt("{}", ping).data(), x + 107 * scale, y + (10 - font_y_offset) * scale, scale, rgba_white, true, text_align_t::LEFT);
@@ -3868,7 +3882,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
 
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x, y, scale, cgi.get_configString(index));
                 else
                     cgi.SCR_DrawFontString(cgi.get_configString(index), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -3889,7 +3903,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
             token = COM_Parse (&s);
             if (!skip_depth)
             {
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x, y, scale, token);
                 else
                     cgi.SCR_DrawFontString(token, x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -3910,7 +3924,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
             token = COM_Parse (&s);
             if (!skip_depth)
             {
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x, y, scale, token, true);
                 else
                     cgi.SCR_DrawFontString(token, x, y - (font_y_offset * scale), scale, alt_color, true, text_align_t::LEFT);
@@ -3982,7 +3996,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
 
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x, y, scale, cgi.Localize(cgi.get_configString(index), nullptr, 0));
                 else
                     cgi.SCR_DrawFontString(cgi.Localize(cgi.get_configString(index), nullptr, 0), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -4007,7 +4021,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 if (index < 0 || index >= MAX_CONFIGSTRINGS)
                     cgi.Com_Error("Bad stat_string index");
                 const char *s = cgi.Localize(cgi.get_configString(index), nullptr, 0);
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x - (static_cast<int>(CG_StrlenNoColor(s, strlen(s))) * CONCHAR_WIDTH * scale), y, scale, s);
                 else
                 {
@@ -4108,7 +4122,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
             
             if (!skip_depth)
             {
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x, y, scale, cgi.Localize(arg_tokens[0], arg_buffers, num_args));
                 else
                     cgi.SCR_DrawFontString(cgi.Localize(arg_tokens[0], arg_buffers, num_args), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -4168,10 +4182,10 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 int xOffs = 0;
                 if (rightAlign)
                 {
-                    xOffs = cg_usekfont->integer ? cgi.SCR_MeasureFontString(locStr, scale).x : (static_cast<int>(CG_StrlenNoColor(locStr, strlen(locStr))) * CONCHAR_WIDTH * scale);
+                    xOffs = CG_UseFontText() ? cgi.SCR_MeasureFontString(locStr, scale).x : (static_cast<int>(CG_StrlenNoColor(locStr, strlen(locStr))) * CONCHAR_WIDTH * scale);
                 }
 
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString (x - xOffs, y, scale, locStr, green);
                 else
                     cgi.SCR_DrawFontString(locStr, x - xOffs, y - (font_y_offset * scale), scale, green ? alt_color : rgba_white, true, text_align_t::LEFT);
@@ -4198,8 +4212,8 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                 arg_buffers[0] = G_Fmt("{:02}:{:02}", (remaining_ms / 1000) / 60, (remaining_ms / 1000) % 60).data();
 
                 const char *locStr = cgi.Localize("$g_score_time", arg_buffers, 1);
-                int xOffs = cg_usekfont->integer ? cgi.SCR_MeasureFontString(locStr, scale).x : (static_cast<int>(CG_StrlenNoColor(locStr, strlen(locStr))) * CONCHAR_WIDTH * scale);
-                if (!cg_usekfont->integer)
+                int xOffs = CG_UseFontText() ? cgi.SCR_MeasureFontString(locStr, scale).x : (static_cast<int>(CG_StrlenNoColor(locStr, strlen(locStr))) * CONCHAR_WIDTH * scale);
+                if (!CG_UseFontText())
                     CG_DrawString (x - xOffs, y, scale, locStr, green);
                 else
                     cgi.SCR_DrawFontString(locStr, x - xOffs, y - (font_y_offset * scale), scale, green ? alt_color : rgba_white, true, text_align_t::LEFT);
@@ -4319,7 +4333,7 @@ static void CG_ExecuteLayoutString (const char *s, vrect_t hud_vrect, vrect_t hu
                     cgi.Com_Error("Bad stat_string index");
                 index = ps->stats[index] - 1;
 
-                if (!cg_usekfont->integer)
+                if (!CG_UseFontText())
                     CG_DrawString(x, y, scale, cgi.CL_GetClientName(index));
                 else
                     cgi.SCR_DrawFontString(cgi.CL_GetClientName(index), x, y - (font_y_offset * scale), scale, rgba_white, true, text_align_t::LEFT);
@@ -4558,7 +4572,7 @@ static void CG_DrawInventory(const player_state_t *ps, const std::array<int16_t,
                 cgi.SCR_DrawChar(x-8, y, scale, 15, false);
         }
 
-        if (!cg_usekfont->integer)
+        if (!CG_UseFontText())
         {
             CG_DrawString(x, y, scale,
                 G_Fmt("{:3} {}", inventory[item],
@@ -5319,8 +5333,8 @@ void CG_InitScreen()
     cg_obituary_time_legacy = cgi.cvar("cl_obituary_time", cg_obituary_time->string, CVAR_NOFLAGS);
     cg_obituary_fade = cgi.cvar("cg_obituary_fade", "200", CVAR_ARCHIVE);
     cg_obituary_fade_legacy = cgi.cvar("cl_obituary_fade", cg_obituary_fade->string, CVAR_NOFLAGS);
-	ui_acc_contrast = cgi.cvar ("ui_acc_contrast", "1",   CVAR_NOFLAGS);
-    ui_acc_alttypeface = cgi.cvar("ui_acc_alttypeface", "0", CVAR_NOFLAGS);
+    ui_high_visibility_text = cgi.cvar("ui_high_visibility_text", "1", CVAR_ARCHIVE);
+    ui_text_typeface = cgi.cvar("ui_text_typeface", "2", CVAR_ARCHIVE);
     scr_crosshair = cgi.cvar("crosshair", "3", CVAR_ARCHIVE);
     cl_crosshair_brightness = cgi.cvar("cl_crosshair_brightness", "1.0", CVAR_ARCHIVE);
     cl_crosshair_color = cgi.cvar("cl_crosshair_color", "25", CVAR_ARCHIVE);

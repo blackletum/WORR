@@ -43,6 +43,12 @@ typedef struct font_debug_metrics_s {
     int baseline_px;
 } font_debug_metrics_t;
 
+typedef enum {
+    FONT_TYPEFACE_LEGACY = 0,
+    FONT_TYPEFACE_KEX = 1,
+    FONT_TYPEFACE_TRUETYPE = 2,
+} font_typeface_t;
+
 void Font_Init(void);
 void Font_Shutdown(void);
 
@@ -58,6 +64,9 @@ int Font_MeasureString(const font_t *font, int scale, int flags, size_t max_char
                        const char *string, int *out_height);
 int Font_LineHeight(const font_t *font, int scale);
 bool Font_DrawBlackBackgroundEnabled(void);
+bool Font_HighVisibilityTextEnabled(void);
+font_typeface_t Font_EffectiveTypeface(void);
+int Font_SettingsGeneration(void);
 bool Font_GetDebugMetrics(const font_t *font, int scale,
                           font_debug_metrics_t *out_metrics);
 

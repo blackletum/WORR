@@ -67,6 +67,7 @@ static cvar_t   *scr_scale;
 static cvar_t   *cl_font_skip_virtual_scale;
 static cvar_t   *cl_font_test;
 static cvar_t   *cl_font_test_font;
+static int      scr_font_settings_generation;
 static cvar_t   *scr_demobar_legacy;
 static cvar_t   *scr_font_legacy;
 static cvar_t   *scr_scale_legacy;
@@ -74,7 +75,7 @@ static const float k_scr_ttf_letter_spacing = 0.06f;
 static const char k_scr_kfont_fallback_path[] = "fonts/qconfont.kfont";
 static const char k_scr_ui_font_path[] = "fonts/AtkinsonHyperLegible-Regular.otf";
 static const char k_scr_bootstrap_transition_env[] = "WORR_BOOTSTRAP_TRANSITION";
-static const unsigned k_scr_bootstrap_blend_duration = 180;
+static const unsigned k_scr_bootstrap_blend_duration = 120;
 static unsigned scr_bootstrap_blend_start;
 static bool scr_bootstrap_blend_pending;
 static bool scr_bootstrap_blend_done;
@@ -2974,6 +2975,20 @@ static void scr_ui_font_reload(void)
 
     Font_SetLetterSpacing(scr.ui_font, k_scr_ttf_letter_spacing);
     scr.ui_font_pic = Font_LegacyHandle(scr.ui_font);
+    scr_font_settings_generation = Font_SettingsGeneration();
+}
+
+static void SCR_CheckFontSettingsChanged(void)
+{
+    int generation = Font_SettingsGeneration();
+    if (scr_font_settings_generation == generation)
+        return;
+
+    scr_font_settings_generation = generation;
+    if (scr.initialized && scr_font)
+        scr_font_changed(scr_font);
+    if (cls.ref_initialized)
+        UI_FontModeChanged();
 }
 
 /*
@@ -3320,6 +3335,7 @@ void SCR_Init(void)
     scr_bootstrap_blend_done = false;
     scr_bootstrap_blend_armed = false;
     scr_bootstrap_blend_consumed = false;
+    scr_font_settings_generation = Font_SettingsGeneration();
 
     scr.initialized = true;
 }
@@ -3343,6 +3359,7 @@ void SCR_Shutdown(void)
     scr_bootstrap_blend_done = false;
     scr_bootstrap_blend_armed = false;
     scr_bootstrap_blend_consumed = false;
+    scr_font_settings_generation = 0;
     scr.initialized = false;
 }
 
@@ -4023,13 +4040,10 @@ static void SCR_DrawActive(void)
 
 static void SCR_DrawBootstrapBlend(void)
 {
-    if (!SCR_BootstrapTransitionRequested())
+    if (!SCR_BootstrapTransitionRequested() || scr_bootstrap_blend_done)
         return;
 
     unsigned now = Sys_Milliseconds();
-    if (scr_bootstrap_blend_done)
-        return;
-
     if (!scr_bootstrap_blend_pending) {
         scr_bootstrap_blend_pending = true;
         scr_bootstrap_blend_start = now;
@@ -4047,10 +4061,8 @@ static void SCR_DrawBootstrapBlend(void)
     float frac = 1.0f - (float)elapsed / (float)k_scr_bootstrap_blend_duration;
     frac *= frac;
     byte alpha = (byte)Q_clip(Q_rint(frac * 255.0f), 0, 255);
-    if (alpha <= 0)
-        return;
-
-    R_DrawFill32(0, 0, r_config.width, r_config.height, COLOR_RGBA(0, 0, 0, alpha));
+    if (alpha > 0)
+        R_DrawFill32(0, 0, r_config.width, r_config.height, COLOR_RGBA(0, 0, 0, alpha));
 }
 
 static void SCR_DrawBootstrapTransitionBackdrop(void)
@@ -4103,6 +4115,8 @@ void SCR_UpdateScreen(void)
     if (recursive > 1) {
         Com_Error(ERR_FATAL, "%s: recursively called", __func__);
     }
+
+    SCR_CheckFontSettingsChanged();
 
     recursive++;
 

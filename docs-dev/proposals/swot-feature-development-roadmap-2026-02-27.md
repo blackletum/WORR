@@ -172,9 +172,9 @@ Create a repository-grounded SWOT and convert it into actionable, task-based pro
   - Updated TTF glyph cache generation to keep HarfBuzz-shaped glyphs renderable when metrics lookup fails but glyph image extraction succeeds (`TTF_GetGlyphImageForIndex(...)`).
   - Added SDL3_ttf surface text-engine startup validation so TTF mode only stays active when both library init and text engine creation succeed.
   - Finalized accessibility defaults and fallback controls:
-    - Set `cl_font_draw_black_background` default to `1` to improve text readability on bright/high-variance scenes.
+    - Consolidated high-visibility text under archived `ui_high_visibility_text 1` so black text backgrounds and related accessibility text behavior have one authoritative cvar.
+    - Added archived `ui_text_typeface 2` as the default TrueType selector, with legacy and KEX/kfont options available from settings.
     - Added archived fallback font cvars (`cl_font_fallback_kfont`, `cl_font_fallback_legacy`) so fallback chains remain configurable without code edits.
-    - Set `ui_acc_contrast` default to `1` so notify/centerprint contrast bars are enabled by default.
   - Repaired the console/UI/screen font chain so fixed-width TTF fonts render through a direct per-codepoint TTF path again, and readable client fallbacks now use `fonts/qconfont.kfont` instead of `fonts/qfont.kfont`.
   - Implementation log: `docs-dev/ttf-sdl3-harfbuzz-render-path-hardening-2026-03-27.md`.
   - Implementation log: `docs-dev/fr-06-t03-accessibility-defaults-and-fallback-controls-2026-03-27.md`.
@@ -183,7 +183,7 @@ Create a repository-grounded SWOT and convert it into actionable, task-based pro
   - Implementation log: `docs-dev/font-ttf-test-screen-visual-alignment-2026-04-27.md`.
   - Implementation log: `docs-dev/font-horizontal-alignment-and-menu-footer-2026-04-27.md`.
   - Extended the TTF-first policy to the actual cgame in-game weapon bar and the bootstrapper splash/legal footer text; client font loading now falls back to platform TTFs when staged project font files are unavailable, with TTF menu measurement kept on the renderer glyph-advance path for stable center/right alignment.
-  - Expanded the high-visibility black text background behavior from centerprint-specific contrast bars to the shared HUD/menu font wrappers. `cl_font_draw_black_background` and `ui_acc_contrast` now both enable the shared black background path for TTF/kfont text and legacy fallback string wrappers.
+  - Expanded high-visibility black text backgrounds from centerprint-specific contrast bars to shared HUD/menu font wrappers under the single `ui_high_visibility_text` cvar. Added Options -> Accessibility controls and `ui_text_typeface` (`legacy`, `KEX`, `TrueType`, default TrueType), with high-visibility text forcing the effective typeface to TrueType.
   - Implementation log: `docs-dev/ui-bootstrap-font-handoff-2026-04-27.md`.
 
 ## Baseline Snapshot (Repository-Derived)
@@ -673,7 +673,7 @@ Tasks:
   Dependency: `DV-08-T09`. Priority: P0.
 - [ ] `DV-08-T12` Convert the client bootstrap into a long-lived session shell that owns the display/window lifecycle, keeps updater UX in-process, and reserves the external worker for locked-file replacement and relaunch only.  
   Dependency: `DV-08-T09`, `DV-08-T11`. Priority: P1.
-  Progress: Windows session-shell work introduced native splash-shell startup, adopted-window activation, synchronized `.install` staging, and engine-side menu backdrops. This follow-up temporarily disables Windows shared-HWND handoff because Win11 capture/preview APIs were still sampling the bootstrap-owned surface; the splash is kept out of taskbar previews, fullscreen defaults to capture-friendly borderless behavior for PrintScreen/Snipping Tool, and the renderer-owned engine window becomes the app frame. Non-transparent menus now clear the engine backbuffer every frame, and the bootstrap transition marker is consumed as a one-shot so stale splash pixels cannot remain blended into the main menu.
+  Progress: Windows session-shell work introduced native splash-shell startup, adopted-window activation, synchronized `.install` staging, and engine-side menu backdrops. This follow-up temporarily disables Windows shared-HWND handoff because Win11 capture/preview APIs were still sampling the bootstrap-owned surface; the splash is kept out of taskbar previews, fullscreen defaults to capture-friendly borderless behavior for PrintScreen/Snipping Tool, and the renderer-owned engine window becomes the app frame. Non-transparent menus now clear the engine backbuffer every frame, the main menu backdrop is fully opaque, and hosted launches request only a short engine-owned fade from black, so stale splash pixels cannot remain blended into the main menu.
   Implementation logs: `docs-dev/bootstrap-session-shell-handoff-2026-04-01.md`, `docs-dev/ui-bootstrap-font-handoff-2026-04-27.md`.
 
 ## Immediate 90-Day Priority Queue (2026-03-01 to 2026-05-31)
