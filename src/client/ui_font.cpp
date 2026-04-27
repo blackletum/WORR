@@ -30,6 +30,7 @@ static int ui_last_width;
 static int ui_last_height;
 static const int k_ui_list_font_size = 6;
 static const float k_ui_ttf_letter_spacing = 0.06f;
+static const char k_ui_kfont_fallback_path[] = "fonts/qconfont.kfont";
 
 static float UI_FontCalcPixelScale(void)
 {
@@ -58,12 +59,12 @@ static float UI_FontCalcPixelScale(void)
 static font_t *UI_FontLoadHandle(const char *path, int line_height)
 {
     font_t *handle = Font_Load(path, line_height, ui_pixel_scale, 0,
-                               "fonts/qfont.kfont", "conchars.png");
+                               k_ui_kfont_fallback_path, "conchars.png");
 
     if (!handle && ui_font && ui_font->default_string &&
         (!path || strcmp(path, ui_font->default_string))) {
         handle = Font_Load(ui_font->default_string, line_height, ui_pixel_scale, 0,
-                           "fonts/qfont.kfont", "conchars.png");
+                           k_ui_kfont_fallback_path, "conchars.png");
     }
 
     if (handle)

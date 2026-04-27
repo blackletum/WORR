@@ -1935,7 +1935,14 @@ loop if rendering is disabled but sound is running.
 */
 void CL_CalcViewValues(void)
 {
-    CL_RequireCGameEntity(__func__);
+    // The sound-only frame path can run before a local connect finishes loading cgame.
+    if (!cgame_entity) {
+        if (cls.state < ca_precached || !cl.frame.valid) {
+            return;
+        }
+        Com_Error(ERR_DROP, "cgame entity extension required for %s", __func__);
+    }
+
     if (!cgame_entity->CalcViewValues)
         Com_Error(ERR_DROP, "cgame entity CalcViewValues not available");
 

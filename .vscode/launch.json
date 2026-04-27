@@ -86,9 +86,7 @@
                 "1",
                 "+set",
                 "cheats",
-                "1",
-                "+map",
-                "q2dm1"
+                "1"
             ],
             "cwd": "${workspaceFolder}\\.install",
             "console": "integratedTerminal"

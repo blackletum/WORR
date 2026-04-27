@@ -535,7 +535,8 @@ LoadMapPool
 ==================
 */
 void LoadMapPool(gentity_t *ent) {
-  bool entClient = ent && ent->client;
+  bool entClient =
+      ent && ent->inUse && ent->client && ent->client->pers.connected;
   std::vector<MapEntry> newPool;
   std::unordered_map<std::string, std::pair<int64_t, bool>> existingRuntime;
 
@@ -737,7 +738,8 @@ LoadMapCycle
 ==================
 */
 void LoadMapCycle(gentity_t *ent) {
-  bool entClient = ent && ent->client;
+  bool entClient =
+      ent && ent->inUse && ent->client && ent->client->pers.connected;
 
   const char *defaultCycleFile = "mapcycle.txt";
   std::string sanitizedCycleFile;

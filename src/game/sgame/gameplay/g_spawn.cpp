@@ -710,18 +710,28 @@ static void SpawnEnt_MapFixes(gentity_t *ent) {
   if (!ent->inUse) {
     return;
   }
-  if (!ent->className || !ent->model) {
-    worr::Logf(worr::LogLevel::Warn, "{}: missing data; skipping map fixes {}",
-               __FUNCTION__, BuildMapEntityContext(ent));
+  if (!ent->className) {
+    worr::Logf(worr::LogLevel::Warn,
+               "{}: missing classname; skipping map fixes {}", __FUNCTION__,
+               BuildMapEntityContext(ent));
     return;
   }
   if (!Q_strcasecmp(level.mapName.data(), "bunk1")) {
-    if (!Q_strcasecmp(ent->className, "func_button") &&
-        !Q_strcasecmp(ent->model, "*36")) {
-      ent->wait = -1;
-      worr::Logf(worr::LogLevel::Trace,
-                 "{}: applied bunk1 func_button wait fix {}", __FUNCTION__,
-                 BuildMapEntityContext(ent));
+    if (!Q_strcasecmp(ent->className, "func_button")) {
+      if (!ent->model) {
+        worr::Logf(worr::LogLevel::Debug,
+                   "{}: bunk1 func_button missing model {}; skipping",
+                   __FUNCTION__, BuildMapEntityContext(ent));
+      } else if (!Q_strcasecmp(ent->model, "*36")) {
+        ent->wait = -1;
+        worr::Logf(worr::LogLevel::Trace,
+                   "{}: applied bunk1 func_button wait fix {}", __FUNCTION__,
+                   BuildMapEntityContext(ent));
+      } else {
+        worr::Logf(worr::LogLevel::Debug,
+                   "{}: bunk1 map fixes skipped {}", __FUNCTION__,
+                   BuildMapEntityContext(ent));
+      }
     } else {
       worr::Logf(worr::LogLevel::Debug, "{}: bunk1 map fixes skipped {}",
                  __FUNCTION__, BuildMapEntityContext(ent));

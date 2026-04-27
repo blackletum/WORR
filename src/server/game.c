@@ -325,6 +325,9 @@ static void PF_Client_Print(edict_t *ent, int level, const char *msg)
 
     client = svs.client_pool + clientNum;
     if (client->state <= cs_zombie) {
+        if (sv.state <= ss_loading) {
+            return;
+        }
         Com_DWPrintf("%s to a free/zombie client %d\n", __func__, clientNum);
         return;
     }

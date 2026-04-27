@@ -32,7 +32,8 @@ static void List_DrawAlignedString(int x, int y, int flags, color_t color,
         else if (flags & UI_RIGHT)
             draw_x -= List_StringWidth(string, flags, fontSize);
 
-        UI_FontDrawStringSized(draw_x, y, flags, MAX_STRING_CHARS, string,
+        UI_FontDrawStringSized(draw_x, y, flags & ~(UI_LEFT | UI_RIGHT),
+                               MAX_STRING_CHARS, string,
                                COLOR_SETA_U8(color, 255), fontSize);
         return;
     }

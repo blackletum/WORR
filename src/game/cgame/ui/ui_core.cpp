@@ -63,7 +63,8 @@ void UI_DrawString(int x, int y, int flags, color_t color, const char *string)
         draw_x -= TextWidth(string);
     }
 
-    UI_FontDrawString(draw_x, y, flags, MAX_STRING_CHARS, string, COLOR_SETA_U8(color, 255));
+    UI_FontDrawString(draw_x, y, flags & ~(UI_LEFT | UI_RIGHT),
+                      MAX_STRING_CHARS, string, COLOR_SETA_U8(color, 255));
 }
 
 void UI_DrawChar(int x, int y, int flags, color_t color, int ch)

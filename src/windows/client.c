@@ -113,6 +113,7 @@ static void win_cvar_alias_register(void)
 }
 
 static void     Win_ClipCursor(void);
+static void     Win_Activate(WPARAM wParam);
 static void     win_utf8_reset(void);
 static void     win_clear_char_state(void);
 
@@ -213,6 +214,13 @@ static void Win_SetPosition(void)
     if (win.mouse.grabbed) {
         Win_ClipCursor();
     }
+}
+
+static void win_force_activate_adopted_window(void)
+{
+    if (!win.adopted_bootstrap_window)
+        return;
+    Win_Activate(MAKEWPARAM(WA_ACTIVE, 0));
 }
 
 /*
@@ -632,6 +640,7 @@ static LONG set_fullscreen_mode(void)
     win.flags |= QVF_FULLSCREEN;
     Win_SetPosition();
     Win_ModeChanged();
+    win_force_activate_adopted_window();
     win.mode_changed = 0;
 
     return ret;
@@ -665,6 +674,7 @@ static void set_borderless_mode(void)
     win.flags |= QVF_FULLSCREEN;
     Win_SetPosition();
     Win_ModeChanged();
+    win_force_activate_adopted_window();
     win.mode_changed = 0;
 }
 
@@ -728,6 +738,7 @@ void Win_SetMode(void)
     win.flags &= ~QVF_FULLSCREEN;
     Win_SetPosition();
     Win_ModeChanged();
+    win_force_activate_adopted_window();
     win.mode_changed = 0;
 }
 
@@ -1678,9 +1689,9 @@ static LRESULT WINAPI Win_MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
         break;
     }
 
-    // pass all unhandled messages to DefWindowProc
-    if (win.adopted_bootstrap_window && win.bootstrap_wndproc)
-        return CallWindowProcA(win.bootstrap_wndproc, hWnd, uMsg, wParam, lParam);
+    // Once the engine adopts the bootstrap window, it fully owns message handling.
+    // Forwarding paint/activation traffic back into SDL leaves the old splash proc
+    // alive and can resurrect stale splash content on later restores.
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
@@ -1768,6 +1779,14 @@ static bool win_try_adopt_bootstrap_window(void)
     win.bootstrap_wndproc = previous_wndproc;
     win.adopted_bootstrap_window = true;
     SetWindowTextA(win.wnd, PRODUCT);
+    ShowWindow(win.wnd, SW_SHOW);
+    SetActiveWindow(win.wnd);
+    SetForegroundWindow(win.wnd);
+    SetFocus(win.wnd);
+    Win_Activate(MAKEWPARAM(WA_ACTIVE, 0));
+    RedrawWindow(win.wnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    InvalidateRect(win.wnd, NULL, FALSE);
+    UpdateWindow(win.wnd);
     Com_Printf("Adopted bootstrap-owned Win32 window.\n");
     return true;
 }

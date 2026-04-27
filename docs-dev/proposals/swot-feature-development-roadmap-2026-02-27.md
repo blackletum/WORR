@@ -45,6 +45,11 @@ Create a repository-grounded SWOT and convert it into actionable, task-based pro
   - Implementation log: `docs-dev/nightly-run-23153597827-error-warning-recovery-2026-03-16.md`.
   - Recovered additional warning noise from run `23156641291` by removing `entity_iterable_t` constructor template-id syntax in `sgame` and extending quiet fallback warning suppression for third-party fallback builds.
   - Implementation log: `docs-dev/nightly-run-23156641291-recovery-2026-03-16.md`.
+- `FR-02-T08` Done:
+  - Hardened the OpenGL `q2dm1` launch path so unsupported postfx framebuffer combinations retry safer bloom/DOF/depth variants instead of failing the whole postfx chain on `GL_FRAMEBUFFER_UNSUPPORTED`.
+  - Removed two false-positive startup warnings from the same smoke path by scoping map-fix validation to entities that actually need model data and suppressing `PF_Client_Print` free/zombie noise during `ss_loading`.
+  - Added a client-side guard so sound-only frames do not call `CL_CalcViewValues` before cgame entity extensions are available.
+  - Implementation log: `docs-dev/renderer-startup-log-cleanup-2026-03-27.md`.
 - `FR-03-T08` In Progress:
   - Tightened multiplayer menu routing so the match menu is only selected during an active multiplayer game session, instead of any `cl.maxclients > 1` state.
   - Split the session-only menu definitions (`dm_welcome`, `dm_join`, `join`, `dm_hostinfo`, `dm_matchinfo`) out of `src/game/cgame/ui/worr.json` into a dedicated embedded `src/game/cgame/ui/worr-multiplayer.json` asset loaded by cgame UI init.
@@ -169,8 +174,13 @@ Create a repository-grounded SWOT and convert it into actionable, task-based pro
     - Set `cl_font_draw_black_background` default to `1` to improve text readability on bright/high-variance scenes.
     - Added archived fallback font cvars (`cl_font_fallback_kfont`, `cl_font_fallback_legacy`) so fallback chains remain configurable without code edits.
     - Set `ui_acc_contrast` default to `1` so notify/centerprint contrast bars are enabled by default.
+  - Repaired the console/UI/screen font chain so fixed-width TTF fonts render through a direct per-codepoint TTF path again, and readable client fallbacks now use `fonts/qconfont.kfont` instead of `fonts/qfont.kfont`.
   - Implementation log: `docs-dev/ttf-sdl3-harfbuzz-render-path-hardening-2026-03-27.md`.
   - Implementation log: `docs-dev/fr-06-t03-accessibility-defaults-and-fallback-controls-2026-03-27.md`.
+  - Implementation log: `docs-dev/console-font-ttf-kfont-fallback-repair-2026-03-28.md`.
+  - Implementation log: `docs-dev/font-ttf-kexfont-alignment-2026-04-27.md`.
+  - Implementation log: `docs-dev/font-ttf-test-screen-visual-alignment-2026-04-27.md`.
+  - Implementation log: `docs-dev/font-horizontal-alignment-and-menu-footer-2026-04-27.md`.
 
 ## Baseline Snapshot (Repository-Derived)
 - Codebase scale is substantial: approximately 733 `*.c`/`*.cpp`/`*.h`/`*.hpp` files and approximately 426k lines across `src/` and `inc/`.
@@ -338,6 +348,8 @@ Tasks:
   Dependency: `FR-02-T01`. Priority: P2.
 - [x] `FR-02-T07` Add SDL/MoltenVK Vulkan window/surface support for macOS and other SDL-backed platforms.  
   Dependency: none. Priority: P0.
+- [x] `FR-02-T08` Harden OpenGL startup fallback and clean local `q2dm1` launch log noise.  
+  Dependency: none. Priority: P1.
 
 ## Epic FR-03: JSON UI Rework Completion
 Objective: complete modern menu coverage and remove remaining UX gaps for core settings and flows.
@@ -655,8 +667,10 @@ Tasks:
   Dependency: `DV-08-T09`. Priority: P1.
 - [x] `DV-08-T11` Stabilize the Windows public-bootstrap-to-temp-worker approved-update handoff and add deterministic local automation for that path.  
   Dependency: `DV-08-T09`. Priority: P0.
-- [ ] `DV-08-T12` Convert the client bootstrap into a long-lived session shell that owns the display/window lifecycle, keeps updater UX in-process, and reserves the external worker for locked-file replacement and relaunch only.
+- [ ] `DV-08-T12` Convert the client bootstrap into a long-lived session shell that owns the display/window lifecycle, keeps updater UX in-process, and reserves the external worker for locked-file replacement and relaunch only.  
   Dependency: `DV-08-T09`, `DV-08-T11`. Priority: P1.
+  Progress: Windows session-shell handoff now stays on one native client window in installed launches, explicitly reactivates the adopted bootstrap window to avoid black-screen/Alt+Tab startup stalls, keeps the blended splash-to-engine transition, hardens `.install` staging so launcher/runtime binaries are hash-verified against the current build outputs, gives the main menu an engine-side backdrop so installed startup no longer lands on a flat black menu frame, and now uses a native Win32 splash shell with SDL detached before handoff so the live desktop canvas advances into the engine instead of freezing on the splash.
+  Implementation log: `docs-dev/bootstrap-session-shell-handoff-2026-04-01.md`.
 
 ## Immediate 90-Day Priority Queue (2026-03-01 to 2026-05-31)
 - [ ] `P0` `FR-01-T01` Vulkan particle style parity

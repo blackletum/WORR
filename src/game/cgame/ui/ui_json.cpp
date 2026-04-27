@@ -827,10 +827,17 @@ static void ParseMenu(json_parse_t *parser)
     bool logoAnchorSet = false;
     std::string footerText;
     std::string footerSubtext;
+    std::string footerSubtextCvar;
     bool footerColorSet = false;
     color_t footerColor{};
     bool footerSizeSet = false;
     int footerSize = 0;
+    bool footerSubtextColorSet = false;
+    color_t footerSubtextColor{};
+    bool footerSubtextSizeSet = false;
+    int footerSubtextSize = 0;
+    int footerAlign = 0;
+    bool footerAlignSet = false;
     bool frame = false;
     bool frameSet = false;
     int framePadding = GenericSpacing(CONCHAR_HEIGHT);
@@ -962,15 +969,37 @@ static void ParseMenu(json_parse_t *parser)
                     } else if (Json_Strcmp(parser, "subtext") == 0) {
                         Json_Next(parser);
                         footerSubtext = Json_ReadString(parser);
+                    } else if (Json_Strcmp(parser, "subtextCvar") == 0) {
+                        Json_Next(parser);
+                        footerSubtextCvar = Json_ReadString(parser);
                     } else if (Json_Strcmp(parser, "color") == 0) {
                         Json_Next(parser);
                         std::string value = Json_ReadString(parser);
                         if (SCR_ParseColor(value.c_str(), &footerColor))
                             footerColorSet = true;
+                    } else if (Json_Strcmp(parser, "subtextColor") == 0) {
+                        Json_Next(parser);
+                        std::string value = Json_ReadString(parser);
+                        if (SCR_ParseColor(value.c_str(), &footerSubtextColor))
+                            footerSubtextColorSet = true;
                     } else if (Json_Strcmp(parser, "size") == 0) {
                         Json_Next(parser);
                         footerSize = static_cast<int>(Json_ReadNumber(parser));
                         footerSizeSet = true;
+                    } else if (Json_Strcmp(parser, "subtextSize") == 0) {
+                        Json_Next(parser);
+                        footerSubtextSize = static_cast<int>(Json_ReadNumber(parser));
+                        footerSubtextSizeSet = true;
+                    } else if (Json_Strcmp(parser, "align") == 0) {
+                        Json_Next(parser);
+                        std::string value = Json_ReadString(parser);
+                        if (value == "left")
+                            footerAlign = 1;
+                        else if (value == "right")
+                            footerAlign = 2;
+                        else
+                            footerAlign = 0;
+                        footerAlignSet = true;
                     } else {
                         Json_Next(parser);
                         Json_SkipToken(parser);
@@ -1134,10 +1163,22 @@ static void ParseMenu(json_parse_t *parser)
         menu->SetFooterText(footerText);
     if (!footerSubtext.empty())
         menu->SetFooterSubtext(footerSubtext);
+    if (!footerSubtextCvar.empty())
+        menu->SetFooterSubtextCvar(Cvar_WeakGet(footerSubtextCvar.c_str()));
     if (footerColorSet)
         menu->SetFooterColor(footerColor);
     if (footerSizeSet)
         menu->SetFooterSize(footerSize);
+    if (footerSubtextColorSet)
+        menu->SetFooterSubtextColor(footerSubtextColor);
+    if (footerSubtextSizeSet)
+        menu->SetFooterSubtextSize(footerSubtextSize);
+    if (footerAlignSet) {
+        if (footerAlign == 1)
+            menu->SetFooterAlignLeft(true);
+        else if (footerAlign == 2)
+            menu->SetFooterAlignRight(true);
+    }
 
     GetMenuSystem().RegisterMenu(std::move(menu));
 }

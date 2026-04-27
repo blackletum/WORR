@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cctype>
 #include <cstdint>
+#include <cmath>
 #include <ctime>
 #include <cstdio>
 #include <cstdlib>
@@ -99,6 +100,7 @@ constexpr const char *kServerEngineLibraryStem =
 #endif
 constexpr const char *kBaseDirEnv = "WORR_BOOTSTRAP_BASEDIR";
 constexpr const char *kBootstrapWin32HwndEnv = "WORR_BOOTSTRAP_WIN32_HWND";
+constexpr const char *kBootstrapTransitionEnv = "WORR_BOOTSTRAP_TRANSITION";
 constexpr const char *kEngineEntryPoint = "WORR_EngineMain";
 constexpr const char *kReadyCallbackEntryPoint = "Com_SetBootstrapReadyCallback";
 constexpr const char *kSkipUpdateCheckArg = "--bootstrap-skip-update-check";
@@ -108,6 +110,7 @@ constexpr int kDiscoveryBudgetMs = 5000;
 constexpr int kApplyRetryCount = 20;
 constexpr int kApplyRetryDelayMs = 100;
 constexpr uint64_t kUiTickDelayMs = 16;
+constexpr uint64_t kMinimumSplashDisplayMs = 5000;
 constexpr const char *kUserAgent = "WORR-Bootstrap/1.0";
 
 struct SemverIdentifier {
@@ -1076,6 +1079,7 @@ public:
   virtual bool SetProgress(const std::string &label, uint64_t current, uint64_t total) = 0;
   virtual bool Pump() = 0;
   virtual bool PromptInstall(const std::string &headline, const std::string &detail) = 0;
+  virtual bool WaitForMinimumDisplayTime() { return true; }
   virtual void DismissForEngineHandoff() = 0;
   virtual bool SupportsSharedWindowHandoff() const { return false; }
   virtual bool PrepareSharedWindowHandoff() { return false; }
@@ -1147,21 +1151,27 @@ public:
 
 std::vector<std::string> WrapText(const std::string &text, size_t width) {
   std::vector<std::string> lines;
-  std::istringstream stream(text);
-  std::string word;
-  std::string current;
-  while (stream >> word) {
-    if (current.empty()) {
-      current = word;
-    } else if (current.size() + 1 + word.size() <= width) {
-      current += " " + word;
-    } else {
-      lines.push_back(current);
-      current = word;
+  std::istringstream paragraphs(text);
+  std::string paragraph;
+  while (std::getline(paragraphs, paragraph)) {
+    std::istringstream stream(paragraph);
+    std::string word;
+    std::string current;
+    while (stream >> word) {
+      if (current.empty()) {
+        current = word;
+      } else if (current.size() + 1 + word.size() <= width) {
+        current += " " + word;
+      } else {
+        lines.push_back(current);
+        current = word;
+      }
     }
+    if (!current.empty())
+      lines.push_back(current);
+    else
+      lines.push_back({});
   }
-  if (!current.empty())
-    lines.push_back(current);
   if (lines.empty())
     lines.push_back({});
   return lines;
@@ -1178,7 +1188,19 @@ public:
 
     placement_ = ResolveSessionShellPlacement(config_);
     CreateShellWindow();
-    renderer_ = SDL_CreateRenderer(window_, nullptr);
+    ApplySessionShellWindowMode();
+    if (!SDL_ShowWindow(window_))
+      throw std::runtime_error(SDL_GetError());
+
+    renderer_ = SDL_CreateRenderer(window_,
+#if defined(_WIN32)
+                                   "software"
+#else
+                                   nullptr
+#endif
+    );
+    if (!renderer_)
+      renderer_ = SDL_CreateRenderer(window_, nullptr);
     if (!renderer_)
       throw std::runtime_error(SDL_GetError());
 
@@ -1196,9 +1218,6 @@ public:
     if (!logo_)
       throw std::runtime_error(SDL_GetError());
 
-    ApplySessionShellWindowMode();
-    if (!SDL_ShowWindow(window_))
-      throw std::runtime_error(SDL_GetError());
   }
 
   ~SplashUi() override { ReleaseUiResources(false); }
@@ -1211,9 +1230,21 @@ public:
   }
 
   bool SetProgress(const std::string &label, uint64_t current, uint64_t total) override {
+    const bool label_changed = progress_label_ != label;
     progress_label_ = label;
     progress_current_ = current;
     progress_total_ = total;
+    if (progress_total_ > 0) {
+      const float target = std::clamp(static_cast<float>(progress_current_) / static_cast<float>(progress_total_), 0.0f,
+                                      1.0f);
+      if (label_changed || target < progress_display_) {
+        progress_display_ = target;
+      }
+      progress_target_ = target;
+    } else if (label_changed) {
+      progress_display_ = 0.0f;
+      progress_target_ = 0.0f;
+    }
     Render();
     return !closed_;
   }
@@ -1244,6 +1275,7 @@ public:
         }
       }
     }
+    AnimateProgress();
     Render();
     SDL_Delay(kUiTickDelayMs);
     return !closed_;
@@ -1261,6 +1293,17 @@ public:
     return prompt_result_.value_or(false);
   }
 
+  bool WaitForMinimumDisplayTime() override {
+    while (!closed_) {
+      const uint64_t now = SDL_GetTicks();
+      if (now >= created_at_ + kMinimumSplashDisplayMs)
+        return true;
+      if (!Pump())
+        return false;
+    }
+    return false;
+  }
+
   void DismissForEngineHandoff() override {
     closed_ = true;
     ReleaseUiResources(true);
@@ -1268,7 +1311,7 @@ public:
 
   bool SupportsSharedWindowHandoff() const override {
 #if defined(_WIN32)
-    return window_ != nullptr;
+    return native_window_ != nullptr;
 #else
     return false;
 #endif
@@ -1276,11 +1319,11 @@ public:
 
   bool PrepareSharedWindowHandoff() override {
 #if defined(_WIN32)
-    if (!window_)
+    if (!native_window_)
       return false;
     closed_ = true;
     ReleaseUiResources(true, true);
-    return window_ != nullptr;
+    return native_window_ != nullptr;
 #else
     return false;
 #endif
@@ -1288,31 +1331,158 @@ public:
 
   void *GetSharedWindowNativeHandle() override {
 #if defined(_WIN32)
-    if (!window_)
+    if (!native_window_) {
+      BootstrapTrace("SplashUi shared_hwnd hwnd_missing");
       return nullptr;
-    SDL_PropertiesID props = SDL_GetWindowProperties(window_);
-    if (!props)
-      return nullptr;
-    return SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr);
+    }
+    void *hwnd = native_window_;
+    BootstrapTrace("SplashUi shared_hwnd props_ok hwnd=" + PointerString(hwnd));
+    return hwnd;
 #else
     return nullptr;
 #endif
   }
 
 private:
-  static constexpr float kHeadlineTextScale = 2.0f;
-  static constexpr float kDetailTextScale = 2.0f;
-  static constexpr float kProgressTextScale = 1.5f;
+  static constexpr float kHeadlineTextScale = 2.3f;
+  static constexpr float kDetailTextScale = 1.6f;
+  static constexpr float kProgressTextScale = 1.4f;
   static constexpr float kButtonTextScale = 1.5f;
-  static constexpr float kPanelPadding = 16.0f;
-  static constexpr float kPanelBottomMargin = 40.0f;
-  static constexpr float kPanelSectionGap = 8.0f;
-  static constexpr float kProgressBarHeight = 16.0f;
+  static constexpr float kLegalTextScale = 6.0f / SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE;
   static constexpr float kButtonWidth = 132.0f;
   static constexpr float kButtonHeight = 36.0f;
   static constexpr float kButtonGap = 16.0f;
+  static constexpr const char *kLegalText =
+      "(c) DarkMatter Productions, 2026.\n"
+      "Quake, Quake II, id Software, Bethesda, and related marks are the property of id Software LLC and/or ZeniMax Media Inc.\n"
+      "WORR is an unofficial fan project and is not affiliated with or endorsed by id Software or Bethesda.";
+
+#if defined(_WIN32)
+  static LRESULT CALLBACK NativeShellWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_CLOSE:
+      DestroyWindow(hwnd);
+      return 0;
+    default:
+      break;
+    }
+    return DefWindowProcA(hwnd, msg, wParam, lParam);
+  }
+
+  static const char *NativeShellWindowClassName() { return "WORRBootstrapShellWindow"; }
+
+  static void EnsureNativeShellWindowClass() {
+    static bool registered = false;
+    if (registered)
+      return;
+
+    WNDCLASSEXA wc{};
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = NativeShellWindowProc;
+    wc.hInstance = GetModuleHandleA(nullptr);
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+    wc.lpszClassName = NativeShellWindowClassName();
+
+    if (!RegisterClassExA(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+      throw std::runtime_error("Failed registering bootstrap shell window class");
+
+    registered = true;
+  }
+
+  RECT ResolveMonitorRect(bool fullscreen) const {
+    RECT rect{};
+    if (placement_.has_bounds) {
+      rect.left = placement_.bounds.x;
+      rect.top = placement_.bounds.y;
+      rect.right = placement_.bounds.x + placement_.bounds.w;
+      rect.bottom = placement_.bounds.y + placement_.bounds.h;
+      return rect;
+    }
+
+    if (!fullscreen) {
+      SystemParametersInfoA(SPI_GETWORKAREA, 0, &rect, 0);
+      if (rect.right > rect.left && rect.bottom > rect.top)
+        return rect;
+    }
+
+    rect.left = 0;
+    rect.top = 0;
+    rect.right = GetSystemMetrics(SM_CXSCREEN);
+    rect.bottom = GetSystemMetrics(SM_CYSCREEN);
+    return rect;
+  }
+
+  void ApplyNativeWindowMode() {
+    if (!native_window_)
+      return;
+
+    const bool fullscreen = config_.mode != SessionShellWindowMode::Windowed;
+    DWORD style = fullscreen ? (WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS)
+                             : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
+    DWORD exstyle = WS_EX_APPWINDOW;
+
+    RECT monitor_rect = ResolveMonitorRect(fullscreen);
+    int client_width = fullscreen ? (monitor_rect.right - monitor_rect.left) : placement_.width;
+    int client_height = fullscreen ? (monitor_rect.bottom - monitor_rect.top) : placement_.height;
+    int x = fullscreen ? monitor_rect.left : placement_.x;
+    int y = fullscreen ? monitor_rect.top : placement_.y;
+
+    if (!fullscreen) {
+      if (SDL_WINDOWPOS_ISCENTERED(x))
+        x = monitor_rect.left + ((monitor_rect.right - monitor_rect.left) - client_width) / 2;
+      if (SDL_WINDOWPOS_ISCENTERED(y))
+        y = monitor_rect.top + ((monitor_rect.bottom - monitor_rect.top) - client_height) / 2;
+    }
+
+    RECT rect{0, 0, client_width, client_height};
+    AdjustWindowRectEx(&rect, style, FALSE, exstyle);
+    const int window_width = rect.right - rect.left;
+    const int window_height = rect.bottom - rect.top;
+
+    SetWindowLongPtrA(native_window_, GWL_STYLE, static_cast<LONG_PTR>(style));
+    SetWindowLongPtrA(native_window_, GWL_EXSTYLE, static_cast<LONG_PTR>(exstyle));
+    SetWindowPos(native_window_, fullscreen ? HWND_TOP : HWND_NOTOPMOST, x, y, window_width, window_height,
+                 SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER | SWP_HIDEWINDOW);
+    UpdateWindow(native_window_);
+  }
+
+  void CreateNativeShellWindow() {
+    EnsureNativeShellWindowClass();
+
+    native_window_ = CreateWindowExA(WS_EX_APPWINDOW, NativeShellWindowClassName(), "WORR",
+                                     WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, CW_USEDEFAULT,
+                                     CW_USEDEFAULT, placement_.width, placement_.height, nullptr, nullptr,
+                                     GetModuleHandleA(nullptr), nullptr);
+    if (!native_window_)
+      throw std::runtime_error("Failed creating bootstrap shell window");
+
+    ApplyNativeWindowMode();
+  }
+
+  void WrapNativeShellWindow() {
+    SDL_PropertiesID props = SDL_CreateProperties();
+    if (!props)
+      throw std::runtime_error(SDL_GetError());
+
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIDDEN_BOOLEAN, true);
+    SDL_SetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
+    SDL_SetPointerProperty(props, SDL_PROP_WINDOW_CREATE_WIN32_HWND_POINTER, native_window_);
+
+    window_ = SDL_CreateWindowWithProperties(props);
+    SDL_DestroyProperties(props);
+    if (!window_)
+      throw std::runtime_error(SDL_GetError());
+
+    wrapped_external_window_ = true;
+  }
+#endif
 
   void CreateShellWindow() {
+#if defined(_WIN32)
+    CreateNativeShellWindow();
+    WrapNativeShellWindow();
+#else
     SDL_PropertiesID props = SDL_CreateProperties();
     if (!props)
       throw std::runtime_error(SDL_GetError());
@@ -1331,6 +1501,7 @@ private:
     SDL_DestroyProperties(props);
     if (!window_)
       throw std::runtime_error(SDL_GetError());
+#endif
   }
 
   bool ApplySdlChange(bool result, const char *step) {
@@ -1407,6 +1578,24 @@ private:
   }
 
   void ApplySessionShellWindowMode() {
+#if defined(_WIN32)
+    if (wrapped_external_window_) {
+      ApplyNativeWindowMode();
+      const char *display_name = placement_.display_id ? SDL_GetDisplayName(placement_.display_id) : nullptr;
+      std::ostringstream detail;
+      detail << "SplashUi window_mode=" << SessionShellWindowModeToCString(config_.mode)
+             << " display_id=" << static_cast<unsigned long long>(placement_.display_id)
+             << " invalid_display=" << (placement_.invalid_display ? 1 : 0)
+             << " fallback=0"
+             << " bounds=" << placement_.bounds.w << 'x' << placement_.bounds.h << std::showpos << placement_.bounds.x
+             << placement_.bounds.y << std::noshowpos << " create=" << placement_.width << 'x' << placement_.height
+             << " native_wrap=1";
+      if (display_name && *display_name)
+        detail << " name=\"" << display_name << '"';
+      BootstrapTrace(detail.str());
+      return;
+    }
+#endif
     bool ok = false;
     bool fell_back = false;
     switch (config_.mode) {
@@ -1443,17 +1632,24 @@ private:
     BootstrapTrace(detail.str());
   }
 
-  void ReleaseUiResources(bool keep_video_subsystem, bool keep_window = false) {
+  void ReleaseUiResources(bool keep_video_subsystem, bool keep_native_window = false) {
     if (logo_)
       SDL_DestroyTexture(logo_);
     if (renderer_)
       SDL_DestroyRenderer(renderer_);
-    if (window_ && !keep_window)
+    if (window_)
       SDL_DestroyWindow(window_);
+#if defined(_WIN32)
+    if (native_window_ && !keep_native_window)
+      DestroyWindow(native_window_);
+#endif
     logo_ = nullptr;
     renderer_ = nullptr;
-    if (!keep_window)
-      window_ = nullptr;
+    window_ = nullptr;
+#if defined(_WIN32)
+    if (!keep_native_window)
+      native_window_ = nullptr;
+#endif
     if (owns_sdl_video_ && !keep_video_subsystem)
       SDL_QuitSubSystem(SDL_INIT_VIDEO);
     owns_sdl_video_ = false;
@@ -1481,11 +1677,32 @@ private:
     SDL_SetRenderScale(renderer_, old_scale_x, old_scale_y);
   }
 
+  void DrawCenteredTextBlock(float center_x, float y, const std::string &text, float scale, float max_width) {
+    float line_y = y;
+    const float line_advance = DebugTextLineAdvance(scale);
+    for (const std::string &line : WrapText(text, DebugTextWrapWidth(max_width, scale))) {
+      const float line_width = static_cast<float>(line.size()) * DebugTextPixelSize(scale);
+      DrawScaledDebugText(center_x - (line_width * 0.5f), line_y, line, scale);
+      line_y += line_advance;
+    }
+  }
+
   float DrawTextBlock(float x, float y, const std::string &text, float scale, float max_width) {
     float line_y = y;
     const float line_advance = DebugTextLineAdvance(scale);
     for (const std::string &line : WrapText(text, DebugTextWrapWidth(max_width, scale))) {
       DrawScaledDebugText(x, line_y, line, scale);
+      line_y += line_advance;
+    }
+    return line_y;
+  }
+
+  float DrawCenteredTextMeasured(float center_x, float y, const std::string &text, float scale, float max_width) {
+    float line_y = y;
+    const float line_advance = DebugTextLineAdvance(scale);
+    for (const std::string &line : WrapText(text, DebugTextWrapWidth(max_width, scale))) {
+      const float line_width = static_cast<float>(line.size()) * DebugTextPixelSize(scale);
+      DrawScaledDebugText(center_x - (line_width * 0.5f), line_y, line, scale);
       line_y += line_advance;
     }
     return line_y;
@@ -1502,6 +1719,73 @@ private:
                         kButtonTextScale);
   }
 
+  void AnimateProgress() {
+    if (progress_total_ <= 0)
+      return;
+
+    const uint64_t now = SDL_GetTicks();
+    if (last_progress_tick_ == 0) {
+      last_progress_tick_ = now;
+      return;
+    }
+
+    const float dt = static_cast<float>(now - last_progress_tick_) / 1000.0f;
+    last_progress_tick_ = now;
+    if (dt <= 0.0f)
+      return;
+
+    const float step = std::min(1.0f, dt * 2.5f);
+    progress_display_ += (progress_target_ - progress_display_) * step;
+    if (std::fabs(progress_target_ - progress_display_) < 0.0025f)
+      progress_display_ = progress_target_;
+  }
+
+  void DrawArc(float cx, float cy, float radius, float start, float end, int segments) {
+    if (segments < 1)
+      return;
+    float last_x = cx + std::cos(start) * radius;
+    float last_y = cy + std::sin(start) * radius;
+    for (int i = 1; i <= segments; ++i) {
+      const float t = start + (end - start) * (static_cast<float>(i) / static_cast<float>(segments));
+      const float x = cx + std::cos(t) * radius;
+      const float y = cy + std::sin(t) * radius;
+      SDL_RenderLine(renderer_, last_x, last_y, x, y);
+      last_x = x;
+      last_y = y;
+    }
+  }
+
+  void DrawCircularIndicator(float cx, float cy, float radius) {
+    constexpr float tau = 6.28318530718f;
+    const int ring_segments = std::max(40, static_cast<int>(radius * 1.8f));
+
+    SDL_SetRenderDrawColor(renderer_, 44, 50, 52, 255);
+    for (int i = 0; i < 4; ++i)
+      DrawArc(cx, cy, radius - static_cast<float>(i), 0.0f, tau, ring_segments);
+
+    if (progress_total_ > 0) {
+      const float progress = std::clamp(progress_display_, 0.0f, 1.0f);
+      const float start = -1.57079632679f;
+      const float end = start + tau * progress;
+      SDL_SetRenderDrawColor(renderer_, 155, 198, 66, 255);
+      for (int i = 0; i < 5; ++i)
+        DrawArc(cx, cy, radius - static_cast<float>(i), start, end, std::max(1, static_cast<int>(ring_segments * progress)));
+
+      const int percent = static_cast<int>(std::round(progress * 100.0f));
+      const std::string value = std::to_string(percent) + "%";
+      const float value_width = static_cast<float>(value.size()) * DebugTextPixelSize(1.25f);
+      SDL_SetRenderDrawColor(renderer_, 229, 235, 219, 255);
+      DrawScaledDebugText(cx - value_width * 0.5f, cy - DebugTextPixelSize(1.25f) * 0.5f, value, 1.25f);
+    } else {
+      const float tick = static_cast<float>(SDL_GetTicks() % 1200u) / 1200.0f;
+      const float start = -1.57079632679f + tau * tick;
+      const float end = start + 1.35f;
+      SDL_SetRenderDrawColor(renderer_, 155, 198, 66, 255);
+      for (int i = 0; i < 5; ++i)
+        DrawArc(cx, cy, radius - static_cast<float>(i), start, end, ring_segments / 4);
+    }
+  }
+
   void Render() {
     if (closed_ || !renderer_)
       return;
@@ -1513,64 +1797,114 @@ private:
     SDL_SetRenderDrawColor(renderer_, 14, 16, 18, 255);
     SDL_RenderClear(renderer_);
 
-    const float banner_width = static_cast<float>(width) - 80.0f;
-    const float banner_height = banner_width * static_cast<float>(generated::kBootstrapLogoHeight) /
+    const float center_x = static_cast<float>(width) * 0.5f;
+    const float virtual_43_width = std::min(static_cast<float>(width), static_cast<float>(height) * (4.0f / 3.0f));
+    const float legal_margin = 12.0f;
+    const float legal_width = std::min<float>(virtual_43_width, static_cast<float>(width) - 96.0f);
+    const float legal_height = MeasureTextBlockHeight(kLegalText, kLegalTextScale, legal_width);
+    const float footer_top = static_cast<float>(height) - legal_height - legal_margin;
+    const float content_top = 24.0f;
+    const float content_bottom = footer_top - 22.0f;
+    const float available_height = std::max(0.0f, content_bottom - content_top);
+    const float status_width = std::min<float>(virtual_43_width, static_cast<float>(width) - 140.0f);
+
+    const bool has_progress = !progress_label_.empty();
+    const bool has_headline = !headline_.empty();
+    const bool has_detail = !detail_.empty();
+    const float progress_height = has_progress ? MeasureTextBlockHeight(progress_label_, kProgressTextScale, status_width) : 0.0f;
+    const float headline_height = has_headline ? MeasureTextBlockHeight(headline_, kHeadlineTextScale, status_width) : 0.0f;
+    const float detail_height = has_detail ? MeasureTextBlockHeight(detail_, kDetailTextScale, status_width) : 0.0f;
+
+    float text_block_height = 0.0f;
+    if (has_progress)
+      text_block_height += progress_height;
+    if (has_headline) {
+      if (text_block_height > 0.0f)
+        text_block_height += 4.0f;
+      text_block_height += headline_height;
+    }
+    if (has_detail) {
+      if (text_block_height > 0.0f)
+        text_block_height += 4.0f;
+      text_block_height += detail_height;
+    }
+
+    float spinner_radius = std::clamp(static_cast<float>(std::min(width, height)) * 0.055f, 26.0f, 46.0f);
+    float spinner_block_height = spinner_radius * 2.0f;
+    const float button_block_height = prompt_active_ ? (18.0f + kButtonHeight) : 0.0f;
+    const float gap_logo_spinner = 20.0f;
+    const float gap_spinner_text = 18.0f;
+    const float gap_text_buttons = prompt_active_ ? 18.0f : 0.0f;
+    const float minimum_banner_height = 96.0f;
+    const float minimum_spinner_block = 48.0f;
+    const float minimum_stack_height = minimum_banner_height + minimum_spinner_block + text_block_height +
+                                       button_block_height + gap_logo_spinner + gap_spinner_text + gap_text_buttons;
+    if (minimum_stack_height > available_height && spinner_block_height > minimum_spinner_block) {
+      const float overflow = minimum_stack_height - available_height;
+      const float shrink = std::min((spinner_block_height - minimum_spinner_block) * 0.5f, overflow * 0.5f);
+      spinner_radius = std::max(24.0f, spinner_radius - shrink);
+      spinner_block_height = spinner_radius * 2.0f;
+    }
+
+    const float banner_aspect = static_cast<float>(generated::kBootstrapLogoHeight) /
                                 static_cast<float>(generated::kBootstrapLogoWidth);
-    SDL_FRect banner_rect{40.0f, 28.0f, banner_width, std::min<float>(banner_height, height * 0.6f)};
+    float banner_width = virtual_43_width;
+    float banner_height = banner_width * banner_aspect;
+    const float max_banner_height = std::max(minimum_banner_height,
+                                             available_height - spinner_block_height - text_block_height -
+                                                 button_block_height - gap_logo_spinner - gap_spinner_text -
+                                                 gap_text_buttons);
+    const float preferred_banner_height = std::min(max_banner_height, static_cast<float>(height) * 0.34f);
+    if (banner_height > preferred_banner_height) {
+      banner_height = preferred_banner_height;
+      banner_width = banner_height / banner_aspect;
+    }
+    if (banner_height > max_banner_height) {
+      banner_height = max_banner_height;
+      banner_width = banner_height / banner_aspect;
+    }
+    if (banner_width > virtual_43_width) {
+      banner_width = virtual_43_width;
+      banner_height = banner_width * banner_aspect;
+    }
+
+    const float stack_height = banner_height + spinner_block_height + text_block_height + button_block_height +
+                               gap_logo_spinner + gap_spinner_text + gap_text_buttons;
+    const float stack_top = content_top + std::max(0.0f, (available_height - stack_height) * 0.35f);
+    SDL_FRect banner_rect{center_x - banner_width * 0.5f, stack_top, banner_width, banner_height};
     SDL_RenderTexture(renderer_, logo_, nullptr, &banner_rect);
 
-    const float panel_width = static_cast<float>(width) - 80.0f;
-    const float panel_text_width = panel_width - (kPanelPadding * 2.0f);
-    const float headline_height = MeasureTextBlockHeight(headline_, kHeadlineTextScale, panel_text_width);
-    const float detail_height = MeasureTextBlockHeight(detail_, kDetailTextScale, panel_text_width);
-    const float progress_label_height = DebugTextPixelSize(kProgressTextScale);
-    const float prompt_section_height =
-        prompt_active_ ? (kPanelSectionGap + kButtonHeight + kPanelPadding) : kPanelPadding;
-    const float panel_height = kPanelPadding + headline_height + kPanelSectionGap + detail_height +
-                               kPanelSectionGap + progress_label_height + 6.0f + kProgressBarHeight +
-                               prompt_section_height;
-    SDL_FRect panel_rect{40.0f, std::max(40.0f, static_cast<float>(height) - panel_height - kPanelBottomMargin),
-                         panel_width, panel_height};
-    SDL_SetRenderDrawColor(renderer_, 22, 26, 28, 220);
-    SDL_RenderFillRect(renderer_, &panel_rect);
-    SDL_SetRenderDrawColor(renderer_, 110, 130, 104, 255);
-    SDL_RenderRect(renderer_, &panel_rect);
+    const float spinner_y = banner_rect.y + banner_rect.h + gap_logo_spinner + spinner_radius;
+    DrawCircularIndicator(center_x, spinner_y, spinner_radius);
 
-    const float text_x = panel_rect.x + kPanelPadding;
-    float cursor_y = panel_rect.y + kPanelPadding;
-    cursor_y = DrawTextBlock(text_x, cursor_y, headline_, kHeadlineTextScale, panel_text_width);
-    cursor_y += 2.0f;
-    cursor_y = DrawTextBlock(text_x, cursor_y, detail_, kDetailTextScale, panel_text_width);
-    cursor_y += kPanelSectionGap;
-
-    DrawScaledDebugText(text_x, cursor_y, progress_label_, kProgressTextScale);
-    SDL_FRect bar_back{text_x, cursor_y + progress_label_height + 6.0f, panel_rect.w - (kPanelPadding * 2.0f),
-                       kProgressBarHeight};
-    SDL_SetRenderDrawColor(renderer_, 40, 46, 40, 255);
-    SDL_RenderFillRect(renderer_, &bar_back);
-    SDL_SetRenderDrawColor(renderer_, 72, 88, 64, 255);
-    SDL_RenderRect(renderer_, &bar_back);
-
-    float progress = 0.0f;
-    if (progress_total_ > 0) {
-      progress = static_cast<float>(progress_current_) / static_cast<float>(progress_total_);
-    } else {
-      const uint64_t tick = SDL_GetTicks();
-      progress = static_cast<float>((tick % 2000u)) / 2000.0f;
+    float text_y = spinner_y + spinner_radius + gap_spinner_text;
+    if (has_progress) {
+      SDL_SetRenderDrawColor(renderer_, 155, 198, 66, 255);
+      text_y = DrawCenteredTextMeasured(center_x, text_y, progress_label_, kProgressTextScale, status_width);
+      text_y += 4.0f;
     }
-    progress = std::clamp(progress, 0.0f, 1.0f);
-    SDL_FRect bar_fill{bar_back.x + 2.0f, bar_back.y + 2.0f, (bar_back.w - 4.0f) * progress, bar_back.h - 4.0f};
-    SDL_SetRenderDrawColor(renderer_, 155, 198, 66, 255);
-    SDL_RenderFillRect(renderer_, &bar_fill);
+    if (has_headline) {
+      SDL_SetRenderDrawColor(renderer_, 229, 235, 219, 255);
+      text_y = DrawCenteredTextMeasured(center_x, text_y, headline_, kHeadlineTextScale, status_width);
+    }
+    if (has_detail) {
+      SDL_SetRenderDrawColor(renderer_, 170, 179, 163, 255);
+      if (has_headline || has_progress)
+        text_y += 4.0f;
+      text_y = DrawCenteredTextMeasured(center_x, text_y, detail_, kDetailTextScale, status_width);
+    }
 
     if (prompt_active_) {
-      const float button_y = bar_back.y + bar_back.h + kPanelSectionGap;
-      exit_button_ = SDL_FRect{panel_rect.x + panel_rect.w - kPanelPadding - kButtonWidth, button_y, kButtonWidth,
-                               kButtonHeight};
-      install_button_ = SDL_FRect{exit_button_.x - kButtonGap - kButtonWidth, button_y, kButtonWidth, kButtonHeight};
+      const float total_button_width = (kButtonWidth * 2.0f) + kButtonGap;
+      const float button_y = text_y + gap_text_buttons;
+      install_button_ = SDL_FRect{center_x - total_button_width * 0.5f, button_y, kButtonWidth, kButtonHeight};
+      exit_button_ = SDL_FRect{install_button_.x + kButtonWidth + kButtonGap, button_y, kButtonWidth, kButtonHeight};
       DrawButton(install_button_, "Install", true);
       DrawButton(exit_button_, "Exit", false);
     }
+
+    SDL_SetRenderDrawColor(renderer_, 160, 170, 150, 255);
+    DrawCenteredTextBlock(center_x, footer_top, kLegalText, kLegalTextScale, legal_width);
 
     SDL_RenderPresent(renderer_);
   }
@@ -1578,17 +1912,25 @@ private:
   SDL_Window *window_ = nullptr;
   SDL_Renderer *renderer_ = nullptr;
   SDL_Texture *logo_ = nullptr;
+#if defined(_WIN32)
+  HWND native_window_ = nullptr;
+  bool wrapped_external_window_ = false;
+#endif
   SessionShellWindowConfig config_{};
   SessionShellWindowPlacement placement_{};
   bool owns_sdl_video_ = false;
   bool closed_ = false;
   bool prompt_active_ = false;
+  uint64_t created_at_ = SDL_GetTicks();
   std::optional<bool> prompt_result_;
   std::string headline_;
   std::string detail_;
   std::string progress_label_ = "Starting";
   uint64_t progress_current_ = 0;
   uint64_t progress_total_ = 0;
+  float progress_display_ = 0.0f;
+  float progress_target_ = 0.0f;
+  uint64_t last_progress_tick_ = 0;
   SDL_FRect install_button_{};
   SDL_FRect exit_button_{};
 };
@@ -2587,6 +2929,8 @@ int LaunchEngineAndWait(const fs::path &install_root, const std::string &launch_
 
   if (ui && ui->Get())
     ui->Get()->SetStatus("Launching WORR", "Starting the hosted engine library.");
+  if (ui && ui->Get() && !ui->Get()->WaitForMinimumDisplayTime())
+    return 1;
 
   auto *engine_object = SDL_LoadObject(GenericPath(engine_path).c_str());
   if (!engine_object)
@@ -2603,9 +2947,10 @@ int LaunchEngineAndWait(const fs::path &install_root, const std::string &launch_
       reinterpret_cast<set_ready_callback_fn>(SDL_LoadFunction(engine_object, kReadyCallbackEntryPoint));
 
   bool shared_window_handoff = false;
-  if (ui && ui->Get() && ui->Get()->SupportsSharedWindowHandoff()) {
-    if (void *native_handle = ui->Get()->GetSharedWindowNativeHandle()) {
-      if (ui->Get()->PrepareSharedWindowHandoff()) {
+  auto *splash_ui = (ui && ui->Get()) ? dynamic_cast<SplashUi *>(ui->Get()) : nullptr;
+  if (splash_ui && splash_ui->SupportsSharedWindowHandoff()) {
+    if (void *native_handle = splash_ui->GetSharedWindowNativeHandle()) {
+      if (splash_ui->PrepareSharedWindowHandoff()) {
         SetProcessEnvVar(kBootstrapWin32HwndEnv, PointerString(native_handle));
         shared_window_handoff = true;
         BootstrapTrace("LaunchEngineAndWait shared_window_handoff=1 hwnd=" + PointerString(native_handle));
@@ -2630,6 +2975,9 @@ int LaunchEngineAndWait(const fs::path &install_root, const std::string &launch_
   std::vector<char *> arg_ptrs = BuildArgPointers(args);
 
   SetProcessEnvVar(kBaseDirEnv, GenericPath(install_root));
+  const bool bootstrap_transition = ui && dynamic_cast<SplashUi *>(ui->Get()) != nullptr;
+  if (bootstrap_transition)
+    SetProcessEnvVar(kBootstrapTransitionEnv, "1");
 
   int exit_code = 0;
   try {
@@ -2639,6 +2987,8 @@ int LaunchEngineAndWait(const fs::path &install_root, const std::string &launch_
       set_ready_callback(nullptr, nullptr);
     SDL_UnloadObject(engine_object);
     ClearProcessEnvVar(kBaseDirEnv);
+    if (bootstrap_transition)
+      ClearProcessEnvVar(kBootstrapTransitionEnv);
     if (shared_window_handoff)
       ClearProcessEnvVar(kBootstrapWin32HwndEnv);
     throw;
@@ -2648,6 +2998,8 @@ int LaunchEngineAndWait(const fs::path &install_root, const std::string &launch_
     set_ready_callback(nullptr, nullptr);
   SDL_UnloadObject(engine_object);
   ClearProcessEnvVar(kBaseDirEnv);
+  if (bootstrap_transition)
+    ClearProcessEnvVar(kBootstrapTransitionEnv);
   if (shared_window_handoff)
     ClearProcessEnvVar(kBootstrapWin32HwndEnv);
   return exit_code;

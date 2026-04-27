@@ -35,6 +35,7 @@ static GLenum gl_post_depth_format;
 static GLenum gl_post_depth_type;
 static bool gl_hdr_warned;
 static bool gl_bloom_mrt_warned;
+static bool gl_dof_warned;
 
 static int upload_width;
 static int upload_height;
@@ -1475,6 +1476,14 @@ static bool GL_CheckFramebufferStatus(bool check, const char *name, int w, int h
     if (!GL_CheckFramebufferStatus(check, name, w, h, gl_post_format, gl_post_type, \
                                    gl_post_internal_format)) return false
 
+typedef struct {
+    GLenum internal_format;
+    GLenum format;
+    GLenum type;
+    const char *name;
+    bool uses_stencil;
+} gl_depth_format_desc_t;
+
 static bool GL_PostFxSupportsBloomMRT(void)
 {
     GLint max_draw_buffers = 0;
@@ -1584,6 +1593,8 @@ static bool GL_InitFramebuffersWithFormat(bool dof_active, bool crt_active, bool
     qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, bloom_w ? TEXNUM_PP_BLOOM : GL_NONE, 0);
 
     if (dof_active) {
+        const bool allow_stencil = r_dof_allow_stencil && r_dof_allow_stencil->integer;
+
         qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, GL_NONE);
         if (depth_format == GL_DEPTH_STENCIL) {
             qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D,
@@ -1594,7 +1605,7 @@ static bool GL_InitFramebuffersWithFormat(bool dof_active, bool crt_active, bool
             qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
                                     scene_w ? TEXNUM_PP_DEPTH : GL_NONE, 0);
 
-            if (gl_config.stencilbits) {
+            if (allow_stencil && gl_config.stencilbits) {
                 qglBindRenderbuffer(GL_RENDERBUFFER, gl_static.renderbuffer);
                 qglRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8, scene_w, scene_h);
                 qglBindRenderbuffer(GL_RENDERBUFFER, 0);
@@ -1657,6 +1668,86 @@ static bool GL_InitFramebuffersWithFormat(bool dof_active, bool crt_active, bool
     return true;
 }
 
+static bool GL_InitFramebuffersForColorFormat(bool dof_active, bool crt_active,
+                                              bool refract_active,
+                                              bool postfx_active, bool bloom_mrt,
+                                              GLenum internal_format,
+                                              GLenum format, GLenum type)
+{
+    static const gl_depth_format_desc_t depth_formats[] = {
+        { GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, "D24", false },
+        { GL_DEPTH_COMPONENT16, GL_DEPTH_COMPONENT, GL_UNSIGNED_SHORT, "D16", false },
+#ifdef GL_DEPTH_COMPONENT32F
+        { GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT, "D32F", false },
+#endif
+#if defined(GL_DEPTH24_STENCIL8) && defined(GL_UNSIGNED_INT_24_8)
+        { GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, "D24S8", true },
+#endif
+#if defined(GL_DEPTH32F_STENCIL8) && defined(GL_FLOAT_32_UNSIGNED_INT_24_8_REV)
+        { GL_DEPTH32F_STENCIL8, GL_DEPTH_STENCIL,
+          GL_FLOAT_32_UNSIGNED_INT_24_8_REV, "D32FS8", true },
+#endif
+    };
+    const bool allow_stencil = r_dof_allow_stencil && r_dof_allow_stencil->integer;
+    const char *preferred_depth = NULL;
+
+    if (!dof_active) {
+        return GL_InitFramebuffersWithFormat(
+            false, crt_active, refract_active, postfx_active, bloom_mrt,
+            internal_format, format, type, GL_DEPTH_COMPONENT24,
+            GL_DEPTH_COMPONENT, GL_UNSIGNED_INT);
+    }
+
+    for (size_t i = 0; i < q_countof(depth_formats); i++) {
+        const gl_depth_format_desc_t *depth = &depth_formats[i];
+        if (depth->uses_stencil && !allow_stencil)
+            continue;
+        if (!preferred_depth)
+            preferred_depth = depth->name;
+
+        if (GL_InitFramebuffersWithFormat(
+                true, crt_active, refract_active, postfx_active, bloom_mrt,
+                internal_format, format, type, depth->internal_format,
+                depth->format, depth->type)) {
+            if (preferred_depth && strcmp(preferred_depth, depth->name)) {
+                Com_WPrintf("PostFX: depth format %s unsupported, using %s.\n",
+                            preferred_depth, depth->name);
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool GL_InitFramebuffersVariant(bool dof_active, bool crt_active,
+                                       bool refract_active, bool postfx_active,
+                                       bool bloom_mrt, bool hdr_requested)
+{
+    if (!hdr_requested)
+        gl_hdr_warned = false;
+
+    if (hdr_requested) {
+        if (GL_InitFramebuffersForColorFormat(
+                dof_active, crt_active, refract_active, postfx_active,
+                bloom_mrt, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT)) {
+            gl_static.hdr_active = true;
+            gl_hdr_warned = false;
+            return true;
+        }
+
+        if (!gl_hdr_warned) {
+            Com_WPrintf("HDR framebuffer unsupported, falling back to LDR.\n");
+            gl_hdr_warned = true;
+        }
+    }
+
+    gl_static.hdr_active = false;
+    return GL_InitFramebuffersForColorFormat(
+        dof_active, crt_active, refract_active, postfx_active, bloom_mrt,
+        GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+}
+
 bool GL_InitFramebuffers(bool dof_active, bool crt_active, bool refract_active,
                          bool postfx_active, bool hdr_requested)
 {
@@ -1669,34 +1760,64 @@ bool GL_InitFramebuffers(bool dof_active, bool crt_active, bool refract_active,
         gl_bloom_mrt_warned = true;
     }
 
-    if (!hdr_requested)
-        gl_hdr_warned = false;
+    if (!dof_active)
+        gl_dof_warned = false;
 
-    if (hdr_requested) {
-        if (GL_InitFramebuffersWithFormat(
-                dof_active, crt_active, refract_active, postfx_active, bloom_mrt,
-                GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, GL_DEPTH_COMPONENT24,
-                GL_DEPTH_COMPONENT, GL_UNSIGNED_INT)) {
-            gl_static.hdr_active = true;
-            gl_static.postfx_bloom_mrt = bloom_mrt;
-            gl_static.postfx_dof = dof_active;
-            gl_hdr_warned = false;
-            return true;
-        }
+    if (GL_InitFramebuffersVariant(dof_active, crt_active, refract_active,
+                                   postfx_active, bloom_mrt, hdr_requested)) {
+        gl_static.postfx_bloom_mrt = bloom_mrt;
+        gl_static.postfx_dof = dof_active;
+        if (dof_active)
+            gl_dof_warned = false;
+        return true;
+    }
 
-        if (!gl_hdr_warned) {
-            Com_WPrintf("HDR framebuffer unsupported, falling back to LDR.\n");
-            gl_hdr_warned = true;
+    if (bloom_mrt &&
+        GL_InitFramebuffersVariant(dof_active, crt_active, refract_active,
+                                   postfx_active, false, hdr_requested)) {
+        if (!gl_bloom_mrt_warned) {
+            Com_WPrintf("PostFX: bloom MRT unsupported, using scene-only bloom.\n");
+            gl_bloom_mrt_warned = true;
         }
+        gl_static.postfx_bloom_mrt = false;
+        gl_static.postfx_dof = dof_active;
+        if (dof_active)
+            gl_dof_warned = false;
+        return true;
+    }
+
+    if (dof_active &&
+        GL_InitFramebuffersVariant(false, crt_active, refract_active,
+                                   postfx_active, bloom_mrt, hdr_requested)) {
+        if (!gl_dof_warned) {
+            Com_WPrintf("PostFX: DOF depth unsupported, disabling DOF.\n");
+            gl_dof_warned = true;
+        }
+        gl_static.postfx_bloom_mrt = bloom_mrt;
+        gl_static.postfx_dof = false;
+        return true;
+    }
+
+    if (bloom_mrt && dof_active &&
+        GL_InitFramebuffersVariant(false, crt_active, refract_active,
+                                   postfx_active, false, hdr_requested)) {
+        if (!gl_bloom_mrt_warned) {
+            Com_WPrintf("PostFX: bloom MRT unsupported, using scene-only bloom.\n");
+            gl_bloom_mrt_warned = true;
+        }
+        if (!gl_dof_warned) {
+            Com_WPrintf("PostFX: DOF depth unsupported, disabling DOF.\n");
+            gl_dof_warned = true;
+        }
+        gl_static.postfx_bloom_mrt = false;
+        gl_static.postfx_dof = false;
+        return true;
     }
 
     gl_static.hdr_active = false;
-    gl_static.postfx_bloom_mrt = bloom_mrt;
-    gl_static.postfx_dof = dof_active;
-    return GL_InitFramebuffersWithFormat(
-        dof_active, crt_active, refract_active, postfx_active, bloom_mrt,
-        GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, GL_DEPTH_COMPONENT24,
-        GL_DEPTH_COMPONENT, GL_UNSIGNED_INT);
+    gl_static.postfx_bloom_mrt = false;
+    gl_static.postfx_dof = false;
+    return false;
 }
 
 static void gl_partshape_changed(cvar_t *self)

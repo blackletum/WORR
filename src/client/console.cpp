@@ -98,6 +98,7 @@ static cvar_t *ui_download_active;
 static cvar_t *con_fontscale;
 static cvar_t *con_fontsize;
 static cvar_t *cl_font_skip_virtual_scale;
+static const char k_console_kfont_fallback[] = "fonts/qconfont.kfont";
 
 static bool con_speed_alias_syncing;
 
@@ -764,12 +765,12 @@ void Con_RegisterMedia(void) {
   int con_fixed_advance = max(1, con_size);
   con.font =
       Font_Load(con_font->string, con_line_height, pixel_scale,
-                con_fixed_advance, "fonts/qfont.kfont", "conchars.png");
+                con_fixed_advance, k_console_kfont_fallback, "conchars.png");
   if (!con.font && strcmp(con_font->string, con_font->default_string)) {
     Cvar_Reset(con_font);
     con.font =
         Font_Load(con_font->default_string, con_line_height, pixel_scale,
-                  con_fixed_advance, "fonts/qfont.kfont", "conchars.png");
+                  con_fixed_advance, k_console_kfont_fallback, "conchars.png");
   }
   con.font_pixel_scale = pixel_scale;
   con.charsetImage = Font_LegacyHandle(con.font);

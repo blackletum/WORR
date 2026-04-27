@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import pathlib
 import shutil
 
@@ -41,6 +42,17 @@ def clear_globbed_paths(root: pathlib.Path, patterns: tuple[str, ...]) -> None:
             remove_path(path)
 
 
+def file_sha256(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def copy_runtime_files(build_dir: pathlib.Path, install_dir: pathlib.Path) -> int:
     copied = 0
     copied_paths: set[pathlib.Path] = set()
@@ -52,7 +64,10 @@ def copy_runtime_files(build_dir: pathlib.Path, install_dir: pathlib.Path) -> in
             if not should_stage_runtime_file(path) or path in copied_paths:
                 continue
             dest = install_dir / path.name
+            remove_path(dest)
             shutil.copy2(path, dest)
+            if file_sha256(path) != file_sha256(dest):
+                raise SystemExit(f'Runtime staging verification failed for {path} -> {dest}')
             copied_paths.add(path)
             copied += 1
     return copied

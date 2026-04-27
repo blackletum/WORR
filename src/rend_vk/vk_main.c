@@ -1685,7 +1685,7 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
             while (true) {
                 token = COM_Parse(&data);
 
-                if (!strcmp(token, "}"))
+                if (!*token || !strcmp(token, "}"))
                     break;
 
                 uint32_t codepoint = strtoul(token, NULL, 10);
@@ -1695,13 +1695,12 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
                 uint32_t h = strtoul(COM_Parse(&data), NULL, 10);
                 COM_Parse(&data);
 
-                codepoint -= KFONT_ASCII_MIN;
-
-                if (codepoint < KFONT_ASCII_MAX) {
-                    font->chars[codepoint].x = x;
-                    font->chars[codepoint].y = y;
-                    font->chars[codepoint].w = w;
-                    font->chars[codepoint].h = h;
+                if (codepoint >= KFONT_ASCII_MIN && codepoint <= KFONT_ASCII_MAX) {
+                    size_t char_index = (size_t)(codepoint - KFONT_ASCII_MIN);
+                    font->chars[char_index].x = x;
+                    font->chars[char_index].y = y;
+                    font->chars[char_index].w = w;
+                    font->chars[char_index].h = h;
 
                     font->line_height = max(font->line_height, h);
                 }

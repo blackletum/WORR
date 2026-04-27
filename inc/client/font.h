@@ -29,6 +29,20 @@ extern "C" {
 
 typedef struct font_s font_t;
 
+typedef struct font_debug_metrics_s {
+    int kind;
+    int line_height;
+    int pixel_height;
+    int ascent;
+    int descent;
+    int baseline;
+    int extent;
+    int line_skip;
+    int text_y_offset;
+    float draw_scale;
+    int baseline_px;
+} font_debug_metrics_t;
+
 void Font_Init(void);
 void Font_Shutdown(void);
 
@@ -43,6 +57,8 @@ int Font_DrawString(font_t *font, int x, int y, int scale, int flags,
 int Font_MeasureString(const font_t *font, int scale, int flags, size_t max_chars,
                        const char *string, int *out_height);
 int Font_LineHeight(const font_t *font, int scale);
+bool Font_GetDebugMetrics(const font_t *font, int scale,
+                          font_debug_metrics_t *out_metrics);
 
 bool Font_IsLegacy(const font_t *font);
 qhandle_t Font_LegacyHandle(const font_t *font);

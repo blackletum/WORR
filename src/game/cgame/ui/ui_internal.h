@@ -322,8 +322,13 @@ public:
     void SetLogoAnchor(int anchor) { logoAnchor_ = anchor; }
     void SetFooterText(std::string text) { footerText_ = std::move(text); }
     void SetFooterSubtext(std::string text) { footerSubtext_ = std::move(text); }
+    void SetFooterSubtextCvar(cvar_t *cvar) { footerSubtextCvar_ = cvar; }
     void SetFooterColor(color_t color) { footerColor_ = color; footerColorSet_ = true; }
     void SetFooterSize(int size) { footerSize_ = size; footerSizeSet_ = true; }
+    void SetFooterSubtextColor(color_t color) { footerSubtextColor_ = color; footerSubtextColorSet_ = true; }
+    void SetFooterSubtextSize(int size) { footerSubtextSize_ = size; footerSubtextSizeSet_ = true; }
+    void SetFooterAlignLeft(bool alignLeft) { footerAlignLeft_ = alignLeft; footerAlignRight_ = false; }
+    void SetFooterAlignRight(bool alignRight) { footerAlignRight_ = alignRight; footerAlignLeft_ = false; }
     void SetCloseCommand(std::string command) { closeCommand_ = std::move(command); }
     void SetFrameStyle(bool enabled, color_t fill, color_t border, int padding, int borderWidth);
     void ClearHints();
@@ -402,10 +407,17 @@ private:
     int logoAnchor_ = 0;
     std::string footerText_{};
     std::string footerSubtext_{};
+    cvar_t *footerSubtextCvar_ = nullptr;
     color_t footerColor_{};
     bool footerColorSet_ = false;
     int footerSize_ = 0;
     bool footerSizeSet_ = false;
+    color_t footerSubtextColor_{};
+    bool footerSubtextColorSet_ = false;
+    int footerSubtextSize_ = 0;
+    bool footerSubtextSizeSet_ = false;
+    bool footerAlignLeft_ = false;
+    bool footerAlignRight_ = false;
     bool scrollDragging_ = false;
     int scrollDragOffset_ = 0;
 };

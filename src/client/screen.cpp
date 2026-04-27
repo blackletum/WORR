@@ -63,11 +63,35 @@ static cvar_t   *scr_demobar;
 static cvar_t   *scr_font;
 static cvar_t   *scr_scale;
 static cvar_t   *cl_font_skip_virtual_scale;
+static cvar_t   *cl_font_test;
+static cvar_t   *cl_font_test_font;
 static cvar_t   *scr_demobar_legacy;
 static cvar_t   *scr_font_legacy;
 static cvar_t   *scr_scale_legacy;
 static const float k_scr_ttf_letter_spacing = 0.06f;
+static const char k_scr_kfont_fallback_path[] = "fonts/qconfont.kfont";
 static const char k_scr_ui_font_path[] = "fonts/AtkinsonHyperLegible-Regular.otf";
+static const char k_scr_bootstrap_transition_env[] = "WORR_BOOTSTRAP_TRANSITION";
+static const unsigned k_scr_bootstrap_blend_duration = 240;
+static unsigned scr_bootstrap_blend_start;
+static bool scr_bootstrap_blend_pending;
+static bool scr_bootstrap_blend_done;
+static qhandle_t scr_bootstrap_logo_pic;
+static int scr_bootstrap_logo_width;
+static int scr_bootstrap_logo_height;
+
+#define SCR_FONT_TEST_SIZE_COUNT 6
+static const int scr_font_test_sizes[SCR_FONT_TEST_SIZE_COUNT] = {
+    8, 10, 12, 16, 24, 32
+};
+
+typedef struct {
+    font_t *proportional;
+    font_t *fixed;
+} scr_font_test_font_t;
+
+static scr_font_test_font_t scr_font_test_fonts[SCR_FONT_TEST_SIZE_COUNT];
+static char scr_font_test_loaded_path[MAX_QPATH];
 
 static cvar_t   *scr_crosshair;
 
@@ -307,7 +331,8 @@ int SCR_DrawStringStretch(int x, int y, int scale, int flags, size_t maxlen,
         } else if (flags & UI_RIGHT) {
             x -= text_width;
         }
-        return Font_DrawString(scr.ui_font, x, y, scale, flags, len, s, color);
+        return Font_DrawString(scr.ui_font, x, y, scale,
+                               flags & ~(UI_LEFT | UI_RIGHT), len, s, color);
     }
 
     size_t visible_len = Com_StrlenNoColor(s, len);
@@ -387,6 +412,234 @@ void SCR_DrawKStringMultiStretch(int x, int y, int scale, int flags, size_t maxl
 
     if (flags & UI_DRAWCURSOR && com_localTime & BIT(8))
         R_DrawKFontChar(last_x, last_y, scale, flags, 11, color, kfont);
+}
+
+static void SCR_FontTestFree(void)
+{
+    for (int i = 0; i < SCR_FONT_TEST_SIZE_COUNT; ++i) {
+        if (scr_font_test_fonts[i].proportional) {
+            Font_Free(scr_font_test_fonts[i].proportional);
+            scr_font_test_fonts[i].proportional = nullptr;
+        }
+        if (scr_font_test_fonts[i].fixed) {
+            Font_Free(scr_font_test_fonts[i].fixed);
+            scr_font_test_fonts[i].fixed = nullptr;
+        }
+    }
+    scr_font_test_loaded_path[0] = '\0';
+}
+
+static const char *SCR_FontTestPath(void)
+{
+    if (cl_font_test_font && cl_font_test_font->string && *cl_font_test_font->string)
+        return cl_font_test_font->string;
+    if (scr_font && scr_font->string && *scr_font->string)
+        return scr_font->string;
+    return "fonts/RobotoMono-Regular.ttf";
+}
+
+static void SCR_FontTestEnsure(void)
+{
+    const char *path = SCR_FontTestPath();
+    if (!strcmp(scr_font_test_loaded_path, path))
+        return;
+
+    SCR_FontTestFree();
+    Q_strlcpy(scr_font_test_loaded_path, path, sizeof(scr_font_test_loaded_path));
+
+    for (int i = 0; i < SCR_FONT_TEST_SIZE_COUNT; ++i) {
+        int size = scr_font_test_sizes[i];
+        scr_font_test_fonts[i].proportional =
+            Font_Load(path, size, 1.0f, 0, k_scr_kfont_fallback_path, "conchars.png");
+        scr_font_test_fonts[i].fixed =
+            Font_Load(path, size, 1.0f, size, k_scr_kfont_fallback_path, "conchars.png");
+    }
+
+    Com_Printf("Font test: loaded \"%s\" at %d sizes\n", path,
+               SCR_FONT_TEST_SIZE_COUNT);
+}
+
+static void SCR_FontTestDrawLabel(int x, int y, color_t color, const char *text)
+{
+    if (!text || !*text)
+        return;
+    if (scr.ui_font) {
+        Font_DrawString(scr.ui_font, x, y, 1, 0, strlen(text), text, color);
+    } else {
+        SCR_DrawStringStretch(x, y, 1, 0, strlen(text), text, color,
+                              scr.ui_font_pic);
+    }
+}
+
+static void SCR_FontTestDrawBlock(font_t *font, int x, int y, int width,
+                                  const char *mode, int size,
+                                  const char *sample)
+{
+    if (!font)
+        return;
+
+    font_debug_metrics_t metrics;
+    Font_GetDebugMetrics(font, 1, &metrics);
+
+    int line_h = metrics.line_height > 0 ? metrics.line_height : Font_LineHeight(font, 1);
+    int baseline_y = y + metrics.baseline_px;
+
+    color_t box_color = COLOR_RGBA(18, 20, 24, 232);
+    color_t top_color = COLOR_RGBA(120, 120, 128, 255);
+    color_t base_color = COLOR_RGBA(80, 230, 120, 255);
+    color_t bottom_color = COLOR_RGBA(120, 100, 90, 255);
+    color_t text_color = COLOR_RGBA(245, 245, 245, 255);
+    color_t label_color = COLOR_RGBA(190, 205, 220, 255);
+
+    R_DrawFill32(x, y, width, line_h, box_color);
+    R_DrawFill32(x, y, width, 1, top_color);
+    if (metrics.baseline_px >= 0 && metrics.baseline_px < line_h)
+        R_DrawFill32(x, baseline_y, width, 1, base_color);
+    R_DrawFill32(x, y + line_h - 1, width, 1, bottom_color);
+
+    Font_DrawString(font, x + 4, y, 1, 0, strlen(sample), sample, text_color);
+
+    char label[192];
+    Q_snprintf(label, sizeof(label),
+               "%s size=%d line=%d px=%d asc=%d desc=%d base=%d ext=%d off=%d",
+               mode, size, metrics.line_height, metrics.pixel_height,
+               metrics.ascent, metrics.descent, metrics.baseline,
+               metrics.extent, metrics.text_y_offset);
+    SCR_FontTestDrawLabel(x, y - CONCHAR_HEIGHT - 2, label_color, label);
+}
+
+static int SCR_FontTestDrawAlignment(font_t *font, int y)
+{
+    if (!font)
+        return 0;
+
+    const int canvas_w = r_config.width;
+    const int margin = 18;
+    const int width = canvas_w - (margin * 2);
+    if (width <= 0)
+        return 0;
+
+    const int line_h = Font_LineHeight(font, 1);
+    const int pad = 6;
+    const int line_step = max(line_h * 2, line_h + 12);
+    const int block_h = line_step * 3 + pad * 2;
+    const int center_x = canvas_w / 2;
+    const int right_anchor_x = canvas_w - margin;
+
+    R_DrawFill32(margin, y, width, block_h, COLOR_RGBA(12, 16, 20, 232));
+    R_DrawFill32(margin, y, 1, block_h, COLOR_RGBA(120, 170, 230, 255));
+    R_DrawFill32(center_x, y, 1, block_h, COLOR_RGBA(80, 230, 120, 255));
+    R_DrawFill32(right_anchor_x - 1, y, 1, block_h,
+                 COLOR_RGBA(230, 190, 80, 255));
+
+    const char *left = "LEFT anchor: Hpxgjqy 0123 []{}";
+    const char *center = "CENTER anchor: Hpxgjqy 0123 []{}";
+    const char *right = "RIGHT anchor: Hpxgjqy 0123 []{}";
+    const color_t text_color = COLOR_RGBA(245, 245, 245, 255);
+
+    Font_DrawString(font, margin, y + pad, 1, UI_LEFT, strlen(left), left,
+                    text_color);
+    Font_DrawString(font, center_x, y + pad + line_step, 1, UI_CENTER,
+                    strlen(center), center, text_color);
+    Font_DrawString(font, right_anchor_x, y + pad + (line_step * 2), 1, UI_RIGHT,
+                    strlen(right), right, text_color);
+
+    SCR_FontTestDrawLabel(margin, y - CONCHAR_HEIGHT - 2,
+                          COLOR_RGBA(190, 205, 220, 255),
+                          "alignment anchors: blue=left, green=center, gold=right");
+    return block_h;
+}
+
+static void SCR_DrawFontTestScreen(void)
+{
+    if (!cl_font_test || cl_font_test->integer <= 0)
+        return;
+
+    SCR_FontTestEnsure();
+
+    const int canvas_w = r_config.width;
+    const int canvas_h = r_config.height;
+
+    R_SetScale((float)SCR_GetBaseScaleInt());
+    R_DrawFill32(0, 0, canvas_w, canvas_h, COLOR_RGBA(0, 0, 0, 238));
+
+    const char *path = SCR_FontTestPath();
+    char title[MAX_QPATH + 96];
+    Q_snprintf(title, sizeof(title),
+               "TTF font test: %s  (green=baseline, gray=top, brown=bottom)",
+               path);
+    SCR_FontTestDrawLabel(18, 14, COLOR_RGBA(255, 255, 255, 255), title);
+    SCR_FontTestDrawLabel(18, 28, COLOR_RGBA(170, 190, 210, 255),
+                          "Use: font_test [0|1|path], or set cl_font_test_font");
+
+    const char *sample =
+        "Hpxgjqy 0123456789 []{} ÀÉÖÜß çéñ Ωβμ ЖДЙ яфб 한국어 日本語 中文";
+
+    int margin = 18;
+    int gap = 22;
+    int col_w = (canvas_w - (margin * 2) - gap) / 2;
+    if (col_w < 280)
+        col_w = canvas_w - (margin * 2);
+    int x_prop = margin;
+    int x_fixed = (col_w * 2 + gap <= canvas_w - (margin * 2))
+                      ? margin + col_w + gap
+                      : margin;
+
+    int y = 68;
+    font_t *alignment_font = scr_font_test_fonts[0].proportional;
+    int alignment_h = SCR_FontTestDrawAlignment(alignment_font, y);
+    if (alignment_h > 0)
+        y += alignment_h + 36;
+
+    for (int i = 0; i < SCR_FONT_TEST_SIZE_COUNT; ++i) {
+        font_t *prop = scr_font_test_fonts[i].proportional;
+        font_t *fixed = scr_font_test_fonts[i].fixed;
+        int prop_h = prop ? Font_LineHeight(prop, 1) : CONCHAR_HEIGHT;
+        int fixed_h = fixed ? Font_LineHeight(fixed, 1) : CONCHAR_HEIGHT;
+        int row_h = max(prop_h, fixed_h);
+
+        if (y + row_h + 8 > canvas_h)
+            break;
+
+        if (prop) {
+            SCR_FontTestDrawBlock(prop, x_prop, y, col_w, "proportional",
+                                  scr_font_test_sizes[i], sample);
+        } else {
+            SCR_FontTestDrawLabel(x_prop, y, COLOR_RGBA(255, 80, 80, 255),
+                                  "proportional load failed");
+        }
+
+        if (x_fixed != x_prop) {
+            if (fixed) {
+                SCR_FontTestDrawBlock(fixed, x_fixed, y, col_w, "fixed",
+                                      scr_font_test_sizes[i], sample);
+            } else {
+                SCR_FontTestDrawLabel(x_fixed, y, COLOR_RGBA(255, 80, 80, 255),
+                                      "fixed load failed");
+            }
+        }
+
+        y += row_h + 34;
+    }
+}
+
+static void SCR_FontTest_f(void)
+{
+    if (!cl_font_test)
+        return;
+
+    if (Cmd_Argc() > 1) {
+        const char *arg = Cmd_Argv(1);
+        if (!strcmp(arg, "0") || !strcmp(arg, "1")) {
+            Cvar_Set("cl_font_test", arg);
+        } else {
+            Cvar_Set("cl_font_test_font", arg);
+            Cvar_Set("cl_font_test", "1");
+        }
+        return;
+    }
+
+    Cvar_Set("cl_font_test", cl_font_test->integer ? "0" : "1");
 }
 
 typedef struct {
@@ -2648,12 +2901,12 @@ static void scr_font_changed(cvar_t *self)
 
     float pixel_scale = SCR_GetFontPixelScale();
     scr.font = Font_Load(self->string, CONCHAR_HEIGHT, pixel_scale, 0,
-                         "fonts/qfont.kfont", "conchars.png");
+                         k_scr_kfont_fallback_path, "conchars.png");
 
     if (!scr.font && strcmp(self->string, self->default_string)) {
         Cvar_Reset(self);
         scr.font = Font_Load(self->default_string, CONCHAR_HEIGHT, pixel_scale, 0,
-                             "fonts/qfont.kfont", "conchars.png");
+                             k_scr_kfont_fallback_path, "conchars.png");
     }
 
     Font_SetLetterSpacing(scr.font, k_scr_ttf_letter_spacing);
@@ -2673,7 +2926,7 @@ static void scr_ui_font_reload(void)
 
     float pixel_scale = SCR_GetFontPixelScale();
     scr.ui_font = Font_Load(k_scr_ui_font_path, CONCHAR_HEIGHT, pixel_scale, 0,
-                            "fonts/qfont.kfont", "conchars.png");
+                            k_scr_kfont_fallback_path, "conchars.png");
     if (!scr.ui_font) {
         scr.ui_font = scr.font;
         scr.ui_font_pic = scr.font_pic;
@@ -2898,6 +3151,7 @@ static const cmdreg_t scr_cmds[] = {
     { "undraw", SCR_UnDraw_f, SCR_UnDraw_c },
     { "clearchathud", SCR_ClearChatHUD_f },
     { "stat", SCR_Stat_f, SCR_Stat_c },
+    { "font_test", SCR_FontTest_f },
     { NULL }
 };
 
@@ -2921,6 +3175,8 @@ void SCR_Init(void)
     scr_scale->changed = scr_scale_changed;
     cl_font_skip_virtual_scale = Cvar_Get("cl_font_skip_virtual_scale", "0", CVAR_ARCHIVE);
     cl_font_skip_virtual_scale->changed = cl_font_skip_virtual_scale_changed;
+    cl_font_test = Cvar_Get("cl_font_test", "0", 0);
+    cl_font_test_font = Cvar_Get("cl_font_test_font", "fonts/RobotoMono-Regular.ttf", 0);
     scr_crosshair = Cvar_Get("crosshair", "3", CVAR_ARCHIVE);
     scr_crosshair->changed = scr_crosshair_changed;
 
@@ -3020,6 +3276,16 @@ void SCR_Init(void)
 
     scr_scale_changed(scr_scale);
     SCR_SetCrosshairColor();
+    scr_bootstrap_blend_start = 0;
+    scr_bootstrap_blend_pending = false;
+    scr_bootstrap_blend_done = false;
+    scr_bootstrap_logo_pic = R_RegisterPic("/art/logo.png");
+    if (scr_bootstrap_logo_pic) {
+        R_GetPicSize(&scr_bootstrap_logo_width, &scr_bootstrap_logo_height, scr_bootstrap_logo_pic);
+    } else {
+        scr_bootstrap_logo_width = 0;
+        scr_bootstrap_logo_height = 0;
+    }
 
     scr.initialized = true;
 }
@@ -3027,6 +3293,7 @@ void SCR_Init(void)
 void SCR_Shutdown(void)
 {
     Cmd_Deregister(scr_cmds);
+    SCR_FontTestFree();
     if (scr.ui_font && scr.ui_font != scr.font) {
         Font_Free(scr.ui_font);
         scr.ui_font = nullptr;
@@ -3037,6 +3304,12 @@ void SCR_Shutdown(void)
     }
     scr.font_pic = 0;
     scr.ui_font_pic = 0;
+    scr_bootstrap_logo_pic = 0;
+    scr_bootstrap_logo_width = 0;
+    scr_bootstrap_logo_height = 0;
+    scr_bootstrap_blend_start = 0;
+    scr_bootstrap_blend_pending = false;
+    scr_bootstrap_blend_done = false;
     scr.initialized = false;
 }
 
@@ -3715,6 +3988,52 @@ static void SCR_DrawActive(void)
     SCR_Draw2D();
 }
 
+static void SCR_DrawBootstrapBlend(void)
+{
+    const char *transition = getenv(k_scr_bootstrap_transition_env);
+    if (!transition || !*transition)
+        return;
+
+    unsigned now = Sys_Milliseconds();
+    if (scr_bootstrap_blend_done)
+        return;
+
+    if (!scr_bootstrap_blend_pending) {
+        scr_bootstrap_blend_pending = true;
+        scr_bootstrap_blend_start = now;
+    }
+
+    unsigned elapsed = now - scr_bootstrap_blend_start;
+    if (elapsed >= k_scr_bootstrap_blend_duration) {
+        scr_bootstrap_blend_pending = false;
+        scr_bootstrap_blend_done = true;
+        return;
+    }
+
+    float frac = 1.0f - (float)elapsed / (float)k_scr_bootstrap_blend_duration;
+    byte alpha = (byte)Q_clip(Q_rint(frac * 255.0f), 0, 255);
+    if (alpha <= 0)
+        return;
+
+    R_DrawFill32(0, 0, r_config.width, r_config.height, COLOR_RGBA(0, 0, 0, alpha));
+
+    if (scr_bootstrap_logo_pic && scr_bootstrap_logo_width > 0 && scr_bootstrap_logo_height > 0) {
+        float banner_width = min((float)r_config.width, (float)r_config.height * (4.0f / 3.0f));
+        float banner_height = banner_width * (float)scr_bootstrap_logo_height / (float)scr_bootstrap_logo_width;
+        float max_height = (float)r_config.height * 0.6f;
+        if (banner_height > max_height) {
+            banner_height = max_height;
+            banner_width = banner_height * (float)scr_bootstrap_logo_width / (float)scr_bootstrap_logo_height;
+        }
+
+        int draw_w = Q_rint(banner_width);
+        int draw_h = Q_rint(banner_height);
+        int draw_x = (r_config.width - draw_w) / 2;
+        int draw_y = 28;
+        R_DrawStretchPic(draw_x, draw_y, draw_w, draw_h, COLOR_RGBA(255, 255, 255, alpha), scr_bootstrap_logo_pic);
+    }
+}
+
 //=======================================================
 
 /*
@@ -3759,11 +4078,15 @@ void SCR_UpdateScreen(void)
     // draw main menu
     UI_Draw(cls.realtime);
 
+    SCR_DrawFontTestScreen();
+
     // draw console
     Con_DrawConsole();
 
     // draw loading plaque
     SCR_DrawLoading();
+
+    SCR_DrawBootstrapBlend();
 
     R_EndFrame();
     Com_BootstrapSignalReady();

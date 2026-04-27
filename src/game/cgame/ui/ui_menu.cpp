@@ -140,6 +140,94 @@ static color_t MenuAdjustColor(color_t color, float delta)
     return color;
 }
 
+static color_t LerpColor(color_t from, color_t to, float t)
+{
+    t = Q_clipf(t, 0.0f, 1.0f);
+    return COLOR_RGBA(
+        Q_rint(from.r + (to.r - from.r) * t),
+        Q_rint(from.g + (to.g - from.g) * t),
+        Q_rint(from.b + (to.b - from.b) * t),
+        Q_rint(from.a + (to.a - from.a) * t));
+}
+
+static void DrawVerticalGradientFill(int x, int y, int width, int height,
+                                     color_t top, color_t bottom, int steps)
+{
+    if (width <= 0 || height <= 0)
+        return;
+
+    steps = max(1, min(steps, height));
+    for (int i = 0; i < steps; i++) {
+        int y0 = y + (height * i) / steps;
+        int y1 = y + (height * (i + 1)) / steps;
+        int h = max(1, y1 - y0);
+        float t = (steps > 1) ? (static_cast<float>(i) / (steps - 1)) : 1.0f;
+        R_DrawFill32(x, y0, width, h, LerpColor(top, bottom, t));
+    }
+}
+
+static void DrawMainMenuBackdrop(int menuTop, int menuBottom)
+{
+    int height = menuBottom - menuTop;
+    if (height <= 0)
+        return;
+
+    DrawVerticalGradientFill(0, menuTop, uis.width, height,
+                             COLOR_RGBA(20, 24, 28, 255),
+                             COLOR_RGBA(54, 40, 28, 255),
+                             48);
+
+    int horizonTop = menuTop + Q_rint(height * 0.18f);
+    int horizonHeight = max(1, Q_rint(height * 0.42f));
+    DrawVerticalGradientFill(0, horizonTop, uis.width, horizonHeight,
+                             COLOR_RGBA(118, 82, 40, 180),
+                             COLOR_RGBA(28, 32, 36, 40),
+                             28);
+
+    int centerGlowWidth = max(320, Q_rint(uis.width * 0.42f));
+    int centerGlowHeight = max(180, Q_rint(height * 0.42f));
+    int centerGlowX = (uis.width - centerGlowWidth) / 2;
+    int centerGlowY = menuTop + Q_rint(height * 0.24f);
+    DrawVerticalGradientFill(centerGlowX, centerGlowY, centerGlowWidth, centerGlowHeight,
+                             COLOR_RGBA(168, 126, 62, 96),
+                             COLOR_RGBA(22, 24, 28, 32),
+                             20);
+
+    int panelWidth = max(360, Q_rint(uis.width * 0.42f));
+    panelWidth = min(panelWidth, uis.width - GenericSpacing(CONCHAR_WIDTH) * 8);
+    int panelHeight = max(220, Q_rint(height * 0.34f));
+    int panelX = (uis.width - panelWidth) / 2;
+    int panelY = menuTop + Q_rint(height * 0.34f);
+    R_DrawFill32(panelX, panelY, panelWidth, panelHeight, COLOR_RGBA(18, 22, 26, 220));
+    R_DrawFill32(panelX, panelY, panelWidth, 1, COLOR_RGBA(188, 138, 74, 128));
+    R_DrawFill32(panelX, panelY + panelHeight - 1, panelWidth, 1, COLOR_RGBA(188, 138, 74, 96));
+    R_DrawFill32(panelX, panelY, 1, panelHeight, COLOR_RGBA(110, 92, 68, 96));
+    R_DrawFill32(panelX + panelWidth - 1, panelY, 1, panelHeight, COLOR_RGBA(110, 92, 68, 96));
+
+    int topShade = max(1, Q_rint(height * 0.12f));
+    int bottomShade = max(1, Q_rint(height * 0.22f));
+    DrawVerticalGradientFill(0, menuTop, uis.width, topShade,
+                             COLOR_RGBA(0, 0, 0, 164),
+                             COLOR_RGBA(0, 0, 0, 0),
+                             8);
+    DrawVerticalGradientFill(0, menuBottom - bottomShade, uis.width, bottomShade,
+                             COLOR_RGBA(0, 0, 0, 0),
+                             COLOR_RGBA(0, 0, 0, 196),
+                             16);
+
+    static qhandle_t worrBackdrop = 0;
+    if (!worrBackdrop)
+        worrBackdrop = R_RegisterPic("/art/logo.png");
+    if (worrBackdrop) {
+        int logoWidth = Q_rint(uis.width * 0.58f);
+        int logoHeight = logoWidth / 2;
+        int logoX = (uis.width - logoWidth) / 2;
+        int logoY = menuTop + Q_rint(height * 0.08f);
+        R_DrawStretchPic(logoX, logoY, logoWidth, logoHeight,
+                         COLOR_RGBA(255, 255, 255, 48), worrBackdrop);
+    }
+}
+
 } // namespace
 
 Menu::Menu(std::string name)
@@ -423,11 +511,13 @@ void Menu::Layout()
     int bitmap_top = 0;
     int bitmap_bottom = 0;
     bool bitmap_bounds_set = false;
+    bool bitmap_cursor_needed = false;
     for (size_t i = 0; i < widgets_.size(); i++) {
         const auto *bitmap = dynamic_cast<const BitmapWidget *>(widgets_[i].get());
         if (!bitmap || widgets_[i]->IsHidden())
             continue;
         widest_bitmap = max(widest_bitmap, bitmap->ImageWidth());
+        bitmap_cursor_needed = bitmap_cursor_needed || widgets_[i]->IsSelectable();
         int top = itemYs_[i];
         int bottom = top + itemHeights_[i];
         if (!bitmap_bounds_set) {
@@ -443,12 +533,14 @@ void Menu::Layout()
     hasBitmaps_ = widest_bitmap > 0;
     bitmapBaseX_ = uis.width / 2;
     if (hasBitmaps_) {
+        const int bitmap_cursor_column = bitmap_cursor_needed ? kBitmapCursorColumn : 0;
+        const int bitmap_cursor_width = bitmap_cursor_needed ? CURSOR_WIDTH : 0;
         if (fixedLayout_ && fixed_bitmap_bounds_set) {
             int side_width = 0;
             if (plaqueFixed_ || logoFixed_)
                 side_width = max(plaqueRect_.width, logoRect_.width);
-            int total_width = widest_bitmap + kBitmapCursorColumn + side_width;
-            int desired_left = max(0, (uis.width - total_width) / 2 + side_width + kBitmapCursorColumn);
+            int total_width = widest_bitmap + bitmap_cursor_column + side_width;
+            int desired_left = max(0, (uis.width - total_width) / 2 + side_width + bitmap_cursor_column);
             fixedLayoutOffsetX_ = desired_left - fixed_bitmap_left;
             for (auto &widget : widgets_) {
                 if (auto *bitmap = dynamic_cast<BitmapWidget *>(widget.get()))
@@ -470,7 +562,7 @@ void Menu::Layout()
             int side_width = 0;
             if (plaque_ || logo_)
                 side_width = max(plaqueRect_.width, logoRect_.width);
-            int total_width = widest_bitmap + CURSOR_WIDTH + side_width;
+            int total_width = widest_bitmap + bitmap_cursor_width + side_width;
             bitmapBaseX_ = (uis.width + total_width) / 2 - widest_bitmap;
         }
     }
@@ -934,7 +1026,9 @@ void Menu::Draw()
 
     UpdateMenuBlurRect(allowBlur_, transparent_, menuTop, menuBottom);
 
-    if (backgroundImage_) {
+    if (name_ == "main" && !backgroundImage_) {
+        DrawMainMenuBackdrop(menuTop, menuBottom);
+    } else if (backgroundImage_) {
         R_DrawKeepAspectPic(0, menuTop, uis.width, menuBottom - menuTop, COLOR_WHITE, backgroundImage_);
     } else {
         R_DrawFill32(0, menuTop, uis.width, menuBottom - menuTop, backgroundColor_);
@@ -1045,22 +1139,49 @@ void Menu::Draw()
         }
     }
 
-    if (!footerText_.empty() || !footerSubtext_.empty()) {
+    std::string footerSubtext = footerSubtext_;
+    if (footerSubtext.empty() && footerSubtextCvar_ && footerSubtextCvar_->string)
+        footerSubtext = footerSubtextCvar_->string;
+
+    if (!footerText_.empty() || !footerSubtext.empty()) {
         int size = footerSizeSet_ ? footerSize_ : max(8, CONCHAR_HEIGHT - 4);
+        int subtextSize = footerSubtextSizeSet_ ? footerSubtextSize_ : max(6, size - 1);
         color_t color = footerColorSet_ ? footerColor_ : COLOR_RGBA(180, 180, 180, 255);
+        color_t subtextColor = footerSubtextColorSet_ ? footerSubtextColor_ : color;
+        auto alignTextX = [](const char *text, int anchorX, int flags, int fontSize) {
+            if (!text || !*text)
+                return anchorX;
+            if ((flags & UI_CENTER) == UI_CENTER)
+                return anchorX - UI_FontMeasureStringSized(0, MAX_STRING_CHARS, text, nullptr, fontSize) / 2;
+            if (flags & UI_RIGHT)
+                return anchorX - UI_FontMeasureStringSized(0, MAX_STRING_CHARS, text, nullptr, fontSize);
+            return anchorX;
+        };
         int line_h = UI_FontLineHeightSized(size);
+        int subtextLineH = UI_FontLineHeightSized(subtextSize);
         int pad = GenericSpacing(CONCHAR_HEIGHT) / 2;
         int y = uis.height - hintHeight - pad - line_h;
-        if (!footerSubtext_.empty())
-            y -= line_h;
+        int footer_anchor_x = centerX;
+        int footer_flags = UI_CENTER;
+        if (footerAlignLeft_) {
+            footer_anchor_x = leftX;
+            footer_flags = UI_LEFT;
+        } else if (footerAlignRight_) {
+            footer_anchor_x = leftX + contentWidth;
+            footer_flags = UI_RIGHT;
+        }
+        if (!footerSubtext.empty())
+            y -= subtextLineH;
         if (!footerText_.empty()) {
-            UI_FontDrawStringSized(uis.width / 2, y, UI_CENTER, MAX_STRING_CHARS,
+            int footer_x = alignTextX(footerText_.c_str(), footer_anchor_x, footer_flags, size);
+            UI_FontDrawStringSized(footer_x, y, 0, MAX_STRING_CHARS,
                                    footerText_.c_str(), color, size);
             y += line_h;
         }
-        if (!footerSubtext_.empty()) {
-            UI_FontDrawStringSized(uis.width / 2, y, UI_CENTER, MAX_STRING_CHARS,
-                                   footerSubtext_.c_str(), color, size);
+        if (!footerSubtext.empty()) {
+            int subtext_x = alignTextX(footerSubtext.c_str(), footer_anchor_x, footer_flags, subtextSize);
+            UI_FontDrawStringSized(subtext_x, y, 0, MAX_STRING_CHARS,
+                                   footerSubtext.c_str(), subtextColor, subtextSize);
         }
     }
 

@@ -496,10 +496,14 @@ static inline int draw_kfont_char(int x, int y, int scale, int flags, uint32_t c
 {
     const kfont_char_t *ch = SCR_KFontLookup(kfont, codepoint);
 
-    if (!ch)
+    if (!ch || !kfont || !kfont->pic || kfont->sw <= 0.0f || kfont->sh <= 0.0f)
         return 0;
     
     image_t *image = IMG_ForHandle(kfont->pic);
+    if (!image)
+        return 0;
+
+    int draw_scale = max(scale, 1);
 
     float s = ch->x * kfont->sw;
     float t = ch->y * kfont->sh;
@@ -507,13 +511,13 @@ static inline int draw_kfont_char(int x, int y, int scale, int flags, uint32_t c
     float sw = ch->w * kfont->sw;
     float sh = ch->h * kfont->sh;
 
-    int w = ch->w * scale;
-    int h = ch->h * scale;
+    int w = ch->w * draw_scale;
+    int h = ch->h * draw_scale;
 
     int shadow_offset = 0;
 
     if ((flags & UI_DROPSHADOW) || gl_fontshadow->integer > 0) {
-        shadow_offset = (1 * scale);
+        shadow_offset = draw_scale;
         
         color_t black = COLOR_A(color.a);
 
@@ -528,7 +532,7 @@ static inline int draw_kfont_char(int x, int y, int scale, int flags, uint32_t c
     GL_StretchPic(x, y, w, h, s, t,
                   s + sw, t + sh, color, image);
 
-    return ch->w * scale;
+    return ch->w * draw_scale;
 }
 
 int R_DrawKFontChar(int x, int y, int scale, int flags, uint32_t codepoint, color_t color, const kfont_t *kfont)
@@ -538,6 +542,9 @@ int R_DrawKFontChar(int x, int y, int scale, int flags, uint32_t codepoint, colo
 
 const kfont_char_t *SCR_KFontLookup(const kfont_t *kfont, uint32_t codepoint)
 {
+    if (!kfont)
+        return NULL;
+
     if (codepoint < KFONT_ASCII_MIN || codepoint > KFONT_ASCII_MAX)
         return NULL;
 
@@ -595,7 +602,7 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
             while (true) {
                 token = COM_Parse(&data);
 
-                if (!strcmp(token, "}"))
+                if (!*token || !strcmp(token, "}"))
                     break;
 
                 uint32_t codepoint = strtoul(token, NULL, 10);
@@ -607,13 +614,12 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
                 h = strtoul(COM_Parse(&data), NULL, 10);
                 COM_Parse(&data);
 
-                codepoint -= KFONT_ASCII_MIN;
-
-                if (codepoint < KFONT_ASCII_MAX) {
-                    font->chars[codepoint].x = x;
-                    font->chars[codepoint].y = y;
-                    font->chars[codepoint].w = w;
-                    font->chars[codepoint].h = h;
+                if (codepoint >= KFONT_ASCII_MIN && codepoint <= KFONT_ASCII_MAX) {
+                    size_t char_index = (size_t)(codepoint - KFONT_ASCII_MIN);
+                    font->chars[char_index].x = x;
+                    font->chars[char_index].y = y;
+                    font->chars[char_index].w = w;
+                    font->chars[char_index].h = h;
 
                     font->line_height = max(font->line_height, h);
                 }
@@ -621,8 +627,14 @@ void SCR_LoadKFont(kfont_t *font, const char *filename)
         }
     }
     
-    font->sw = 1.0f / IMG_ForHandle(font->pic)->width;
-    font->sh = 1.0f / IMG_ForHandle(font->pic)->height;
+    image_t *font_image = font->pic ? IMG_ForHandle(font->pic) : NULL;
+    if (font_image && font_image->width > 0 && font_image->height > 0) {
+        font->sw = 1.0f / font_image->width;
+        font->sh = 1.0f / font_image->height;
+    } else {
+        font->sw = 0.0f;
+        font->sh = 0.0f;
+    }
 
     FS_FreeFile(buffer);
 
