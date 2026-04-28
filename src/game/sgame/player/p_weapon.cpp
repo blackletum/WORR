@@ -11,6 +11,7 @@ g_weapon.c*/
 
 #include <array>
 #include <cmath>
+#include <cstring>
 
 bool isQuad = false;
 bool isHaste = false;
@@ -1396,6 +1397,23 @@ static void Weapon_HandGrenade_Fire(gentity_t *ent, bool held) {
 Throw_Generic
 ===================
 */
+static void Throw_SetPrimedLoopSound(gentity_t *ent, const char *primed_sound) {
+  if (!ent || !ent->client || !primed_sound)
+    return;
+
+  const int soundIndex = gi.soundIndex(primed_sound);
+  if (!soundIndex)
+    return;
+
+  if (!std::strcmp(primed_sound, "weapons/hgrenc1b.wav") &&
+      ent->client->weaponSound != soundIndex)
+    gi.sound(ent, CHAN_AUX, soundIndex, 1, ATTN_NORM, 0);
+
+  ent->client->weaponSound = soundIndex;
+  ent->s.sound = soundIndex;
+  ent->s.loopAttenuation = ATTN_NORM;
+}
+
 void Throw_Generic(gentity_t *ent, int FRAME_FIRE_LAST, int FRAME_IDLE_LAST,
                    int FRAME_PRIME_SOUND, const char *prime_sound,
                    int FRAME_THROW_HOLD, int FRAME_THROW_FIRE,
@@ -1506,8 +1524,8 @@ void Throw_Generic(gentity_t *ent, int FRAME_FIRE_LAST, int FRAME_IDLE_LAST,
       if (!cl->grenadeTime && !cl->grenadeFinishedTime)
         cl->grenadeTime = level.time + GRENADE_TIMER + 200_ms;
 
-      if (primed_sound && !cl->grenadeBlewUp)
-        cl->weaponSound = gi.soundIndex(primed_sound);
+      if (!cl->grenadeBlewUp)
+        Throw_SetPrimedLoopSound(ent, primed_sound);
 
       // Detonate in hand
       if (EXPLODE && !cl->grenadeBlewUp && level.time >= cl->grenadeTime) {

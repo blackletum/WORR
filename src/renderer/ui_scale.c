@@ -11,15 +11,24 @@ the Free Software Foundation; either version 2 of the License, or
 #include "renderer/renderer_api.h"
 #include "renderer/ui_scale.h"
 
-int R_UIScaleBaseInt(int width, int height)
+float R_UIScaleBaseFloat(int width, int height)
 {
     if (width < 1 || height < 1)
-        return 1;
+        return 1.0f;
 
     float scale_x = (float)width / VIRTUAL_SCREEN_WIDTH;
     float scale_y = (float)height / VIRTUAL_SCREEN_HEIGHT;
     float base_scale = max(scale_x, scale_y);
-    int base_scale_int = (int)base_scale;
+
+    if (base_scale < 1.0f)
+        base_scale = 1.0f;
+
+    return base_scale;
+}
+
+int R_UIScaleBaseInt(int width, int height)
+{
+    int base_scale_int = (int)R_UIScaleBaseFloat(width, height);
 
     if (base_scale_int < 1)
         base_scale_int = 1;
@@ -52,6 +61,17 @@ float R_UIScaleClamp(int width, int height, cvar_t *var)
     int ui_scale_int = R_UIScaleIntForCvar(base_scale_int, var);
 
     return (float)base_scale_int / (float)ui_scale_int;
+}
+
+float R_UIScaleFontPixelScale(int width, int height, float draw_scale,
+                              bool skip_virtual_scale)
+{
+    float safe_draw_scale = draw_scale > 0.0f ? draw_scale : 1.0f;
+
+    if (skip_virtual_scale)
+        return 1.0f / safe_draw_scale;
+
+    return R_UIScaleBaseFloat(width, height) / safe_draw_scale;
 }
 
 renderer_ui_scale_t R_UIScaleCompute(int width, int height)

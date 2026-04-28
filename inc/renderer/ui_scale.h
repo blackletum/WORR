@@ -17,9 +17,12 @@ typedef struct {
     float virtual_height;
 } renderer_ui_scale_t;
 
+float R_UIScaleBaseFloat(int width, int height);
 int R_UIScaleBaseInt(int width, int height);
 int R_UIScaleIntForCvar(int base_scale_int, cvar_t *var);
 float R_UIScaleClamp(int width, int height, cvar_t *var);
+float R_UIScaleFontPixelScale(int width, int height, float draw_scale,
+                              bool skip_virtual_scale);
 renderer_ui_scale_t R_UIScaleCompute(int width, int height);
 void R_UIScalePixelRectToVirtual(int x, int y, int w, int h, float base_scale,
                                  int *out_x, int *out_y, int *out_w, int *out_h);

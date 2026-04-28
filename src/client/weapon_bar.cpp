@@ -59,6 +59,7 @@ typedef struct weapon_bar_font_cache_s {
 #define WEAPON_BAR_FONT_CACHE_COUNT 4
 static weapon_bar_font_cache_t weapon_bar_font_cache[WEAPON_BAR_FONT_CACHE_COUNT];
 static int weapon_bar_font_cache_next;
+static int weapon_bar_font_settings_generation;
 
 static int WeaponBar_FormatCount(int value, char *out, size_t out_size);
 static void WeaponBar_DrawScaledString(int x, int y, float scale, int flags, color_t color, const char *text);
@@ -66,12 +67,9 @@ static void WeaponBar_DrawScaledString(int x, int y, float scale, int flags, col
 static float WeaponBar_FontPixelScale(void)
 {
     float hud_scale = scr.hud_scale > 0.0f ? scr.hud_scale : 1.0f;
-    float virtual_scale = scr.virtual_scale > 0.0f ? scr.virtual_scale : 1.0f;
-
-    if (Cvar_VariableInteger("cl_font_skip_virtual_scale"))
-        return 1.0f / hud_scale;
-
-    return virtual_scale / hud_scale;
+    bool skip_virtual_scale = Cvar_VariableInteger("cl_font_skip_virtual_scale") != 0;
+    return CL_CalcFontPixelScale(r_config.width, r_config.height, hud_scale,
+                                 skip_virtual_scale);
 }
 
 static int WeaponBar_FontLineHeightForScale(float scale)
@@ -82,10 +80,30 @@ static int WeaponBar_FontLineHeightForScale(float scale)
     return max(1, Q_rint(CONCHAR_HEIGHT * scale));
 }
 
+static void WeaponBar_ClearFontCache(void)
+{
+    for (int i = 0; i < WEAPON_BAR_FONT_CACHE_COUNT; i++) {
+        if (weapon_bar_font_cache[i].font) {
+            Font_Free(weapon_bar_font_cache[i].font);
+            weapon_bar_font_cache[i].font = NULL;
+        }
+        weapon_bar_font_cache[i].line_height = 0;
+        weapon_bar_font_cache[i].pixel_scale = 0.0f;
+    }
+
+    weapon_bar_font_cache_next = 0;
+}
+
 static font_t *WeaponBar_GetFont(float scale)
 {
     int line_height = WeaponBar_FontLineHeightForScale(scale);
     float pixel_scale = WeaponBar_FontPixelScale();
+    int settings_generation = Font_SettingsGeneration();
+
+    if (weapon_bar_font_settings_generation != settings_generation) {
+        WeaponBar_ClearFontCache();
+        weapon_bar_font_settings_generation = settings_generation;
+    }
 
     for (int i = 0; i < WEAPON_BAR_FONT_CACHE_COUNT; i++) {
         weapon_bar_font_cache_t *entry = &weapon_bar_font_cache[i];

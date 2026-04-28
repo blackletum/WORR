@@ -98,6 +98,7 @@ static cvar_t *ui_download_active;
 static cvar_t *con_fontscale;
 static cvar_t *con_fontsize;
 static cvar_t *cl_font_skip_virtual_scale;
+static int con_font_settings_generation;
 static const char k_console_kfont_fallback[] = "fonts/qconfont.kfont";
 
 static bool con_speed_alias_syncing;
@@ -416,7 +417,8 @@ void Con_CheckResize(void) {
 
   if (con.font && cls.ref_initialized) {
     float pixel_scale = Con_GetFontPixelScale();
-    if (con.font_pixel_scale != pixel_scale)
+    if (con.font_pixel_scale != pixel_scale ||
+        con_font_settings_generation != Font_SettingsGeneration())
       Con_RegisterMedia();
   }
 }
@@ -426,18 +428,11 @@ static float Con_GetFontPixelScale(void) {
     cl_font_skip_virtual_scale =
         Cvar_Get("cl_font_skip_virtual_scale", "0", CVAR_ARCHIVE);
 
-  float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
-  float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
-  float base_scale = max(scale_x, scale_y);
-  int base_scale_int = (int)base_scale;
-
-  if (base_scale_int < 1)
-    base_scale_int = 1;
-
   float scale = con.scale > 0.0f ? con.scale : 1.0f;
-  if (cl_font_skip_virtual_scale && cl_font_skip_virtual_scale->integer)
-    return 1.0f / scale;
-  return (float)base_scale_int / scale;
+  bool skip_virtual_scale =
+      cl_font_skip_virtual_scale && cl_font_skip_virtual_scale->integer;
+  return CL_CalcFontPixelScale(r_config.width, r_config.height, scale,
+                               skip_virtual_scale);
 }
 
 static int Con_FontCharWidth(void) {
@@ -773,6 +768,7 @@ void Con_RegisterMedia(void) {
                   con_fixed_advance, k_console_kfont_fallback, "conchars.png");
   }
   con.font_pixel_scale = pixel_scale;
+  con_font_settings_generation = Font_SettingsGeneration();
   con.charsetImage = Font_LegacyHandle(con.font);
   if (!con.font) {
     Com_Error(ERR_FATAL, "%s", Com_GetLastError());
@@ -804,6 +800,7 @@ void Con_RegisterMedia(void) {
 void Con_RendererShutdown(void) {
   con.font = nullptr;
   con.font_pixel_scale = 0.0f;
+  con_font_settings_generation = 0;
   con.charsetImage = 0;
   con.backImage = 0;
 }

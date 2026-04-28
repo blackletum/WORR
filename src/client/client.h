@@ -67,6 +67,27 @@ extern "C" {
 
 //=============================================================================
 
+static inline float CL_CalcFontPixelScale(int width, int height,
+                                          float draw_scale,
+                                          bool skip_virtual_scale)
+{
+    float safe_draw_scale = draw_scale > 0.0f ? draw_scale : 1.0f;
+
+    if (skip_virtual_scale)
+        return 1.0f / safe_draw_scale;
+
+    float base_scale = 1.0f;
+    if (width > 0 && height > 0) {
+        float scale_x = (float)width / VIRTUAL_SCREEN_WIDTH;
+        float scale_y = (float)height / VIRTUAL_SCREEN_HEIGHT;
+        base_scale = max(scale_x, scale_y);
+        if (base_scale < 1.0f)
+            base_scale = 1.0f;
+    }
+
+    return base_scale / safe_draw_scale;
+}
+
 typedef struct font_s font_t;
 
 #include "client/client_state.h"

@@ -294,13 +294,12 @@ static float SCR_GetFontPixelScale(void)
         cl_font_skip_virtual_scale =
             Cvar_Get("cl_font_skip_virtual_scale", "0", CVAR_ARCHIVE);
 
-    int base_scale_int = SCR_GetBaseScaleInt();
     float hud_scale = scr.hud_scale > 0.0f ? scr.hud_scale : 1.0f;
+    bool skip_virtual_scale =
+        cl_font_skip_virtual_scale && cl_font_skip_virtual_scale->integer;
 
-    if (cl_font_skip_virtual_scale && cl_font_skip_virtual_scale->integer)
-        return 1.0f / hud_scale;
-
-    return (float)base_scale_int / hud_scale;
+    return CL_CalcFontPixelScale(r_config.width, r_config.height,
+                                 hud_scale, skip_virtual_scale);
 }
 
 static void cl_font_skip_virtual_scale_changed(cvar_t *self)
@@ -398,6 +397,10 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
     size_t  len;
     int     last_x = x;
     int     last_y = y;
+    int     line_height = CONCHAR_HEIGHT * scale;
+
+    if (SCR_UseScrFont(font) && scr.ui_font)
+        line_height = Font_LineHeight(scr.ui_font, scale);
 
     while (*s && maxlen) {
         p = strchr(s, '\n');
@@ -412,12 +415,13 @@ void SCR_DrawStringMultiStretch(int x, int y, int scale, int flags, size_t maxle
         last_y = y;
         maxlen -= len;
 
-        y += CONCHAR_HEIGHT * scale;
+        y += line_height;
         s = p + 1;
     }
 
     if (flags & UI_DRAWCURSOR && com_localTime & BIT(8))
-        R_DrawStretchChar(last_x, last_y, CONCHAR_WIDTH * scale, CONCHAR_HEIGHT * scale, flags, 11, color, font);
+        R_DrawStretchChar(last_x, last_y, CONCHAR_WIDTH * scale, line_height,
+                          flags, 11, color, font);
 }
 
 static int SCR_DrawKStringStretch(int x, int y, int scale, int flags, size_t maxlen, const char *s, color_t color, const kfont_t *kfont)

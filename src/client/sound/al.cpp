@@ -3256,12 +3256,15 @@ static bool AL_ApplySourcePathState(const vec3_t source_origin, bool fullvolume,
             *reverb_gainhf = path.portal_path.reverb_gainhf;
     }
 
-    if (occlusion && *occlusion < path.occlusion_floor)
-        *occlusion = path.occlusion_floor;
-    if (cutoff_hz && *cutoff_hz > path.cutoff_ceiling)
-        *cutoff_hz = path.cutoff_ceiling;
-    if (reverb_gainhf && *reverb_gainhf > path.reverb_gainhf_ceiling)
-        *reverb_gainhf = path.reverb_gainhf_ceiling;
+    const bool direct_path_clear = occlusion && *occlusion <= S_OCCLUSION_CLEAR_MARGIN;
+    if (!direct_path_clear) {
+        if (occlusion && *occlusion < path.occlusion_floor)
+            *occlusion = path.occlusion_floor;
+        if (cutoff_hz && *cutoff_hz > path.cutoff_ceiling)
+            *cutoff_hz = path.cutoff_ceiling;
+        if (reverb_gainhf && *reverb_gainhf > path.reverb_gainhf_ceiling)
+            *reverb_gainhf = path.reverb_gainhf_ceiling;
+    }
     if (send_scale)
         *send_scale = Q_clipf(*send_scale * path.send_scale, 0.0f, 1.85f);
     if (send_gainhf)

@@ -39,22 +39,14 @@ static float UI_FontCalcPixelScale(void)
         cl_font_skip_virtual_scale =
             Cvar_Get("cl_font_skip_virtual_scale", "0", CVAR_ARCHIVE);
 
-    float scale_x = (float)r_config.width / VIRTUAL_SCREEN_WIDTH;
-    float scale_y = (float)r_config.height / VIRTUAL_SCREEN_HEIGHT;
-    float base_scale = max(scale_x, scale_y);
-    int base_scale_int = (int)base_scale;
-
-    if (base_scale_int < 1)
-        base_scale_int = 1;
-
     float ui_draw_scale = ui_scale ? R_ClampScale(ui_scale) : 1.0f;
     if (ui_draw_scale <= 0.0f)
         ui_draw_scale = 1.0f;
 
-    if (cl_font_skip_virtual_scale && cl_font_skip_virtual_scale->integer)
-        return 1.0f / ui_draw_scale;
-
-    return (float)base_scale_int / ui_draw_scale;
+    bool skip_virtual_scale =
+        cl_font_skip_virtual_scale && cl_font_skip_virtual_scale->integer;
+    return CL_CalcFontPixelScale(r_config.width, r_config.height,
+                                 ui_draw_scale, skip_virtual_scale);
 }
 
 static font_t *UI_FontLoadHandle(const char *path, int line_height)

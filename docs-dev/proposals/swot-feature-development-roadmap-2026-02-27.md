@@ -167,6 +167,10 @@ Create a repository-grounded SWOT and convert it into actionable, task-based pro
     - Unmerged projectile/autosound loops now use a stable per-entity phase offset so identical loop samples do not all start in lockstep.
     - This reduces crackle/noise when many projectile loop emitters are active simultaneously while preserving per-entity Doppler spatialization.
   - Implementation log: `docs-dev/audio-eax-loop-doppler-mix-stability-2026-03-22.md`.
+  - Fixed clear-path explosion and held hand grenade tick regressions:
+    - OpenAL source-path damping now skips occlusion floors/HF ceilings when the direct multi-ray path is still inside `S_OCCLUSION_CLEAR_MARGIN`, so visible midair explosions are not muffled by room-path classification alone.
+    - Held throwable loop setup now mirrors primed sounds onto the player entity loop state immediately, and hand grenades emit a first tick cue while the loop carries the continuing fuse sound for the owner and nearby players.
+  - Implementation log: `docs-dev/audio-clear-path-explosions-and-grenade-tick-2026-04-27.md`.
 - `FR-06-T06` Done:
   - Implemented the first spatial-audio roadmap wave from `docs-dev/proposals/spatial-audio.md`:
     - Defaulted occlusion, EFX reverb, per-source reverb sends, air absorption, and HRTF default/autodetect toward the modern spatial path.
@@ -221,6 +225,8 @@ Create a repository-grounded SWOT and convert it into actionable, task-based pro
   - Extended the TTF-first policy to the actual cgame in-game weapon bar and the bootstrapper splash/legal footer text; client font loading now falls back to platform TTFs when staged project font files are unavailable, with TTF menu measurement kept on the renderer glyph-advance path for stable center/right alignment.
   - Expanded high-visibility black text backgrounds from centerprint-specific contrast bars to shared HUD/menu font wrappers under the single `ui_high_visibility_text` cvar. Added Options -> Accessibility controls and `ui_text_typeface` (`legacy`, `KEX`, `TrueType`, default TrueType), with high-visibility text forcing the effective typeface to TrueType.
   - Implementation log: `docs-dev/ui-bootstrap-font-handoff-2026-04-27.md`.
+  - Stabilized fullscreen/resizable TTF handling so framebuffer size changes refresh font raster pixel height without changing the assigned font kind, expanded shared font-generation invalidation to console and cached weapon-bar paths, and fixed multiline screen/cgame TTF row stepping to use real font line heights.
+  - Implementation log: `docs-dev/ttf-fullscreen-font-pixel-scale-refresh-2026-04-28.md`.
 
 ## Baseline Snapshot (Repository-Derived)
 - Codebase scale is substantial: approximately 733 `*.c`/`*.cpp`/`*.h`/`*.hpp` files and approximately 426k lines across `src/` and `inc/`.

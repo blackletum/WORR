@@ -162,6 +162,17 @@ static const int k_ttf_atlas_padding = 1;
 static const char k_default_font_fallback_kfont[] = "fonts/qconfont.kfont";
 static const char k_default_font_fallback_legacy[] = "conchars.png";
 
+static void font_ensure_fallback_cvars(void) {
+  if (!cl_font_fallback_kfont)
+    cl_font_fallback_kfont = Cvar_Get("cl_font_fallback_kfont",
+                                      k_default_font_fallback_kfont,
+                                      CVAR_ARCHIVE);
+  if (!cl_font_fallback_legacy)
+    cl_font_fallback_legacy = Cvar_Get("cl_font_fallback_legacy",
+                                       k_default_font_fallback_legacy,
+                                       CVAR_ARCHIVE);
+}
+
 static const char *font_safe_str(const char *value) {
   return (value && *value) ? value : "<null>";
 }
@@ -1267,24 +1278,17 @@ static font_t *font_load_internal(const char *path, int virtual_line_height,
                                   const char *fallback_kfont,
                                   const char *fallback_legacy,
                                   bool register_font) {
-	if (!cl_font_fallback_kfont)
-		cl_font_fallback_kfont =
-			Cvar_Get("cl_font_fallback_kfont", k_default_font_fallback_kfont, CVAR_ARCHIVE);
-	if (!cl_font_fallback_legacy)
-		cl_font_fallback_legacy =
-			Cvar_Get("cl_font_fallback_legacy", k_default_font_fallback_legacy, CVAR_ARCHIVE);
+  font_ensure_fallback_cvars();
 
-	if ((!fallback_kfont || !*fallback_kfont) &&
-		cl_font_fallback_kfont && cl_font_fallback_kfont->string &&
-		*cl_font_fallback_kfont->string) {
-		fallback_kfont = cl_font_fallback_kfont->string;
-	}
+  if ((!fallback_kfont || !*fallback_kfont) && cl_font_fallback_kfont &&
+      cl_font_fallback_kfont->string && *cl_font_fallback_kfont->string) {
+    fallback_kfont = cl_font_fallback_kfont->string;
+  }
 
-	if ((!fallback_legacy || !*fallback_legacy) &&
-		cl_font_fallback_legacy && cl_font_fallback_legacy->string &&
-		*cl_font_fallback_legacy->string) {
-		fallback_legacy = cl_font_fallback_legacy->string;
-	}
+  if ((!fallback_legacy || !*fallback_legacy) && cl_font_fallback_legacy &&
+      cl_font_fallback_legacy->string && *cl_font_fallback_legacy->string) {
+    fallback_legacy = cl_font_fallback_legacy->string;
+  }
 
   if (virtual_line_height <= 0)
     virtual_line_height = CONCHAR_HEIGHT;
@@ -1506,12 +1510,7 @@ void Font_Init(void) {
   (void)font_scale_boost();
   (void)font_draw_black_background_enabled();
   (void)font_requested_typeface();
-	if (!cl_font_fallback_kfont)
-		cl_font_fallback_kfont =
-			Cvar_Get("cl_font_fallback_kfont", k_default_font_fallback_kfont, CVAR_ARCHIVE);
-	if (!cl_font_fallback_legacy)
-		cl_font_fallback_legacy =
-			Cvar_Get("cl_font_fallback_legacy", k_default_font_fallback_legacy, CVAR_ARCHIVE);
+  font_ensure_fallback_cvars();
 #if USE_CLIENT
   Cmd_AddCommand("font_dump_glyphs", Font_DumpGlyphs_f);
 #endif
@@ -1912,10 +1911,28 @@ font_typeface_t Font_EffectiveTypeface(void) {
 int Font_SettingsGeneration(void) {
   (void)font_high_visibility_text_enabled();
   (void)font_requested_typeface();
+  font_ensure_fallback_cvars();
   int high_vis_count =
       ui_high_visibility_text ? ui_high_visibility_text->modified_count : 0;
   int typeface_count = ui_text_typeface ? ui_text_typeface->modified_count : 0;
+  int fallback_kfont_count =
+      cl_font_fallback_kfont ? cl_font_fallback_kfont->modified_count : 0;
+  int fallback_legacy_count =
+      cl_font_fallback_legacy ? cl_font_fallback_legacy->modified_count : 0;
+#if USE_SDL3_TTF
+  (void)font_ttf_hinting_mode();
+  int hinting_count =
+      cl_font_ttf_hinting ? cl_font_ttf_hinting->modified_count : 0;
+  int hinting_mode = cl_font_ttf_hinting
+                         ? Cvar_ClampInteger(cl_font_ttf_hinting, 0, 3)
+                         : 1;
+#else
+  int hinting_count = 0;
+  int hinting_mode = 0;
+#endif
   return (high_vis_count * 31) ^ (typeface_count * 131) ^
+         (fallback_kfont_count * 257) ^ (fallback_legacy_count * 389) ^
+         (hinting_count * 521) ^ (hinting_mode * 19) ^
          ((int)Font_EffectiveTypeface() * 17) ^
          (Font_HighVisibilityTextEnabled() ? 1 : 0);
 }
