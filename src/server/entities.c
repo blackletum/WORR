@@ -717,6 +717,8 @@ void SV_BuildClientFrame(client_t *client)
 
             bool shadow_affecting = (ent->s.renderfx & RF_CASTSHADOW)
                 || (ent->s.modelindex && !(ent->s.renderfx & RF_NOSHADOW));
+            if (sv_shadow_strict_replication && sv_shadow_strict_replication->integer)
+                shadow_affecting = false;
             const visrow_t *entity_vis = (beam_cull || sound_cull) ? &clientphs
                 : (shadow_affecting ? &clientpvs2 : &clientpvs);
 

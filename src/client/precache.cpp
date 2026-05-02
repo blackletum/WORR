@@ -483,7 +483,8 @@ static void CS_LoadShadowLight(int index, const char *s)
     cl_shadow_light_t *light = &cl.shadowdefs[index - cl.csr.shadowlights].light;
 
     const char *p = buf;
-    cl.shadowdefs[index - cl.csr.shadowlights].number = Q_atoi(COM_Parse(&p));
+    int shadow_index = index - cl.csr.shadowlights;
+    cl.shadowdefs[shadow_index].number = Q_atoi(COM_Parse(&p));
     bool is_cone = !!Q_atoi(COM_Parse(&p));
     light->radius = Q_atof(COM_Parse(&p));
     light->resolution = Q_atoi(COM_Parse(&p));
@@ -499,6 +500,10 @@ static void CS_LoadShadowLight(int index, const char *s)
     light->conedirection[0] = Q_atof(COM_Parse(&p));
     light->conedirection[1] = Q_atof(COM_Parse(&p));
     light->conedirection[2] = Q_atof(COM_Parse(&p));
+    light->owner_entity = cl.shadowdefs[shadow_index].number;
+    light->source_index = shadow_index;
+    light->strict_pvs = true;
+    light->ignore_owner_casters = false;
 
     if (!is_cone) {
         light->coneangle = 0.0f;

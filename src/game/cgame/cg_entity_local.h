@@ -58,6 +58,7 @@ extern cvar_t *info_fov;
 extern cvar_t *info_uf;
 extern cvar_t *info_bobskip;
 extern cvar_t *cl_shadowlights;
+extern cvar_t *cl_flashlight_torso_sway;
 
 #define cl (*cgei->cl)
 #define cls (*cgei->cls)
@@ -176,6 +177,7 @@ static inline cvar_t *CG_SvPausedVar(void)
 #define V_AddParticle cgei->V_AddParticle
 #define V_AddLight cgei->V_AddLight
 #define V_AddLightEx cgei->V_AddLightEx
+#define V_AddLightExVis cgei->V_AddLightExVis
 #define V_AddLightStyle cgei->V_AddLightStyle
 
 #define S_RegisterSound cgei->S_RegisterSound

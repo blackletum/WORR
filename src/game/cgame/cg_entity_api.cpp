@@ -96,6 +96,7 @@ void CG_Entity_InitCvars(void)
     info_uf = Cvar_Get("uf", "", CVAR_USERINFO);
     info_bobskip = Cvar_Get("bobskip", "0", CVAR_USERINFO | CVAR_ARCHIVE);
     cl_shadowlights = Cvar_Get("cl_shadowlights", "1", 0);
+    cl_flashlight_torso_sway = Cvar_Get("cl_flashlight_torso_sway", "1", CVAR_ARCHIVE);
 
     cg_entity_cvars_initialized = true;
 }

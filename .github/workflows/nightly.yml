@@ -88,6 +88,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check shadowmapping guardrails
+        shell: bash
+        run: python3 tools/check_shadowmapping_guardrails.py
+
       - name: Install Linux dependencies
         if: matrix.os == 'linux'
         shell: bash

@@ -60,6 +60,7 @@ cvar_t  *sv_show_name_changes;
 cvar_t  *sv_airaccelerate;
 cvar_t  *sv_qwmod;              // atu QW Physics modificator
 cvar_t  *sv_novis;
+cvar_t  *sv_shadow_strict_replication;
 
 cvar_t  *sv_maxclients;
 cvar_t  *sv_reserved_slots;
@@ -2147,6 +2148,7 @@ void SV_Init(void)
     sv_reserved_password = Cvar_Get("sv_reserved_password", "", CVAR_PRIVATE);
     sv_locked = Cvar_Get("sv_locked", "0", 0);
     sv_novis = Cvar_Get("sv_novis", "0", 0);
+    sv_shadow_strict_replication = Cvar_Get("sv_shadow_strict_replication", "0", 0);
     sv_downloadserver = Cvar_Get("sv_downloadserver", "", 0);
     sv_redirect_address = Cvar_Get("sv_redirect_address", "", 0);
 

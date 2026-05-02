@@ -6,12 +6,20 @@ Date: 2026-02-27
 Create a repository-grounded SWOT and convert it into actionable, task-based project roadmaps that can guide coordinated team execution.
 
 ## Status Updates
-- `FR-02-T09` / `DV-02-T06` In Progress:
+- `FR-02-T09` / `FR-02-T10` / `FR-02-T11` / `DV-02-T06` / `DV-07-T05` Done:
   - Added a renderer-neutral shadow frontend contract (`shadow_light_desc_t`, `shadow_view_desc_t`, `shadow_caster_t`, `shadow_cache_key_t`, `shadow_page_id_t`, `shadow_backend_ops_t`) shared by GL, native Vulkan, and RTX builds.
   - Wired GL and native Vulkan frame paths into the shared frontend for deterministic candidate light selection, backend-resolved caster bounds, per-view caster index spans, light-influence cluster dirtying, page residency keys, dirty reasons, freeze modes, optional sun cascade descriptors, and main-view visibility mutation guardrails.
+  - Implemented native OpenGL depth and moment array page allocation, per-layer shadow rendering, moment mip generation, `ShadowPages` UBO upload, and hard/PCF/PCSS/VSM/EVSM receiver sampling in the dynamic shader path.
+  - Implemented native Vulkan depth and moment array page allocation, per-layer render pass/framebuffer setup, explicit depth/moment image barriers, optional moment mip generation, shadow descriptor binding, and world receiver sampling in the embedded Vulkan world shader.
+    - Replaced interim caster-box rendering with actual brush, MD2/alias, and MD5 skeletal caster geometry for both non-RTX backends; GL keeps CPU shadow copies of uploaded model buffers, while Vulkan emits caster triangles through a native entity callback.
+    - Fixed first-person entity caster visibility by marking the local body clone as `RF_CASTSHADOW`, excluding `RF_WEAPONMODEL` view weapons from the caster list, and emitting model-less `RF_CASTSHADOW` bounds proxies in both non-RTX backends.
+    - Hardened transient visual no-cast behavior so particles, projectile models, and explosion models are marked or rejected before entering shared shadow caster collection.
+    - Completed authored entity shadowlight handling for point and spot `light`/`dynamic_light` records across cgame, client, server setup, shared frontend area/PVS2 culling, wide-spot caster influence testing, and 64-bit receiver light masks.
+    - Fitted sun cascades to camera frustum splits with texel-snapped light-space origins, and aligned Vulkan receiver normal-offset bias behavior with OpenGL.
+  - Added focused shadow dumps, materialization reports, live debug overlays, model-path caster exclusion, tracked/configstring shadowlight metadata preservation, world-occluder view culling, and scripted repro smoke launch coverage.
   - Added `sv_shadow_strict_replication` for multiplayer servers that prefer strict normal-PVS shadow owner replication over the default PVS2 shadow relevance expansion.
   - Added a CI/source guardrail script that blocks the removed no-slot fallback and sticky slot-churn shadow cvars/paths from returning.
-  - Implementation log: `docs-dev/renderer/shadowmapping-replacement-baseline.md`.
+  - Implementation logs: `docs-dev/renderer/shadowmapping-replacement-baseline.md`, `docs-dev/renderer/shadowmapping-native-backends-2026-04-30.md`, `docs-dev/renderer/shadowmapping-full-plan-2026-04-30.md`.
 - `FR-03-T09` Done:
   - Added shared archived `r_borderless` tri-state window behavior for renderer/video backends (`0` exclusive where supported, `1` borderless fullscreen, `2` always borderless in windowed mode too).
   - Updated the Video and Multi-Monitor menu selectors to expose `r_borderless` instead of the legacy `r_fullscreen_exclusive` toggle, while keeping the legacy cvar as a no-archive runtime mirror.
@@ -415,11 +423,11 @@ Tasks:
   Dependency: none. Priority: P0.
 - [x] `FR-02-T08` Harden OpenGL startup fallback and clean local `q2dm1` launch log noise.  
   Dependency: none. Priority: P1.
-- [ ] `FR-02-T09` Implement renderer-neutral shadowmapping frontend, deterministic page residency, and no-fallback guardrails.  
+- [x] `FR-02-T09` Implement renderer-neutral shadowmapping frontend, deterministic page residency, and no-fallback guardrails.
   Dependency: `FR-02-T01`. Priority: P0.
-- [ ] `FR-02-T10` Implement native OpenGL shadow page allocation/render/sample backend under the shared frontend.  
+- [x] `FR-02-T10` Implement native OpenGL shadow page allocation/render/sample backend under the shared frontend.
   Dependency: `FR-02-T09`. Priority: P0.
-- [ ] `FR-02-T11` Implement native Vulkan raster shadow page allocation/render/sample backend under the shared frontend.  
+- [x] `FR-02-T11` Implement native Vulkan raster shadow page allocation/render/sample backend under the shared frontend.
   Dependency: `FR-02-T09`, `FR-01-T07`. Priority: P0.
 
 ## Epic FR-03: JSON UI Rework Completion
@@ -618,7 +626,7 @@ Tasks:
   Dependency: `DV-02-T01`. Priority: P1.
 - [ ] `DV-02-T05` Add failure triage guide and flaky test quarantine workflow.  
   Dependency: `DV-02-T01`. Priority: P2.
-- [ ] `DV-02-T06` Add renderer guardrail scans for removed shadow fallback/cache paths.  
+- [x] `DV-02-T06` Add renderer guardrail scans for removed shadow fallback/cache paths.
   Dependency: `DV-02-T01`. Priority: P1.
 
 ## Epic DV-03: Automated Test Strategy
@@ -720,7 +728,7 @@ Tasks:
   Dependency: none. Priority: P2.
 - [ ] `DV-07-T04` Add user-doc parity pass whenever user-visible cvars/features are changed.  
   Dependency: none. Priority: P1.
-- [ ] `DV-07-T05` Keep the canonical shadowmapping replacement baseline synchronized with implementation status.  
+- [x] `DV-07-T05` Keep the canonical shadowmapping replacement baseline synchronized with implementation status.
   Dependency: `FR-02-T09`. Priority: P1.
 
 ## Epic DV-08: Release and Updater Hardening

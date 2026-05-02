@@ -272,16 +272,22 @@ bool V_AddParticle(const particle_t *p)
 
 static void cone_to_bounding_sphere(const vec3_t origin, const vec3_t forward, float size, float angle_radians, float c, float s, vec4_t out)
 {
-    if(angle_radians > M_PI/4.0f)
-    {
-        VectorMA(origin, c * size, forward, out);
-        out[3]   = s * size;
+    if (angle_radians > M_PI / 4.0f) {
+        VectorMA(origin, size, forward, out);
+        out[3] = tanf(angle_radians) * size;
+    } else {
+        float center = size / (2.0f * c * c);
+        VectorMA(origin, center, forward, out);
+        out[3] = center;
     }
-    else
-    {
-        VectorMA(origin, size / (2.0f * c), forward, out);
-        out[3]   = size / (2.0f * c);
+}
+
+static float V_LightstyleScale(int lightstyle)
+{
+    if (lightstyle < 0 || lightstyle >= MAX_LIGHTSTYLES) {
+        return 1.0f;
     }
+    return r_lightstyles[lightstyle].white;
 }
 
 // calculate the fade distance from screen to light
@@ -328,8 +334,7 @@ void V_AddLightExVis(cl_shadow_light_t *light, bool strict_pvs)
     const bool shadowlight =
         light->resolution > 0 && cl_shadowlights && cl_shadowlights->integer;
     const uint32_t now_ms = Sys_Milliseconds();
-    float intensity = light->intensity *
-                      (light->lightstyle == -1 ? 1.0f : r_lightstyles[light->lightstyle].white) *
+    float intensity = light->intensity * V_LightstyleScale(light->lightstyle) *
                       fade;
     uint32_t key = V_DlightBuildKey(
         light->origin, light->radius, intensity, (int32_t)light->color.r,
@@ -363,13 +368,14 @@ void V_AddLightExVis(cl_shadow_light_t *light, bool strict_pvs)
     dl->color[2] = light->color.b / 255.f;
 
     if (light->coneangle) {
+        float cone_angle = DEG2RAD(Q_clipf(light->coneangle, 1.0f, 89.0f));
         dl->light_type = DLIGHT_SPOT;
         VectorCopy(light->conedirection, dl->cone);
         if (VectorLengthSquared(dl->cone) < 1e-6f)
             VectorSet(dl->cone, 0.0f, 0.0f, -1.0f);
         else
             VectorNormalize(dl->cone);
-        dl->cone[3] = DEG2RAD(light->coneangle);
+        dl->cone[3] = cone_angle;
         dl->conecos = cosf(dl->cone[3]);
         cone_to_bounding_sphere(dl->origin, dl->cone, dl->radius, dl->cone[3], dl->conecos, sinf(dl->cone[3]), dl->sphere);
 
@@ -386,9 +392,15 @@ void V_AddLightExVis(cl_shadow_light_t *light, bool strict_pvs)
 
     dl->fade[0] = light->fade_start;
     dl->fade[1] = light->fade_end;
+    dl->shadow_resolution = light->resolution;
+    dl->shadow_lightstyle = light->lightstyle;
+    dl->shadow_owner_entity = light->owner_entity;
+    dl->shadow_source_index = light->source_index;
+    dl->shadow_strict_pvs = strict_pvs;
+    dl->shadow_ignore_owner_casters = light->ignore_owner_casters;
     dl->shadow = DL_SHADOW_NONE;
     if (shadowlight) {
-        dl->shadow = DL_SHADOW_LIGHT;
+        dl->shadow = light->dynamic_shadow ? DL_SHADOW_DYNAMIC : DL_SHADOW_LIGHT;
     }
 
     V_DlightStickyTouch(key, now_ms);
@@ -434,6 +446,12 @@ void V_AddLight(const vec3_t org, float intensity, float r, float g, float b)
     dl->color[2] = b;
     dl->conecos = 0;
     dl->fade[0] = dl->fade[1] = 0.0f;
+    dl->shadow_resolution = 0;
+    dl->shadow_lightstyle = -1;
+    dl->shadow_owner_entity = 0;
+    dl->shadow_source_index = -1;
+    dl->shadow_strict_pvs = true;
+    dl->shadow_ignore_owner_casters = false;
     VectorCopy(dl->origin, dl->sphere);
     dl->sphere[3] = dl->radius;
     dl->shadow = DL_SHADOW_DYNAMIC;

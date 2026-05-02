@@ -101,6 +101,8 @@ static void write_dynamic_light_block(sizebuf_t *buf) {
     float radius;
     vec4 color;
     vec4 cone;
+    vec4 shadow_pages0;
+    vec4 shadow_pages1;
   };)
   GLSF("#define DLIGHT_CUTOFF 64\n");
   GLSF("layout(std140) uniform DynamicLights {\n");
@@ -110,9 +112,177 @@ static void write_dynamic_light_block(sizebuf_t *buf) {
   GLSF("};\n");
 }
 
+static void write_shadow_page_block(sizebuf_t *buf) {
+  GLSL(struct shadow_page_t {
+    mat4 matrix;
+    vec4 params;
+  };)
+  GLSF("layout(std140) uniform ShadowPages {\n");
+  GLSF("#define MAX_SHADOW_PAGES " STRINGIFY(GL_SHADOW_MAX_PAGES) "\n");
+  GLSL(vec4 shadow_global;
+       vec4 shadow_sun;
+       shadow_page_t shadow_pages[MAX_SHADOW_PAGES];)
+  GLSF("};\n");
+  GLSL(uniform sampler2DArray u_shadowmap;
+       uniform sampler2DArray u_shadowmoments;)
+}
+
 static void write_dynamic_lights(sizebuf_t *buf) {
+  GLSL(float shadow_raw_depth(int page, vec2 uv) {
+    return texture(u_shadowmap, vec3(uv, float(page))).r;
+  })
+
+  GLSL(float shadow_compare_depth(int page, vec2 uv, float depth) {
+    return depth <= shadow_raw_depth(page, uv) ? 1.0 : 0.0;
+  })
+
+  GLSL(float shadow_pcf_depth(int page, vec3 tc, float bias, float radius_texels) {
+    float depth = tc.z - bias;
+    float inv_res = shadow_pages[page].params.y;
+    float result = 0.0;
+    float count = 0.0;
+    for (int y = -2; y <= 2; y++) {
+      for (int x = -2; x <= 2; x++) {
+        vec2 ofs = vec2(float(x), float(y)) * inv_res * radius_texels;
+        result += shadow_compare_depth(page, tc.xy + ofs, depth);
+        count += 1.0;
+      }
+    }
+    return result / max(count, 1.0);
+  })
+
+  GLSL(float shadow_pcss_depth(int page, vec3 tc, float bias) {
+    float receiver = tc.z - bias;
+    float inv_res = shadow_pages[page].params.y;
+    float blockers = 0.0;
+    float blocker_depth = 0.0;
+    for (int y = -2; y <= 2; y++) {
+      for (int x = -2; x <= 2; x++) {
+        vec2 ofs = vec2(float(x), float(y)) * inv_res * 3.0;
+        float sample_depth = shadow_raw_depth(page, tc.xy + ofs);
+        if (sample_depth + bias < receiver) {
+          blocker_depth += sample_depth;
+          blockers += 1.0;
+        }
+      }
+    }
+    if (blockers <= 0.0)
+      return 1.0;
+    blocker_depth /= blockers;
+    float penumbra = clamp((receiver - blocker_depth) /
+                           max(blocker_depth, 0.01) * 16.0,
+                           1.0, 8.0);
+    return shadow_pcf_depth(page, tc, bias, penumbra);
+  })
+
+  GLSL(float shadow_moment_factor(int page, vec3 tc, float bias, float filter_mode) {
+    float depth = clamp(tc.z - bias, 0.0, 1.0);
+    vec2 moments;
+    if (filter_mode > 2.5) {
+      const float evsm_exponent = 10.0;
+      depth = exp(min(evsm_exponent * depth, evsm_exponent));
+      moments = texture(u_shadowmoments, vec3(tc.xy, float(page))).xy;
+    } else {
+      moments = texture(u_shadowmoments, vec3(tc.xy, float(page))).xy;
+    }
+    if (depth <= moments.x)
+      return 1.0;
+    float variance = max(moments.y - moments.x * moments.x, 0.00002);
+    float d = depth - moments.x;
+    float p = variance / (variance + d * d);
+    return clamp((p - 0.18) / 0.82, 0.0, 1.0);
+  })
+
+  GLSL(float shadow_sample_page_covered(float page_value, vec3 world_pos,
+                                        vec3 normal, out float covered) {
+    covered = 0.0;
+    int page = int(page_value + 0.5);
+    if (page < 0 || page >= int(shadow_global.x))
+      return 1.0;
+
+    vec3 sample_pos = world_pos + normal * shadow_pages[page].params.w;
+    vec4 clip = shadow_pages[page].matrix * vec4(sample_pos, 1.0);
+    if (clip.w <= 0.0)
+      return 1.0;
+
+    vec3 tc = (clip.xyz / clip.w) * 0.5 + vec3(0.5);
+    if (any(lessThan(tc, vec3(0.0))) || any(greaterThan(tc, vec3(1.0))))
+      return 1.0;
+
+    covered = min(min(tc.x, 1.0 - tc.x), min(tc.y, 1.0 - tc.y));
+    float bias = shadow_pages[page].params.z;
+    float filter_mode = shadow_pages[page].params.x;
+    float result;
+    if (filter_mode < 0.5) {
+      result = shadow_compare_depth(page, tc.xy, tc.z - bias);
+    } else if (filter_mode < 1.5) {
+      result = shadow_pcf_depth(page, tc, bias, 1.0);
+    } else if (filter_mode < 3.5) {
+      result = shadow_moment_factor(page, tc, bias, filter_mode);
+    } else {
+      result = shadow_pcss_depth(page, tc, bias);
+    }
+    return mix(1.0, result, clamp(shadow_global.y, 0.0, 1.0));
+  })
+
+  GLSL(float shadow_sample_page(float page_value, vec3 world_pos, vec3 normal) {
+    float covered = 0.0;
+    return shadow_sample_page_covered(page_value, world_pos, normal, covered);
+  })
+
+  GLSL(float shadow_point_page(dlight_t light, vec3 light_to_frag) {
+    vec3 adir = abs(light_to_frag);
+    int face;
+    if (adir.x >= adir.y && adir.x >= adir.z) {
+      face = light_to_frag.x >= 0.0 ? 0 : 1;
+    } else if (adir.y >= adir.z) {
+      face = light_to_frag.y >= 0.0 ? 2 : 3;
+    } else {
+      face = light_to_frag.z >= 0.0 ? 4 : 5;
+    }
+    return face < 4 ? light.shadow_pages0[face] : light.shadow_pages1[face - 4];
+  })
+
+  GLSL(float shadow_factor_for_light(int index, vec3 world_pos, vec3 normal) {
+    dlight_t light = dlights[index];
+    float kind = light.shadow_pages1.z;
+    if (kind < 0.5)
+      return 1.0;
+    float page = kind < 1.5
+        ? shadow_point_page(light, world_pos - light.position)
+        : light.shadow_pages0.x;
+    return shadow_sample_page(page, world_pos, normal);
+  })
+
+  GLSL(float shadow_sun_factor(vec3 world_pos, vec3 normal) {
+    if (shadow_sun.x < 0.0 || shadow_sun.y <= 0.0)
+      return 1.0;
+    float factor = 1.0;
+    int first_page = int(shadow_sun.x + 0.5);
+    int page_count = int(shadow_sun.y + 0.5);
+    for (int i = 0; i < 4; i++) {
+      if (i >= page_count)
+        break;
+      float covered = 0.0;
+      factor = shadow_sample_page_covered(float(first_page + i), world_pos,
+                                          normal, covered);
+      if (covered > 0.12 || i + 1 >= page_count)
+        break;
+      float next_covered = 0.0;
+      float next_factor =
+          shadow_sample_page_covered(float(first_page + i + 1), world_pos,
+                                     normal, next_covered);
+      if (next_covered > 0.0) {
+        factor = mix(next_factor, factor, smoothstep(0.0, 0.12, covered));
+        break;
+      }
+    }
+    return factor;
+  })
+
   GLSL(vec3 calc_dynamic_lights() {
     vec3 shade = vec3(0);
+    vec3 normal = normalize(v_norm);
 
     for (int i = 0; i < num_dlights; i++) {
       vec3 light_dir = dlights[i].position - v_world_pos;
@@ -125,7 +295,7 @@ static void write_dynamic_lights(sizebuf_t *buf) {
       if (dlights[i].color.r < 0.0)
         lambert = 1.0;
       else
-        lambert = max(dot(v_norm, dir), 0.0);
+        lambert = max(dot(normal, dir), 0.0);
 
       vec3 result = ((dlights[i].color.rgb * dlights[i].color.a) * len) * lambert;
 
@@ -134,6 +304,7 @@ static void write_dynamic_lights(sizebuf_t *buf) {
         result *= max(1.0 - (1.0 - mag) * (1.0 / (1.0 - dlights[i].cone.w)), 0.0);
       }
 
+      result *= shadow_factor_for_light(i, v_world_pos, normal);
       shade += result;
     }
 
@@ -502,8 +673,10 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits) {
   if (bits & GLS_UNIFORM_MASK)
     write_block(buf, bits);
 
-  if (bits & GLS_DYNAMIC_LIGHTS)
+  if (bits & GLS_DYNAMIC_LIGHTS) {
     write_dynamic_light_block(buf);
+    write_shadow_page_block(buf);
+  }
 
   if (bits & GLS_CLASSIC_SKY) {
     GLSL(uniform sampler2D u_texture1; uniform sampler2D u_texture2;)
@@ -849,11 +1022,13 @@ static void write_fragment_shader(sizebuf_t *buf, glStateBits_t bits) {
     }
 
     if (bits & GLS_DYNAMIC_LIGHTS) {
+      GLSL(lightmap.rgb *= shadow_sun_factor(v_world_pos, normalize(v_norm));)
       GLSL(lightmap.rgb += calc_dynamic_lights();)
     }
 
     GLSL(diffuse.rgb *= (lightmap.rgb + u_add) * u_modulate;)
   } else if ((bits & GLS_DYNAMIC_LIGHTS) && !(bits & GLS_TEXTURE_REPLACE)) {
+    GLSL(color.rgb *= shadow_sun_factor(v_world_pos, normalize(v_norm));)
     GLSL(color.rgb += calc_dynamic_lights() * u_modulate;)
   }
 
@@ -1199,6 +1374,9 @@ static GLuint create_and_use_program(glStateBits_t bits) {
     if (!bind_uniform_block(program, "DynamicLights", sizeof(gls.u_dlights),
                             UBO_DLIGHTS))
       goto fail;
+    if (!bind_uniform_block(program, "ShadowPages", sizeof(gls.u_shadows),
+                            UBO_SHADOWS))
+      goto fail;
   }
 
   qglUseProgram(program);
@@ -1239,6 +1417,11 @@ static GLuint create_and_use_program(glStateBits_t bits) {
   if (bits & GLS_POSTFX)
     bind_texture_unit(program, "u_lut", TMU_LUT);
 
+  if (bits & GLS_DYNAMIC_LIGHTS) {
+    bind_texture_unit(program, "u_shadowmap", TMU_SHADOW);
+    bind_texture_unit(program, "u_shadowmoments", TMU_SHADOW_MOMENT);
+  }
+
   return program;
 
 fail:
@@ -1268,6 +1451,15 @@ static void shader_state_bits(glStateBits_t bits) {
 
   if (diff & GLS_SHADER_MASK)
     shader_use_program(bits & GLS_SHADER_MASK);
+
+  if (bits & GLS_DYNAMIC_LIGHTS) {
+    GLuint shadow_tex = GL_Shadow_DepthTexture();
+    if (shadow_tex)
+      GL_BindTexture(TMU_SHADOW, shadow_tex);
+    GLuint moment_tex = GL_Shadow_MomentTexture();
+    if (moment_tex)
+      GL_BindTexture(TMU_SHADOW_MOMENT, moment_tex);
+  }
 
   if (diff & GLS_SCROLL_MASK && bits & GLS_SCROLL_ENABLE) {
     GL_ScrollPos(gls.u_block.scroll, bits);
@@ -1325,16 +1517,25 @@ static void shader_load_lights(void) {
   // dlight bits changed, set up the buffer.
   // if you didn't modify dlights just leave the bits
   // # alone or set to 0.
-  if (!glr.ppl_dlight_bits)
-    return;
+  memset(&gls.u_dlights, 0, sizeof(gls.u_dlights));
+  const bool weapon_receiver =
+      (glr.ppl_dlight_receiver_key & GL_DLIGHT_RECEIVER_WEAPON) != 0;
+  const int receiver_owner =
+      (int)(glr.ppl_dlight_receiver_key & GL_DLIGHT_RECEIVER_OWNER_MASK);
+  GLuint shadow_tex = GL_Shadow_DepthTexture();
+  if (shadow_tex)
+    GL_BindTexture(TMU_SHADOW, shadow_tex);
+  GLuint moment_tex = GL_Shadow_MomentTexture();
+  if (moment_tex)
+    GL_BindTexture(TMU_SHADOW_MOMENT, moment_tex);
 
   int i = 0;
   int nl = min(q_countof(gls.u_dlights.lights), glr.fd.num_dlights);
 
   c.dlightsTotal += nl;
 
-  for (int n = 0; n < nl; n++) {
-    if (!(glr.ppl_dlight_bits & 1 << n)) {
+  for (int n = 0; n < nl && glr.ppl_dlight_bits; n++) {
+    if (!(glr.ppl_dlight_bits & BIT_ULL(n))) {
       c.dlightsNotUsed++;
       continue;
     }
@@ -1352,10 +1553,16 @@ static void shader_load_lights(void) {
     gls.u_dlights.lights[i].radius = dl->radius;
     VectorCopy(dl->color, gls.u_dlights.lights[i].color);
     gls.u_dlights.lights[i].color[3] = dl->intensity;
+    const bool owner_weapon_spot =
+        weapon_receiver && receiver_owner > 0 &&
+        dl->light_type == DLIGHT_SPOT &&
+        dl->shadow_owner_entity == receiver_owner;
     if (dl->conecos) {
       VectorCopy(dl->cone, gls.u_dlights.lights[i].cone);
     }
-    gls.u_dlights.lights[i].cone[3] = dl->conecos;
+    gls.u_dlights.lights[i].cone[3] =
+        owner_weapon_spot ? 0.0f : dl->conecos;
+    GL_Shadow_FillDlight(n, &gls.u_dlights.lights[i]);
 
     i++;
   }
@@ -1554,6 +1761,12 @@ static void shader_init(void) {
   qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_dlights), NULL,
                 GL_DYNAMIC_DRAW);
 
+  qglGenBuffers(1, &gl_static.shadow_buffer);
+  GL_BindBuffer(GL_UNIFORM_BUFFER, gl_static.shadow_buffer);
+  GL_BindBufferBase(GL_UNIFORM_BUFFER, UBO_SHADOWS, gl_static.shadow_buffer);
+  qglBufferData(GL_UNIFORM_BUFFER, sizeof(gls.u_shadows), NULL,
+                GL_DYNAMIC_DRAW);
+
   // precache common shader
   shader_use_program(GLS_DEFAULT);
 
@@ -1584,6 +1797,10 @@ static void shader_shutdown(void) {
     qglDeleteBuffers(1, &gl_static.dlight_buffer);
     gl_static.dlight_buffer = 0;
   }
+  if (gl_static.shadow_buffer) {
+    qglDeleteBuffers(1, &gl_static.shadow_buffer);
+    gl_static.shadow_buffer = 0;
+  }
 
 #if USE_MD5
   if (gl_static.skeleton_buffer) {
@@ -1601,7 +1818,8 @@ static void shader_shutdown(void) {
 }
 
 static bool shader_use_per_pixel_lighting(void) {
-  return gl_per_pixel_lighting->integer != 0;
+  return gl_per_pixel_lighting->integer != 0 ||
+         (glr.ppl_bits & GLS_DYNAMIC_LIGHTS) != 0;
 }
 
 const glbackend_t backend_shader = {

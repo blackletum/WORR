@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
  */
 
 #include "gl.h"
+#include "renderer/shadow_frontend.h"
 #include "renderer/ui_scale.h"
 #if !defined(RENDERER_DLL)
 #include "system/system.h"
@@ -35,6 +36,98 @@ statCounters_t c;
 entity_t gl_world;
 
 refcfg_t r_config;
+
+static shadow_frontend_state_t gl_shadow_frontend;
+static shadow_frontend_cvars_t gl_shadow_frontend_cvars;
+static bool gl_shadow_frontend_cvars_registered;
+
+static void GL_ShadowAddPointToBounds(const vec3_t point, vec3_t mins,
+                                      vec3_t maxs) {
+  for (int i = 0; i < 3; i++) {
+    if (point[i] < mins[i]) {
+      mins[i] = point[i];
+    }
+    if (point[i] > maxs[i]) {
+      maxs[i] = point[i];
+    }
+  }
+}
+
+static bool GL_ShadowResolveCasterBounds(void *userdata, const entity_t *ent,
+                                         const bsp_t *world_bsp,
+                                         vec3_t local_mins,
+                                         vec3_t local_maxs) {
+  (void)userdata;
+  if (!ent) {
+    return false;
+  }
+
+  if (ent->model & BIT(31)) {
+    int model_index = ~ent->model;
+    if (!world_bsp || !world_bsp->models || model_index < 1 ||
+        model_index >= world_bsp->nummodels) {
+      return false;
+    }
+
+    const mmodel_t *model = &world_bsp->models[model_index];
+    VectorCopy(model->mins, local_mins);
+    VectorCopy(model->maxs, local_maxs);
+    return true;
+  }
+
+  const model_t *model = MOD_ForHandle(ent->model);
+  if (!model || model->type != MOD_ALIAS || !model->frames ||
+      model->numframes <= 0) {
+    return false;
+  }
+
+  unsigned frame = ent->frame < (unsigned)model->numframes ? ent->frame : 0;
+  unsigned oldframe = ent->oldframe < (unsigned)model->numframes
+                          ? ent->oldframe
+                          : frame;
+
+  ClearBounds(local_mins, local_maxs);
+  GL_ShadowAddPointToBounds(model->frames[frame].bounds[0], local_mins,
+                            local_maxs);
+  GL_ShadowAddPointToBounds(model->frames[frame].bounds[1], local_mins,
+                            local_maxs);
+  if (oldframe != frame || ent->backlerp > 0.0f) {
+    GL_ShadowAddPointToBounds(model->frames[oldframe].bounds[0], local_mins,
+                              local_maxs);
+    GL_ShadowAddPointToBounds(model->frames[oldframe].bounds[1], local_mins,
+                              local_maxs);
+  }
+  return true;
+}
+
+static const char *GL_ShadowModelName(void *userdata, qhandle_t model_handle,
+                                      const bsp_t *world_bsp) {
+  (void)userdata;
+  (void)world_bsp;
+  if (!model_handle || (model_handle & BIT(31))) {
+    return "";
+  }
+  const model_t *model = MOD_ForHandle(model_handle);
+  return model ? model->name : "";
+}
+
+static const shadow_backend_ops_t gl_shadow_backend_ops = {
+    .backend_name = "opengl",
+    .supports_depth_compare_pages = true,
+    .supports_moment_pages = true,
+    .supports_cube_array_pages = false,
+    .supports_array_2d_pages = true,
+    .max_pages = GL_SHADOW_MAX_PAGES,
+    .max_resolution = 1024,
+    .userdata = NULL,
+    .begin_frame = GL_Shadow_BeginFrame,
+    .resolve_caster_bounds = GL_ShadowResolveCasterBounds,
+    .model_name = GL_ShadowModelName,
+    .ensure_page = GL_Shadow_EnsurePage,
+    .render_view = GL_Shadow_RenderView,
+    .end_frame = GL_Shadow_EndFrame,
+    .describe_materialization = GL_Shadow_DescribeMaterialization,
+};
 
 static int gl_leaf_count;
 static int gl_leaf_maxcount;
@@ -1557,8 +1650,23 @@ void R_RenderFrame(const refdef_t *fd) {
   glr.ppl_bits = 0;
   GL_UpdateResolutionScale();
 
-  if (gl_dynamic->integer != 1 || gl_vertexlight->integer)
+  shadow_frontend_policy_t shadow_policy;
+  ShadowFrontend_PolicyFromCvars(&gl_shadow_frontend_cvars, &shadow_policy);
+  if (!gl_static.use_shaders) {
+    shadow_policy.enabled = false;
+  }
+  shadow_policy.max_resolution =
+      min(shadow_policy.max_resolution, GL_SHADOW_MAX_RESOLUTION);
+  shadow_policy.default_resolution =
+      min(shadow_policy.default_resolution, GL_SHADOW_MAX_RESOLUTION);
+  shadow_policy.sun_resolution =
+      min(shadow_policy.sun_resolution, GL_SHADOW_MAX_RESOLUTION);
+  const bool shadowmaps_active = shadow_policy.enabled;
+
+  if ((gl_dynamic->integer != 1 || gl_vertexlight->integer) &&
+      !shadowmaps_active) {
     glr.fd.num_dlights = 0;
+  }
 
   glr.fog_bits = glr.fog_bits_sky = 0;
 
@@ -1572,7 +1680,8 @@ void R_RenderFrame(const refdef_t *fd) {
         glr.fog_bits_sky |= GLS_FOG_SKY;
     }
 
-    bool use_ppl = gl_per_pixel_lighting->integer > 0;
+    bool use_ppl = gl_per_pixel_lighting->integer > 0 ||
+                   shadowmaps_active;
     if (use_ppl)
       glr.ppl_bits |= GLS_DYNAMIC_LIGHTS;
   }
@@ -1585,6 +1694,22 @@ void R_RenderFrame(const refdef_t *fd) {
   pp_flags_t pp_flags = GL_BindFramebuffer();
 
   GL_ClassifyEntities();
+
+  int shadow_sun_pages = shadow_policy.sun_enabled
+      ? shadow_policy.sun_cascades
+      : 0;
+  int shadow_local_pages = max(0, GL_SHADOW_MAX_PAGES - shadow_sun_pages);
+  shadow_policy.max_lights =
+      min(shadow_policy.max_lights,
+          shadow_local_pages / SHADOW_FRONTEND_POINT_FACES);
+  ShadowFrontend_BeginMainVisibilityGuard(&gl_shadow_frontend, glr.visframe,
+                                          glr.viewcluster1, glr.viewcluster2);
+  ShadowFrontend_BuildFrame(&gl_shadow_frontend, &glr.fd,
+                            gl_static.world.cache, &shadow_policy,
+                            &gl_shadow_backend_ops);
+  ShadowFrontend_EndMainVisibilityGuard(&gl_shadow_frontend, glr.visframe,
+                                        glr.viewcluster1, glr.viewcluster2,
+                                        "opengl");
 
   gls.u_block.dof_params[0] =
       r_dofFocusDistance ? r_dofFocusDistance->value : 0.0f;
@@ -1862,6 +1987,14 @@ static void GL_GfxInfo_f(void) {
     }
     Com_Printf("\n");
   }
+}
+
+static void GL_ShadowDump_f(void) {
+  shadow_frontend_policy_t policy;
+  ShadowFrontend_PolicyFromCvars(&gl_shadow_frontend_cvars, &policy);
+  int focus = Cmd_Argc() > 1 ? Q_atoi(Cmd_Argv(1)) : -1;
+  ShadowFrontend_Dump(&gl_shadow_frontend, &policy, &gl_shadow_backend_ops,
+                      focus);
 }
 
 #if USE_DEBUG
@@ -2145,6 +2278,10 @@ static void GL_Register(void) {
   gl_flarespeed = Cvar_Get("gl_flarespeed", "8", 0);
   gl_fontshadow = Cvar_Get("gl_fontshadow", "0", 0);
   gl_shaders = Cvar_Get("gl_shaders", "1", CVAR_FILES);
+  if (!gl_shadow_frontend_cvars_registered) {
+    ShadowFrontend_RegisterCvars(&gl_shadow_frontend_cvars, "gl");
+    gl_shadow_frontend_cvars_registered = true;
+  }
 #if USE_MD5
   gl_md5_load = Cvar_Get("gl_md5_load", "1", CVAR_FILES);
   gl_md5_use = Cvar_Get("gl_md5_use", "1", 0);
@@ -2312,6 +2449,8 @@ static void GL_Register(void) {
 
   Cmd_AddCommand("strings", GL_Strings_f);
   Cmd_AddCommand("gfxinfo", GL_GfxInfo_f);
+  Cmd_AddCommand("r_shadow_dump", GL_ShadowDump_f);
+  Cmd_AddCommand("gl_shadow_dump", GL_ShadowDump_f);
 
 #if USE_DEBUG
   Cmd_AddMacro("gl_viewcluster", GL_ViewCluster_m);
@@ -2321,6 +2460,9 @@ static void GL_Register(void) {
 
 static void GL_Unregister(void) {
   Cmd_RemoveCommand("strings");
+  Cmd_RemoveCommand("gfxinfo");
+  Cmd_RemoveCommand("r_shadow_dump");
+  Cmd_RemoveCommand("gl_shadow_dump");
 }
 
 static void APIENTRY myDebugProc(GLenum source, GLenum type, GLuint id,
@@ -2570,6 +2712,9 @@ bool R_Init(bool total) {
 
   GL_InitDebugDraw();
 
+  GL_Shadow_Init();
+  ShadowFrontend_Init(&gl_shadow_frontend);
+
   GL_PostInit();
 
   GL_ShowErrors(__func__);
@@ -2610,6 +2755,9 @@ void R_Shutdown(bool total) {
   }
 
   GL_ShutdownDebugDraw();
+
+  ShadowFrontend_Shutdown(&gl_shadow_frontend);
+  GL_Shadow_Shutdown();
 
   GL_ShutdownState();
 

@@ -18,10 +18,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "vk_local.h"
 #include "vk_entity.h"
+#include "vk_shadow.h"
 #include "vk_ui.h"
 #include "vk_world.h"
 #include "common/utils.h"
 #include "format/pcx.h"
+#include "renderer/shadow_frontend.h"
 
 #include <string.h>
 
@@ -47,6 +49,64 @@ uint32_t d_8to24table[256];
 static cvar_t *vk_draw_world;
 static cvar_t *vk_draw_entities;
 static cvar_t *vk_draw_ui;
+static shadow_frontend_state_t vk_shadow_frontend;
+static shadow_frontend_cvars_t vk_shadow_frontend_cvars;
+static bool vk_shadow_frontend_cvars_registered;
+
+static bool VK_ShadowResolveCasterBounds(void *userdata, const entity_t *ent,
+                                         const bsp_t *world_bsp,
+                                         vec3_t local_mins,
+                                         vec3_t local_maxs)
+{
+    (void)userdata;
+    if (!ent) {
+        return false;
+    }
+
+    if (ent->model & BIT(31)) {
+        int model_index = ~ent->model;
+        if (!world_bsp || !world_bsp->models || model_index < 1 ||
+            model_index >= world_bsp->nummodels) {
+            return false;
+        }
+
+        const mmodel_t *model = &world_bsp->models[model_index];
+        VectorCopy(model->mins, local_mins);
+        VectorCopy(model->maxs, local_maxs);
+        return true;
+    }
+
+    return VK_Entity_ModelBounds(ent->model, ent, local_mins, local_maxs);
+}
+
+static const char *VK_ShadowModelName(void *userdata, qhandle_t model,
+                                      const bsp_t *world_bsp)
+{
+    (void)userdata;
+    (void)world_bsp;
+    if (!model || (model & BIT(31))) {
+        return "";
+    }
+    return VK_Entity_ModelName(model);
+}
+
+static const shadow_backend_ops_t vk_shadow_backend_ops = {
+    .backend_name = "vulkan",
+    .supports_depth_compare_pages = true,
+    .supports_moment_pages = true,
+    .supports_cube_array_pages = false,
+    .supports_array_2d_pages = true,
+    .max_pages = VK_SHADOW_MAX_PAGES,
+    .max_resolution = VK_SHADOW_MAX_RESOLUTION,
+    .userdata = NULL,
+    .begin_frame = VK_Shadow_BeginFrame,
+    .resolve_caster_bounds = VK_ShadowResolveCasterBounds,
+    .model_name = VK_ShadowModelName,
+    .ensure_page = VK_Shadow_EnsurePage,
+    .render_view = VK_Shadow_RenderView,
+    .end_frame = VK_Shadow_EndFrame,
+    .describe_materialization = VK_Shadow_DescribeMaterialization,
+};
 
 static bool VK_LoadPaletteFromColormap(void)
 {
@@ -1208,6 +1268,8 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
         .pClearValues = clear_values,
     };
 
+    VK_Shadow_Record(cmd);
+
     vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);
     if (!vk_draw_world || vk_draw_world->integer) {
         VK_World_Record(cmd, &ctx->swapchain.extent);
@@ -1346,6 +1408,15 @@ static void VK_DestroyContext(void)
     ctx->graphics_queue_family = 0;
 }
 
+static void VK_ShadowDump_f(void)
+{
+    shadow_frontend_policy_t policy;
+    ShadowFrontend_PolicyFromCvars(&vk_shadow_frontend_cvars, &policy);
+    int focus = Cmd_Argc() > 1 ? Q_atoi(Cmd_Argv(1)) : -1;
+    ShadowFrontend_Dump(&vk_shadow_frontend, &policy, &vk_shadow_backend_ops,
+                        focus);
+}
+
 bool R_Init(bool total)
 {
     if (!vk_draw_world) {
@@ -1357,6 +1428,12 @@ bool R_Init(bool total)
     if (!vk_draw_ui) {
         vk_draw_ui = Cvar_Get("vk_draw_ui", "1", 0);
     }
+    if (!vk_shadow_frontend_cvars_registered) {
+        ShadowFrontend_RegisterCvars(&vk_shadow_frontend_cvars, "vk");
+        Cmd_AddCommand("r_shadow_dump", VK_ShadowDump_f);
+        Cmd_AddCommand("vk_shadow_dump", VK_ShadowDump_f);
+        vk_shadow_frontend_cvars_registered = true;
+    }
 
     if (!total) {
         vk_state.swapchain_dirty = true;
@@ -1365,6 +1442,7 @@ bool R_Init(bool total)
 
     if (total && !vk_state.initialized) {
         VK_InitPalette();
+        ShadowFrontend_Init(&vk_shadow_frontend);
     }
 
     Com_Printf("------- VK_Init -------\n");
@@ -1411,19 +1489,28 @@ bool R_Init(bool total)
         return false;
     }
 
+    if (!VK_Shadow_Init(&vk_state.ctx)) {
+        VK_DestroyContext();
+        vid->shutdown();
+        return false;
+    }
+
     if (!VK_UI_Init(&vk_state.ctx)) {
+        VK_Shadow_Shutdown(&vk_state.ctx);
         VK_DestroyContext();
         vid->shutdown();
         return false;
     }
 
     if (!VK_World_Init(&vk_state.ctx)) {
+        VK_Shadow_Shutdown(&vk_state.ctx);
         VK_DestroyContext();
         vid->shutdown();
         return false;
     }
 
     if (!VK_Entity_Init(&vk_state.ctx)) {
+        VK_Shadow_Shutdown(&vk_state.ctx);
         VK_DestroyContext();
         vid->shutdown();
         return false;
@@ -1452,7 +1539,12 @@ void R_Shutdown(bool total)
         return;
     }
 
+    VK_Shadow_Shutdown(&vk_state.ctx);
     VK_DestroyContext();
+    ShadowFrontend_Shutdown(&vk_shadow_frontend);
+    Cmd_RemoveCommand("r_shadow_dump");
+    Cmd_RemoveCommand("vk_shadow_dump");
+    vk_shadow_frontend_cvars_registered = false;
     vid->shutdown();
 
     memset(&vk_state, 0, sizeof(vk_state));
@@ -1504,6 +1596,25 @@ void R_EndRegistration(void)
 
 void R_RenderFrame(const refdef_t *fd)
 {
+    shadow_frontend_policy_t shadow_policy;
+    ShadowFrontend_PolicyFromCvars(&vk_shadow_frontend_cvars, &shadow_policy);
+    shadow_policy.max_resolution =
+        min(shadow_policy.max_resolution, VK_SHADOW_MAX_RESOLUTION);
+    shadow_policy.default_resolution =
+        min(shadow_policy.default_resolution, VK_SHADOW_MAX_RESOLUTION);
+    shadow_policy.sun_resolution =
+        min(shadow_policy.sun_resolution, VK_SHADOW_MAX_RESOLUTION);
+    int shadow_sun_pages = shadow_policy.sun_enabled
+        ? shadow_policy.sun_cascades
+        : 0;
+    int shadow_local_pages = max(0, VK_SHADOW_MAX_PAGES - shadow_sun_pages);
+    shadow_policy.max_lights =
+        min(shadow_policy.max_lights,
+            shadow_local_pages / SHADOW_FRONTEND_POINT_FACES);
+    ShadowFrontend_BuildFrame(&vk_shadow_frontend, fd, VK_World_GetBsp(),
+                              &shadow_policy, &vk_shadow_backend_ops);
+    VK_Shadow_UpdateDlights(fd);
+
     VK_World_RenderFrame(fd);
     VK_Entity_RenderFrame(fd);
 }
@@ -1916,7 +2027,7 @@ void GL_ExpireDebugObjects(void)
 
 bool R_SupportsPerPixelLighting(void)
 {
-    return false;
+    return true;
 }
 
 r_opengl_config_t R_GetGLConfig(void)

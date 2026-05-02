@@ -1433,6 +1433,68 @@ static bool VK_Entity_ResolveAnimationFrames(const refdef_t *fd, uint32_t num_fr
     return true;
 }
 
+static void VK_Entity_AddPointToBounds(const vec3_t point,
+                                       vec3_t mins,
+                                       vec3_t maxs)
+{
+    for (int i = 0; i < 3; i++) {
+        if (point[i] < mins[i]) {
+            mins[i] = point[i];
+        }
+        if (point[i] > maxs[i]) {
+            maxs[i] = point[i];
+        }
+    }
+}
+
+bool VK_Entity_ModelBounds(qhandle_t handle, const entity_t *ent,
+                           vec3_t local_mins, vec3_t local_maxs)
+{
+    if (!vk_entity.initialized || !ent || handle <= 0 ||
+        handle > vk_entity.num_models) {
+        return false;
+    }
+
+    const vk_model_t *model = &vk_entity.models[handle - 1];
+    if (!model->type || model->type != VK_MODEL_MD2 ||
+        !model->md2.positions || !model->md2.num_frames ||
+        !model->md2.num_vertices) {
+        return false;
+    }
+
+    uint32_t frame, oldframe;
+    float backlerp, frontlerp;
+    if (!VK_Entity_ResolveAnimationFrames(NULL, model->md2.num_frames,
+                                          ent->frame, ent->oldframe,
+                                          ent->backlerp, &frame, &oldframe,
+                                          &backlerp, &frontlerp)) {
+        return false;
+    }
+
+    ClearBounds(local_mins, local_maxs);
+    const uint32_t frames[2] = { frame, oldframe };
+    int frame_count = oldframe != frame ? 2 : 1;
+    for (int f = 0; f < frame_count; f++) {
+        const float *positions =
+            &model->md2.positions[(size_t)frames[f] * model->md2.num_vertices * 3];
+        for (uint32_t i = 0; i < model->md2.num_vertices; i++) {
+            const float *pos = &positions[i * 3];
+            VK_Entity_AddPointToBounds(pos, local_mins, local_maxs);
+        }
+    }
+    return true;
+}
+
+const char *VK_Entity_ModelName(qhandle_t handle)
+{
+    if (!vk_entity.initialized || handle <= 0 ||
+        handle > vk_entity.num_models) {
+        return "";
+    }
+    const vk_model_t *model = &vk_entity.models[handle - 1];
+    return model->type ? model->name : "";
+}
+
 static bool VK_Entity_AddSprite(const entity_t *ent, const vec3_t view_axis[3], const vk_model_t *model,
                                 bool depth_hack, bool weapon_model)
 {
@@ -1944,6 +2006,237 @@ static bool VK_Entity_AddMD2(const entity_t *ent, const refdef_t *fd, const vk_m
         if (!VK_Entity_EmitTri(&tri[0], &tri[1], &tri[2], set, alpha, depth_hack, weapon_model)) {
             return false;
         }
+    }
+
+    return true;
+}
+
+static bool VK_Entity_EmitShadowMD2(const entity_t *ent, const refdef_t *fd,
+                                    const vk_model_t *model,
+                                    vk_entity_shadow_emit_triangle_fn emit,
+                                    void *userdata)
+{
+    const vk_md2_t *md2 = &model->md2;
+    if (!md2->positions || !md2->indices || !md2->num_frames) {
+        return true;
+    }
+
+    uint32_t frame = 0;
+    uint32_t oldframe = 0;
+    float backlerp = 0.0f;
+    float frontlerp = 1.0f;
+    if (!VK_Entity_ResolveAnimationFrames(fd, md2->num_frames, ent->frame, ent->oldframe,
+                                          ent->backlerp,
+                                          &frame, &oldframe, &backlerp, &frontlerp)) {
+        return true;
+    }
+
+    vk_entity_transform_t transform;
+    VK_Entity_BuildTransform(ent, &transform);
+
+    for (uint32_t i = 0; i + 2 < md2->num_indices; i += 3) {
+        vec3_t tri[3];
+        bool valid_tri = true;
+        for (uint32_t j = 0; j < 3; j++) {
+            uint32_t idx = md2->indices[i + j];
+            if (idx >= md2->num_vertices) {
+                valid_tri = false;
+                break;
+            }
+            const float *p0 = &md2->positions[((size_t)frame * md2->num_vertices + idx) * 3];
+            const float *p1 = &md2->positions[((size_t)oldframe * md2->num_vertices + idx) * 3];
+            vec3_t local = {
+                p0[0] * frontlerp + p1[0] * backlerp,
+                p0[1] * frontlerp + p1[1] * backlerp,
+                p0[2] * frontlerp + p1[2] * backlerp,
+            };
+            VK_Entity_TransformPointWithTransform(&transform, local, tri[j]);
+        }
+
+        if (valid_tri && !emit(tri[0], tri[1], tri[2], userdata)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+#if USE_MD5
+static bool VK_Entity_EmitShadowMD5(const entity_t *ent, const refdef_t *fd,
+                                    const vk_model_t *model,
+                                    vk_entity_shadow_emit_triangle_fn emit,
+                                    void *userdata)
+{
+    if (!ent || !model || !model->md5.loaded) {
+        return true;
+    }
+
+    const vk_md5_t *md5 = &model->md5;
+    if (!md5->num_meshes || !md5->num_joints || !md5->num_frames ||
+        !md5->meshes || !md5->skeleton_frames) {
+        return true;
+    }
+
+    uint32_t frame = 0;
+    uint32_t oldframe = 0;
+    float backlerp = 0.0f;
+    float frontlerp = 1.0f;
+    uint32_t frame_count = model->md2.num_frames ? model->md2.num_frames : md5->num_frames;
+    if (!VK_Entity_ResolveAnimationFrames(fd, frame_count, ent->frame, ent->oldframe,
+                                          ent->backlerp,
+                                          &frame, &oldframe, &backlerp, &frontlerp)) {
+        return true;
+    }
+
+    const vk_md5_joint_t *skeleton = VK_Entity_LerpMD5Skeleton(md5, oldframe, frame, backlerp, frontlerp);
+    if (!skeleton) {
+        return false;
+    }
+
+    vk_entity_transform_t transform;
+    VK_Entity_BuildTransform(ent, &transform);
+
+    for (uint32_t i = 0; i < md5->num_meshes; i++) {
+        const vk_md5_mesh_t *mesh = &md5->meshes[i];
+        if (!mesh->num_indices || !mesh->vertices || !mesh->indices ||
+            !mesh->weights || !mesh->jointnums) {
+            continue;
+        }
+
+        for (uint32_t tri_idx = 0; tri_idx + 2 < mesh->num_indices; tri_idx += 3) {
+            vec3_t tri[3];
+            bool valid_tri = true;
+            for (uint32_t j = 0; j < 3; j++) {
+                uint32_t idx = mesh->indices[tri_idx + j];
+                if (idx >= mesh->num_verts) {
+                    valid_tri = false;
+                    break;
+                }
+
+                vec3_t local_pos;
+                VK_Entity_MD5VertexPosition(mesh, skeleton, md5->num_joints, idx, local_pos);
+                VK_Entity_TransformPointWithTransform(&transform, local_pos, tri[j]);
+            }
+
+            if (valid_tri && !emit(tri[0], tri[1], tri[2], userdata)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+#endif
+
+static bool VK_Entity_EmitShadowBspModel(const entity_t *ent, const bsp_t *bsp,
+                                         vk_entity_shadow_emit_triangle_fn emit,
+                                         void *userdata)
+{
+    if (!ent || !bsp || !bsp->models || !bsp->faces ||
+        !bsp->vertices || !bsp->edges || !bsp->surfedges) {
+        return true;
+    }
+
+    int model_index = ~ent->model;
+    if (model_index < 1 || model_index >= bsp->nummodels) {
+        return true;
+    }
+
+    const mmodel_t *model = &bsp->models[model_index];
+    if (!model->firstface || model->numfaces <= 0) {
+        return true;
+    }
+
+    vk_entity_transform_t transform;
+    VK_Entity_BuildTransform(ent, &transform);
+
+    for (int i = 0; i < model->numfaces; i++) {
+        const mface_t *face = &model->firstface[i];
+        if (!face || !face->firstsurfedge || face->numsurfedges < 3) {
+            continue;
+        }
+
+        surfflags_t surf_flags = face->texinfo ? face->texinfo->c.flags : 0;
+        if ((face->drawflags | surf_flags) & (SURF_NODRAW | SURF_SKY | SURF_TRANS_MASK)) {
+            continue;
+        }
+
+        const msurfedge_t *surfedges = face->firstsurfedge;
+        if (surfedges[0].edge >= (uint32_t)bsp->numedges) {
+            continue;
+        }
+        uint32_t i0 = VK_Entity_SurfEdgeVertexIndex(bsp, &surfedges[0]);
+        if (i0 >= (uint32_t)bsp->numvertices) {
+            continue;
+        }
+        const mvertex_t *v0 = &bsp->vertices[i0];
+
+        for (int j = 1; j < face->numsurfedges - 1; j++) {
+            if (surfedges[j].edge >= (uint32_t)bsp->numedges ||
+                surfedges[j + 1].edge >= (uint32_t)bsp->numedges) {
+                continue;
+            }
+
+            uint32_t i1 = VK_Entity_SurfEdgeVertexIndex(bsp, &surfedges[j]);
+            uint32_t i2 = VK_Entity_SurfEdgeVertexIndex(bsp, &surfedges[j + 1]);
+            if (i1 >= (uint32_t)bsp->numvertices || i2 >= (uint32_t)bsp->numvertices) {
+                continue;
+            }
+
+            const mvertex_t *verts[3] = {
+                v0,
+                &bsp->vertices[i1],
+                &bsp->vertices[i2],
+            };
+
+            vec3_t tri[3];
+            for (int k = 0; k < 3; k++) {
+                const vec3_t local = {
+                    verts[k]->point[0],
+                    verts[k]->point[1],
+                    verts[k]->point[2],
+                };
+                VK_Entity_TransformPointWithTransform(&transform, local, tri[k]);
+            }
+
+            if (!emit(tri[0], tri[1], tri[2], userdata)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool VK_Entity_EmitShadowCaster(const entity_t *ent, const refdef_t *fd,
+                                const bsp_t *world_bsp,
+                                vk_entity_shadow_emit_triangle_fn emit,
+                                void *userdata)
+{
+    if (!vk_entity.initialized || !ent || !emit) {
+        return true;
+    }
+
+    if (ent->model & BIT(31)) {
+        return VK_Entity_EmitShadowBspModel(ent, world_bsp, emit, userdata);
+    }
+
+    if (ent->model <= 0 || ent->model > vk_entity.num_models) {
+        return true;
+    }
+
+    const vk_model_t *model = &vk_entity.models[ent->model - 1];
+    if (!model->type) {
+        return true;
+    }
+
+    if (model->type == VK_MODEL_MD2) {
+#if USE_MD5
+        if (VK_Entity_ShouldUseMD5(ent, fd, model)) {
+            return VK_Entity_EmitShadowMD5(ent, fd, model, emit, userdata);
+        }
+#endif
+        return VK_Entity_EmitShadowMD2(ent, fd, model, emit, userdata);
     }
 
     return true;

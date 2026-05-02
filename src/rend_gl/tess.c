@@ -674,8 +674,9 @@ void GL_Flush3D(void)
                 state |= GLS_GLOWMAP_ENABLE;
         }
 
-        if (tess.dlight_bits && glr.ppl_bits) {
+        if ((tess.dlight_bits || GL_Shadow_SunActive()) && glr.ppl_bits) {
             glr.ppl_dlight_bits = tess.dlight_bits;
+            glr.ppl_dlight_receiver_key = 0;
             state |= glr.ppl_bits;
         }
         array |= GLA_NORMAL;

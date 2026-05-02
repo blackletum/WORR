@@ -203,6 +203,7 @@ ui_src = [
 
 renderer_src = [
   'src/renderer/dds.c',
+  'src/renderer/shadow_frontend.c',
   'src/renderer/ui_scale.c',
   'src/renderer/view_setup.c',
   'src/rend_gl/draw.c',
@@ -213,6 +214,7 @@ renderer_src = [
   'src/rend_gl/mesh.c',
   'src/rend_gl/models.c',
   'src/rend_gl/qgl.c',
+  'src/rend_gl/shadow.c',
   'src/rend_gl/shader.c',
   'src/rend_gl/sky.c',
   'src/rend_gl/state.c',
@@ -228,10 +230,12 @@ renderer_src = [
   'src/rend_gl/qgl.h',
 
   'inc/renderer/renderer.h',
+  'inc/renderer/shadow_frontend.h',
 ]
 
 renderer_vk_rtx_src = [
   'src/renderer/dds.c',
+  'src/renderer/shadow_frontend.c',
   'src/renderer/ui_scale.c',
   'src/renderer/view_setup.c',
   'src/rend_rtx/vkpt/asvgf.c',
@@ -275,16 +279,20 @@ renderer_vk_rtx_src = [
   'src/rend_rtx/vkpt/vkpt.h',
   'src/rend_rtx/vkpt/vk_util.h',
   'inc/renderer/renderer.h',
+  'inc/renderer/shadow_frontend.h',
 ]
 
 renderer_vk_src = [
   'src/renderer/dds.c',
+  'src/renderer/shadow_frontend.c',
   'src/renderer/ui_scale.c',
   'src/renderer/view_setup.c',
   'src/rend_vk/vk_main.c',
   'src/rend_vk/vk_entity.c',
   'src/rend_vk/vk_entity.h',
   'src/rend_vk/vk_entity_spv.h',
+  'src/rend_vk/vk_shadow.c',
+  'src/rend_vk/vk_shadow.h',
   'src/rend_vk/vk_ui.c',
   'src/rend_vk/vk_ui.h',
   'src/rend_vk/vk_ui2d_spv.h',
@@ -294,6 +302,7 @@ renderer_vk_src = [
   'src/rend_vk/refresh/stb/stb.c',
   'src/rend_vk/vk_local.h',
   'inc/renderer/renderer.h',
+  'inc/renderer/shadow_frontend.h',
   'inc/renderer/view_setup.h',
 ]
 

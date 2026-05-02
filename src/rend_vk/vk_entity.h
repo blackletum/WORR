@@ -20,6 +20,19 @@ void VK_Entity_DestroySwapchainResources(vk_context_t *ctx);
 void VK_Entity_BeginRegistration(void);
 void VK_Entity_EndRegistration(void);
 qhandle_t VK_Entity_RegisterModel(const char *name);
+bool VK_Entity_ModelBounds(qhandle_t handle, const entity_t *ent,
+                           vec3_t local_mins, vec3_t local_maxs);
+const char *VK_Entity_ModelName(qhandle_t handle);
+
+typedef bool (*vk_entity_shadow_emit_triangle_fn)(const vec3_t a,
+                                                  const vec3_t b,
+                                                  const vec3_t c,
+                                                  void *userdata);
+
+bool VK_Entity_EmitShadowCaster(const entity_t *ent, const refdef_t *fd,
+                                const bsp_t *world_bsp,
+                                vk_entity_shadow_emit_triangle_fn emit,
+                                void *userdata);
 
 void VK_Entity_RenderFrame(const refdef_t *fd);
 void VK_Entity_Record(VkCommandBuffer cmd, const VkExtent2D *extent);

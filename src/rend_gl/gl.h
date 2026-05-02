@@ -30,6 +30,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/video.h"
 #include "client/client.h"
 #include "renderer/renderer.h"
+#include "renderer/shadow_frontend.h"
 #if defined(RENDERER_DLL)
 #include "renderer/renderer_api.h"
 #endif
@@ -118,6 +119,7 @@ typedef struct {
     GLuint          framebuffers[FBO_COUNT];
     GLuint          uniform_buffer;
     GLuint          dlight_buffer;
+    GLuint          shadow_buffer;
 #if USE_MD5
     GLuint          skeleton_buffer;
     GLuint          skeleton_tex[2];
@@ -182,6 +184,7 @@ typedef struct {
     glStateBits_t   fog_bits, fog_bits_sky;
     glStateBits_t   ppl_bits;
     uint64_t        ppl_dlight_bits;
+    uint64_t        ppl_dlight_receiver_key;
     int             render_width;
     int             render_height;
     float           render_scale_w;
@@ -588,6 +591,8 @@ typedef struct {
     };
 
     GLuint buffers[2];
+    void *shadow_vertex_data;
+    void *shadow_index_data;
 } model_t;
 
 // 2d:    xy[2]  | st[2]     | color[1]
@@ -703,6 +708,9 @@ static inline float GL_DlightInfluenceRadius(const dlight_t *dl)
 #define GLS_ITEM_COLORIZE       BIT_ULL(42)
 #define GLS_ITEM_COLORIZE_BASE  BIT_ULL(43)
 
+#define GL_DLIGHT_RECEIVER_WEAPON       BIT_ULL(63)
+#define GL_DLIGHT_RECEIVER_OWNER_MASK   0x7fffffffULL
+
 #define GLS_BLEND_MASK          (GLS_BLEND_BLEND | GLS_BLEND_ADD | GLS_BLEND_MODULATE)
 #define GLS_COMMON_MASK         (GLS_DEPTHMASK_FALSE | GLS_DEPTHTEST_DISABLE | GLS_CULL_DISABLE | GLS_BLEND_MASK)
 #define GLS_SKY_MASK            (GLS_CLASSIC_SKY | GLS_DEFAULT_SKY)
@@ -784,6 +792,8 @@ typedef enum {
     TMU_REFRACT,
     TMU_EXPOSURE,
     TMU_LUT,
+    TMU_SHADOW,
+    TMU_SHADOW_MOMENT,
     MAX_TMUS,
 
     // MD5
@@ -799,14 +809,19 @@ typedef enum {
     GLB_COUNT
 } glBufferBinding_t;
 
-enum { UBO_UNIFORMS, UBO_SKELETON, UBO_DLIGHTS };
+enum { UBO_UNIFORMS, UBO_SKELETON, UBO_DLIGHTS, UBO_SHADOWS };
 enum { SSBO_WEIGHTS, SSBO_JOINTNUMS };
+
+#define GL_SHADOW_MAX_PAGES 64
+#define GL_SHADOW_MAX_RESOLUTION 1024
 
 typedef struct {
     vec3_t    position;
     float     radius;
     vec4_t    color; // a = intensity
     vec4_t    cone; // a = angle
+    vec4_t    shadow_pages0;
+    vec4_t    shadow_pages1;
 } glDlight_t;
 
 typedef struct {
@@ -875,6 +890,17 @@ typedef struct {
 } glUniformDlights_t;
 
 typedef struct {
+    mat4_t      matrix;
+    vec4_t      params; // x = resolution, y = inv resolution, z = bias, w = normal offset
+} glShadowPage_t;
+
+typedef struct {
+    vec4_t          params; // x = active pages, y = strength, z/w reserved
+    vec4_t          sun; // x = first page, y = count, z = bias, w = strength
+    glShadowPage_t  pages[GL_SHADOW_MAX_PAGES];
+} glUniformShadowPages_t;
+
+typedef struct {
     glTmu_t             client_tmu;
     glTmu_t             server_tmu;
     GLuint              texnums[MAX_TMUS];
@@ -890,7 +916,9 @@ typedef struct {
     glUniformBlock_t    u_block;
     bool                u_block_dirty;
     glUniformDlights_t  u_dlights;
+    glUniformShadowPages_t u_shadows;
     uint64_t            dlight_bits;
+    uint64_t            dlight_receiver_key;
 } glState_t;
 
 extern glState_t gls;
@@ -992,9 +1020,12 @@ static inline void GL_LoadUniforms(void)
 
 static inline void GL_LoadLights(void)
 {
-    if (gls.dlight_bits != glr.ppl_dlight_bits && gl_backend->load_lights) {
+    if ((gls.dlight_bits != glr.ppl_dlight_bits ||
+         gls.dlight_receiver_key != glr.ppl_dlight_receiver_key) &&
+        gl_backend->load_lights) {
         gl_backend->load_lights();
         gls.dlight_bits = glr.ppl_dlight_bits;
+        gls.dlight_receiver_key = glr.ppl_dlight_receiver_key;
     }
 }
 
@@ -1109,6 +1140,26 @@ bool GL_InitFramebuffers(bool dof_active, bool crt_active, bool refract_active,
 void GL_EnsureRefractionTexture(int w, int h);
 
 extern cvar_t *gl_intensity;
+
+/*
+ * gl_shadow.c
+ *
+ */
+void GL_Shadow_Init(void);
+void GL_Shadow_Shutdown(void);
+void GL_Shadow_BeginFrame(void *userdata,
+                          const shadow_frontend_policy_t *policy);
+bool GL_Shadow_EnsurePage(void *userdata, const shadow_view_desc_t *view);
+bool GL_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
+                          const shadow_caster_t *casters,
+                          const int *caster_indices, int caster_count);
+void GL_Shadow_EndFrame(void *userdata,
+                        const shadow_frontend_stats_t *stats);
+const char *GL_Shadow_DescribeMaterialization(void *userdata);
+void GL_Shadow_FillDlight(int source_index, glDlight_t *out);
+GLuint GL_Shadow_DepthTexture(void);
+GLuint GL_Shadow_MomentTexture(void);
+bool GL_Shadow_SunActive(void);
 
 /*
  * gl_tess.c

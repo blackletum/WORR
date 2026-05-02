@@ -1,15 +1,23 @@
 {
   "mode": "ralph",
-  "active": true,
-  "iteration": 2,
+  "active": false,
+  "iteration": 4,
   "max_iterations": 10,
-  "current_phase": "executing-native-backends",
+  "current_phase": "complete",
   "started_at": "2026-04-30T15:39:15Z",
+  "completed_at": "2026-04-30T21:05:28Z",
   "state": {
-    "context_snapshot_path": ".omx/context/shadowmapping-native-backends-20260430T163108Z.md",
+    "context_snapshot_path": ".omx/context/shadowmapping-full-plan-20260430T192503Z.md",
+    "previous_iteration_context_snapshot_path": ".omx/context/shadowmapping-native-backends-20260430T163108Z.md",
     "previous_context_snapshot_path": ".omx/context/shadowmapping-replacement-20260430T153915Z.md",
     "mcp_state_tools": "unavailable",
-    "agent_tiers_doc": "missing"
+    "agent_tiers_doc": "missing",
+    "cancel_tool": "unavailable",
+    "reentry_reason": "User requested another Ralph loop against the full proposal checklist after compare-depth backend approval.",
+    "current_iteration_notes": "Architect rejection closed by replacing caster boxes with real GL/VK brush, alias, and MD5 caster geometry; fitting sun cascades to frustum splits with texel snapping; applying Vulkan receiver normal-offset bias parity; and making cache mode 2 literal world-only reuse by excluding entity casters from cached page rendering.",
+    "completion_notes": "Ralph loop completed with architect approval. OMX state/ai-slop-cleaner/cancel tools were unavailable in this session, so state was maintained manually, deslop was a changed-file manual pass, and the ledger was marked inactive.",
+    "reentry_2026_04_30T21_00_03Z": "User requested another Ralph loop. Iteration 4 reopened the ledger for a fresh checklist audit, verification pass, and architect gate.",
+    "iteration_4_notes": "Fixed stale baseline wording that still described frontend caster boxes. Fresh code search, build, install refresh, staged smokes, cache-mode-2 dumps, and architect re-review all passed."
   },
   "todos": [
     {
@@ -29,18 +37,59 @@
     },
     {
       "id": "SHADOW-GL-BACKEND-001",
-      "status": "in_progress",
+      "status": "completed",
       "description": "Implement visible native OpenGL shadow page allocation, rendering, and sampling."
     },
     {
       "id": "SHADOW-VK-BACKEND-001",
-      "status": "pending",
+      "status": "completed",
       "description": "Implement native Vulkan shadow page allocation/render integration without redirecting to OpenGL."
     },
     {
       "id": "SHADOW-FINAL-VERIFY-001",
-      "status": "pending",
+      "status": "completed",
       "description": "Run final builds/regression checks, architect verification, and cleanup pass."
+    },
+    {
+      "id": "SHADOW-PLAN-GAP-001",
+      "status": "completed",
+      "description": "Classify remaining proposal checklist items against the current implementation and close blocking gaps."
+    },
+    {
+      "id": "SHADOW-INSTRUMENT-001",
+      "status": "completed",
+      "description": "Add proposal-level shadow debug dumps/counters/materialization reporting."
+    },
+    {
+      "id": "SHADOW-QUALITY-002",
+      "status": "completed",
+      "description": "Complete remaining quality-policy items such as tracked light class semantics, moment filter handling/reporting, and exclusion/alpha policy."
+    },
+    {
+      "id": "SHADOW-DOCS-002",
+      "status": "completed",
+      "description": "Update implementation documentation and roadmap with full-plan completion evidence."
+    },
+    {
+      "id": "SHADOW-VERIFY-002",
+      "status": "completed",
+      "description": "Run final full-plan build/regression/smoke checks and obtain fresh architect verification."
     }
-  ]
+  ],
+  "verification": {
+    "targeted_renderers": "ninja -C builddir-win worr_opengl_x86_64.pdb worr_vulkan_x86_64.pdb passed after replacing caster boxes, fitting cascades, and adding Vulkan normal-offset parity",
+    "full_build": "iteration 4 ninja -C builddir-win passed and linked all targets; ninja emitted a non-fatal 'premature end of file; recovering' warning with exit 0",
+    "install_refresh": "iteration 4 python tools/refresh_install.py --build-dir builddir-win --install-dir .install --base-game basew --platform-id windows-x86_64 refreshed and validated .install",
+    "guardrails": "iteration 4 python tools/check_shadowmapping_guardrails.py passed",
+    "python": "iteration 4 python -m py_compile tools/shadowmapping_repro_smoke.py tools/check_shadowmapping_guardrails.py passed",
+    "spirv": "iteration 4 spirv-val passed individually for .tmp/vk_world_shadow.vert.spv, .tmp/vk_world_shadow.frag.spv, and .tmp/vk_shadow_moment.frag.spv",
+    "tests": "iteration 4 meson test -C builddir-win --print-errorlogs reported no tests defined",
+    "smoke": "iteration 4 staged tools/shadowmapping_repro_smoke.py moving-bmodel + translated-md2 PCF and sun-cascade VSM/EVSM/PCSS exited 0 for OpenGL and Vulkan",
+    "dry_run": "tools/shadowmapping_repro_smoke.py --dry-run emitted the expected staged command",
+    "diff_check": "git diff --check passed with line-ending warnings only",
+    "cache_mode_2_runtime": "iteration 4 staged OpenGL cache mode 2 dump had global casters=27 dynamic=27 with all four views at casters=0 dynamic=0; staged Vulkan sun cache mode 2 dump had global casters=38 dynamic=38 with all three cascades at casters=0 dynamic=0",
+    "architect": "APPROVED by Pauli in iteration 4 after the baseline doc correction; no architectural blockers found",
+    "deslop": "oh-my-codex ai-slop-cleaner unavailable via tool_search; manual changed-file deslop scan found no cleanup edits needed, so iteration 4 build/smoke evidence remains post-cleanup evidence",
+    "state_cleanup": "Ralph active=false because /cancel/state_clear tooling was unavailable"
+  }
 }

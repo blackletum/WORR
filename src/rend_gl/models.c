@@ -115,6 +115,8 @@ static void MOD_FreeAlias(model_t *model)
     Hunk_Free(&model->hunk);
 
     GL_DeleteBuffers(2, model->buffers);
+    Z_Free(model->shadow_vertex_data);
+    Z_Free(model->shadow_index_data);
 
     // all memory is allocated on hunk if not using GPU lerp
     if (!gl_static.use_gpu_lerp)
@@ -1488,6 +1490,10 @@ static bool MOD_UploadVertexBuffer(model_t *model, memhunk_t *hunk)
     if (GL_ShowErrors(__func__))
         return false;
 
+    Z_Free(model->shadow_vertex_data);
+    model->shadow_vertex_data = R_Malloc(hunk->cursize);
+    memcpy(model->shadow_vertex_data, hunk->base, hunk->cursize);
+
     const uintptr_t base = (uintptr_t)hunk->base;
 
     for (int i = 0; i < model->nummeshes; i++) {
@@ -1522,6 +1528,10 @@ static bool MOD_UploadIndexBuffer(model_t *model, memhunk_t *hunk)
     qglBufferData(GL_ELEMENT_ARRAY_BUFFER, hunk->cursize, hunk->base, GL_STATIC_DRAW);
     if (GL_ShowErrors(__func__))
         return false;
+
+    Z_Free(model->shadow_index_data);
+    model->shadow_index_data = R_Malloc(hunk->cursize);
+    memcpy(model->shadow_index_data, hunk->base, hunk->cursize);
 
     const uintptr_t base = (uintptr_t)hunk->base;
 

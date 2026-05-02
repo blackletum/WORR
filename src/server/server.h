@@ -533,6 +533,7 @@ extern cvar_t       *sv_debug;
 extern cvar_t       *sv_pad_packets;
 #endif
 extern cvar_t       *sv_novis;
+extern cvar_t       *sv_shadow_strict_replication;
 extern cvar_t       *sv_lan_force_rate;
 extern cvar_t       *sv_calcpings_method;
 extern cvar_t       *sv_changemapcmd;

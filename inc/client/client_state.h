@@ -143,6 +143,11 @@ typedef struct {
     float       coneangle; // spot if non-zero
     vec3_t      conedirection;
     color_t     color;
+    int         owner_entity;
+    int         source_index;
+    bool        strict_pvs;
+    bool        ignore_owner_casters;
+    bool        dynamic_shadow;
 } cl_shadow_light_t;
 
 //

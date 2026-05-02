@@ -851,7 +851,7 @@ static void draw_alias_mesh(const uint16_t *indices, int num_indices,
 
     if (!(state & (GLS_MESH_SHELL | GLS_RIMLIGHT)) &&
         !(glr.ent->flags & RF_BRIGHTSKIN) &&
-        glr.ppl_dlight_bits)
+        (glr.ppl_dlight_bits || GL_Shadow_SunActive()))
         state |= glr.ppl_bits;
 
     GL_StateBits(state);
@@ -1238,6 +1238,14 @@ static bool test_sphere_sphere(const vec4_t a, const vec4_t b)
 static void setup_lights(void)
 {
     glr.ppl_dlight_bits = 0;
+    glr.ppl_dlight_receiver_key = 0;
+
+    const bool weapon_receiver =
+        (glr.ent->flags & RF_WEAPONMODEL) && glr.ent->owner_entity > 0;
+    if (weapon_receiver) {
+        glr.ppl_dlight_receiver_key = GL_DLIGHT_RECEIVER_WEAPON |
+            ((uint64_t)glr.ent->owner_entity & GL_DLIGHT_RECEIVER_OWNER_MASK);
+    }
 
     const vec4_t ent_sphere = { glr.ent->origin[0], glr.ent->origin[1], glr.ent->origin[2], m_model->frames[newframenum].radius };
 
@@ -1251,12 +1259,15 @@ static void setup_lights(void)
         }
 
         vec4_t light_sphere = { center[0], center[1], center[2], radius };
-        if (!test_sphere_sphere(light_sphere, ent_sphere)) {
+        const bool owner_weapon_spot =
+            weapon_receiver && dl->light_type == DLIGHT_SPOT &&
+            dl->shadow_owner_entity == glr.ent->owner_entity;
+        if (!owner_weapon_spot && !test_sphere_sphere(light_sphere, ent_sphere)) {
             c.dlightsEntCulled++;
             continue;
         }
 
-        glr.ppl_dlight_bits |= 1 << i;
+        glr.ppl_dlight_bits |= BIT_ULL(i);
     }
 }
 

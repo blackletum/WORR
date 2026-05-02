@@ -9,6 +9,7 @@ the Free Software Foundation; either version 2 of the License, or
 
 #include "vk_world.h"
 
+#include "vk_shadow.h"
 #include "vk_ui.h"
 #include "vk_world_spv.h"
 #include "renderer/view_setup.h"
@@ -23,6 +24,7 @@ typedef struct {
     float uv[2];
     float lm_uv[2];
     uint32_t color;
+    float normal[3];
     float base_uv[2];
     uint8_t base_alpha;
     uint8_t flags;
@@ -624,17 +626,6 @@ static inline void VK_World_ShiftLightmapBytes(const byte in[3], vec3_t out)
 static inline void VK_World_AdjustLightColor(vec3_t color)
 {
     VectorScale(color, 1.0f / 255.0f, color);
-}
-
-static inline color_t VK_World_ColorFromLight(const vec3_t light)
-{
-    int r = (int)(light[0] * 255.0f + 0.5f);
-    int g = (int)(light[1] * 255.0f + 0.5f);
-    int b = (int)(light[2] * 255.0f + 0.5f);
-    r = max(0, min(255, r));
-    g = max(0, min(255, g));
-    b = max(0, min(255, b));
-    return COLOR_RGBA(r, g, b, 255);
 }
 
 static bool VK_World_SampleFaceLightmap(const mface_t *face, float s, float t, vec3_t out_color)
@@ -1349,6 +1340,13 @@ static bool VK_World_BuildMesh(vk_world_vertex_t **out_vertices,
 
         uint8_t base_alpha = (uint8_t)Q_clipf(alpha * 255.0f + 0.5f, 0.0f, 255.0f);
         color_t modulate_color = COLOR_RGBA(255, 255, 255, base_alpha);
+        vec3_t face_normal = { 0.0f, 0.0f, 1.0f };
+        if (face->plane) {
+            VectorCopy(face->plane->normal, face_normal);
+            if (face->drawflags & DSURF_PLANEBACK) {
+                VectorInverse(face_normal);
+            }
+        }
 
         const vk_world_face_lightmap_t *face_lm = &face_lms[i];
         float fallback_lm_u = 0.5f / (float)atlas_size;
@@ -1421,6 +1419,7 @@ static bool VK_World_BuildMesh(vk_world_vertex_t **out_vertices,
                 .uv = { uv0[0], uv0[1] },
                 .lm_uv = { lm_u0, lm_v0 },
                 .color = modulate_color.u32,
+                .normal = { face_normal[0], face_normal[1], face_normal[2] },
                 .base_uv = { uv0[0], uv0[1] },
                 .base_alpha = base_alpha,
                 .flags = vertex_flags,
@@ -1430,6 +1429,7 @@ static bool VK_World_BuildMesh(vk_world_vertex_t **out_vertices,
                 .uv = { uv1[0], uv1[1] },
                 .lm_uv = { lm_u1, lm_v1 },
                 .color = modulate_color.u32,
+                .normal = { face_normal[0], face_normal[1], face_normal[2] },
                 .base_uv = { uv1[0], uv1[1] },
                 .base_alpha = base_alpha,
                 .flags = vertex_flags,
@@ -1439,6 +1439,7 @@ static bool VK_World_BuildMesh(vk_world_vertex_t **out_vertices,
                 .uv = { uv2[0], uv2[1] },
                 .lm_uv = { lm_u2, lm_v2 },
                 .color = modulate_color.u32,
+                .normal = { face_normal[0], face_normal[1], face_normal[2] },
                 .base_uv = { uv2[0], uv2[1] },
                 .base_alpha = base_alpha,
                 .flags = vertex_flags,
@@ -1550,10 +1551,8 @@ static bool VK_World_UpdateVertexLighting(void)
     const float time = (vk_world.current_fd ? vk_world.current_fd->time : 0.0f);
     const bool enable_shader_effects = !vk_shaders || (vk_shaders->integer != 0);
     const bool animate_warp = enable_shader_effects && vk_world.has_warp_vertices;
-    const bool has_dlights = vk_world.current_fd && vk_world.current_fd->dlights &&
-                             vk_world.current_fd->num_dlights > 0;
 
-    if (!animate_warp && !has_dlights && !vk_world.vertex_dynamic_dirty) {
+    if (!animate_warp && !vk_world.vertex_dynamic_dirty) {
         return true;
     }
 
@@ -1576,19 +1575,7 @@ static bool VK_World_UpdateVertexLighting(void)
             vertex->uv[1] = base_v;
         }
 
-        if (has_dlights) {
-            color_t color;
-            if (vertex->flags & VK_WORLD_VERTEX_FULLBRIGHT) {
-                color = COLOR_RGBA(255, 255, 255, vertex->base_alpha);
-            } else {
-                vec3_t light = { 1.0f, 1.0f, 1.0f };
-                VK_World_AddDynamicLightsAtPoint(vertex->pos, light);
-                VK_World_ClampLight(light);
-                color = VK_World_ColorFromLight(light);
-                color.a = vertex->base_alpha;
-            }
-            vertex->color = color.u32;
-        } else if (vk_world.vertex_dynamic_dirty) {
+        if (vk_world.vertex_dynamic_dirty) {
             vertex->color = COLOR_RGBA(255, 255, 255, vertex->base_alpha).u32;
         }
     }
@@ -1600,7 +1587,7 @@ static bool VK_World_UpdateVertexLighting(void)
     }
 
     memcpy(vk_world.vertex_mapped, vk_world.cpu_vertices, bytes);
-    vk_world.vertex_dynamic_dirty = has_dlights || animate_warp;
+    vk_world.vertex_dynamic_dirty = animate_warp;
     return true;
 }
 
@@ -1660,7 +1647,7 @@ static bool VK_World_CreatePipelineVariant(vk_context_t *ctx, bool alpha_blend, 
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
     };
 
-    VkVertexInputAttributeDescription attrs[5] = {
+    VkVertexInputAttributeDescription attrs[6] = {
         {
             .location = 0,
             .binding = 0,
@@ -1690,6 +1677,12 @@ static bool VK_World_CreatePipelineVariant(vk_context_t *ctx, bool alpha_blend, 
             .binding = 0,
             .format = VK_FORMAT_R8_UINT,
             .offset = offsetof(vk_world_vertex_t, flags),
+        },
+        {
+            .location = 5,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32B32_SFLOAT,
+            .offset = offsetof(vk_world_vertex_t, normal),
         },
     };
 
@@ -1832,10 +1825,16 @@ bool VK_World_Init(vk_context_t *ctx)
         Com_SetLastError("Vulkan world: UI descriptor set layout is unavailable");
         return false;
     }
+    VkDescriptorSetLayout shadow_set_layout = VK_Shadow_GetDescriptorSetLayout();
+    if (!shadow_set_layout) {
+        Com_SetLastError("Vulkan world: shadow descriptor set layout is unavailable");
+        return false;
+    }
 
-    VkDescriptorSetLayout set_layouts[2] = {
+    VkDescriptorSetLayout set_layouts[3] = {
         ui_set_layout,
         ui_set_layout,
+        shadow_set_layout,
     };
 
     VkPipelineLayoutCreateInfo layout_info = {
@@ -2238,6 +2237,10 @@ void VK_World_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
                                vk_world.sky_vertex_buffer;
 
     VkDeviceSize offset = 0;
+    VkDescriptorSet shadow_set = VK_Shadow_GetDescriptorSet();
+    if (!shadow_set) {
+        return;
+    }
     vkCmdBindVertexBuffers(cmd, 0, 1, &vk_world.vertex_buffer, &offset);
     vkCmdPushConstants(cmd, vk_world.pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT,
                        0, sizeof(vk_world.frame_push), &vk_world.frame_push);
@@ -2245,6 +2248,11 @@ void VK_World_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
                             VK_PIPELINE_BIND_POINT_GRAPHICS,
                             vk_world.pipeline_layout,
                             1, 1, &vk_world.lightmap_descriptor_set,
+                            0, NULL);
+    vkCmdBindDescriptorSets(cmd,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            vk_world.pipeline_layout,
+                            2, 1, &shadow_set,
                             0, NULL);
 
     vkCmdSetViewport(cmd, 0, 1, &viewport);

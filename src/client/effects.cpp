@@ -28,6 +28,7 @@ static cvar_t *cl_lerp_lightstyles;
 static cvar_t *cl_rerelease_effects;
 static cvar_t *cl_muzzlelight_time;
 cvar_t *cl_shadowlights;
+cvar_t *cl_flashlight_torso_sway;
 
 static void CL_RequireCGameEntity(const char *what)
 {
@@ -1961,6 +1962,9 @@ void CL_AddShadowLights(void)
         // (even though they can)
         VectorCopy(state->origin, cl.shadowdefs[i].light.origin);
         cl.shadowdefs[i].light.color = color;
+        cl.shadowdefs[i].light.owner_entity = entnum;
+        cl.shadowdefs[i].light.source_index = (int)i;
+        cl.shadowdefs[i].light.strict_pvs = strict_pvs;
 
         if (cl.shadowdefs[i].light.max_fade_dist > 0.0f) {
             float max_dist = cl.shadowdefs[i].light.max_fade_dist;

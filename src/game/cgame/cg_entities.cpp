@@ -40,6 +40,33 @@ static int listener_entnum;
 #define RESERVED_ENTITY_TESTMODEL 2
 #define RESERVED_ENTITY_COUNT 3
 
+static constexpr float FLASHLIGHT_CLASSIC_DISTANCE = 256.0f;
+static constexpr float FLASHLIGHT_SHADOW_DISTANCE = 1024.0f;
+static constexpr float FLASHLIGHT_SHADOW_RADIUS = 1024.0f;
+static constexpr float FLASHLIGHT_SHADOW_INTENSITY = 6.0f;
+static constexpr float FLASHLIGHT_SHADOW_RESOLUTION = 512.0f;
+static constexpr float FLASHLIGHT_SHADOW_CONE_ANGLE = 24.0f;
+static constexpr float FLASHLIGHT_TORSO_FORWARD_OFFSET = 4.0f;
+static constexpr float FLASHLIGHT_TORSO_DOWN_OFFSET = 18.0f;
+static constexpr float FLASHLIGHT_TORSO_IDLE_BREATH_SPEED = 0.0017f;
+static constexpr float FLASHLIGHT_TORSO_IDLE_RIGHT = 0.10f;
+static constexpr float FLASHLIGHT_TORSO_IDLE_UP = 0.30f;
+static constexpr float FLASHLIGHT_TORSO_IDLE_FORWARD = 0.48f;
+static constexpr float FLASHLIGHT_TORSO_IDLE_AIM_RIGHT = 0.0020f;
+static constexpr float FLASHLIGHT_TORSO_IDLE_AIM_UP = 0.0060f;
+static constexpr float FLASHLIGHT_TORSO_BOB_RIGHT = 1.45f;
+static constexpr float FLASHLIGHT_TORSO_BOB_UP = 1.10f;
+static constexpr float FLASHLIGHT_TORSO_BOB_FORWARD = 0.65f;
+static constexpr float FLASHLIGHT_TORSO_BOB_SPEED = 0.0080f;
+static constexpr float FLASHLIGHT_TORSO_BOB_SPEED_RUN = 0.0060f;
+static constexpr float FLASHLIGHT_TORSO_DAMAGE_BOB_SPEED = 0.026f;
+static constexpr float FLASHLIGHT_TORSO_DAMAGE_BOB_SCALE = 0.45f;
+static constexpr float FLASHLIGHT_TORSO_DAMAGE_SHARPEN_SCALE = 0.60f;
+static constexpr float FLASHLIGHT_TORSO_DAMAGE_AIM_RIGHT = 0.0060f;
+static constexpr float FLASHLIGHT_TORSO_DAMAGE_AIM_UP = 0.0080f;
+static constexpr float FLASHLIGHT_TORSO_AIM_RIGHT = 0.0100f;
+static constexpr float FLASHLIGHT_TORSO_AIM_UP = 0.0080f;
+
 static bool CL_ParseBrightskinColor(const char *s, color_t *color)
 {
     if (SCR_ParseColor(s, color))
@@ -106,6 +133,111 @@ static bool CL_IsSpectatorView(void)
     pmtype_t pm_type = cl.frame.ps.pmove.pm_type;
 
     return pm_type == PM_SPECTATOR || pm_type == PM_FREEZE;
+}
+
+static bool CL_FlashlightTorsoMotionAllowed(void)
+{
+    if (info_bobskip && info_bobskip->integer)
+        return false;
+
+    if (CL_IsSpectatorView())
+        return false;
+
+    return cl.frame.ps.pmove.pm_type < PM_DEAD;
+}
+
+static float CL_FlashlightTorsoSwayScale(void)
+{
+    if (!cl_flashlight_torso_sway)
+        return 1.0f;
+
+    return Q_clipf(cl_flashlight_torso_sway->value, 0.0f, 2.0f);
+}
+
+static float CL_FlashlightMovementScale(void)
+{
+    vec3_t velocity;
+
+    if (!CL_FlashlightTorsoMotionAllowed())
+        return 0.0f;
+
+    if (!cls.demo.playback && cl_predict->integer &&
+        !(cl.frame.ps.pmove.pm_flags & PMF_NO_PREDICTION)) {
+        VectorCopy(cl.predicted_velocity, velocity);
+    } else {
+        VectorCopy(cl.frame.ps.pmove.velocity, velocity);
+    }
+
+    velocity[2] = 0.0f;
+    float scale = Q_clipf(VectorLength(velocity) / 320.0f, 0.0f, 1.0f);
+    if (!(cl.frame.ps.pmove.pm_flags & PMF_ON_GROUND))
+        scale *= 0.35f;
+
+    return scale;
+}
+
+static float CL_FlashlightDamageScale(void)
+{
+    if (!CL_FlashlightTorsoMotionAllowed())
+        return 0.0f;
+
+    float damage = Q_clipf(cl.refdef.damage_blend[3] * 1.75f, 0.0f, 1.0f);
+    int health = cl.frame.ps.stats[STAT_HEALTH];
+
+    if (health > 0 && health < 60) {
+        float low_health = ((60.0f - (float)health) / 60.0f) * 0.35f;
+        if (low_health > damage)
+            damage = low_health;
+    }
+
+    return damage;
+}
+
+static void CL_ApplyFlashlightTorsoMotion(vec3_t origin, vec3_t direction)
+{
+    float sway_scale = CL_FlashlightTorsoSwayScale();
+    float movement = CL_FlashlightMovementScale();
+    float damage = CL_FlashlightDamageScale();
+
+    if (sway_scale <= 0.0f || !CL_FlashlightTorsoMotionAllowed())
+        return;
+
+    float breath_phase = (float)cl.time * FLASHLIGHT_TORSO_IDLE_BREATH_SPEED;
+    float breath = sinf(breath_phase);
+    float breath_side = sinf(breath_phase * 0.50f + 0.85f);
+    float bob_phase = (float)cl.time *
+        (FLASHLIGHT_TORSO_BOB_SPEED + FLASHLIGHT_TORSO_BOB_SPEED_RUN * movement);
+    float damage_phase = (float)cl.time * FLASHLIGHT_TORSO_DAMAGE_BOB_SPEED;
+    float stride = movement * (1.0f + damage * FLASHLIGHT_TORSO_DAMAGE_BOB_SCALE);
+    float sharp = damage * (0.40f + movement * FLASHLIGHT_TORSO_DAMAGE_SHARPEN_SCALE);
+    float side_wave = sinf(bob_phase);
+    float lift_wave = 0.5f - 0.5f * cosf(bob_phase * 2.0f);
+
+    float right = breath_side * FLASHLIGHT_TORSO_IDLE_RIGHT +
+        side_wave * FLASHLIGHT_TORSO_BOB_RIGHT * stride +
+        sinf(damage_phase + 0.65f) * FLASHLIGHT_TORSO_BOB_RIGHT * 0.40f * sharp;
+    float up = breath * FLASHLIGHT_TORSO_IDLE_UP +
+        (lift_wave - 0.45f) * FLASHLIGHT_TORSO_BOB_UP * stride +
+        sinf(damage_phase) * FLASHLIGHT_TORSO_BOB_UP * 0.65f * sharp;
+    float forward = breath * FLASHLIGHT_TORSO_IDLE_FORWARD +
+        cosf(bob_phase) * FLASHLIGHT_TORSO_BOB_FORWARD * stride +
+        cosf(damage_phase * 0.70f) * FLASHLIGHT_TORSO_BOB_FORWARD * 0.50f * sharp -
+        damage * 0.25f;
+    float aim_right = breath_side * FLASHLIGHT_TORSO_IDLE_AIM_RIGHT +
+        right * FLASHLIGHT_TORSO_AIM_RIGHT +
+        sinf(damage_phase + 1.15f) * sharp * FLASHLIGHT_TORSO_DAMAGE_AIM_RIGHT;
+    float aim_up = breath * FLASHLIGHT_TORSO_IDLE_AIM_UP +
+        up * FLASHLIGHT_TORSO_AIM_UP +
+        sinf(damage_phase) * sharp * FLASHLIGHT_TORSO_DAMAGE_AIM_UP;
+
+    VectorMA(origin, right * sway_scale, cl.v_right, origin);
+    VectorMA(origin, up * sway_scale, cl.v_up, origin);
+    VectorMA(origin, forward * sway_scale, cl.v_forward, origin);
+
+    VectorMA(direction, aim_right * sway_scale, cl.v_right, direction);
+    VectorMA(direction, aim_up * sway_scale, cl.v_up, direction);
+    if (VectorNormalize(direction) <= 0.0f)
+        VectorCopy(cl.v_forward, direction);
 }
 
 void CL_MigratePlayerCvars(void)
@@ -930,6 +1062,7 @@ static void CL_AddPacketEntities(void)
 
         cent = &cl_entities[s1->number];
         ent.id = cent->id + RESERVED_ENTITY_COUNT;
+        ent.owner_entity = s1->number;
 
         has_trail = false;
         bool is_player = CL_IsPlayerEntity(s1);
@@ -1179,9 +1312,10 @@ static void CL_AddPacketEntities(void)
             ent.flags = renderfx;
         {
             const effects_t shadow_skip_effects =
-                EF_ROCKET | EF_BLASTER | EF_HYPERBLASTER | EF_BFG | EF_TRAP |
-                EF_TRACKERTRAIL | EF_TRACKER | EF_IONRIPPER | EF_PLASMA |
-                EF_BLUEHYPERBLASTER | EF_GRENADE_LIGHT;
+                EF_ROCKET | EF_BLASTER | EF_HYPERBLASTER | EF_GRENADE |
+                EF_BFG | EF_TRAP | EF_TRACKERTRAIL | EF_TRACKER |
+                EF_IONRIPPER | EF_PLASMA | EF_BLUEHYPERBLASTER |
+                EF_GRENADE_LIGHT;
             if (effects & shadow_skip_effects)
                 ent.flags |= RF_NOSHADOW;
         }
@@ -1222,12 +1356,18 @@ static void CL_AddPacketEntities(void)
                 mask |= CONTENTS_MONSTER | CONTENTS_PLAYER;
 
             if (s1->number == cl.frame.clientNum + 1) {
-                VectorMA(cl.refdef.vieworg, 256, cl.v_forward, end);
+                float dist = is_per_pixel ? FLASHLIGHT_SHADOW_DISTANCE : FLASHLIGHT_CLASSIC_DISTANCE;
                 VectorCopy(cl.refdef.vieworg, start);
                 VectorCopy(cl.v_forward, forward);
+                if (is_per_pixel) {
+                    VectorMA(start, FLASHLIGHT_TORSO_FORWARD_OFFSET, cl.v_forward, start);
+                    VectorMA(start, -FLASHLIGHT_TORSO_DOWN_OFFSET, cl.v_up, start);
+                    CL_ApplyFlashlightTorsoMotion(start, forward);
+                }
+                VectorMA(start, dist, forward, end);
             } else {
                 AngleVectors(ent.angles, forward, NULL, NULL);
-                float dist = is_per_pixel ? 1024 : 256;
+                float dist = is_per_pixel ? FLASHLIGHT_SHADOW_DISTANCE : FLASHLIGHT_CLASSIC_DISTANCE;
                 VectorMA(ent.origin, dist, forward, end);
                 VectorCopy(ent.origin, start);
             }
@@ -1235,19 +1375,21 @@ static void CL_AddPacketEntities(void)
             CL_Trace(&trace, start, end, vec3_origin, vec3_origin, NULL, mask);
 
             if (is_per_pixel) {
-                cl_shadow_light_t light;
+                cl_shadow_light_t light = {};
                 light.fade_end = light.fade_start = 0;
                 light.lightstyle = -1;
-                light.resolution = 512.0f;
-                light.intensity = 2.0f;
-                light.radius = 512.0f;
-                light.coneangle = 22.0f;
+                light.resolution = FLASHLIGHT_SHADOW_RESOLUTION;
+                light.intensity = FLASHLIGHT_SHADOW_INTENSITY;
+                light.radius = FLASHLIGHT_SHADOW_RADIUS;
+                light.coneangle = FLASHLIGHT_SHADOW_CONE_ANGLE;
                 VectorCopy(forward, light.conedirection);
                 light.color = COLOR_WHITE;
+                light.owner_entity = s1->number;
+                light.source_index = -1;
+                light.strict_pvs = true;
+                light.ignore_owner_casters = true;
+                light.dynamic_shadow = true;
                 VectorCopy(start, light.origin);
-                if (s1->number == cl.frame.clientNum + 1 && info_hand->integer != 2) {
-                    VectorMA(light.origin, info_hand->integer ? -7 : 7, cl.v_right, light.origin);
-                }
                 V_AddLightEx(&light);
             } else {
                 // smooth out distance "jumps"
@@ -1272,11 +1414,12 @@ static void CL_AddPacketEntities(void)
             // Add a shadow-only entity so first-person players still cast shadows.
             {
                 const effects_t shadow_skip_effects =
-                    EF_ROCKET | EF_BLASTER | EF_HYPERBLASTER | EF_BFG | EF_TRAP |
-                    EF_TRACKERTRAIL | EF_TRACKER | EF_IONRIPPER | EF_PLASMA |
-                    EF_BLUEHYPERBLASTER | EF_GRENADE_LIGHT;
+                    EF_ROCKET | EF_BLASTER | EF_HYPERBLASTER | EF_GRENADE |
+                    EF_BFG | EF_TRAP | EF_TRACKERTRAIL | EF_TRACKER |
+                    EF_IONRIPPER | EF_PLASMA | EF_BLUEHYPERBLASTER |
+                    EF_GRENADE_LIGHT;
                 entity_t shadow_ent = ent;
-                shadow_ent.flags = renderfx | RF_VIEWERMODEL;
+                shadow_ent.flags = renderfx | RF_VIEWERMODEL | RF_CASTSHADOW;
                 if (effects & shadow_skip_effects)
                     shadow_ent.flags |= RF_NOSHADOW;
                 V_AddEntity(&shadow_ent);
@@ -1843,6 +1986,7 @@ static void CL_AddViewWeapon(void)
     }
 
     gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL;
+    gun.owner_entity = cl.frame.clientNum + 1;
     gun.alpha = Cvar_ClampValue(cl_gunalpha, 0.1f, 1.0f);
 
     ent = get_player_entity();

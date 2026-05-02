@@ -82,6 +82,18 @@ def copy_base_game_tree(build_dir: pathlib.Path, install_dir: pathlib.Path, base
     clear_globbed_paths(target, GENERATED_BASE_GAME_PATTERNS)
     shutil.copytree(source, target, dirs_exist_ok=True)
 
+    # Meson links game modules in the build root; the generated base-game tree can
+    # lag behind when a single module is rebuilt. Overlay the root artifacts last.
+    for pattern in ("cgame*", "sgame*"):
+        for path in sorted(build_dir.glob(pattern)):
+            if not is_runtime_file(path):
+                continue
+            dest = target / path.name
+            remove_path(dest)
+            shutil.copy2(path, dest)
+            if file_sha256(path) != file_sha256(dest):
+                raise SystemExit(f'Game module staging verification failed for {path} -> {dest}')
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description='Stage WORR runtime distributables into .install/.')

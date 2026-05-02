@@ -166,6 +166,7 @@ extern cvar_t   *cl_nobob;
 extern cvar_t   *cl_nolerp;
 extern cvar_t   *cl_colorize_items;
 extern cvar_t   *cl_shadowlights;
+extern cvar_t   *cl_flashlight_torso_sway;
 extern cvar_t   *cl_player_outline_enemy;
 extern cvar_t   *cl_player_outline_team;
 extern cvar_t   *cl_player_outline_width;

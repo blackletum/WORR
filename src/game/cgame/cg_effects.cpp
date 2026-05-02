@@ -28,6 +28,7 @@ static cvar_t *cl_lerp_lightstyles;
 static cvar_t *cl_rerelease_effects;
 static cvar_t *cl_muzzlelight_time;
 cvar_t *cl_shadowlights;
+cvar_t *cl_flashlight_torso_sway;
 
 static void CL_AddWeaponMuzzleFXv(cl_muzzlefx_t fx, float x, float y, float z, float scale)
 {
@@ -1857,30 +1858,45 @@ CL_AddShadowLights
 */
 void CL_AddShadowLights(void)
 {
-    if (!cl_shadowlights->integer || !R_SupportsPerPixelLighting())
-        return;
-
     for (size_t i = 0; i < cl.csr.max_shadowlights; i++) {
         if (!*cl.configstrings[cl.csr.shadowlights + i])
             continue;
 
-        centity_t *ent = &cl_entities[cl.shadowdefs[i].number];
+        int entnum = cl.shadowdefs[i].number;
+        if (entnum <= 0 || entnum >= cl.csr.max_edicts)
+            continue;
 
-        if (ent->serverframe != cl.frame.number)
+        centity_t *ent = &cl_entities[entnum];
+        const bool strict_pvs = ent->serverframe == cl.frame.number;
+        const entity_state_t *state = NULL;
+        if (ent->serverframe)
+            state = &ent->current;
+        else if (cl.baselines[entnum].number == entnum)
+            state = &cl.baselines[entnum];
+        else
             continue;
 
         color_t color;
-        if (!ent->current.skinnum)
+        if (!state->skinnum)
             color = COLOR_WHITE;
         else
-            color.u32 = BigLong(ent->current.skinnum);
+            color.u32 = BigLong(state->skinnum);
         // technically we should be lerping but
         // these lights never move in the game
         // (even though they can)
-        VectorCopy(ent->current.origin, cl.shadowdefs[i].light.origin);
+        VectorCopy(state->origin, cl.shadowdefs[i].light.origin);
         cl.shadowdefs[i].light.color = color;
+        cl.shadowdefs[i].light.owner_entity = entnum;
+        cl.shadowdefs[i].light.source_index = (int)i;
+        cl.shadowdefs[i].light.strict_pvs = strict_pvs;
 
-        V_AddLightEx(&cl.shadowdefs[i].light);
+        if (cl.shadowdefs[i].light.max_fade_dist > 0.0f) {
+            float max_dist = cl.shadowdefs[i].light.max_fade_dist;
+            if (DistanceSquared(cl.refdef.vieworg, cl.shadowdefs[i].light.origin) > (max_dist * max_dist))
+                continue;
+        }
+
+        V_AddLightExVis(&cl.shadowdefs[i].light, strict_pvs);
     }
 }
 
@@ -1921,4 +1937,5 @@ void CL_InitEffects(void)
     cl_rerelease_effects = Cvar_Get("cl_rerelease_effects", "1", 0);
     cl_muzzlelight_time = Cvar_Get("cl_muzzlelight_time", "100", 0);
     cl_shadowlights = Cvar_Get("cl_shadowlights", "1", 0);
+    cl_flashlight_torso_sway = Cvar_Get("cl_flashlight_torso_sway", "1", CVAR_ARCHIVE);
 }

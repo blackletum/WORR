@@ -2929,6 +2929,7 @@ static void CL_InitLocal(void)
     cl_colorize_items = Cvar_Get("cl_colorize_items", "0", CVAR_ARCHIVE);
     cl_hit_markers = Cvar_Get("cl_hit_markers", "2", 0);
     cl_shadowlights = Cvar_Get("cl_shadowlights", "1", 0);
+    cl_flashlight_torso_sway = Cvar_Get("cl_flashlight_torso_sway", "1", CVAR_ARCHIVE);
     cl_hit_beeps = Cvar_Get("cl_hit_beeps", "1", CVAR_ARCHIVE);
     cl_player_outline_enemy = Cvar_Get("cl_player_outline_enemy", "0", CVAR_ARCHIVE);
     cl_player_outline_team = Cvar_Get("cl_player_outline_team", "0", CVAR_ARCHIVE);

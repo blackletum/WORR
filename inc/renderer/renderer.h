@@ -87,6 +87,7 @@ typedef struct entity_s {
 
     uint64_t    flags;
     int         id;
+    int         owner_entity;
 
     qhandle_t   skin;           // NULL for inline skin
     vec3_t      scale;
@@ -109,6 +110,12 @@ typedef struct {
     vec4_t  sphere;
     float   conecos;
     uint32_t shadow;
+    int     shadow_resolution;
+    int     shadow_lightstyle;
+    int     shadow_owner_entity;
+    int     shadow_source_index;
+    bool    shadow_strict_pvs;
+    bool    shadow_ignore_owner_casters;
 
     // RTX light types support (optional).
     int     light_type;

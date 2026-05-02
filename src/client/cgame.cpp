@@ -621,6 +621,7 @@ static cgame_entity_import_t cg_entity_import = {
     .V_AddParticle = V_AddParticle,
     .V_AddLight = V_AddLight,
     .V_AddLightEx = V_AddLightEx,
+    .V_AddLightExVis = V_AddLightExVis,
     .V_AddLightStyle = V_AddLightStyle,
 
     .S_RegisterSound = S_RegisterSound,

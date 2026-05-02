@@ -766,7 +766,12 @@ void G_LoadShadowLights() {
 static void setup_dynamic_light(gentity_t* self) {
 	// [Sam-KEX] Shadow stuff
 	if (st.sl.data.radius > 0) {
-		self->s.renderFX = RF_CASTSHADOW;
+		if (level.shadowLightCount >= MAX_SHADOW_LIGHTS) {
+			gi.Com_PrintFmt("{}: MAX_SHADOW_LIGHTS reached; ignoring shadow light\n", *self);
+			return;
+		}
+
+		self->s.renderFX |= RF_CASTSHADOW;
 		self->itemTarget = st.sl.lightStyleTarget;
 
 		level.shadowLightInfo[level.shadowLightCount].entity_number = self->s.number;

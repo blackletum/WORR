@@ -27,7 +27,9 @@ const mat4_t gl_identity = { [0] = 1, [5] = 1, [10] = 1, [15] = 1 };
 
 static inline GLenum GL_TextureTarget(glTmu_t tmu)
 {
-    (void)tmu;
+    if (tmu == TMU_SHADOW || tmu == TMU_SHADOW_MOMENT) {
+        return GL_TEXTURE_2D_ARRAY;
+    }
     return GL_TEXTURE_2D;
 }
 
@@ -290,7 +292,10 @@ void GL_Setup3D(void)
     GL_StateBits(GLS_DEFAULT);
 
     // clear both wanted & active dlight bits
-    gls.dlight_bits = glr.ppl_dlight_bits = 0;
+    gls.dlight_bits = GL_Shadow_SunActive() ? UINT64_MAX : 0;
+    gls.dlight_receiver_key = 0;
+    glr.ppl_dlight_bits = 0;
+    glr.ppl_dlight_receiver_key = 0;
 
     GLbitfield clear_bits = GL_DEPTH_BUFFER_BIT | gl_static.stencil_buffer_bit;
     if (glr.fd.rdflags & RDF_NOWORLDMODEL) {
