@@ -572,10 +572,13 @@ void CL_PrepRenderer(void)
     CL_SetSky();
 
     // load shadow lights
-    int n;
-    for (n = cl.csr.shadowlights, i = 0; i < MAX_SHADOW_LIGHTS; i++, n++) {
-        if (*cl.configstrings[n]) {
-            CS_LoadShadowLight(n, cl.configstrings[n]);
+    if (cl.csr.shadowlights != (uint16_t)-1 && cl.csr.max_shadowlights > 0) {
+        int n;
+        for (n = cl.csr.shadowlights, i = 0;
+             i < cl.csr.max_shadowlights && n < cl.csr.end; i++, n++) {
+            if (*cl.configstrings[n]) {
+                CS_LoadShadowLight(n, cl.configstrings[n]);
+            }
         }
     }
 
@@ -701,7 +704,9 @@ static void update_configstring(int index)
         return;
     }
 
-    if (index >= cl.csr.shadowlights && index <= cl.csr.shadowlights + cl.csr.max_shadowlights) {
+    if (cl.csr.shadowlights != (uint16_t)-1 &&
+        index >= cl.csr.shadowlights &&
+        index < cl.csr.shadowlights + cl.csr.max_shadowlights) {
         CS_LoadShadowLight(index, s);
         return;
     }

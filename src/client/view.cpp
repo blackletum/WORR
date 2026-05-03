@@ -332,7 +332,7 @@ void V_AddLightExVis(cl_shadow_light_t *light, bool strict_pvs)
         return;
 
     const bool shadowlight =
-        light->resolution > 0 && cl_shadowlights && cl_shadowlights->integer;
+        light->radius > 0.0f && cl_shadowlights && cl_shadowlights->integer;
     const uint32_t now_ms = Sys_Milliseconds();
     float intensity = light->intensity * V_LightstyleScale(light->lightstyle) *
                       fade;

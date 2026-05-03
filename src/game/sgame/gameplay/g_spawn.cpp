@@ -1290,6 +1290,7 @@ static const std::initializer_list<temp_field_t> temp_fields = {
 	FIELD_AUTO(nextMap),
 	FIELD_AUTO(music),  // [Edward-KEX]
 	FIELD_AUTO(instantItems),
+	FIELD_AUTO(light),
 	FIELD_AUTO(radius),
 	FIELD_AUTO(hub_map),
 	FIELD_AUTO(achievement),
@@ -1302,6 +1303,7 @@ static const std::initializer_list<temp_field_t> temp_fields = {
 	FIELD_AUTO_NAMED("shadowlightmaxfadedistance", sl.data.maxFadeDistance),
 	FIELD_AUTO_NAMED("shadowlightstyle", sl.data.lightStyle),
 	FIELD_AUTO_NAMED("shadowlightconeangle", sl.data.coneAngle),
+	FIELD_AUTO_NAMED("shadowconeangle", sl.data.coneAngle),
 	FIELD_AUTO_NAMED("shadowlightstyletarget", sl.lightStyleTarget),
 
 	FIELD_AUTO(goals),

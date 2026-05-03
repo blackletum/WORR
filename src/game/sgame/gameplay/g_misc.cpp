@@ -763,9 +763,26 @@ void G_LoadShadowLights() {
 }
 // ---------------------------------------------------------------------------------
 
+static bool is_dynamic_light_entity(const gentity_t *self) {
+	return self && self->className && !Q_strcasecmp(self->className, "dynamic_light");
+}
+
+static float resolve_shadow_light_radius(const gentity_t *self) {
+	if (st.was_key_specified("shadowlightradius"))
+		return st.sl.data.radius;
+	if (st.was_key_specified("radius"))
+		return st.radius;
+	if (is_dynamic_light_entity(self) && st.was_key_specified("light"))
+		return st.light;
+	return st.sl.data.radius;
+}
+
 static void setup_dynamic_light(gentity_t* self) {
 	// [Sam-KEX] Shadow stuff
-	if (st.sl.data.radius > 0) {
+	shadow_light_data_t data = st.sl.data;
+	data.radius = resolve_shadow_light_radius(self);
+
+	if (data.radius > 0) {
 		if (level.shadowLightCount >= MAX_SHADOW_LIGHTS) {
 			gi.Com_PrintFmt("{}: MAX_SHADOW_LIGHTS reached; ignoring shadow light\n", *self);
 			return;
@@ -775,7 +792,7 @@ static void setup_dynamic_light(gentity_t* self) {
 		self->itemTarget = st.sl.lightStyleTarget;
 
 		level.shadowLightInfo[level.shadowLightCount].entity_number = self->s.number;
-		level.shadowLightInfo[level.shadowLightCount].shadowlight = st.sl.data;
+		level.shadowLightInfo[level.shadowLightCount].shadowlight = data;
 		level.shadowLightCount++;
 
 		self->mins[0] = self->mins[1] = self->mins[2] = 0;
@@ -802,7 +819,8 @@ void SP_dynamic_light(gentity_t* self) {
 
 void SP_light(gentity_t* self) {
 	// no targeted lights in deathmatch, because they cause global messages
-	if ((!self->targetName || (deathmatch->integer && !(self->spawnFlags.has(SPAWNFLAG_LIGHT_ALLOW_IN_DM)))) && st.sl.data.radius == 0) // [Sam-KEX]
+	if ((!self->targetName || (deathmatch->integer && !(self->spawnFlags.has(SPAWNFLAG_LIGHT_ALLOW_IN_DM)))) &&
+		resolve_shadow_light_radius(self) <= 0.0f) // [Sam-KEX]
 	{
 		FreeEntity(self);
 		return;

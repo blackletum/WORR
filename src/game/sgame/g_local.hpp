@@ -14,6 +14,7 @@ class Menu;
 #include <bitset> // for bitset
 #include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -3395,6 +3396,7 @@ struct spawn_temp_t {
   shadow_light_temp_t sl = {};
   const char *music = nullptr;
   int instantItems = 0;
+  float light = 0.0f;
   float radius = 0.0f;
   bool hub_map = false;
   const char *achievement = nullptr;
@@ -3441,7 +3443,15 @@ struct spawn_temp_t {
   std::unordered_set<const char *> keys_specified;
 
   inline bool was_key_specified(const char *key) const {
-    return keys_specified.find(key) != keys_specified.end();
+    if (keys_specified.find(key) != keys_specified.end())
+      return true;
+
+    for (const char *specified : keys_specified) {
+      if (specified && key && std::strcmp(specified, key) == 0)
+        return true;
+    }
+
+    return false;
   }
 };
 
