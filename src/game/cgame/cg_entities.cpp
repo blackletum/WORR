@@ -36,10 +36,6 @@ static vec3_t listener_right;
 static vec3_t listener_up;
 static int listener_entnum;
 
-#define RESERVED_ENTITY_GUN 1
-#define RESERVED_ENTITY_TESTMODEL 2
-#define RESERVED_ENTITY_COUNT 3
-
 static constexpr float FLASHLIGHT_CLASSIC_DISTANCE = 256.0f;
 static constexpr float FLASHLIGHT_SHADOW_DISTANCE = 1024.0f;
 static constexpr float FLASHLIGHT_SHADOW_RADIUS = 1024.0f;
@@ -1897,7 +1893,7 @@ static void CL_AddViewWeapon(void)
     const centity_t *ent;
     const player_state_t *ps, *ops;
     entity_t    gun;        // view model
-    int         i, flags;
+    int         flags;
     bool        skip_bob;
 
     // allow the gun to be completely removed
@@ -1935,18 +1931,7 @@ static void CL_AddViewWeapon(void)
 
     skip_bob = info_bobskip->integer != 0;
 
-    // set up gun position
-    if (skip_bob) {
-        VectorCopy(cl.refdef.vieworg, gun.origin);
-        VectorCopy(cl.refdef.viewangles, gun.angles);
-    } else {
-        for (i = 0; i < 3; i++) {
-            gun.origin[i] = cl.refdef.vieworg[i] + ops->gunoffset[i] +
-                            CL_KEYLERPFRAC * (ps->gunoffset[i] - ops->gunoffset[i]);
-            gun.angles[i] = cl.refdef.viewangles[i] + LerpAngle(ops->gunangles[i],
-                            ps->gunangles[i], CL_KEYLERPFRAC);
-        }
-    }
+    CG_View_CalcWeaponPose(gun.origin, gun.angles, ps, ops, skip_bob);
 
     VectorMA(gun.origin, cl_gun_y->value, cl.v_forward, gun.origin);
     VectorMA(gun.origin, cl_gun_x->value, cl.v_right, gun.origin);

@@ -261,6 +261,7 @@ static void GL_MarkLights_r(const mnode_t *node, const dlight_t *light, uint64_t
 
 static void GL_MarkLights(void)
 {
+    glCpuProfileGuard_t cpu = GL_ProfileCpuBegin(GL_CPU_PROFILE_MARK_LIGHTS);
     int i;
     dlight_t *light;
 
@@ -270,6 +271,7 @@ static void GL_MarkLights(void)
         VectorCopy(light->origin, light->transformed);
         GL_MarkLights_r(gl_static.world.cache->nodes, light, BIT_ULL(i));
     }
+    GL_ProfileCpuEnd(&cpu);
 }
 
 static void GL_TransformLights(const mmodel_t *model)
@@ -325,14 +327,17 @@ void R_LightPoint(const vec3_t origin, vec3_t color)
 
 static void GL_MarkLeaves(void)
 {
+    glCpuProfileGuard_t cpu = GL_ProfileCpuBegin(GL_CPU_PROFILE_MARK_LEAVES);
     const bsp_t *bsp = gl_static.world.cache;
     const mleaf_t *leaf;
     visrow_t vis1, vis2;
     int i, cluster1, cluster2;
     vec3_t tmp;
 
-    if (gl_lockpvs->integer)
+    if (gl_lockpvs->integer) {
+        GL_ProfileCpuEnd(&cpu);
         return;
+    }
 
     leaf = BSP_PointLeaf(bsp->nodes, glr.fd.vieworg);
     cluster1 = cluster2 = leaf->cluster;
@@ -345,8 +350,10 @@ static void GL_MarkLeaves(void)
     if (!(leaf->contents[0] & CONTENTS_SOLID))
         cluster2 = leaf->cluster;
 
-    if (cluster1 == glr.viewcluster1 && cluster2 == glr.viewcluster2)
+    if (cluster1 == glr.viewcluster1 && cluster2 == glr.viewcluster2) {
+        GL_ProfileCpuEnd(&cpu);
         return;
+    }
 
     glr.visframe++;
     glr.viewcluster1 = cluster1;
@@ -361,6 +368,7 @@ static void GL_MarkLeaves(void)
             bsp->leafs[i].visframe = glr.visframe;
 
         glr.nodes_visible = bsp->numnodes;
+        GL_ProfileCpuEnd(&cpu);
         return;
     }
 
@@ -385,6 +393,7 @@ static void GL_MarkLeaves(void)
             glr.nodes_visible++;
         }
     }
+    GL_ProfileCpuEnd(&cpu);
 }
 
 void GL_UpdateViewPVS(void)
@@ -425,6 +434,7 @@ static q_unused bool GL_BoxIntersectsBox(const vec3_t mins, const vec3_t maxs, c
 
 void GL_DrawBspModel(mmodel_t *model)
 {
+    glDebugGroup_t debug_group = GL_DebugGroupBegin("brush model");
     mface_t *face;
     vec3_t bounds[2];
     vec_t dot;
@@ -434,13 +444,16 @@ void GL_DrawBspModel(mmodel_t *model)
     glStateBits_t skymask;
     int i;
 
-    if (!model->numfaces)
+    if (!model->numfaces) {
+        GL_DebugGroupEnd(&debug_group);
         return;
+    }
 
     if (glr.entrotated) {
         cull = GL_CullSphere(ent->origin, model->radius);
         if (cull == CULL_OUT) {
             c.spheresCulled++;
+            GL_DebugGroupEnd(&debug_group);
             return;
         }
         if (cull == CULL_CLIP) {
@@ -449,6 +462,7 @@ void GL_DrawBspModel(mmodel_t *model)
             cull = GL_CullLocalBox(ent->origin, bounds);
             if (cull == CULL_OUT) {
                 c.rotatedBoxesCulled++;
+                GL_DebugGroupEnd(&debug_group);
                 return;
             }
         }
@@ -460,6 +474,7 @@ void GL_DrawBspModel(mmodel_t *model)
         cull = GL_CullBox(bounds);
         if (cull == CULL_OUT) {
             c.boxesCulled++;
+            GL_DebugGroupEnd(&debug_group);
             return;
         }
         VectorSubtract(glr.fd.vieworg, ent->origin, transformed);
@@ -511,6 +526,7 @@ void GL_DrawBspModel(mmodel_t *model)
     // protect against infinite loop if the same inline model
     // with alpha faces is referenced by multiple entities
     model->drawframe = glr.drawframe;
+    GL_DebugGroupEnd(&debug_group);
 }
 
 #define NODE_CLIPPED    0
@@ -612,6 +628,7 @@ static void GL_WorldNode_r(const mnode_t *node, int clipflags)
 
 void GL_DrawWorld(void)
 {
+    glDebugGroup_t debug_group = GL_DebugGroupBegin("world");
     // auto cycle the world frame for texture animation
     gl_world.frame = (int)(glr.fd.time * 2);
 
@@ -630,14 +647,21 @@ void GL_DrawWorld(void)
     GL_ClearSolidFaces();
 
     int clip_mode = gl_cull_nodes->integer ? NODE_CLIPPED : NODE_UNCLIPPED;
+    glCpuProfileGuard_t world_node =
+        GL_ProfileCpuBegin(GL_CPU_PROFILE_WORLD_NODE);
     GL_WorldNode_r(gl_static.world.cache->nodes, clip_mode);
+    GL_ProfileCpuEnd(&world_node);
 
     if (gl_dynamic->integer)
         GL_UploadLightmaps();
 
+    glGpuProfileGuard_t gpu_world =
+        GL_ProfileGpuBegin(GL_GPU_PROFILE_WORLD_OPAQUE);
     GL_DrawSolidFaces();
+    GL_ProfileGpuEnd(&gpu_world);
 
     GL_Flush3D();
 
     R_DrawSkyBox();
+    GL_DebugGroupEnd(&debug_group);
 }

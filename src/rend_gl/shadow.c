@@ -48,6 +48,8 @@ typedef struct {
   bool frame_active;
   bool sun_active;
   bool reallocated_this_frame;
+  bool reallocated_last_frame;
+  bool moment_rendered;
   shadow_storage_family_t storage_family;
   int world_faces_considered;
   int world_faces_submitted;
@@ -56,6 +58,27 @@ typedef struct {
 } glShadowState_t;
 
 static glShadowState_t gl_shadow;
+
+typedef struct {
+  vec3_t mins;
+  vec3_t maxs;
+} glShadowFaceBounds_t;
+
+// World face bounds are immutable per map; caching them avoids walking every
+// face's surfedges again for every shadow view every frame.
+typedef struct {
+  const bsp_t *bsp;
+  uint32_t checksum;
+  int numfaces;
+  glShadowFaceBounds_t *bounds;
+} glShadowWorldCache_t;
+
+static glShadowWorldCache_t gl_shadow_world_cache;
+
+static void GL_Shadow_FreeWorldCache(void) {
+  Z_Free(gl_shadow_world_cache.bounds);
+  memset(&gl_shadow_world_cache, 0, sizeof(gl_shadow_world_cache));
+}
 
 static float GL_Shadow_ViewReceiverBias(const shadow_view_desc_t *view) {
   float bias_scale = max(gl_shadow.policy.bias_scale, 0.0f);
@@ -278,7 +301,7 @@ static bool GL_Shadow_CreateMomentProgram(void) {
              "void main() {\n"
              "  float d = clamp(gl_FragCoord.z, 0.0, 1.0);\n"
              "  if (u_shadow_filter == %d) {\n"
-             "    const float evsm_exponent = 10.0;\n"
+             "    const float evsm_exponent = " GL_SHADOW_EVSM_EXPONENT_GLSL ";\n"
              "    float w = exp(min(evsm_exponent * d, evsm_exponent));\n"
              "    o_moment = vec4(w, w * w, 0.0, 1.0);\n"
              "  } else {\n"
@@ -1020,9 +1043,49 @@ static bool GL_Shadow_ViewTouchesBounds(const shadow_view_desc_t *view,
          up <= forward * tan_y + radius;
 }
 
+static const glShadowFaceBounds_t *GL_Shadow_WorldFaceBounds(const bsp_t *bsp) {
+  if (gl_shadow_world_cache.bounds && gl_shadow_world_cache.bsp == bsp &&
+      gl_shadow_world_cache.checksum == bsp->checksum &&
+      gl_shadow_world_cache.numfaces == bsp->numfaces) {
+    return gl_shadow_world_cache.bounds;
+  }
+
+  GL_Shadow_FreeWorldCache();
+  if (!bsp || bsp->numfaces <= 0) {
+    return NULL;
+  }
+
+  glShadowFaceBounds_t *bounds =
+      R_Malloc(sizeof(*bounds) * bsp->numfaces);
+  for (int i = 0; i < bsp->numfaces; i++) {
+    const mface_t *face = &bsp->faces[i];
+    ClearBounds(bounds[i].mins, bounds[i].maxs);
+    if (!face->firstsurfedge) {
+      continue;
+    }
+    for (int j = 0; j < face->numsurfedges; j++) {
+      const mvertex_t *v = GL_Shadow_SurfEdgeVertex(bsp, &face->firstsurfedge[j]);
+      if (v) {
+        GL_Shadow_AddPointToBounds(v->point, bounds[i].mins, bounds[i].maxs);
+      }
+    }
+  }
+
+  gl_shadow_world_cache.bsp = bsp;
+  gl_shadow_world_cache.checksum = bsp->checksum;
+  gl_shadow_world_cache.numfaces = bsp->numfaces;
+  gl_shadow_world_cache.bounds = bounds;
+  return bounds;
+}
+
 static void GL_Shadow_DrawWorldDepth(const shadow_view_desc_t *view) {
   const bsp_t *bsp = gl_static.world.cache;
   if (!bsp || !bsp->faces || !bsp->edges || !bsp->vertices) {
+    return;
+  }
+
+  const glShadowFaceBounds_t *bounds = GL_Shadow_WorldFaceBounds(bsp);
+  if (!bounds) {
     return;
   }
 
@@ -1040,16 +1103,9 @@ static void GL_Shadow_DrawWorldDepth(const shadow_view_desc_t *view) {
     if (!v0) {
       continue;
     }
-    vec3_t mins, maxs;
-    ClearBounds(mins, maxs);
-    for (int j = 0; j < face->numsurfedges; j++) {
-      const mvertex_t *v = GL_Shadow_SurfEdgeVertex(bsp, &face->firstsurfedge[j]);
-      if (v) {
-        GL_Shadow_AddPointToBounds(v->point, mins, maxs);
-      }
-    }
     gl_shadow.world_faces_considered++;
-    if (view && !GL_Shadow_ViewTouchesBounds(view, mins, maxs)) {
+    if (view && !GL_Shadow_ViewTouchesBounds(view, bounds[i].mins,
+                                             bounds[i].maxs)) {
       continue;
     }
     gl_shadow.world_faces_submitted++;
@@ -1090,6 +1146,7 @@ void GL_Shadow_Init(void) {
 }
 
 void GL_Shadow_Shutdown(void) {
+  GL_Shadow_FreeWorldCache();
   GL_Shadow_DestroyResources();
   if (gl_shadow.program) {
     qglDeleteProgram(gl_shadow.program);
@@ -1109,7 +1166,12 @@ void GL_Shadow_BeginFrame(void *userdata,
   gl_shadow.policy = policy ? *policy : (shadow_frontend_policy_t){0};
   gl_shadow.max_active_page = -1;
   gl_shadow.sun_active = false;
+  // Pages rendered before a mid-frame reallocation were destroyed with the
+  // old texture while their resident entries stayed clean; keep reporting
+  // "allocated" for one extra frame so every view re-renders once.
+  gl_shadow.reallocated_last_frame = gl_shadow.reallocated_this_frame;
   gl_shadow.reallocated_this_frame = false;
+  gl_shadow.moment_rendered = false;
   gl_shadow.world_faces_considered = 0;
   gl_shadow.world_faces_submitted = 0;
 
@@ -1140,7 +1202,8 @@ bool GL_Shadow_EnsurePage(void *userdata, const shadow_view_desc_t *view) {
   }
 
   GL_Shadow_RegisterView(view);
-  return allocated || gl_shadow.reallocated_this_frame;
+  return allocated || gl_shadow.reallocated_this_frame ||
+         gl_shadow.reallocated_last_frame;
 }
 
 bool GL_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
@@ -1218,7 +1281,14 @@ bool GL_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
     if (caster_index < 0 || !casters) {
       continue;
     }
-    GL_Shadow_DrawCasterGeometry(&casters[caster_index]);
+    const shadow_caster_t *caster = &casters[caster_index];
+    // The frontend culls casters per light; cube faces of a point light
+    // would otherwise re-skin and re-submit every caster six times.
+    if (!GL_Shadow_ViewTouchesBounds(view, caster->bounds[0],
+                                     caster->bounds[1])) {
+      continue;
+    }
+    GL_Shadow_DrawCasterGeometry(caster);
   }
   GL_Shadow_FlushPositions();
 
@@ -1229,6 +1299,9 @@ bool GL_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
   }
   qglBindFramebuffer(GL_FRAMEBUFFER, glr.framebuffer_bound ? FBO_SCENE : 0);
   GL_Shadow_InvalidateState();
+  if (view->storage_family == SHADOW_STORAGE_MOMENT) {
+    gl_shadow.moment_rendered = true;
+  }
   return true;
 }
 
@@ -1240,8 +1313,7 @@ void GL_Shadow_EndFrame(void *userdata,
   if (gl_shadow.max_active_page >= 0 && gl_shadow.resources_ok) {
     gls.u_shadows.params[0] = (float)(gl_shadow.max_active_page + 1);
     gls.u_shadows.params[1] = GL_SHADOW_DEFAULT_STRENGTH;
-    gls.u_shadows.params[2] =
-        gl_shadow.storage_family == SHADOW_STORAGE_MOMENT ? 1.0f : 0.0f;
+    gls.u_shadows.params[2] = Q_clipf(gl_shadow.policy.softness, 0.25f, 4.0f);
     gls.u_shadows.params[3] = (float)gl_shadow.policy.filter_family;
   } else {
     gls.u_shadows.params[0] = 0.0f;
@@ -1251,7 +1323,7 @@ void GL_Shadow_EndFrame(void *userdata,
   }
 
   if (gl_shadow.storage_family == SHADOW_STORAGE_MOMENT &&
-      gl_shadow.moment_array) {
+      gl_shadow.moment_array && gl_shadow.moment_rendered) {
     GL_ForceTexture(TMU_SHADOW_MOMENT, gl_shadow.moment_array);
     qglGenerateMipmap(GL_TEXTURE_2D_ARRAY);
   }

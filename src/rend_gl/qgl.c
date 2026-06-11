@@ -369,6 +369,18 @@ static const glsection_t sections[] = {
         }
     },
 
+    // GL 3.3
+    // GL_ARB_timer_query
+    {
+        .extension = "GL_ARB_timer_query",
+        .ver_gl = QGL_VER(3, 3),
+        .caps = QGL_CAP_TIMER_QUERY,
+        .functions = (const glfunction_t []) {
+            QGL_FN(GetQueryObjectui64v),
+            { NULL }
+        }
+    },
+
     // GL 4.1
     {
         .ver_gl = QGL_VER(4, 1),
@@ -387,9 +399,12 @@ static const glsection_t sections[] = {
         .suffix = "?KHR",
         .ver_gl = QGL_VER(4, 3),
         .ver_es = QGL_VER(3, 2),
+        .caps = QGL_CAP_DEBUG_GROUPS,
         .functions = (const glfunction_t []) {
             QGL_FN(DebugMessageCallback),
             QGL_FN(DebugMessageControl),
+            QGL_FN(PushDebugGroup),
+            QGL_FN(PopDebugGroup),
             { NULL }
         }
     },

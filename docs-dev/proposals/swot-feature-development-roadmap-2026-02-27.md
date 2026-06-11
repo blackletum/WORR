@@ -6,6 +6,10 @@ Date: 2026-02-27
 Create a repository-grounded SWOT and convert it into actionable, task-based project roadmaps that can guide coordinated team execution.
 
 ## Status Updates
+- `DV-04-T02` / `FR-03-T06` / `DV-07-T04` In Progress:
+  - Added `cg_view.cpp` as the cgame-local home for first-person viewweapon pose logic and introduced archived `cg_weaponBob` modes for disabled, Quake 3-style, and Doom 3-style weapon bobbing.
+  - Wired the cgame Effects menu and client cvar docs to expose the new setting.
+  - Implementation log: `docs-dev/cgame-viewweapon-bob-options-2026-05-06.md`.
 - `FR-02-T09` / `FR-02-T10` / `FR-02-T11` / `DV-02-T06` / `DV-07-T05` Done:
   - Added a renderer-neutral shadow frontend contract (`shadow_light_desc_t`, `shadow_view_desc_t`, `shadow_caster_t`, `shadow_cache_key_t`, `shadow_page_id_t`, `shadow_backend_ops_t`) shared by GL, native Vulkan, and RTX builds.
   - Wired GL and native Vulkan frame paths into the shared frontend for deterministic candidate light selection, backend-resolved caster bounds, per-view caster index spans, light-influence cluster dirtying, page residency keys, dirty reasons, freeze modes, optional sun cascade descriptors, and main-view visibility mutation guardrails.
@@ -70,6 +74,9 @@ Create a repository-grounded SWOT and convert it into actionable, task-based pro
   - Implementation log: `docs-dev/nightly-run-23153597827-error-warning-recovery-2026-03-16.md`.
   - Recovered additional warning noise from run `23156641291` by removing `entity_iterable_t` constructor template-id syntax in `sgame` and extending quiet fallback warning suppression for third-party fallback builds.
   - Implementation log: `docs-dev/nightly-run-23156641291-recovery-2026-03-16.md`.
+- `DV-05-T03` In Progress:
+  - Added OpenGL renderer baseline instrumentation for GPU-offload work: opt-in CPU scope timers, delayed GPU timer queries, `KHR_debug` phase groups, stable per-frame telemetry, streamed buffer byte counters, texture-upload byte counters, and fast-path flags for shader/GPU-lerp/static-world-VBO/per-pixel-lighting selection.
+  - Implementation log: `docs-dev/renderer/opengl-gpu-offload-instrumentation-2026-05-04.md`.
 - `FR-02-T08` Done:
   - Hardened the OpenGL `q2dm1` launch path so unsupported postfx framebuffer combinations retry safer bloom/DOF/depth variants instead of failing the whole postfx chain on `GL_FRAMEBUFFER_UNSUPPORTED`.
   - Removed two false-positive startup warnings from the same smoke path by scoping map-fix validation to entities that actually need model data and suppressing `PF_Client_Print` free/zombie noise during `ss_loading`.
@@ -452,6 +459,7 @@ Tasks:
   Dependency: `FR-03-T01`. Priority: P1.
 - [ ] `FR-03-T06` Audit and complete settings page cvar wiring for Video/Audio/Input/HUD/Downloads.  
   Dependency: `FR-03-T02..T05`. Priority: P0.
+  Progress: The cgame Effects menu now exposes `cg_weaponBob` as a 0/1/2 selector for disabled, Quake 3, and Doom 3 viewweapon bob modes.
 - [ ] `FR-03-T07` Add menu regression checklist (navigation, conditionals, scaling, localization).  
   Dependency: `FR-03-T06`. Priority: P1.
 - [ ] `FR-03-T08` Complete split between engine-side and cgame-side UI ownership where still mixed.  
@@ -664,6 +672,7 @@ Tasks:
   Dependency: none. Priority: P1.
 - [ ] `DV-04-T02` Complete client/cgame ownership map for duplicated behavior paths.  
   Dependency: none. Priority: P1.
+  Progress: First-person viewweapon pose calculation now has a cgame-local `cg_view.cpp` helper used by both the weapon entity and local beam starts, reducing drift between duplicated cgame view paths.
 - [ ] `DV-04-T03` Add static analysis and warning-as-error policy for first-party code in CI.  
   Dependency: `DV-02-T01`. Priority: P1.
 - [ ] `DV-04-T04` Create cvar namespace modernization plan (`g_` to `sg_` for new server-side controls).  
@@ -688,6 +697,7 @@ Tasks:
   Dependency: `DV-05-T01`. Priority: P1.
 - [ ] `DV-05-T03` Add lightweight frame-time and subsystem timing instrumentation toggles.  
   Dependency: none. Priority: P1.
+  Progress: OpenGL now exposes the first renderer baseline through `gl_cpu_timers`, `gl_gpu_timers`, `gl_profile_log`, `gl_debug_markers`, `gl_telemetry`, and renderer stats. Server-frame and CI trend integration remain future work.
 - [ ] `DV-05-T04` Add nightly trend report for key performance metrics.  
   Dependency: `DV-05-T02`. Priority: P2.
 - [ ] `DV-05-T05` Add performance budget thresholds for major renderer and server paths.  
@@ -728,6 +738,7 @@ Tasks:
   Dependency: none. Priority: P2.
 - [ ] `DV-07-T04` Add user-doc parity pass whenever user-visible cvars/features are changed.  
   Dependency: none. Priority: P1.
+  Progress: `docs-user/client.asciidoc` documents `cg_weaponBob` and its disabled/Quake 3/Doom 3 values.
 - [x] `DV-07-T05` Keep the canonical shadowmapping replacement baseline synchronized with implementation status.
   Dependency: `FR-02-T09`. Priority: P1.
 

@@ -12,6 +12,7 @@ cvar_t *cl_gunfov = nullptr;
 cvar_t *cl_gun_x = nullptr;
 cvar_t *cl_gun_y = nullptr;
 cvar_t *cl_gun_z = nullptr;
+cvar_t *cg_weaponBob = nullptr;
 cvar_t *cl_footsteps = nullptr;
 cvar_t *cl_predict = nullptr;
 cvar_t *cl_kickangles = nullptr;
@@ -59,6 +60,7 @@ void CG_Entity_InitCvars(void)
     cl_gun_x = Cvar_Get("cl_gun_x", "0", 0);
     cl_gun_y = Cvar_Get("cl_gun_y", "0", 0);
     cl_gun_z = Cvar_Get("cl_gun_z", "0", 0);
+    cg_weaponBob = Cvar_Get("cg_weaponBob", "2", CVAR_ARCHIVE);
     cl_footsteps = Cvar_Get("cl_footsteps", "1", 0);
     cl_predict = Cvar_Get("cl_predict", "1", 0);
     cl_kickangles = Cvar_Get("cl_kickangles", "1", CVAR_CHEAT);

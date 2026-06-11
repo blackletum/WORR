@@ -284,6 +284,16 @@
         },
         { "type": "checkbox", "label": "screen blending", "cvar": "gl_polyblend" },
         { "type": "checkbox", "label": "screen warping", "cvar": "gl_waterwarp" },
+        {
+          "type": "dropdown",
+          "label": "weapon bob",
+          "cvar": "cg_weaponBob",
+          "pairs": [
+            { "label": "off", "value": "0" },
+            { "label": "Quake 3", "value": "1" },
+            { "label": "Doom 3", "value": "2" }
+          ]
+        },
         { "type": "checkbox", "label": "grenade explosions", "cvar": "cl_disable_explosions", "bit": 0, "negate": true },
         { "type": "checkbox", "label": "rocket explosions", "cvar": "cl_disable_explosions", "bit": 1, "negate": true },
         { "type": "blank" },

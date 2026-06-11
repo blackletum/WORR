@@ -64,6 +64,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef GL_DEPTH_COMPONENT24
 #define GL_DEPTH_COMPONENT24 0x81A6
 #endif
+#ifndef GL_TIME_ELAPSED
+#define GL_TIME_ELAPSED 0x88BF
+#endif
+#ifndef GL_QUERY_RESULT_NO_WAIT
+#define GL_QUERY_RESULT_NO_WAIT 0x9194
+#endif
+#ifndef GL_DEBUG_SOURCE_APPLICATION
+#define GL_DEBUG_SOURCE_APPLICATION 0x824A
+#endif
 
 // GL 1.1
 QGLAPI void (APIENTRYP qglBindTexture)(GLenum target, GLuint texture);
@@ -146,6 +155,9 @@ QGLAPI void (APIENTRYP qglEndQuery)(GLenum target);
 QGLAPI void (APIENTRYP qglGenQueries)(GLsizei n, GLuint *ids);
 QGLAPI void (APIENTRYP qglGetQueryObjectuiv)(GLuint id, GLenum pname, GLuint *params);
 
+// GL 3.3 / GL_ARB_timer_query
+QGLAPI void (APIENTRYP qglGetQueryObjectui64v)(GLuint id, GLenum pname, GLuint64 *params);
+
 // GL 2.0
 QGLAPI void (APIENTRYP qglAttachShader)(GLuint program, GLuint shader);
 QGLAPI void (APIENTRYP qglBindAttribLocation)(GLuint program, GLuint index, const GLchar *name);
@@ -215,6 +227,8 @@ QGLAPI void (APIENTRYP qglDepthRangef)(GLfloat n, GLfloat f);
 // GL 4.3
 QGLAPI void (APIENTRYP qglDebugMessageCallback)(GLDEBUGPROC callback, const void *userParam);
 QGLAPI void (APIENTRYP qglDebugMessageControl)(GLenum source, GLenum type, GLenum severity, GLsizei count, const GLuint *ids, GLboolean enabled);
+QGLAPI void (APIENTRYP qglPushDebugGroup)(GLenum source, GLuint id, GLsizei length, const GLchar *message);
+QGLAPI void (APIENTRYP qglPopDebugGroup)(void);
 
 // GL 4.4
 QGLAPI void (APIENTRYP qglBindTextures)(GLuint first, GLsizei count, const GLuint *textures);

@@ -966,10 +966,7 @@ static void CL_AddPlayerBeams(void)
             ps = CL_KEYPS;
             ops = CL_OLDKEYPS;
 
-            for (j = 0; j < 3; j++) {
-                b->start[j] = cl.refdef.vieworg[j] + ops->gunoffset[j] +
-                    CL_KEYLERPFRAC * (ps->gunoffset[j] - ops->gunoffset[j]);
-            }
+            CG_View_CalcWeaponPose(b->start, angles, ps, ops, info_bobskip->integer != 0);
 
             x = b->offset[0];
             y = b->offset[1];

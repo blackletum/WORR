@@ -40,6 +40,7 @@ refcfg_t r_config;
 static shadow_frontend_state_t gl_shadow_frontend;
 static shadow_frontend_cvars_t gl_shadow_frontend_cvars;
 static bool gl_shadow_frontend_cvars_registered;
+static glDebugGroup_t gl_frame_debug_group;
 
 static void GL_ShadowAddPointToBounds(const vec3_t point, vec3_t mins,
                                       vec3_t maxs) {
@@ -1641,6 +1642,8 @@ static pp_flags_t GL_BindFramebuffer(void) {
 void R_RenderFrame(const refdef_t *fd) {
   GL_Flush2D();
   unsigned draw_start_ms = Sys_Milliseconds();
+  glCpuProfileGuard_t cpu_frame = GL_ProfileCpuBegin(GL_CPU_PROFILE_FRAME);
+  glDebugGroup_t render_group = GL_DebugGroupBegin("render frame");
 
   Q_assert(gl_static.world.cache || (fd->rdflags & RDF_NOWORLDMODEL));
 
@@ -1726,25 +1729,58 @@ void R_RenderFrame(const refdef_t *fd) {
   if (!(glr.fd.rdflags & RDF_NOWORLDMODEL) && gl_drawworld->integer)
     GL_DrawWorld();
 
-  GL_DrawEntities(glr.ents.bmodels);
+  {
+    glDebugGroup_t group = GL_DebugGroupBegin("brush model entities");
+    GL_DrawEntities(glr.ents.bmodels);
+    GL_DebugGroupEnd(&group);
+  }
 
-  GL_DrawEntities(glr.ents.opaque);
+  {
+    glDebugGroup_t group = GL_DebugGroupBegin("opaque entities");
+    GL_DrawEntities(glr.ents.opaque);
+    GL_DebugGroupEnd(&group);
+  }
 
-  GL_DrawEntities(glr.ents.alpha_back);
+  {
+    glDebugGroup_t group = GL_DebugGroupBegin("transparent surfaces");
+    glGpuProfileGuard_t gpu =
+        GL_ProfileGpuBegin(GL_GPU_PROFILE_TRANSPARENT);
+    GL_DrawEntities(glr.ents.alpha_back);
 
-  GL_DrawAlphaFaces();
+    GL_DrawAlphaFaces();
+    GL_ProfileGpuEnd(&gpu);
+    GL_DebugGroupEnd(&group);
+  }
 
-  GL_DrawBeams();
+  {
+    glDebugGroup_t group = GL_DebugGroupBegin("effects");
+    glGpuProfileGuard_t gpu = GL_ProfileGpuBegin(GL_GPU_PROFILE_EFFECTS);
+    GL_DrawBeams();
 
-  GL_DrawParticles();
+    GL_DrawParticles();
+    GL_ProfileGpuEnd(&gpu);
+    GL_DebugGroupEnd(&group);
+  }
 
-  GL_OccludeFlares();
+  {
+    glDebugGroup_t group = GL_DebugGroupBegin("flares");
+    GL_OccludeFlares();
 
-  GL_DrawFlares();
+    GL_DrawFlares();
+    GL_DebugGroupEnd(&group);
+  }
 
-  GL_DrawEntities(glr.ents.alpha_front);
+  {
+    glDebugGroup_t group = GL_DebugGroupBegin("front alpha entities");
+    GL_DrawEntities(glr.ents.alpha_front);
+    GL_DebugGroupEnd(&group);
+  }
 
-  GL_DrawDebugObjects();
+  {
+    glDebugGroup_t group = GL_DebugGroupBegin("debug draw");
+    GL_DrawDebugObjects();
+    GL_DebugGroupEnd(&group);
+  }
 
   if (glr.framebuffer_bound) {
     qglBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1754,6 +1790,10 @@ void R_RenderFrame(const refdef_t *fd) {
   tess.dlight_bits = 0;
 
   // go back into 2D mode
+  glCpuProfileGuard_t cpu_postfx = GL_ProfileCpuBegin(GL_CPU_PROFILE_POSTFX);
+  glDebugGroup_t postfx_group = GL_DebugGroupBegin("postfx");
+  glGpuProfileGuard_t gpu_postfx = GL_ProfileGpuBegin(GL_GPU_PROFILE_POSTFX);
+
   GL_Setup2D();
   GL_UpdatePostFxUniforms((pp_flags & PP_BLOOM) != 0);
 
@@ -1781,6 +1821,10 @@ void R_RenderFrame(const refdef_t *fd) {
   if (gl_polyblend->integer)
     GL_Blend();
 
+  GL_ProfileGpuEnd(&gpu_postfx);
+  GL_DebugGroupEnd(&postfx_group);
+  GL_ProfileCpuEnd(&cpu_postfx);
+
 #if USE_DEBUG
   if (gl_lightmap->integer > 1)
     Draw_Lightmaps();
@@ -1790,6 +1834,8 @@ void R_RenderFrame(const refdef_t *fd) {
     GL_ShowErrors(__func__);
 
   GL_RecordResolutionScaleTime(draw_start_ms);
+  GL_DebugGroupEnd(&render_group);
+  GL_ProfileCpuEnd(&cpu_frame);
 }
 
 bool R_SupportsPerPixelLighting(void) {
@@ -1798,6 +1844,8 @@ bool R_SupportsPerPixelLighting(void) {
 
 void R_BeginFrame(void) {
   memset(&c, 0, sizeof(c));
+  GL_ProfileBeginFrame();
+  gl_frame_debug_group = GL_DebugGroupBegin("frame");
 
   if (gl_finish->integer)
     qglFinish();
@@ -1836,6 +1884,9 @@ void R_EndFrame(void) {
 
   if (gl_showerrors->integer > 1)
     GL_ShowErrors(__func__);
+
+  GL_DebugGroupEnd(&gl_frame_debug_group);
+  GL_ProfileEndFrame();
 
   vid->swap_buffers();
 
@@ -2671,6 +2722,31 @@ static void Draw_Stats_s(void) {
   SCR_StatKeyValuei("Dlight uploads", c.dlightUploads);
   SCR_StatKeyValuei("Dlight frustum culled", c.dlightsCulled);
   SCR_StatKeyValuei("Dlight pre-culled", c.dlightsEntCulled);
+  SCR_StatKeyValue("Stream bytes",
+                   va("v:%llu i:%llu tex:%llu",
+                      (unsigned long long)c.streamedVertexBytes,
+                      (unsigned long long)c.streamedIndexBytes,
+                      (unsigned long long)c.textureUploadBytes));
+  SCR_StatKeyValue("Fast paths",
+                   va("shd:%d lerp:%d vbo:%d ppl:%d",
+                      gl_telemetry.shaders_used,
+                      gl_telemetry.gpu_lerp_used,
+                      gl_telemetry.world_static_vbo_used,
+                      gl_telemetry.ppl_used));
+  SCR_StatKeyValuef("CPU frame ms",
+                    GL_ProfileCpuMilliseconds(GL_CPU_PROFILE_FRAME));
+  SCR_StatKeyValuef("CPU world node ms",
+                    GL_ProfileCpuMilliseconds(GL_CPU_PROFILE_WORLD_NODE));
+  SCR_StatKeyValuef("CPU push lights ms",
+                    GL_ProfileCpuMilliseconds(GL_CPU_PROFILE_PUSH_LIGHTS));
+  SCR_StatKeyValuef("CPU postfx ms",
+                    GL_ProfileCpuMilliseconds(GL_CPU_PROFILE_POSTFX));
+  SCR_StatKeyValuef("GPU world ms",
+                    GL_ProfileGpuMilliseconds(GL_GPU_PROFILE_WORLD_OPAQUE));
+  SCR_StatKeyValuef("GPU effects ms",
+                    GL_ProfileGpuMilliseconds(GL_GPU_PROFILE_EFFECTS));
+  SCR_StatKeyValuef("GPU postfx ms",
+                    GL_ProfileGpuMilliseconds(GL_GPU_PROFILE_POSTFX));
 }
 
 /*
@@ -2703,6 +2779,7 @@ bool R_Init(bool total) {
 
   // register our variables
   GL_Register();
+  GL_ProfileInit();
 
   GL_InitArrays();
 
@@ -2726,6 +2803,7 @@ bool R_Init(bool total) {
   return true;
 
 fail:
+  GL_ProfileShutdown();
   memset(&gl_static, 0, sizeof(gl_static));
   memset(&gl_config, 0, sizeof(gl_config));
   QGL_Shutdown();
@@ -2753,6 +2831,8 @@ void R_Shutdown(bool total) {
     qglDeleteSync(gl_static.sync);
     gl_static.sync = 0;
   }
+
+  GL_ProfileShutdown();
 
   GL_ShutdownDebugDraw();
 

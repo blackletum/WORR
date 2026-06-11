@@ -2988,6 +2988,34 @@ static int alphacmp(const void *p1, const void *p2)
 
 /*
 =================
+FS_GetSaveLookupFlags
+
+Returns the path/dir flags of the search path matching fs_gamedir, i.e. the
+directory savegames and other runtime files are written to. Savegame reads
+and listings must use these flags so they operate on the same directory tree
+as writes; a fixed FS_DIR_HOME lookup diverges from fs_gamedir on setups
+where the home directory is auto-detected (rerelease) but writes go to the
+basedir game directory.
+=================
+*/
+unsigned FS_GetSaveLookupFlags(void)
+{
+    const searchpath_t *search;
+
+    for (search = fs_searchpaths; search; search = search->next) {
+        if (search->pack)
+            continue;
+        if (!FS_pathcmp(search->filename, fs_gamedir))
+            return search->mode & (FS_PATH_MASK | FS_DIR_MASK);
+    }
+
+    // fs_gamedir isn't registered as a search path (e.g. it points at a
+    // skipped, nonexistent directory); fall back to game-path lookups.
+    return FS_PATH_GAME;
+}
+
+/*
+=================
 FS_ListFiles
 =================
 */

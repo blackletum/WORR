@@ -287,15 +287,19 @@ static void update_dynamic_lightmap(mface_t *surf)
 // updates lightmaps in RAM
 void GL_PushLights(mface_t *surf)
 {
+    glCpuProfileGuard_t cpu = GL_ProfileCpuBegin(GL_CPU_PROFILE_PUSH_LIGHTS);
     const lightstyle_t *style;
     int i;
 
-    if (!surf->light_m)
+    if (!surf->light_m) {
+        GL_ProfileCpuEnd(&cpu);
         return;
+    }
 
     // dynamic this frame or dynamic previously
     if (surf->dlightframe && !gl_backend->use_per_pixel_lighting()) {
         update_dynamic_lightmap(surf);
+        GL_ProfileCpuEnd(&cpu);
         return;
     }
 
@@ -304,9 +308,11 @@ void GL_PushLights(mface_t *surf)
         style = LIGHT_STYLE(surf->styles[i]);
         if (style->white != surf->stylecache[i]) {
             update_dynamic_lightmap(surf);
+            GL_ProfileCpuEnd(&cpu);
             return;
         }
     }
+    GL_ProfileCpuEnd(&cpu);
 }
 
 static void clear_dirty_region(lightmap_t *m)
@@ -320,6 +326,11 @@ static void clear_dirty_region(lightmap_t *m)
 // uploads dirty lightmap regions to GL
 void GL_UploadLightmaps(void)
 {
+    glCpuProfileGuard_t cpu =
+        GL_ProfileCpuBegin(GL_CPU_PROFILE_UPLOAD_LIGHTMAPS);
+    glDebugGroup_t debug_group = GL_DebugGroupBegin("lightmap upload");
+    glGpuProfileGuard_t gpu =
+        GL_ProfileGpuBegin(GL_GPU_PROFILE_LIGHTMAP_UPDATE);
     lightmap_t *m;
     bool set = false;
     int i;
@@ -350,10 +361,15 @@ void GL_UploadLightmaps(void)
         clear_dirty_region(m);
         c.texUploads++;
         c.lightTexels += w * h;
+        c.textureUploadBytes += (uint64_t)w * (uint64_t)h * 4ULL;
     }
 
     if (set)
         qglPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+    GL_ProfileGpuEnd(&gpu);
+    GL_DebugGroupEnd(&debug_group);
+    GL_ProfileCpuEnd(&cpu);
 }
 
 /*
@@ -392,6 +408,7 @@ static void LM_UploadBlock(void)
 
     lm.nummaps++;
     lm.dirty = false;
+    c.textureUploadBytes += lm.block_bytes;
 }
 
 static void build_style_map(int dynamic)
@@ -543,9 +560,10 @@ static void LM_RebuildSurfaces(void)
                       lm.block_size, lm.block_size, 0,
                       GL_RGBA, GL_UNSIGNED_BYTE, m->buffer);
         clear_dirty_region(m);
-            c.texUploads++;
-        }
+        c.texUploads++;
+        c.textureUploadBytes += lm.block_bytes;
     }
+}
 
 /*
 =============================================================================

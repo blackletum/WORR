@@ -3446,6 +3446,9 @@ struct spawn_temp_t {
     if (keys_specified.find(key) != keys_specified.end())
       return true;
 
+    // keys_specified hashes pointers; identical string literals are not
+    // guaranteed to be pooled across translation units, so fall back to a
+    // value comparison.
     for (const char *specified : keys_specified) {
       if (specified && key && std::strcmp(specified, key) == 0)
         return true;

@@ -1273,6 +1273,9 @@ static void setup_lights(void)
 
 void GL_DrawAliasModel(const model_t *model)
 {
+    glCpuProfileGuard_t cpu =
+        GL_ProfileCpuBegin(GL_CPU_PROFILE_ALIAS_MODELS);
+    glDebugGroup_t debug_group = GL_DebugGroupBegin("alias model");
     m_model = model;
 
     const entity_t *ent = glr.ent;
@@ -1314,8 +1317,11 @@ void GL_DrawAliasModel(const model_t *model)
     else
         cull = cull_lerped_model(model);
     if (cull == CULL_OUT) {
-        if (!drawshadow)
+        if (!drawshadow) {
+            GL_DebugGroupEnd(&debug_group);
+            GL_ProfileCpuEnd(&cpu);
             return;
+        }
         drawshadow = SHADOW_ONLY;   // still need to draw the shadow
     }
 
@@ -1415,4 +1421,6 @@ void GL_DrawAliasModel(const model_t *model)
         GL_Frustum(glr.fd.fov_x, glr.fd.fov_y, 1.0f);
         qglFrontFace(GL_CW);
     }
+    GL_DebugGroupEnd(&debug_group);
+    GL_ProfileCpuEnd(&cpu);
 }

@@ -108,6 +108,8 @@ const char *FS_NextPath(const char *path);
 #define FS_ReallocList(list, count) \
     Z_Realloc(list, Q_ALIGN(count, MIN_LISTED_FILES) * sizeof(void *))
 
+unsigned FS_GetSaveLookupFlags(void);
+
 void    **FS_ListFiles(const char *path, const char *filter, unsigned flags, int *count_p);
 void    **FS_CopyList(void **list, int count);
 file_info_t *FS_CopyInfo(const char *name, int64_t size, time_t ctime, time_t mtime);

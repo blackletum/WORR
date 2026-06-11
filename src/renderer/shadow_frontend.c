@@ -45,6 +45,12 @@ static const vec3_t shadow_point_face_axis[SHADOW_FRONTEND_POINT_FACES][3] = {
     {{ 0,  0, -1}, {-1,  0,  0}, { 0,  1,  0}},
 };
 
+// Score multiplier for lights that were selected last frame. A challenger
+// must beat an incumbent by this margin before the selection changes, which
+// keeps shadows from popping in and out as the camera moves across the
+// score boundary.
+#define SHADOW_SELECT_HYSTERESIS 1.35f
+
 static const char *const shadow_dirty_names[] = {
     "moved-caster",
     "animated-caster",
@@ -121,9 +127,20 @@ static int ShadowFrontend_BoxLeafs(const bsp_t *bsp,
                                      &count, overflow);
 }
 
-static void ShadowFrontend_MaskClear(visrow_t *mask)
+static size_t ShadowFrontend_MaskBytes(const bsp_t *bsp)
 {
-    memset(mask, 0, sizeof(*mask));
+    if (bsp && bsp->visrowsize > 0 &&
+        (size_t)bsp->visrowsize <= sizeof(((visrow_t *)0)->b)) {
+        // Round up to whole longs; overlap tests only read this many.
+        size_t longs = VIS_FAST_LONGS(bsp->visrowsize);
+        return longs * sizeof(((visrow_t *)0)->l[0]);
+    }
+    return sizeof(visrow_t);
+}
+
+static void ShadowFrontend_MaskClear(const bsp_t *bsp, visrow_t *mask)
+{
+    memset(mask, 0, ShadowFrontend_MaskBytes(bsp));
 }
 
 static void ShadowFrontend_MaskSet(visrow_t *mask, int cluster)
@@ -242,7 +259,7 @@ void ShadowFrontend_RegisterCvars(shadow_frontend_cvars_t *vars,
 
     vars->enabled = Cvar_Get("r_shadowmaps", "1", CVAR_ARCHIVE);
     vars->size = Cvar_Get("r_shadowmap_size", "512", CVAR_ARCHIVE);
-    vars->lights = Cvar_Get("r_shadowmap_lights", "4", CVAR_ARCHIVE);
+    vars->lights = Cvar_Get("r_shadowmap_lights", "6", CVAR_ARCHIVE);
     vars->dynamic = Cvar_Get("r_shadowmap_dynamic", "1", CVAR_ARCHIVE);
     vars->cache_mode = Cvar_Get("r_shadowmap_cache_mode", "1", CVAR_ARCHIVE);
     vars->filter = Cvar_Get("r_shadow_filter", "1", CVAR_ARCHIVE);
@@ -250,13 +267,19 @@ void ShadowFrontend_RegisterCvars(shadow_frontend_cvars_t *vars,
     vars->bias_slope = Cvar_Get("r_shadow_bias_slope", "1.0", CVAR_ARCHIVE);
     vars->normal_offset = Cvar_Get("r_shadow_normal_offset", "0.5", CVAR_ARCHIVE);
     vars->bias_scale = Cvar_Get("r_shadow_bias_scale", "1.0", CVAR_ARCHIVE);
+    vars->softness = Cvar_Get("r_shadow_softness", "1.0", CVAR_ARCHIVE);
     vars->debug_light = Cvar_Get("r_shadow_debug_light", "-1", 0);
     vars->debug_draw = Cvar_Get("r_shadow_draw_debug", "0", 0);
     vars->freeze_selection = Cvar_Get("r_shadow_freeze_selection", "0", 0);
     vars->freeze_dirtying = Cvar_Get("r_shadow_freeze_dirtying", "0", 0);
     vars->alpha_mode = Cvar_Get("r_shadow_alpha_mode", "0", CVAR_ARCHIVE);
     vars->model_exclusion_list = Cvar_Get("r_shadow_model_exclusion_list", "", CVAR_ARCHIVE);
-    vars->sun_enabled = Cvar_Get("r_shadow_sun", "1", CVAR_ARCHIVE);
+    // Off by default: the receivers currently modulate the WHOLE baked
+    // lightmap by the sun visibility factor, so any surface occluded from
+    // the sun direction (i.e. every interior under a roof) loses all of its
+    // baked light, not just a sun term. Until sun light is separated from
+    // the lightmap, sun shadows are opt-in.
+    vars->sun_enabled = Cvar_Get("r_shadow_sun", "0", CVAR_ARCHIVE);
     vars->sun_cascades = Cvar_Get("r_shadow_sun_cascades", "3", CVAR_ARCHIVE);
     vars->sun_resolution = Cvar_Get("r_shadow_sun_resolution", "1024", CVAR_ARCHIVE);
     vars->sun_direction = Cvar_Get("r_shadow_sun_direction", "0.3 0.5 -1", CVAR_ARCHIVE);
@@ -273,6 +296,7 @@ void ShadowFrontend_RegisterCvars(shadow_frontend_cvars_t *vars,
     vars->alias_bias_slope = ShadowFrontend_RegisterAlias(backend_prefix, "shadow_bias_slope", vars->bias_slope);
     vars->alias_normal_offset = ShadowFrontend_RegisterAlias(backend_prefix, "shadow_normal_offset", vars->normal_offset);
     vars->alias_bias_scale = ShadowFrontend_RegisterAlias(backend_prefix, "shadow_bias_scale", vars->bias_scale);
+    vars->alias_softness = ShadowFrontend_RegisterAlias(backend_prefix, "shadow_softness", vars->softness);
     vars->alias_debug_light = ShadowFrontend_RegisterAlias(backend_prefix, "shadow_debug_light", vars->debug_light);
     vars->alias_debug_draw = ShadowFrontend_RegisterAlias(backend_prefix, "shadow_draw_debug", vars->debug_draw);
     vars->alias_freeze_selection = ShadowFrontend_RegisterAlias(backend_prefix, "shadow_freeze_selection", vars->freeze_selection);
@@ -296,7 +320,7 @@ void ShadowFrontend_DefaultPolicy(shadow_frontend_policy_t *policy)
     memset(policy, 0, sizeof(*policy));
     policy->enabled = true;
     policy->dynamic_lights = true;
-    policy->max_lights = 4;
+    policy->max_lights = 6;
     policy->default_resolution = 512;
     policy->min_resolution = 64;
     policy->max_resolution = 4096;
@@ -307,6 +331,7 @@ void ShadowFrontend_DefaultPolicy(shadow_frontend_policy_t *policy)
     policy->slope_bias = 1.0f;
     policy->normal_offset = 0.5f;
     policy->bias_scale = 1.0f;
+    policy->softness = 1.0f;
     policy->sun_distance = 4096.0f;
     policy->sun_size = 4096.0f;
     VectorSet(policy->sun_direction, 0.3f, 0.5f, -1.0f);
@@ -360,6 +385,8 @@ void ShadowFrontend_PolicyFromCvars(const shadow_frontend_cvars_t *vars,
                                     0.0f, 16.0f);
     policy->bias_scale = Q_clipf(ShadowFrontend_CvarValue(vars->bias_scale, vars->alias_bias_scale),
                                  0.0f, 16.0f);
+    policy->softness = Q_clipf(ShadowFrontend_CvarValue(vars->softness, vars->alias_softness),
+                               0.25f, 4.0f);
     policy->sun_distance =
         Q_clipf(ShadowFrontend_CvarValue(vars->sun_distance, vars->alias_sun_distance),
                 128.0f, 65536.0f);
@@ -532,7 +559,7 @@ static bool ShadowFrontend_BoxClusters(const bsp_t *bsp,
                                        const vec3_t maxs,
                                        visrow_t *mask)
 {
-    ShadowFrontend_MaskClear(mask);
+    ShadowFrontend_MaskClear(bsp, mask);
     if (!bsp || !bsp->nodes) {
         return false;
     }
@@ -542,7 +569,7 @@ static bool ShadowFrontend_BoxClusters(const bsp_t *bsp,
     int count = ShadowFrontend_BoxLeafs(bsp, mins, maxs, leafs,
                                         q_countof(leafs), &overflow);
     if (overflow) {
-        ShadowFrontend_MaskClear(mask);
+        ShadowFrontend_MaskClear(bsp, mask);
         return false;
     }
     bool any = false;
@@ -585,7 +612,7 @@ static void ShadowFrontend_UpdateLightInfluenceClusters(const bsp_t *bsp,
     }
 
     light->influence_clusters_valid = false;
-    ShadowFrontend_MaskClear(&light->influence_clusters);
+    ShadowFrontend_MaskClear(bsp, &light->influence_clusters);
 
     if (light->light_class == SHADOW_LIGHT_CLASS_SUN) {
         return;
@@ -720,6 +747,46 @@ static uint32_t ShadowFrontend_LightOwnerId(const dlight_t *dl, int index)
     return hash ? hash : 1u;
 }
 
+// Identity that stays stable while a light moves: configstring index for
+// authored shadowlights, owner entity for tracked lights (flashlights),
+// otherwise the position-derived owner id. Used only for hysteresis.
+static uint32_t ShadowFrontend_LightStableId(const shadow_light_desc_t *light)
+{
+    if (light->source_configstring >= 0) {
+        return 0x43530000u ^ (uint32_t)light->source_configstring;
+    }
+    if (light->owner_entity > 0) {
+        return 0x454e0000u ^ (uint32_t)light->owner_entity;
+    }
+    return light->owner_id;
+}
+
+static bool ShadowFrontend_WasSelectedLastFrame(const shadow_frontend_state_t *state,
+                                                uint32_t stable_id)
+{
+    for (int i = 0; i < state->prev_selected_id_count; i++) {
+        if (state->prev_selected_ids[i] == stable_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void ShadowFrontend_RecordSelectedIds(shadow_frontend_state_t *state)
+{
+    int count = 0;
+    for (int i = 0; i < state->selected_light_count &&
+         count < SHADOW_FRONTEND_MAX_LIGHTS; i++) {
+        int light_index = state->selected_light_indices[i];
+        if (light_index < 0 || light_index >= state->light_count) {
+            continue;
+        }
+        state->prev_selected_ids[count++] =
+            ShadowFrontend_LightStableId(&state->lights[light_index]);
+    }
+    state->prev_selected_id_count = count;
+}
+
 static float ShadowFrontend_LightScore(const refdef_t *fd,
                                        const dlight_t *dl,
                                        dlight_shadow_t source_shadow)
@@ -793,7 +860,10 @@ static void ShadowFrontend_CollectLights(shadow_frontend_state_t *state,
         }
 
         shadow_light_desc_t *desc = &state->lights[state->light_count];
-        memset(desc, 0, sizeof(*desc));
+        // The trailing cluster mask is 8K and is (re)initialized by
+        // ShadowFrontend_UpdateLightInfluenceClusters below; zeroing it here
+        // for every candidate is pure memory traffic.
+        memset(desc, 0, offsetof(shadow_light_desc_t, influence_clusters));
         desc->source_index = (uint32_t)i;
         desc->owner_id = ShadowFrontend_LightOwnerId(dl, i);
         desc->source_shadow = (dlight_shadow_t)dl->shadow;
@@ -829,6 +899,10 @@ static void ShadowFrontend_CollectLights(shadow_frontend_state_t *state,
         desc->lightstyle = dl->shadow_lightstyle;
         desc->strict_pvs2 = dl->shadow_strict_pvs;
         desc->score = ShadowFrontend_LightScore(fd, dl, (dlight_shadow_t)dl->shadow);
+        if (ShadowFrontend_WasSelectedLastFrame(state,
+                                                ShadowFrontend_LightStableId(desc))) {
+            desc->score *= SHADOW_SELECT_HYSTERESIS;
+        }
         ShadowFrontend_UpdateLightInfluenceClusters(bsp, desc);
         if (desc->tracked_entity) {
             state->stats.tracked_entity_lights++;
@@ -1194,7 +1268,9 @@ static void ShadowFrontend_CollectCasters(shadow_frontend_state_t *state,
         }
 
         shadow_caster_t *caster = &state->casters[state->caster_count];
-        memset(caster, 0, sizeof(*caster));
+        // Same as the light path: the trailing cluster mask is initialized
+        // by ShadowFrontend_CasterTouchedClusters below.
+        memset(caster, 0, offsetof(shadow_caster_t, touched_clusters));
         caster->source_index = (uint32_t)i;
         caster->entity_id = ent->id ? (uint32_t)ent->id : (uint32_t)(i + 1);
         caster->model = ent->model;
@@ -1699,11 +1775,19 @@ static void ShadowFrontend_AddView(shadow_frontend_state_t *state,
     for (int i = 0; i < 3; i++) {
         VectorCopy(axis[i], view->axis[i]);
     }
-    view->fov_x = view_type == SHADOW_VIEW_SUN_CASCADE
-        ? 0.0f
-        : (view_type == SHADOW_VIEW_CONE
-            ? RAD2DEG(max(light->cone_angle, DEG2RAD(1.0f))) * 2.0f
-            : 90.0f);
+    if (view_type == SHADOW_VIEW_SUN_CASCADE) {
+        view->fov_x = 0.0f;
+    } else if (view_type == SHADOW_VIEW_CONE) {
+        view->fov_x = RAD2DEG(max(light->cone_angle, DEG2RAD(1.0f))) * 2.0f;
+    } else {
+        // Cube faces get a small guard band beyond 90 degrees so PCF taps
+        // near a face boundary stay inside the page instead of clamping,
+        // which otherwise shows up as seams along the 45-degree planes.
+        float texel_deg = 90.0f / (float)max(view->resolution, 64);
+        float guard = Q_clipf(texel_deg * (2.0f * policy->softness + 2.0f),
+                              0.5f, 3.0f);
+        view->fov_x = 90.0f + 2.0f * guard;
+    }
     view->fov_y = view->fov_x;
     view->ortho_size = view_type == SHADOW_VIEW_SUN_CASCADE
         ? policy->sun_size * ((float)cascade + 1.0f) / (float)max(policy->sun_cascades, 1)
@@ -1920,6 +2004,7 @@ void ShadowFrontend_BuildFrame(shadow_frontend_state_t *state,
     } else {
         ShadowFrontend_SaveFrozenSelection(state);
     }
+    ShadowFrontend_RecordSelectedIds(state);
     ShadowFrontend_CollectCasters(state, fd, world_bsp, policy, backend);
     ShadowFrontend_BuildViews(state, fd, world_bsp, policy);
     ShadowFrontend_DebugDraw(state, policy);

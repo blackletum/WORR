@@ -19,6 +19,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "server.h"
 #include "common/mapdb.h"
 
+#include <errno.h>
+
 #define SAVE_MAGIC1     MakeLittleLong('S','S','V','2')
 #define SAVE_MAGIC2     MakeLittleLong('S','A','V','2')
 #define SAVE_VERSION    1
@@ -26,8 +28,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define SAVE_CURRENT    ".current"
 #define SAVE_AUTO       "save0"
 
-// only load saves from home dir
-#define SAVE_LOOKUP_FLAGS   (FS_TYPE_REAL | FS_PATH_GAME | FS_DIR_HOME)
+// only load saves from the directory tree they are written to (fs_gamedir)
+#define SAVE_LOOKUP_FLAGS   (FS_TYPE_REAL | FS_GetSaveLookupFlags())
 
 typedef enum {
     SAVE_MANUAL,        // manual save
@@ -182,8 +184,13 @@ static int copy_file(const char *src, const char *dst, const char *name)
         goto fail0;
 
     ifp = fopen(path, "rb");
-    if (!ifp)
+    if (!ifp) {
+        // entry was listed from a read-only compat search path and doesn't
+        // exist under the writable game dir; nothing to copy.
+        if (errno == ENOENT)
+            ret = 0;
         goto fail0;
+    }
 
     if (Q_snprintf(path, MAX_OSPATH, "%s/save/%s/%s", fs_gamedir, dst, name) >= MAX_OSPATH)
         goto fail1;
@@ -222,7 +229,13 @@ static int remove_file(const char *dir, const char *name)
     if (Q_snprintf(path, MAX_OSPATH, "%s/save/%s/%s", fs_gamedir, dir, name) >= MAX_OSPATH)
         return -1;
 
-    return remove(path);
+    // save listings can include entries from read-only compat search paths
+    // (e.g. rerelease baseq2 dirs) that don't exist under the writable game
+    // dir; those are not an error for wipe purposes.
+    if (remove(path) && errno != ENOENT)
+        return -1;
+
+    return 0;
 }
 
 static void **list_save_dir(const char *dir, int *count)
@@ -467,7 +480,7 @@ static int read_server_file(void)
         Com_Error(ERR_DROP, "Game does not support enhanced savegames");
 
     // read game state
-    FS_LoadFile("save/" SAVE_CURRENT "/game.ssv", (void **)&buf);
+    FS_LoadFileEx("save/" SAVE_CURRENT "/game.ssv", &buf, SAVE_LOOKUP_FLAGS, TAG_FILESYSTEM);
     if (!buf)
         Com_Error(ERR_DROP, "Couldn't read game.ssv");
     ge->ReadGameJson(buf);
@@ -539,7 +552,7 @@ static int read_level_file(void)
     if (Q_snprintf(name, MAX_OSPATH, "save/" SAVE_CURRENT "/%s.sav", sv.name) >= MAX_OSPATH)
         Com_Error(ERR_DROP, "Savegame path too long");
 
-    FS_LoadFile(name, (void **)&data);
+    FS_LoadFileEx(name, &data, SAVE_LOOKUP_FLAGS, TAG_FILESYSTEM);
     if (!data)
         Com_Error(ERR_DROP, "Couldn't read %s", name);
     ge->ReadLevelJson(data);

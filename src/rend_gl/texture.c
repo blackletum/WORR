@@ -674,6 +674,7 @@ static void GL_Upload32(byte *data, int width, int height, int baselevel, imaget
                       scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled);
 
     c.texUploads++;
+    c.textureUploadBytes += (uint64_t)scaled_width * (uint64_t)scaled_height * 4ULL;
 
     if (type == IT_WALL || type == IT_SKIN) {
         if (qglGenerateMipmap) {
@@ -692,6 +693,8 @@ static void GL_Upload32(byte *data, int width, int height, int baselevel, imaget
                 miplevel++;
                 qglTexImage2D(GL_TEXTURE_2D, miplevel, comp, scaled_width,
                               scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled);
+                c.textureUploadBytes += (uint64_t)scaled_width *
+                                        (uint64_t)scaled_height * 4ULL;
             }
         }
     }

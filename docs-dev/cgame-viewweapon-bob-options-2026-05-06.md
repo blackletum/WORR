@@ -1,0 +1,108 @@
+# Cgame Viewweapon Bob Options (2026-05-06)
+
+## Related Tasks
+- `DV-04-T02` - Complete client/cgame ownership map for duplicated behavior paths.
+- `FR-03-T06` - Audit and complete settings page cvar wiring for Video/Audio/Input/HUD/Downloads.
+- `DV-07-T04` - Add user-doc parity pass whenever user-visible cvars/features are changed.
+
+## Summary
+- Added `src/game/cgame/cg_view.cpp` as the cgame-local home for first-person viewweapon pose calculation.
+- Added archived cvar `cg_weaponBob` with default `2`:
+  - `0` = disabled viewweapon bob
+  - `1` = Quake 3-style stride, landing, and idle weapon motion
+  - `2` = Doom 3-style stride plus acceleration lag, turn lag, landing, and idle weapon motion
+- Routed both the rendered first-person weapon and local player beam starts through the shared helper so heatbeam/grapple origins follow the selected pose consistently.
+- Exposed the setting in the cgame Effects menu and documented it in the client user cvar reference.
+
+The requested cvar name intentionally keeps the `cg_weaponBob` spelling even though new cvars usually prefer lowercase `snake_case`; this preserves the user-facing contract requested for the feature.
+
+## Reference Sources
+- Quake 3: `E:\_SOURCE\_CODE\Quake-III-Arena-master\code\cgame\cg_weapons.c::CG_CalculateWeaponPosition`
+- Quake 3: `E:\_SOURCE\_CODE\Quake-III-Arena-master\code\cgame\cg_view.c` bob-cycle setup
+- Doom 3: `E:\_SOURCE\_CODE\DOOM-3-SDK\neo\game\Player.cpp::CalculateViewWeaponPos`
+- Doom 3: `E:\_SOURCE\_CODE\DOOM-3-SDK\neo\game\Player.cpp::GunTurningOffset`
+- Doom 3: `E:\_SOURCE\_CODE\DOOM-3-SDK\neo\game\Player.cpp::GunAcceleratingOffset`
+
+## Implementation Details
+
+### Cvar and ownership
+- `src/game/cgame/cg_entity_api.cpp` registers `cg_weaponBob` as `CVAR_ARCHIVE` with default `2`.
+- `src/game/cgame/cg_entity_local.h` exposes the cvar and the new `CG_View_CalcWeaponPose(...)` helper.
+- Reserved cgame entity IDs were moved into the shared local header so cgame view/entity helpers use the same constants.
+- `meson.build` now includes `src/game/cgame/cg_view.cpp` in `cgame_src`.
+
+### Pose helper
+- `CG_View_CalcWeaponPose(...)` always starts from `cl.refdef.vieworg` and `cl.refdef.viewangles`.
+- `cg_weaponBob 0` and `bobskip 1` return the base view pose and reset bob state so re-enabling a bob mode starts cleanly.
+- `cg_weaponBob 1` applies the Quake 3 weapon-angle bob constants:
+  - roll: `xyspeed * bobfracsin * 0.005`
+  - yaw: `xyspeed * bobfracsin * 0.01`
+  - pitch: `xyspeed * bobfracsin * 0.005`
+  - landing deflect/return timing and speed-sensitive idle drift
+- `cg_weaponBob 2` keeps the shared stride/landing/idle pieces and adds Doom 3-inspired:
+  - local acceleration history translated into weapon positional lag
+  - view-angle history translated into weapon turn lag
+  - the same default offset tuning used by Doom 3 weapon definitions (`10` averaged frames, `0.25` angle scale, `10` degree clamp, `400 ms` acceleration window, `0.005` acceleration scale)
+- The helper caches the pose per `cls.realtime` and mode so multiple same-frame callers do not advance bob history more than once.
+
+### Call sites
+- `src/game/cgame/cg_entities.cpp`
+  - `CL_AddViewWeapon()` now calls `CG_View_CalcWeaponPose(...)` instead of directly interpolating server `ps->gunoffset` and `ps->gunangles`.
+  - Existing client-side `cl_gun_x`, `cl_gun_y`, and `cl_gun_z` development offsets still apply after the shared pose is calculated.
+- `src/game/cgame/cg_tent.cpp`
+  - `CL_AddPlayerBeams()` now uses the same helper for local beam start points.
+  - This keeps local beam origins aligned with `cg_weaponBob` and also honors `bobskip` for cgame beams.
+
+### UI and docs
+- `src/game/cgame/ui/worr.json` adds an Effects menu dropdown:
+  - `off` -> `0`
+  - `Quake 3` -> `1`
+  - `Doom 3` -> `2`
+- `docs-user/client.asciidoc` documents `cg_weaponBob` and its three values.
+- `docs-dev/proposals/swot-feature-development-roadmap-2026-02-27.md` now tracks this work against `DV-04-T02`, `FR-03-T06`, and `DV-07-T04`.
+
+## Validation
+- Parsed the updated menu JSON:
+
+```powershell
+Get-Content -Raw -Path src\game\cgame\ui\worr.json | ConvertFrom-Json | Out-Null
+```
+
+- Built the cgame target successfully in the canonical Windows build directory:
+
+```powershell
+meson compile -C builddir-win cgame_x86_64
+```
+
+- Attempted the matching `builddir-win` engine rebuild so the embedded menu asset would relink, but that build directory is currently blocked by an existing thin-archive toolchain issue:
+
+```powershell
+meson compile -C builddir-win worr_engine_x86_64
+```
+
+Blocked archives:
+- `subprojects/SDL3_ttf-3.2.2/libsdl3_ttf.a`
+- `subprojects/curl-8.18.0/libcurl.a`
+- `libq2proto.a`
+
+All failed with `llvm-ar.exe: error: cannot convert a regular archive to a thin one`.
+
+- Rebuilt both the cgame and engine targets successfully through the working Windows bootstrap-hosted build:
+
+```powershell
+meson compile -C builddir-win-bootstrap-hosted cgame_x86_64 worr_engine_x86_64
+```
+
+- Refreshed and validated local staging from the successful build:
+
+```powershell
+python tools\refresh_install.py --build-dir builddir-win-bootstrap-hosted --install-dir .install --base-game basew --platform-id windows-x86_64
+```
+
+- Ran a staged OpenGL startup smoke with the new cvar set explicitly:
+
+```powershell
+.install\worr_x86_64.exe --bootstrap-skip-update-check +set basedir E:\Repositories\WORR\.install +set r_renderer opengl +set vid_fullscreen 0 +set logfile 1 +set logfile_flush 1 +set logfile_name cg_weaponbob_startup_smoke +set cg_weaponBob 2 +wait 60 +quit
+```
+
+Result: exited `0`, loaded the staged `.\basew\cgame_x86_64.dll`, initialized the OpenGL renderer and OpenAL, then shut down cleanly.

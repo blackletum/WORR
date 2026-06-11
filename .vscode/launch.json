@@ -32,8 +32,7 @@
                 "q2dm1"
             ],
             "cwd": "${workspaceFolder}\\.install",
-            "console": "integratedTerminal",
-            "preLaunchTask": "meson: build"
+            "console": "integratedTerminal"
         },
         {
             "name": "WORR (RTX)",
@@ -66,8 +65,7 @@
                 "q2dm1"
             ],
             "cwd": "${workspaceFolder}\\.install",
-            "console": "integratedTerminal",
-            "preLaunchTask": "meson: build"
+            "console": "integratedTerminal"
         },
         {
             "name": "WORR (OpenGL)",

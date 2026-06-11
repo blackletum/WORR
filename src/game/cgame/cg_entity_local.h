@@ -24,6 +24,7 @@ extern cvar_t *cl_gunfov;
 extern cvar_t *cl_gun_x;
 extern cvar_t *cl_gun_y;
 extern cvar_t *cl_gun_z;
+extern cvar_t *cg_weaponBob;
 extern cvar_t *cl_footsteps;
 extern cvar_t *cl_predict;
 extern cvar_t *cl_kickangles;
@@ -59,6 +60,15 @@ extern cvar_t *info_uf;
 extern cvar_t *info_bobskip;
 extern cvar_t *cl_shadowlights;
 extern cvar_t *cl_flashlight_torso_sway;
+
+#define RESERVED_ENTITY_GUN 1
+#define RESERVED_ENTITY_TESTMODEL 2
+#define RESERVED_ENTITY_COUNT 3
+
+void CG_View_CalcWeaponPose(vec3_t origin, vec3_t angles,
+                            const player_state_t *ps,
+                            const player_state_t *ops,
+                            bool skip_bob);
 
 #define cl (*cgei->cl)
 #define cls (*cgei->cls)

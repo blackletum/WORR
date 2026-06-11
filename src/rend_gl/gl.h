@@ -211,6 +211,8 @@ typedef enum {
     QGL_CAP_LINE_SMOOTH                 = BIT(12),
     QGL_CAP_BUFFER_TEXTURE              = BIT(13),
     QGL_CAP_SHADER_STORAGE              = BIT(14),
+    QGL_CAP_TIMER_QUERY                 = BIT(15),
+    QGL_CAP_DEBUG_GROUPS                = BIT(16),
     QGL_CAP_SKELETON_MASK               = QGL_CAP_BUFFER_TEXTURE | QGL_CAP_SHADER_STORAGE,
 } glcap_t;
 
@@ -267,9 +269,85 @@ typedef struct {
     int dlightsNotUsed;
     int dlightsUsed;
     int dlightsEntCulled;
+    uint64_t streamedVertexBytes;
+    uint64_t streamedIndexBytes;
+    uint64_t textureUploadBytes;
 } statCounters_t;
 
 extern statCounters_t c;
+
+typedef enum {
+    GL_CPU_PROFILE_FRAME,
+    GL_CPU_PROFILE_MARK_LEAVES,
+    GL_CPU_PROFILE_MARK_LIGHTS,
+    GL_CPU_PROFILE_WORLD_NODE,
+    GL_CPU_PROFILE_DRAW_SOLID_FACES,
+    GL_CPU_PROFILE_PUSH_LIGHTS,
+    GL_CPU_PROFILE_UPLOAD_LIGHTMAPS,
+    GL_CPU_PROFILE_PARTICLES,
+    GL_CPU_PROFILE_BEAMS,
+    GL_CPU_PROFILE_ALIAS_MODELS,
+    GL_CPU_PROFILE_POSTFX,
+    GL_CPU_PROFILE_COUNT
+} glCpuProfileScope_t;
+
+typedef struct {
+    glCpuProfileScope_t scope;
+    uint64_t start_us;
+    bool active;
+} glCpuProfileGuard_t;
+
+typedef enum {
+    GL_GPU_PROFILE_WORLD_OPAQUE,
+    GL_GPU_PROFILE_LIGHTMAP_UPDATE,
+    GL_GPU_PROFILE_EFFECTS,
+    GL_GPU_PROFILE_TRANSPARENT,
+    GL_GPU_PROFILE_POSTFX,
+    GL_GPU_PROFILE_COUNT
+} glGpuProfileScope_t;
+
+typedef struct {
+    glGpuProfileScope_t scope;
+    int slot;
+    bool active;
+} glGpuProfileGuard_t;
+
+typedef struct {
+    bool active;
+} glDebugGroup_t;
+
+typedef struct {
+    statCounters_t counters;
+    unsigned frame_number;
+    int nodes_visible;
+    int total_entities;
+    int total_dlights;
+    int total_particles;
+    bool shaders_used;
+    bool gpu_lerp_used;
+    bool world_static_vbo_used;
+    bool ppl_used;
+    uint64_t cpu_us[GL_CPU_PROFILE_COUNT];
+    uint64_t gpu_ns[GL_GPU_PROFILE_COUNT];
+    uint32_t gpu_available_mask;
+    int gpu_pending;
+    int gpu_missed;
+} glFrameTelemetry_t;
+
+extern glFrameTelemetry_t gl_telemetry;
+
+void GL_ProfileInit(void);
+void GL_ProfileShutdown(void);
+void GL_ProfileBeginFrame(void);
+void GL_ProfileEndFrame(void);
+glCpuProfileGuard_t GL_ProfileCpuBegin(glCpuProfileScope_t scope);
+void GL_ProfileCpuEnd(glCpuProfileGuard_t *guard);
+glGpuProfileGuard_t GL_ProfileGpuBegin(glGpuProfileScope_t scope);
+void GL_ProfileGpuEnd(glGpuProfileGuard_t *guard);
+glDebugGroup_t GL_DebugGroupBegin(const char *name);
+void GL_DebugGroupEnd(glDebugGroup_t *group);
+float GL_ProfileCpuMilliseconds(glCpuProfileScope_t scope);
+float GL_ProfileGpuMilliseconds(glGpuProfileScope_t scope);
 
 // regular variables
 extern cvar_t *gl_partscale;
@@ -815,6 +893,11 @@ enum { SSBO_WEIGHTS, SSBO_JOINTNUMS };
 #define GL_SHADOW_MAX_PAGES 64
 #define GL_SHADOW_MAX_RESOLUTION 1024
 
+// EVSM warp exponent shared by the moment writer (shadow.c) and the receiver
+// (shader.c). Moments are stored as (w, w*w) in RGBA16F, so exp(2*e) must stay
+// below the fp16 max of 65504, which caps e at ~5.54.
+#define GL_SHADOW_EVSM_EXPONENT_GLSL "5.4"
+
 typedef struct {
     vec3_t    position;
     float     radius;
@@ -895,7 +978,7 @@ typedef struct {
 } glShadowPage_t;
 
 typedef struct {
-    vec4_t          params; // x = active pages, y = strength, z/w reserved
+    vec4_t          params; // x = active pages, y = strength, z = filter softness, w = filter family
     vec4_t          sun; // x = first page, y = count, z = bias, w = strength
     glShadowPage_t  pages[GL_SHADOW_MAX_PAGES];
 } glUniformShadowPages_t;

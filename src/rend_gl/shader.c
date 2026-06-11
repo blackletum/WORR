@@ -107,9 +107,10 @@ static void write_dynamic_light_block(sizebuf_t *buf) {
   GLSF("#define DLIGHT_CUTOFF 64\n");
   GLSF("layout(std140) uniform DynamicLights {\n");
   GLSF("#define MAX_DLIGHTS " STRINGIFY(MAX_DLIGHTS) "\n");
-  GLSL(int num_dlights; int dpad_1; int dpad_2; int dpad_3;
+  GLSL(int num_dlights; int receiver_flags; int dpad_2; int dpad_3;
        dlight_t dlights[MAX_DLIGHTS];)
   GLSF("};\n");
+  GLSF("#define RECEIVER_NO_SHADOWS 1\n");
 }
 
 static void write_shadow_page_block(sizebuf_t *buf) {
@@ -172,14 +173,16 @@ static void write_dynamic_lights(sizebuf_t *buf) {
     float penumbra = clamp((receiver - blocker_depth) /
                            max(blocker_depth, 0.01) * 16.0,
                            1.0, 8.0);
+    penumbra = min(penumbra * max(shadow_global.z, 0.25), 16.0);
     return shadow_pcf_depth(page, tc, bias, penumbra);
   })
 
+  GLSF("#define EVSM_EXPONENT " GL_SHADOW_EVSM_EXPONENT_GLSL "\n");
   GLSL(float shadow_moment_factor(int page, vec3 tc, float bias, float filter_mode) {
     float depth = clamp(tc.z - bias, 0.0, 1.0);
     vec2 moments;
     if (filter_mode > 2.5) {
-      const float evsm_exponent = 10.0;
+      const float evsm_exponent = EVSM_EXPONENT;
       depth = exp(min(evsm_exponent * depth, evsm_exponent));
       moments = texture(u_shadowmoments, vec3(tc.xy, float(page))).xy;
     } else {
@@ -196,8 +199,10 @@ static void write_dynamic_lights(sizebuf_t *buf) {
   GLSL(float shadow_sample_page_covered(float page_value, vec3 world_pos,
                                         vec3 normal, out float covered) {
     covered = 0.0;
+    if (page_value < 0.0)
+      return 1.0;
     int page = int(page_value + 0.5);
-    if (page < 0 || page >= int(shadow_global.x))
+    if (page >= int(shadow_global.x))
       return 1.0;
 
     vec3 sample_pos = world_pos + normal * shadow_pages[page].params.w;
@@ -216,7 +221,7 @@ static void write_dynamic_lights(sizebuf_t *buf) {
     if (filter_mode < 0.5) {
       result = shadow_compare_depth(page, tc.xy, tc.z - bias);
     } else if (filter_mode < 1.5) {
-      result = shadow_pcf_depth(page, tc, bias, 1.0);
+      result = shadow_pcf_depth(page, tc, bias, max(shadow_global.z, 0.25));
     } else if (filter_mode < 3.5) {
       result = shadow_moment_factor(page, tc, bias, filter_mode);
     } else {
@@ -244,6 +249,8 @@ static void write_dynamic_lights(sizebuf_t *buf) {
   })
 
   GLSL(float shadow_factor_for_light(int index, vec3 world_pos, vec3 normal) {
+    if ((receiver_flags & RECEIVER_NO_SHADOWS) != 0)
+      return 1.0;
     dlight_t light = dlights[index];
     float kind = light.shadow_pages1.z;
     if (kind < 0.5)
@@ -255,6 +262,8 @@ static void write_dynamic_lights(sizebuf_t *buf) {
   })
 
   GLSL(float shadow_sun_factor(vec3 world_pos, vec3 normal) {
+    if ((receiver_flags & RECEIVER_NO_SHADOWS) != 0)
+      return 1.0;
     if (shadow_sun.x < 0.0 || shadow_sun.y <= 0.0)
       return 1.0;
     float factor = 1.0;
@@ -289,19 +298,27 @@ static void write_dynamic_lights(sizebuf_t *buf) {
       float dist = length(light_dir);
       float radius = dlights[i].radius + DLIGHT_CUTOFF;
       float len = max(radius - dist - DLIGHT_CUTOFF, 0.0) / radius;
+      if (len <= 0.0)
+        continue;
+
       vec3 dir = light_dir / max(dist, 1.0);
       float lambert;
-
-      if (dlights[i].color.r < 0.0)
+      if (dlights[i].color.r < 0.0) {
         lambert = 1.0;
-      else
+      } else {
         lambert = max(dot(normal, dir), 0.0);
+        if (lambert <= 0.0)
+          continue;
+      }
 
       vec3 result = ((dlights[i].color.rgb * dlights[i].color.a) * len) * lambert;
 
       if (dlights[i].cone.w != 0.0) {
         float mag = -dot(dir, dlights[i].cone.xyz);
-        result *= max(1.0 - (1.0 - mag) * (1.0 / (1.0 - dlights[i].cone.w)), 0.0);
+        float spot = max(1.0 - (1.0 - mag) * (1.0 / (1.0 - dlights[i].cone.w)), 0.0);
+        if (spot <= 0.0)
+          continue;
+        result *= spot;
       }
 
       result *= shadow_factor_for_light(i, v_world_pos, normal);
@@ -1522,6 +1539,10 @@ static void shader_load_lights(void) {
       (glr.ppl_dlight_receiver_key & GL_DLIGHT_RECEIVER_WEAPON) != 0;
   const int receiver_owner =
       (int)(glr.ppl_dlight_receiver_key & GL_DLIGHT_RECEIVER_OWNER_MASK);
+  // View weapons do not receive shadow maps: the (invisible) first-person
+  // body occludes the gun from most light directions, so sampling the pages
+  // there only produces unstable self-shadowing.
+  gls.u_dlights.pad[0] = weapon_receiver ? 1 : 0;
   GLuint shadow_tex = GL_Shadow_DepthTexture();
   if (shadow_tex)
     GL_BindTexture(TMU_SHADOW, shadow_tex);

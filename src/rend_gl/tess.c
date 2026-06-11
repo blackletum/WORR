@@ -58,6 +58,8 @@ void GL_Flush2D(void)
 
 void GL_DrawParticles(void)
 {
+    glCpuProfileGuard_t cpu = GL_ProfileCpuBegin(GL_CPU_PROFILE_PARTICLES);
+    glDebugGroup_t debug_group = GL_DebugGroupBegin("particles");
     const particle_t *p;
     int total, count;
     vec3_t transformed;
@@ -67,8 +69,11 @@ void GL_DrawParticles(void)
     vec_t *dst_vert;
     glStateBits_t bits;
 
-    if (!glr.fd.num_particles)
+    if (!glr.fd.num_particles) {
+        GL_DebugGroupEnd(&debug_group);
+        GL_ProfileCpuEnd(&cpu);
         return;
+    }
 
     GL_LoadMatrix(gl_identity, glr.viewmatrix);
     GL_LoadUniforms();
@@ -129,6 +134,8 @@ void GL_DrawParticles(void)
 
         GL_UnlockArrays();
     } while (total);
+    GL_DebugGroupEnd(&debug_group);
+    GL_ProfileCpuEnd(&cpu);
 }
 
 static void GL_FlushBeamSegments(void)
@@ -307,13 +314,18 @@ static void GL_DrawLightningBeam(const vec3_t start, const vec3_t end, color_t c
 
 void GL_DrawBeams(void)
 {
+    glCpuProfileGuard_t cpu = GL_ProfileCpuBegin(GL_CPU_PROFILE_BEAMS);
+    glDebugGroup_t debug_group = GL_DebugGroupBegin("beams");
     vec3_t segs[2];
     color_t color;
     float width, scale;
     const entity_t *ent;
 
-    if (!glr.ents.beams)
+    if (!glr.ents.beams) {
+        GL_DebugGroupEnd(&debug_group);
+        GL_ProfileCpuEnd(&cpu);
         return;
+    }
 
     GL_LoadMatrix(gl_identity, glr.viewmatrix);
 
@@ -346,6 +358,8 @@ void GL_DrawBeams(void)
     }
 
     GL_FlushBeamSegments();
+    GL_DebugGroupEnd(&debug_group);
+    GL_ProfileCpuEnd(&cpu);
 }
 
 static void GL_FlushFlares(void)
@@ -570,8 +584,10 @@ void GL_LockArrays(GLsizei count)
             qglLockArraysEXT(0, count);
     } else {
         const glVaDesc_t *desc = &arraydescs[gls.currentva][VERT_ATTR_POS];
+        GLsizeiptr bytes = count * desc->stride;
         GL_BindBuffer(GL_ARRAY_BUFFER, gl_static.vertex_buffer);
-        qglBufferData(GL_ARRAY_BUFFER, count * desc->stride, tess.vertices, GL_STREAM_DRAW);
+        qglBufferData(GL_ARRAY_BUFFER, bytes, tess.vertices, GL_STREAM_DRAW);
+        c.streamedVertexBytes += (uint64_t)bytes;
     }
 }
 
@@ -602,7 +618,9 @@ void GL_DrawIndexed(showtris_t showtris)
         GL_BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     } else {
         GL_BindBuffer(GL_ELEMENT_ARRAY_BUFFER, gl_static.index_buffer);
-        qglBufferData(GL_ELEMENT_ARRAY_BUFFER, tess.numindices * sizeof(indices[0]), indices, GL_STREAM_DRAW);
+        GLsizeiptr bytes = tess.numindices * sizeof(indices[0]);
+        qglBufferData(GL_ELEMENT_ARRAY_BUFFER, bytes, indices, GL_STREAM_DRAW);
+        c.streamedIndexBytes += (uint64_t)bytes;
         indices = NULL;
     }
 
@@ -826,6 +844,8 @@ void GL_ClearSolidFaces(void)
 
 void GL_DrawSolidFaces(void)
 {
+    glCpuProfileGuard_t cpu =
+        GL_ProfileCpuBegin(GL_CPU_PROFILE_DRAW_SOLID_FACES);
     tess.dlight_bits = 0;
 
     for (int i = 0; i < FACE_HASH_SIZE; i++) {
@@ -833,6 +853,7 @@ void GL_DrawSolidFaces(void)
             GL_DrawFace(face);
         faces_head[i] = NULL;
     }
+    GL_ProfileCpuEnd(&cpu);
 }
 
 static bool GL_AlphaFacesNeedRefraction(const mface_t *face)

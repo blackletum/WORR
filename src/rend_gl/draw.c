@@ -367,6 +367,7 @@ bool R_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic)
     GL_ForceTexture(TMU_TEXTURE, image->texnum);
     qglTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pic);
     c.texUploads++;
+    c.textureUploadBytes += (uint64_t)width * (uint64_t)height * 4ULL;
     return true;
 }
 

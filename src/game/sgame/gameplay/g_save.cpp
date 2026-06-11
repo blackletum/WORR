@@ -20,6 +20,9 @@ function pointers and entity pointers by converting them to names or ID numbers.
 #include "../g_local.hpp"
 #include "g_clients.hpp"
 #include "g_save_metadata.hpp"
+
+#include <string_view>
+#include <unordered_map>
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma GCC diagnostic ignored "-Weverything"
@@ -673,8 +676,8 @@ FIELD_AUTO(mapName),
 FIELD_AUTO(nextMap),
 
 FIELD_AUTO(intermission.time),
-FIELD_LEVEL_STRING(changeMap),
-FIELD_LEVEL_STRING(achievement),
+FIELD_AUTO(changeMap),
+FIELD_AUTO(achievement),
 FIELD_AUTO(intermission.postIntermission),
 FIELD_AUTO(intermission.clear),
 FIELD_AUTO(intermission.origin),
@@ -1539,12 +1542,16 @@ static void read_save_type_json(const Json::Value& json, void* data, const save_
 				for (Json::Value::ArrayIndex i = 0; i < json.size(); i++) {
 					const Json::Value& chr = json[i];
 
-					if (!chr.isInt())
+					if (!chr.isInt()) {
 						json_print_error(field, "expected number", false);
-					else if (chr.asInt() < 0 || chr.asInt() > UINT8_MAX)
+						str[i] = '?';
+					}
+					else if (chr.asInt() < 0 || chr.asInt() > UINT8_MAX) {
 						json_print_error(field, "char out of range", false);
-
-					str[i] = chr.asInt();
+						str[i] = '?';
+					}
+					else
+						str[i] = chr.asInt();
 				}
 
 				str[len] = 0;
@@ -1569,12 +1576,16 @@ static void read_save_type_json(const Json::Value& json, void* data, const save_
 				for (i = 0; i < json.size(); i++) {
 					const Json::Value& chr = json[i];
 
-					if (!chr.isInt())
+					if (!chr.isInt()) {
 						json_print_error(field, "expected number", false);
-					else if (chr.asInt() < 0 || chr.asInt() > UINT8_MAX)
+						((char*)data)[i] = '?';
+					}
+					else if (chr.asInt() < 0 || chr.asInt() > UINT8_MAX) {
 						json_print_error(field, "char out of range", false);
-
-					((char*)data)[i] = chr.asInt();
+						((char*)data)[i] = '?';
+					}
+					else
+						((char*)data)[i] = chr.asInt();
 				}
 
 				((char*)data)[i] = 0;
@@ -1793,14 +1804,18 @@ static void read_save_type_json(const Json::Value& json, void* data, const save_
 					continue;
 				}
 
-				if (!value["mins"].isArray() || value["mins"].size() != 3) {
+				const auto is_int_vec3 = [](const Json::Value& v) {
+					return v.isArray() && v.size() == 3 && v[0].isInt() && v[1].isInt() && v[2].isInt();
+				};
+
+				if (!is_int_vec3(value["mins"])) {
 					json_push_stack(fmt::format("{}.mins", i));
 					json_print_error(field, "expected array[3]", false);
 					json_pop_stack();
 					continue;
 				}
 
-				if (!value["maxs"].isArray() || value["maxs"].size() != 3) {
+				if (!is_int_vec3(value["maxs"])) {
 					json_push_stack(fmt::format("{}.maxs", i));
 					json_print_error(field, "expected array[3]", false);
 					json_pop_stack();
@@ -1845,8 +1860,8 @@ bool write_save_struct_json(const void* data, const save_struct_t* structure, bo
 #define TYPED_DATA_IS_EMPTY(type, expr) (type->is_empty ? type->is_empty(data) : (expr))
 
 static inline bool string_is_high(const char* c) {
-	for (size_t i = 0; i < strlen(c); i++)
-		if (c[i] & 128)
+	for (; *c; c++)
+		if (*c & 128)
 			return true;
 
 	return false;
@@ -1855,8 +1870,8 @@ static inline bool string_is_high(const char* c) {
 static inline Json::Value string_to_bytes(const char* c) {
 	Json::Value array(Json::arrayValue);
 
-	for (size_t i = 0; i < strlen(c); i++)
-		array.append((int32_t)(unsigned char)c[i]);
+	for (; *c; c++)
+		array.append((int32_t)(unsigned char)*c);
 
 	return array;
 }
@@ -2318,6 +2333,25 @@ bool write_save_struct_json(const void* data, const save_struct_t* structure, bo
 	return true;
 }
 
+// lazily built per-struct field lookup; avoids a linear name scan
+// per JSON member, which adds up over thousands of entities on load.
+static const save_field_t* find_save_field(const save_struct_t* structure, const char* key) {
+	static std::unordered_map<const save_struct_t*, std::unordered_map<std::string_view, const save_field_t*>> cache;
+
+	auto& fields = cache[structure];
+
+	if (fields.empty()) {
+		fields.reserve(structure->fields.size());
+
+		for (const save_field_t& field : structure->fields)
+			if (field.name)
+				fields.emplace(field.name, &field);
+	}
+
+	const auto it = fields.find(key);
+	return it == fields.end() ? nullptr : it->second;
+}
+
 // read the specified data+structure from the JSON object
 // referred to by `json`.
 void read_save_struct_json(const Json::Value& json, void* data, const save_struct_t* structure) {
@@ -2330,11 +2364,9 @@ void read_save_struct_json(const Json::Value& json, void* data, const save_struc
 		const char* dummy;
 		const char* key = it.memberName(&dummy);
 		const Json::Value& value = *it;
-		const auto field = std::find_if(structure->fields.begin(), structure->fields.end(), [key](const save_field_t& candidate) {
-			return candidate.name && strcmp(key, candidate.name) == 0;
-			});
+		const save_field_t* field = find_save_field(structure, key);
 
-		if (field == structure->fields.end()) {
+		if (!field) {
 			json_print_error(key, "unknown field", false);
 			continue;
 		}
@@ -2349,13 +2381,13 @@ void read_save_struct_json(const Json::Value& json, void* data, const save_struc
 #include <cstring>
 
 static Json::Value parseJson(const char* jsonString) {
-	Json::CharReaderBuilder reader;
-	reader["allowSpecialFloats"] = true;
+	Json::CharReaderBuilder builder;
+	builder["allowSpecialFloats"] = true;
+	const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
 	Json::Value		  json;
 	JSONCPP_STRING	  errs;
-	std::stringstream ss(jsonString, std::ios_base::in | std::ios_base::binary);
 
-	if (!Json::parseFromStream(reader, ss, &json, &errs))
+	if (!reader->parse(jsonString, jsonString + strlen(jsonString), &json, &errs))
 		gi.Com_ErrorFmt("Couldn't decode JSON: {}", errs.c_str());
 
 	if (!json.isObject())
@@ -2363,64 +2395,6 @@ static Json::Value parseJson(const char* jsonString) {
 
 	return json;
 }
-
-class CountingStreamBuf : public std::streambuf {
-public:
-	CountingStreamBuf() : count(0) {}
-
-	size_t Count() const {
-		return count;
-	}
-
-protected:
-	std::streamsize xsputn(const char* s, std::streamsize n) override {
-		count += static_cast<size_t>(n);
-		return n;
-	}
-
-	int overflow(int ch) override {
-		if (ch != traits_type::eof()) {
-			++count;
-			return ch;
-		}
-
-		return traits_type::eof();
-	}
-
-private:
-	size_t count;
-};
-
-class FixedBufferStreamBuf : public std::streambuf {
-public:
-	FixedBufferStreamBuf(char* buffer, size_t size) {
-		setp(buffer, buffer + size);
-	}
-
-	size_t Written() const {
-		return static_cast<size_t>(pptr() - pbase());
-	}
-
-protected:
-	std::streamsize xsputn(const char* s, std::streamsize n) override {
-		if (pptr() + n > epptr())
-			n = epptr() - pptr();
-
-		memcpy(pptr(), s, static_cast<size_t>(n));
-		pbump(static_cast<int>(n));
-		return n;
-	}
-
-	int overflow(int ch) override {
-		if (ch != traits_type::eof() && pptr() < epptr()) {
-			*pptr() = static_cast<char>(ch);
-			pbump(1);
-			return ch;
-		}
-
-		return traits_type::eof();
-	}
-};
 
 /*
 =============
@@ -2431,20 +2405,12 @@ static char* saveJson(const Json::Value& json, size_t* out_size) {
 	Json::StreamWriterBuilder builder;
 	builder["indentation"] = "\t";
 	builder["useSpecialFloats"] = true;
-	const std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
 
-	CountingStreamBuf counting_buf;
-	std::ostream counting_stream(&counting_buf);
-	writer->write(json, &counting_stream);
+	const std::string serialized = Json::writeString(builder, json);
 
-	*out_size = counting_buf.Count();
+	*out_size = serialized.size();
 	char* const out = static_cast<char*>(gi.TagMalloc(*out_size + 1, TAG_GAME));
-
-	FixedBufferStreamBuf buffer(out, *out_size);
-	std::ostream output_stream(&buffer);
-	writer->write(json, &output_stream);
-
-	*out_size = buffer.Written();
+	memcpy(out, serialized.data(), *out_size);
 	out[*out_size] = '\0';
 	return out;
 }
@@ -2601,7 +2567,11 @@ void ReadLevelJson(const char* jsonString) {
 		const char* dummy;
 		const char* id = it.memberName(&dummy);
 		const Json::Value& value = *it;//json[key];
-		uint32_t		   number = strtoul(id, nullptr, 10);
+		char* end = nullptr;
+		unsigned long	   number = strtoul(id, &end, 10);
+
+		if (end == id || *end != '\0' || number >= game.maxEntities)
+			gi.Com_ErrorFmt("bad entity number \"{}\" in level save", id);
 
 		if (number >= globals.numEntities)
 			globals.numEntities = number + 1;

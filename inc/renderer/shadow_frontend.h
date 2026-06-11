@@ -194,6 +194,7 @@ typedef struct {
     float slope_bias;
     float normal_offset;
     float bias_scale;
+    float softness;
     float sun_distance;
     float sun_size;
     vec3_t sun_direction;
@@ -213,6 +214,7 @@ typedef struct {
     cvar_t *bias_slope;
     cvar_t *normal_offset;
     cvar_t *bias_scale;
+    cvar_t *softness;
     cvar_t *debug_light;
     cvar_t *debug_draw;
     cvar_t *freeze_selection;
@@ -236,6 +238,7 @@ typedef struct {
     cvar_t *alias_bias_slope;
     cvar_t *alias_normal_offset;
     cvar_t *alias_bias_scale;
+    cvar_t *alias_softness;
     cvar_t *alias_debug_light;
     cvar_t *alias_debug_draw;
     cvar_t *alias_freeze_selection;
@@ -329,6 +332,12 @@ typedef struct {
     uint32_t frozen_owner_ids[SHADOW_FRONTEND_MAX_LIGHTS];
     int frozen_selected_light_count;
     bool frozen_selection_valid;
+
+    // Stable identities of last frame's selected lights, used to apply a
+    // selection hysteresis boost so shadows do not pop in and out as the
+    // camera moves across the score boundary.
+    uint32_t prev_selected_ids[SHADOW_FRONTEND_MAX_LIGHTS];
+    int prev_selected_id_count;
 
     shadow_resident_view_t resident[SHADOW_FRONTEND_MAX_RESIDENT_PAGES];
     uint32_t next_page_generation;

@@ -22,6 +22,13 @@ Copyright (C) 2026
 #define VK_SHADOW_CONE_NORMAL_OFFSET 0.05f
 #define VK_SHADOW_CONE_DEPTH_BIAS 0.25f
 
+// EVSM warp exponent shared by the moment pass (push constant) and the world
+// receiver (shadow_moment_tuning UBO member). Moments are stored as (w, w*w)
+// in a 16-bit float format, so exp(2*e) must stay below the fp16 max of
+// 65504, which caps e at ~5.54.
+#define VK_SHADOW_EVSM_EXPONENT 5.4f
+#define VK_SHADOW_MOMENT_MIN_VARIANCE 0.00002f
+
 typedef struct {
     float pos[3];
     float uv[2];
@@ -37,7 +44,8 @@ typedef struct {
 typedef struct {
     renderer_view_push_t view;
     float filter;
-    float pad[3];
+    float evsm_exponent;
+    float pad[2];
 } vk_shadow_push_t;
 
 typedef struct {
@@ -66,6 +74,9 @@ typedef struct {
 typedef struct {
     float global[4];
     float sun[4];
+    // x = VSM/EVSM minimum variance, y = EVSM warp exponent. Must match the
+    // ShadowPages block in src/rend_vk/shaders/vk_world_shadow.frag.
+    float moment_tuning[4];
     float dlight_count[4];
     vk_shadow_uniform_page_t pages[VK_SHADOW_MAX_PAGES];
     vk_shadow_uniform_dlight_t dlights[MAX_DLIGHTS];
@@ -84,6 +95,7 @@ typedef struct {
     bool frame_active;
     bool resources_ok;
     bool reallocated_this_frame;
+    bool reallocated_last_frame;
     bool layout_initialized;
 
     VkFormat depth_format;
@@ -92,6 +104,7 @@ typedef struct {
     VkDeviceMemory memory;
     VkImageView array_view;
     VkSampler sampler;
+    VkSampler compare_sampler;
     VkImage moment_image;
     VkDeviceMemory moment_memory;
     VkImageView moment_array_view;
@@ -136,6 +149,28 @@ typedef struct {
 } vk_shadow_state_t;
 
 static vk_shadow_state_t vk_shadow;
+
+typedef struct {
+    vec3_t mins;
+    vec3_t maxs;
+} vk_shadow_face_bounds_t;
+
+// World face bounds are immutable per map; caching them avoids walking every
+// face's surfedges again for every shadow view every frame.
+typedef struct {
+    const bsp_t *bsp;
+    uint32_t checksum;
+    int numfaces;
+    vk_shadow_face_bounds_t *bounds;
+} vk_shadow_world_cache_t;
+
+static vk_shadow_world_cache_t vk_shadow_world_cache;
+
+static void VK_Shadow_FreeWorldCache(void)
+{
+    free(vk_shadow_world_cache.bounds);
+    memset(&vk_shadow_world_cache, 0, sizeof(vk_shadow_world_cache));
+}
 
 static float VK_Shadow_ViewReceiverBias(const shadow_view_desc_t *view)
 {
@@ -487,7 +522,7 @@ static void VK_Shadow_DestroyDescriptors(void)
 static bool VK_Shadow_CreateDescriptors(void)
 {
     VkDevice device = vk_shadow.ctx->device;
-    VkDescriptorSetLayoutBinding bindings[3] = {
+    VkDescriptorSetLayoutBinding bindings[4] = {
         {
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -502,6 +537,12 @@ static bool VK_Shadow_CreateDescriptors(void)
         },
         {
             .binding = 2,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        },
+        {
+            .binding = 3,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -522,7 +563,7 @@ static bool VK_Shadow_CreateDescriptors(void)
     VkDescriptorPoolSize pool_sizes[2] = {
         {
             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 2,
+            .descriptorCount = 3,
         },
         {
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -560,12 +601,18 @@ static bool VK_Shadow_CreateDescriptors(void)
 static void VK_Shadow_UpdateDescriptorSet(void)
 {
     if (!vk_shadow.descriptor_set || !vk_shadow.sampler ||
-        !vk_shadow.array_view || !vk_shadow.uniform_buffer) {
+        !vk_shadow.compare_sampler || !vk_shadow.array_view ||
+        !vk_shadow.uniform_buffer) {
         return;
     }
 
     VkDescriptorImageInfo image_info = {
         .sampler = vk_shadow.sampler,
+        .imageView = vk_shadow.array_view,
+        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+    };
+    VkDescriptorImageInfo compare_info = {
+        .sampler = vk_shadow.compare_sampler,
         .imageView = vk_shadow.array_view,
         .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
     };
@@ -583,7 +630,7 @@ static void VK_Shadow_UpdateDescriptorSet(void)
         .offset = 0,
         .range = sizeof(vk_shadow.uniform),
     };
-    VkWriteDescriptorSet writes[3] = {
+    VkWriteDescriptorSet writes[4] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = vk_shadow.descriptor_set,
@@ -607,6 +654,14 @@ static void VK_Shadow_UpdateDescriptorSet(void)
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &moment_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = vk_shadow.descriptor_set,
+            .dstBinding = 3,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &compare_info,
         },
     };
     vkUpdateDescriptorSets(vk_shadow.ctx->device, q_countof(writes), writes,
@@ -723,6 +778,10 @@ static void VK_Shadow_DestroyResources(void)
     if (vk_shadow.sampler) {
         vkDestroySampler(device, vk_shadow.sampler, NULL);
         vk_shadow.sampler = VK_NULL_HANDLE;
+    }
+    if (vk_shadow.compare_sampler) {
+        vkDestroySampler(device, vk_shadow.compare_sampler, NULL);
+        vk_shadow.compare_sampler = VK_NULL_HANDLE;
     }
     if (vk_shadow.moment_sampler) {
         vkDestroySampler(device, vk_shadow.moment_sampler, NULL);
@@ -1111,6 +1170,16 @@ static bool VK_Shadow_EnsureResources(int requested_resolution,
         return false;
     }
 
+    VkSamplerCreateInfo compare_sampler_info = sampler_info;
+    compare_sampler_info.compareEnable = VK_TRUE;
+    compare_sampler_info.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    if (!VK_Shadow_Check(vkCreateSampler(device, &compare_sampler_info, NULL,
+                                         &vk_shadow.compare_sampler),
+                         "vkCreateSampler(shadow compare sampler)")) {
+        VK_Shadow_DestroyResources();
+        return false;
+    }
+
     if (storage == SHADOW_STORAGE_MOMENT) {
         VkImageCreateInfo moment_image_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1385,10 +1454,56 @@ static bool VK_Shadow_ViewTouchesBounds(const shadow_view_desc_t *view,
            up <= forward * tan_y + radius;
 }
 
+static const vk_shadow_face_bounds_t *VK_Shadow_WorldFaceBounds(const bsp_t *bsp)
+{
+    if (vk_shadow_world_cache.bounds && vk_shadow_world_cache.bsp == bsp &&
+        vk_shadow_world_cache.checksum == bsp->checksum &&
+        vk_shadow_world_cache.numfaces == bsp->numfaces) {
+        return vk_shadow_world_cache.bounds;
+    }
+
+    VK_Shadow_FreeWorldCache();
+    if (!bsp || bsp->numfaces <= 0) {
+        return NULL;
+    }
+
+    vk_shadow_face_bounds_t *bounds =
+        malloc(sizeof(*bounds) * (size_t)bsp->numfaces);
+    if (!bounds) {
+        return NULL;
+    }
+    for (int i = 0; i < bsp->numfaces; i++) {
+        const mface_t *face = &bsp->faces[i];
+        ClearBounds(bounds[i].mins, bounds[i].maxs);
+        if (!face->firstsurfedge) {
+            continue;
+        }
+        for (int j = 0; j < face->numsurfedges; j++) {
+            const mvertex_t *v = VK_Shadow_SurfEdgeVertex(bsp,
+                                                          &face->firstsurfedge[j]);
+            if (v) {
+                VK_Shadow_AddPointToBounds(v->point, bounds[i].mins,
+                                           bounds[i].maxs);
+            }
+        }
+    }
+
+    vk_shadow_world_cache.bsp = bsp;
+    vk_shadow_world_cache.checksum = bsp->checksum;
+    vk_shadow_world_cache.numfaces = bsp->numfaces;
+    vk_shadow_world_cache.bounds = bounds;
+    return bounds;
+}
+
 static bool VK_Shadow_AddWorldDepth(const shadow_view_desc_t *view)
 {
     const bsp_t *bsp = VK_World_GetBsp();
     if (!bsp || !bsp->faces || !bsp->edges || !bsp->vertices) {
+        return true;
+    }
+
+    const vk_shadow_face_bounds_t *bounds = VK_Shadow_WorldFaceBounds(bsp);
+    if (!bounds) {
         return true;
     }
 
@@ -1406,17 +1521,9 @@ static bool VK_Shadow_AddWorldDepth(const shadow_view_desc_t *view)
         if (!v0) {
             continue;
         }
-        vec3_t mins, maxs;
-        ClearBounds(mins, maxs);
-        for (int j = 0; j < face->numsurfedges; j++) {
-            const mvertex_t *v = VK_Shadow_SurfEdgeVertex(bsp,
-                                                          &face->firstsurfedge[j]);
-            if (v) {
-                VK_Shadow_AddPointToBounds(v->point, mins, maxs);
-            }
-        }
         vk_shadow.world_faces_considered++;
-        if (view && !VK_Shadow_ViewTouchesBounds(view, mins, maxs)) {
+        if (view && !VK_Shadow_ViewTouchesBounds(view, bounds[i].mins,
+                                                 bounds[i].maxs)) {
             continue;
         }
         vk_shadow.world_faces_submitted++;
@@ -1591,6 +1698,7 @@ void VK_Shadow_Shutdown(vk_context_t *ctx)
     if (vk_shadow.ctx && vk_shadow.ctx->device) {
         vkDeviceWaitIdle(vk_shadow.ctx->device);
     }
+    VK_Shadow_FreeWorldCache();
     VK_Shadow_DestroyResources();
     VK_Shadow_DestroyVertexBuffer();
     VK_Shadow_DestroyUniformBuffer();
@@ -1670,6 +1778,10 @@ void VK_Shadow_BeginFrame(void *userdata,
 {
     (void)userdata;
     vk_shadow.frame_active = policy && policy->enabled;
+    // Pages rendered before a mid-frame reallocation were destroyed with the
+    // old image while their resident entries stayed clean; keep reporting
+    // "allocated" for one extra frame so every view re-renders once.
+    vk_shadow.reallocated_last_frame = vk_shadow.reallocated_this_frame;
     vk_shadow.reallocated_this_frame = false;
     vk_shadow.policy = policy ? *policy : (shadow_frontend_policy_t){0};
     vk_shadow.vertex_count = 0;
@@ -1681,6 +1793,8 @@ void VK_Shadow_BeginFrame(void *userdata,
     memset(&vk_shadow.uniform, 0, sizeof(vk_shadow.uniform));
     vk_shadow.uniform.global[1] = VK_SHADOW_DEFAULT_STRENGTH;
     vk_shadow.uniform.sun[0] = -1.0f;
+    vk_shadow.uniform.moment_tuning[0] = VK_SHADOW_MOMENT_MIN_VARIANCE;
+    vk_shadow.uniform.moment_tuning[1] = VK_SHADOW_EVSM_EXPONENT;
     for (int i = 0; i < MAX_DLIGHTS; i++) {
         for (int j = 0; j < SHADOW_FRONTEND_POINT_FACES; j++) {
             vk_shadow.lights[i].pages[j] = -1;
@@ -1703,7 +1817,8 @@ bool VK_Shadow_EnsurePage(void *userdata, const shadow_view_desc_t *view)
         return false;
     }
     VK_Shadow_RegisterView(view);
-    return allocated || vk_shadow.reallocated_this_frame;
+    return allocated || vk_shadow.reallocated_this_frame ||
+           vk_shadow.reallocated_last_frame;
 }
 
 bool VK_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
@@ -1726,6 +1841,7 @@ bool VK_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
     job->storage_family = view->storage_family;
     VK_Shadow_BuildPush(view, &job->push.view);
     job->push.filter = (float)view->filter_family;
+    job->push.evsm_exponent = VK_SHADOW_EVSM_EXPONENT;
 
     if (!VK_Shadow_AddWorldDepth(view)) {
         return false;
@@ -1735,16 +1851,23 @@ bool VK_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
         if (caster_index < 0 || !casters) {
             continue;
         }
+        const shadow_caster_t *caster = &casters[caster_index];
+        // The frontend culls casters per light; cube faces of a point light
+        // would otherwise re-skin and re-submit every caster six times.
+        if (!VK_Shadow_ViewTouchesBounds(view, caster->bounds[0],
+                                         caster->bounds[1])) {
+            continue;
+        }
         const bsp_t *world_bsp = VK_World_GetBsp();
         uint32_t caster_first_vertex = vk_shadow.vertex_count;
-        if (!VK_Entity_EmitShadowCaster(&casters[caster_index].entity, NULL,
+        if (!VK_Entity_EmitShadowCaster(&caster->entity, NULL,
                                         world_bsp,
                                         VK_Shadow_EmitCasterTriangle, NULL)) {
             return false;
         }
         if (vk_shadow.vertex_count == caster_first_vertex &&
-            (casters[caster_index].flags & RF_CASTSHADOW) &&
-            !VK_Shadow_EmitBoundsCaster(&casters[caster_index])) {
+            (caster->flags & RF_CASTSHADOW) &&
+            !VK_Shadow_EmitBoundsCaster(caster)) {
             return false;
         }
     }
@@ -1762,7 +1885,7 @@ void VK_Shadow_EndFrame(void *userdata,
         vk_shadow.uniform.global[0] = (float)(vk_shadow.max_active_page + 1);
         vk_shadow.uniform.global[1] = VK_SHADOW_DEFAULT_STRENGTH;
         vk_shadow.uniform.global[2] =
-            vk_shadow.storage_family == SHADOW_STORAGE_MOMENT ? 1.0f : 0.0f;
+            Q_clipf(vk_shadow.policy.softness, 0.25f, 4.0f);
         vk_shadow.uniform.global[3] = (float)vk_shadow.policy.filter_family;
     } else {
         vk_shadow.uniform.global[0] = 0.0f;
@@ -2036,11 +2159,16 @@ void VK_Shadow_Record(VkCommandBuffer cmd)
                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
     }
 
+    // Unlike the swapchain passes, shadow pages must NOT use the negated
+    // viewport trick: the receiver reconstructs uv as ndc * 0.5 + 0.5, which
+    // matches GL's window/texel mapping (ndc.y = -1 -> texel row 0). A
+    // negative-height viewport would mirror every page vertically relative
+    // to that lookup.
     VkViewport viewport = {
         .x = 0.0f,
-        .y = (float)vk_shadow.resolution,
+        .y = 0.0f,
         .width = (float)vk_shadow.resolution,
-        .height = -(float)vk_shadow.resolution,
+        .height = (float)vk_shadow.resolution,
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };

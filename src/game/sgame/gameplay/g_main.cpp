@@ -1811,6 +1811,14 @@ void ExitLevel(bool forceImmediate) {
     return;
   }
 
+  // changeMap originates from entity data; quotes, separators or control
+  // characters would escape the quoted console command built below.
+  if (level.changeMap.find_first_of("\";\r\n") != std::string::npos) {
+    gi.Com_ErrorFmt("Refusing level change to invalid map name \"{}\"",
+                    level.changeMap);
+    return;
+  }
+
   // N64 fade delay before actual exit
   if (level.intermission.fade) {
     level.intermission.fadeTime = level.time + 1.3_sec;
