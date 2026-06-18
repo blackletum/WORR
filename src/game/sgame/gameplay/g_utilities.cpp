@@ -569,8 +569,6 @@ THINK(FreeEntity)(gentity_t *ed)->void {
   }
   // gi.Com_PrintFmt("{}: removing {}\n", __FUNCTION__, *ed);
 
-  gi.Bot_UnRegisterEntity(ed);
-
   int32_t id = ed->spawn_count + 1;
   memset(static_cast<void *>(ed), 0, sizeof(*ed));
   ed->s.number = ed - g_entities;

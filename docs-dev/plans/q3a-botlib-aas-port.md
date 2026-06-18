@@ -35,10 +35,12 @@ Required external tool baseline:
 
 Current WORR bot surface:
 
-- `src/game/sgame/bots/bot_think.cpp` keeps `Bot_BeginFrame` and `Bot_EndFrame` as AAS-gated lifecycle stubs and now exposes an AAS route-steered `Bot_BuildFrameCommand()` path for server-owned bot `usercmd_t` dispatch.
-- `src/game/sgame/bots/bot_exports.cpp` already exposes bot action helpers for weapon selection, item use, trigger use, forced look direction, and pickup checks.
-- `src/game/sgame/bots/bot_utils.cpp` already builds useful bot-facing entity state and registers players, monsters, items, traps, and movers through the game import API.
-- `src/game/sgame/bots/bot_debug.cpp` already exercises engine-side navigation/debug imports through `Bot_MoveToPoint`, `Bot_FollowActor`, `GetPathToGoal`, and debug drawing.
+- The inherited Quake II Rerelease `bot_debug.*`, `bot_exports.*`, and `bot_utils.*` surface has been removed from `src/game/sgame/bots/` because it targets a different engine-side bot system.
+- `src/game/sgame/bots/bot_runtime.*` owns the WORR BotLib/AAS lifecycle, public `sg_bot_*` cvars, active-map AAS setup, and frame-level entity sync.
+- `src/game/sgame/bots/botlib_adapter.*` owns the narrow bridge to imported Q3A BotLib/AAS code.
+- `src/game/sgame/bots/bot_nav.*` owns AAS route lookup, cached route state, persistent route goals, command steering data, and native route/goal debug overlays.
+- `src/game/sgame/bots/bot_think.*` keeps `Bot_BeginFrame` and `Bot_EndFrame` as AAS-gated lifecycle hooks and exposes the AAS route-steered `Bot_BuildFrameCommand()` path for server-owned bot `usercmd_t` dispatch.
+- The old Q2R game-export bot callbacks are explicitly unavailable from `sgame`; future weapon, item, trigger, and use behavior must land in a new WORR bot action layer above the BotLib/AAS path. `Entity_ForceLookAtPoint` remains as a standalone helper exported outside the removed bot surface.
 - `src/game/sgame/client/client_session_service_impl.cpp` already marks bot clients with `SVF_BOT` and calls `Bot_BeginFrame`.
 - `src/game/sgame/player/p_view.cpp` already calls `Bot_EndFrame`.
 
@@ -101,7 +103,7 @@ Target source layout, subject to adjustment during implementation:
 - `src/game/sgame/bots/q3a/`: imported or lightly wrapped Q3A BotLib runtime code, kept behind C-compatible adapter boundaries.
 - `src/game/sgame/bots/bot_runtime.*`: WORR-native BotLib/AAS runtime shell, cvar registration, active-map AAS load probe, and lifecycle/status surface.
 - `src/game/sgame/bots/botlib_adapter.*`: WORR import table, map load/unload, entity sync, trace/PVS/FS/memory/debug bridging.
-- `src/game/sgame/bots/bot_brain.*`: WORR-native bot lifecycle, per-frame scheduling, goal selection, and usercmd generation.
+- `src/game/sgame/bots/bot_brain.*`: WORR-native high-level frame command/status ownership, future per-frame scheduling, goal selection, and usercmd generation.
 - `src/game/sgame/bots/bot_nav.*`: AAS area lookup, route requests, movement steering, stuck recovery, and debug overlays.
 - `src/game/sgame/bots/bot_combat.*`: weapon selection, aim, reaction, projectile prediction, ammo/resource use.
 - `src/game/sgame/bots/bot_team.*`: TDM/CTF/duel/match role logic.
@@ -167,6 +169,34 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-nav-reachability-debug-2026-06-17.md`: live current-area and next-reachability travel metadata in cached route overlay labels and dedicated frame-command smoke status.
 - `docs-dev/q3a-botlib-nav-polyline-debug-2026-06-17.md`: bounded cached route-point polyline drawing and headless polyline counters for live bot route debug.
 - `docs-dev/q3a-botlib-nav-debug-client-filter-2026-06-17.md`: `sg_bot_debug_client` selected-client filtering for cached route/goal debug overlays and headless filter counters.
+- `docs-dev/q3a-botlib-nav-persistent-goal-2026-06-18.md`: native persistent route-goal ownership, preferred-goal refresh requests, and headless goal counters.
+- `docs-dev/q3a-botlib-legacy-bot-surface-removal-2026-06-18.md`: removal of inherited Q2R `sgame/bots` debug/export/entity-state files and replacement boundary notes for the WORR/Q3A BotLib path.
+- `docs-dev/q3a-botlib-nav-item-goal-2026-06-18.md`: first native active-pickup route-goal selection, item-goal persistence metadata, and headless item-goal counters.
+- `docs-dev/q3a-botlib-nav-item-reservation-2026-06-18.md`: first native item reservation policy, two-bot frame-command smoke, and reservation counters.
+- `docs-dev/q3a-botlib-nav-lookahead-steering-2026-06-18.md`: first route-point look-ahead steering in bot frame commands and headless look-ahead counters.
+- `docs-dev/q3a-botlib-nav-velocity-steering-2026-06-18.md`: first velocity-aware command yaw adjustment and headless velocity-lead counters.
+- `docs-dev/q3a-botlib-nav-stuck-repath-2026-06-18.md`: first stuck-progress watchdog, forced repath refresh reason, and stalled-command smoke.
+- `docs-dev/q3a-botlib-nav-stuck-recovery-command-2026-06-18.md`: short back/strafe recovery command window after stuck detections.
+- `docs-dev/q3a-botlib-nav-goal-blacklist-cooldown-2026-06-18.md`: per-bot active-pickup goal blacklist cooldown after stuck detections.
+- `docs-dev/q3a-botlib-nav-failed-goal-reason-2026-06-18.md`: failed-goal reason diagnostics for abandoned route goals.
+- `docs-dev/q3a-botlib-nav-movement-state-commands-2026-06-18.md`: reachability-aware jump, crouch, swim, and ladder command intent.
+- `docs-dev/q3a-botlib-bot-brain-command-ownership-2026-06-18.md`: high-level frame command/status ownership moved into `bot_brain.*` while `bot_think.*` stays as the stable wrapper surface.
+- `docs-dev/q3a-botlib-nav-natural-travel-goal-2026-06-18.md`: smoke-backed natural `TRAVEL_JUMP`, `TRAVEL_LADDER`, `TRAVEL_WALKOFFLEDGE`, `TRAVEL_ELEVATOR`, and `TRAVEL_BARRIERJUMP` route selection from packaged `mm-rage.aas`.
+- `docs-dev/q3a-botlib-nav-natural-ladder-travel-goal-2026-06-18.md`: follow-up natural `TRAVEL_LADDER` route-goal smoke mode and staged validation metrics.
+- `docs-dev/q3a-botlib-nav-natural-walkoffledge-travel-goal-2026-06-18.md`: route-only natural `TRAVEL_WALKOFFLEDGE` smoke mode, pass semantics, and staged validation metrics.
+- `docs-dev/q3a-botlib-nav-natural-elevator-travel-goal-2026-06-18.md`: route-only natural `TRAVEL_ELEVATOR` smoke mode and staged validation metrics.
+- `docs-dev/q3a-botlib-nav-natural-barrierjump-travel-goal-2026-06-18.md`: natural `TRAVEL_BARRIERJUMP` direct-reachability route smoke and staged validation metrics.
+- `docs-dev/q3a-botlib-nav-rocketjump-policy-2026-06-18.md`: default-off `TRAVEL_ROCKETJUMP` route policy gate, opt-in and blocked smoke modes, and staged validation metrics.
+- `docs-dev/q3a-botlib-nav-four-bot-frame-command-smoke-2026-06-18.md`: four-bot route-command smoke mode, item reservation validation, and staged validation metrics.
+- `docs-dev/q3a-botlib-nav-eight-bot-frame-command-smoke-2026-06-18.md`: eight-bot route-command smoke mode, higher-load item reservation validation, and staged validation metrics.
+- `docs-dev/q3a-botlib-nav-soak-frame-command-smoke-2026-06-18.md`: ten-minute eight-bot route-command soak mode, long-run route cleanliness validation, and command-budget fix notes.
+- `docs-dev/q3a-botlib-nav-map-change-repeat-smoke-2026-06-18.md`: same-map reload repeat smoke mode, reload timeout handling, and cycle marker contract for validation harnesses.
+- `docs-dev/q3a-botlib-nav-natural-movement-door-retry-2026-06-18.md`: natural crouch/swim/waterjump support diagnostics plus first interaction wait/use retry telemetry for mover/elevator routes.
+- `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`: first WORR-native behavior/action dispatcher boundary for future item, weapon, combat, inventory, and world-use policy.
+- `docs-dev/q3a-botlib-scenario-smoke-harness-2026-06-18.md`: local scenario smoke harness, catalog output, Markdown/comparison reports, and offline parser tests.
+- `docs-dev/q3a-botlib-pending-scenario-counters-2026-06-18.md`: proposed counter/pass contracts for enemy engagement, weapon switching, health/armor pickup, and team-objective scenarios.
+- `docs-dev/q3a-botlib-bot-perf-telemetry-2026-06-18.md`: bot smoke log analyzer, derived performance/budget metrics, scenario baselines, Markdown reports, and regression tests.
+- `docs-dev/q3a-botlib-bot-perf-source-counters-2026-06-18.md`: source-counter proposal for true CPU, route, visibility, PVS/PHS, and trace-pressure telemetry.
 - `docs-dev/q3a-botlib-bridge-time-vector-2026-06-17.md`: bridge-fed Q3A runtime milliseconds, real `AngleVectors`, adapter status, and verbose debug smoke.
 - `docs-dev/q3a-botlib-bsp-entity-bridge-2026-06-17.md`: active-map Q2 BSP entity-lump bridge for Q3A `AAS_NextBSPEntity` and epair helper callbacks.
 - `docs-dev/q3a-botlib-bsp-model-bridge-2026-06-17.md`: active-map Q2 BSP model-lump bridge for Q3A inline BSP model bounds.
@@ -191,9 +221,9 @@ Use these tasks as the maintainable checklist backbone. Status values should fol
 | `FR-04-T12` | In Progress | `sgame/bots/q3a` | P0 | `FR-04-T10` | Q3A BotLib runtime compiles behind a WORR adapter and can load/unload generated AAS for the active map. |
 | `FR-04-T13` | In Progress | `sgame/client`, `sgame/commands` | P0 | `FR-04-T01` | Bots can be added/removed through WORR commands without network-client hacks or stale session state. |
 | `FR-04-T14` | In Progress | `sgame/bots/bot_nav` | P0 | `FR-04-T11`, `FR-04-T12`, `FR-04-T13` | A spawned bot can route, steer, recover from simple stalls, and reach item/position goals on reference maps. |
-| `FR-04-T15` | Backlog | `sgame/bots/bot_brain` | P1 | `FR-04-T14` | Q3A behavior concepts are translated into Q2 item, weapon, combat, and mode decisions. |
+| `FR-04-T15` | In Progress | `sgame/bots/bot_brain` | P1 | `FR-04-T14` | Q3A behavior concepts are translated into Q2 item, weapon, combat, and mode decisions. |
 | `FR-04-T16` | In Progress | packaging, validation | P1 | `FR-04-T11`, `FR-04-T14` | AAS assets/tooling are staged under `.install/`, smoke tested, and covered by release packaging checks. |
-| `DV-03-T05` | Backlog | tests | P2 | `FR-04-T02` | Bot scenario tests cover spawn, navigation, combat, and objective behavior. |
+| `DV-03-T05` | In Progress | tests | P2 | `FR-04-T02` | Bot scenario tests cover spawn, navigation, combat, and objective behavior. |
 | `DV-07-T06` | In Progress | docs | P0 | none | Imported-source credit and provenance requirements are documented and checked before each bot PR/merge. |
 
 ## Checklist System
@@ -339,8 +369,11 @@ Implementation checklist:
   - [ ] Elevators/plats/doors as conditional reachability.
     - [x] First elevator candidate generated by the static Q2 bridge smoke.
   - [ ] Teleports.
-  - [ ] Optional rocket-jump routes behind an explicit `sg_bot_allow_rocketjump` style setting.
-    - [x] Generator can emit inherited rocket-jump candidates; runtime policy gate still pending.
+  - [x] Optional rocket-jump routes behind an explicit `sg_bot_allow_rocketjump` style setting.
+    - [x] Generator can emit inherited rocket-jump candidates.
+    - [x] Runtime route policy keeps rocket-jump reachability default-off and adds `TFL_ROCKETJUMP` only when `sg_bot_allow_rocketjump 1`.
+    - [x] Positive and blocked smoke modes validate both opt-in and default-blocked route behavior.
+    - [ ] Real rocket-jump action execution remains pending in the higher-level behavior/weapon policy layer.
 - [ ] Add deterministic metadata to generated AAS:
   - [x] Source BSP checksum.
   - [x] Tool version and executable hash in validation report/sidecar.
@@ -557,6 +590,7 @@ Goal: make bots join/leave like intentional WORR participants.
 
 Implementation checklist:
 
+- [x] Remove inherited Q2R bot debug/export/entity-state registrar files from `src/game/sgame/bots/` so new work targets the WORR/Q3A BotLib replacement path.
 - [x] Audit current bot slot creation in `client_session_service_impl.cpp`.
 - [ ] Add commands:
   - [x] `sg_bot_add [profile] [team]`
@@ -600,7 +634,7 @@ Implementation checklist:
 - `Bot_EnforceMatchTeamPolicy(true)` runs after cvar checks each game frame, preserving active humans first and moving surplus active bots to spectators when `maxplayers` or mode rules tighten.
 - `sv_bot_team_policy_smoke` now validates the policy directly from the game module: a three-bot Duel setup reports `playing=2`, `spectators=1`, `bots=3`, then cleanup reports zero bots with both status lines passing.
 - The fake-client frame-command path now requests an AAS route-steered command from `sgame`, faces the first predicted route step, and reports route counters through `sv_bot_frame_command_smoke`.
-- Remaining limitations: curated profile assets, persistent navigation goals, route reuse, and stuck recovery remain pending.
+- Remaining limitations: curated profile assets, general behavior-authored navigation goal policy, natural map-backed crouch/swim/waterjump movement-state validation, door/trigger retry, and higher-level behavior policy remain pending.
 
 Exit criteria:
 
@@ -664,26 +698,29 @@ Implementation checklist:
 - [ ] Map Q3A `bot_input_t` style output to WORR/Q2 `usercmd_t`.
   - [x] Add first-step AAS route steering directly into `Bot_BuildFrameCommand()`.
   - [x] Move route cache and query cadence into `bot_nav.*`.
-  - [ ] Move high-level command/goal ownership into `bot_brain.*`.
+  - [x] Keep a persistent native route goal area across cadence and cache reuse.
+  - [x] Select a live active-pickup entity as the first native persistent route goal.
+  - [x] Move high-level command/goal ownership into `bot_brain.*`.
+  - [x] Add a debug/smoke-backed position route goal through `bot_brain.*`, `bot_nav.*`, and the BotLib adapter.
 - [ ] Implement movement states:
   - [ ] Ground steering.
     - [x] Initial route-target yaw plus forward movement for a spawned bot.
-  - [ ] Jump.
-  - [ ] Crouch.
-  - [ ] Swim.
+  - [x] Jump.
+  - [x] Crouch.
+  - [x] Swim.
   - [ ] Ladder if supported by map metadata.
   - [ ] Door/plat wait/use.
   - [ ] Teleporter traversal.
 - [ ] Add steering smoothing:
-  - [ ] Look-ahead route points.
+  - [x] Look-ahead route points.
   - [ ] Corner cutting where safe.
-  - [ ] Velocity-aware aim direction.
+  - [x] Velocity-aware aim direction.
   - [ ] Avoid jittering between adjacent areas.
     - [x] Reuse cached route steps for short windows instead of rebuilding the route every command frame.
 - [ ] Add stuck recovery:
-  - [ ] Repath.
-  - [ ] Short dodge/back-off.
-  - [ ] Goal blacklist cooldown.
+  - [x] Repath.
+  - [x] Short dodge/back-off.
+  - [x] Goal blacklist cooldown.
   - [ ] Door/trigger retry.
   - [ ] Last-resort respawn/spectator handling only in debug or controlled modes.
 - [ ] Add movement debug:
@@ -693,9 +730,14 @@ Implementation checklist:
     - [x] Draw bounded sampled route points from the cached Q3A route-steer result.
   - [x] Selected debug client filter for cached route/goal overlays.
   - [x] Next reachability type.
-  - [ ] Stuck reason.
-  - [ ] Failed goal reason.
+  - [x] Stuck reason.
+  - [x] Failed goal reason.
   - [x] Route query/cache counters in the dedicated frame-command smoke.
+  - [x] Persistent route-goal request, assignment, reuse, clear, and fallback counters in the dedicated frame-command smoke.
+  - [x] Active item-goal scan, candidate, assignment, reuse, clear, and selected-item counters in the dedicated frame-command smoke.
+  - [x] Stuck recovery activation and command counters in the dedicated frame-command smoke.
+  - [x] Item-goal blacklist activation, skip, active cooldown, and last blacklisted item counters in the dedicated frame-command smoke.
+  - [x] Movement-state command counters in the dedicated frame-command smoke.
 
 2026-06-17 route-steered command slice:
 
@@ -739,6 +781,180 @@ Implementation checklist:
 - `sv_bot_frame_command_smoke 2` with `sg_bot_debug_client 0` reports the active bot route overlay with `route_debug_routes=8`, `route_debug_filtered_slots=0`, `last_debug_filter_client=0`, and `pass=1`.
 - `sv_bot_frame_command_smoke 2` with `sg_bot_debug_client 1` filters out slot 0 and reports `route_debug_routes=0`, `route_debug_filtered_slots=8`, `route_debug_filter_miss_frames=10`, `last_debug_filter_client=1`, and `pass=1`.
 - Implementation log: `docs-dev/q3a-botlib-nav-debug-client-filter-2026-06-17.md`.
+
+2026-06-18 nav persistent-goal slice:
+
+- `bot_nav.*` now assigns the first successful route goal area as a persistent per-client route goal and requests that area on later route refreshes.
+- Persistent goal state falls back to a fresh imported route goal if the preferred area stops routing, and clears when the cached goal origin is reached.
+- `sv_bot_frame_command_smoke 2` reports `route_goal_requests=1`, `route_goal_assignments=1`, `route_goal_cache_reuses=6`, `route_goal_clears=0`, `route_goal_fallbacks=0`, `last_persistent_goal_area=227`, `last_goal_clear_reason=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-persistent-goal-2026-06-18.md`.
+
+2026-06-18 legacy Q2R bot surface removal slice:
+
+- Removed inherited Q2R bot files `src/game/sgame/bots/bot_debug.*`, `bot_exports.*`, and `bot_utils.*` from source control and the Meson build.
+- Removed the old debug cvars, `Bot_UpdateDebug()` frame call, and sgame-side bot entity register/unregister flow that depended on the removed Q2R surface.
+- Removed the legacy `info_nav_lock` spawn registration because its implementation lived in the deleted Q2R bot utility layer.
+- `G_GetGameAPI()` now leaves the old bot action/export callbacks unavailable while retaining `Entity_ForceLookAtPoint` as a standalone helper.
+- The active `src/game/sgame/bots/` implementation surface is now `bot_runtime.*`, `botlib_adapter.*`, `bot_nav.*`, `bot_think.*`, and `q3a/`.
+- `sv_bot_frame_command_smoke 2` after the removal reports `frames=8`, `commands=8`, `route_failures=0`, `route_goal_assignments=1`, `last_persistent_goal_area=227`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-legacy-bot-surface-removal-2026-06-18.md`.
+
+2026-06-18 nav item-goal slice:
+
+- `Q3A_BotLibImport_FindRouteAreaForPoint()` and `BotLibAdapter_FindRouteAreaForPoint()` expose point-to-route-area lookup through the existing adapter boundary.
+- `bot_nav.*` now scans active pickup entities, applies first-pass health/armor/ammo/weapon/powerup/high-value utility, resolves the selected pickup to an AAS area, and asks the route cache to keep that area as the persistent goal.
+- Route slots remember selected item entity number, entity spawn count, item id, and AAS area so item goals clear when the pickup respawn-hides, disappears, or changes identity.
+- `sv_bot_frame_command_smoke 2` reports `item_goal_scans=1`, `item_goal_candidates=45`, `item_goal_assignments=1`, `item_goal_reuses=7`, `last_item_goal_entity=32`, `last_item_goal_area=415`, `last_item_goal_item=53`, `last_persistent_goal_area=415`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-item-goal-2026-06-18.md`.
+
+2026-06-18 nav item-reservation slice:
+
+- `bot_nav.*` now treats another bot's live selected pickup route slot as an active item reservation.
+- Item-goal scans skip reserved pickup entities, record the skipped entity and owning client, and continue scoring other active pickups.
+- Bot disconnect resets that client's route slot so item reservations do not survive removed bot clients.
+- `sv_bot_frame_command_smoke 3` adds two bots and reports `item_goal_reservation_skips=1`, `item_goal_active_reservations=2`, `last_item_goal_reserved_entity=32`, `last_item_goal_reserved_by_client=0`, `last_item_goal_entity=74`, `last_item_goal_area=251`, `route_goal_assignments=2`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-item-reservation-2026-06-18.md`.
+
+2026-06-18 nav look-ahead steering slice:
+
+- `Bot_BuildFrameCommand()` now steers toward a selected sampled route point rather than always aiming at only the immediate route step.
+- The command builder advances through the bounded route polyline while points remain inside a short local look-ahead distance, keeping the existing route-goal fallback for degenerate targets.
+- `sv_bot_frame_command_smoke 3` reports `lookahead_attempts=17`, `lookahead_uses=9`, `last_lookahead_point_count=2`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-lookahead-steering-2026-06-18.md`.
+
+2026-06-18 nav velocity-steering slice:
+
+- `Bot_BuildFrameCommand()` now applies a short velocity-aware yaw adjustment after route-point look-ahead selects the target.
+- The command builder predicts the bot's horizontal origin `0.10` seconds ahead when movement exceeds a small threshold, but keeps the existing direction if the lead would overshoot the selected target.
+- `sv_bot_frame_command_smoke 3` reports `velocity_lead_attempts=17`, `velocity_lead_uses=3`, `last_velocity_lead_speed_sq=182`, `last_velocity_lead_offset_sq=1`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-velocity-steering-2026-06-18.md`.
+
+2026-06-18 nav stuck-repath slice:
+
+- `bot_nav.*` now tracks progress toward the active route goal across cached route uses and cadence refreshes.
+- A sustained no-progress window produces `BotNavRefreshReason::Stuck`, forcing the normal route refresh/repath path and reporting stuck reason fields in the debug overlay and frame-command status.
+- `sv_bot_frame_command_smoke 4` adds an internal stalled-command mode that builds bot commands without applying them, creating a deterministic no-progress validation case.
+- Normal `sv_bot_frame_command_smoke 3` reports `stuck_detections=0`, `stuck_repath_refreshes=0`, `route_failures=0`, and `pass=1`; stalled `sv_bot_frame_command_smoke 4` reports `stuck_detections=2`, `stuck_repath_refreshes=2`, `last_stuck_reason=1`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-stuck-repath-2026-06-18.md`.
+
+2026-06-18 nav stuck-recovery command slice:
+
+- `bot_nav.*` now activates a short recovery window after a stuck detection, tracking recovery activations, active recovery frames, last recovery client, strafe side, and frames remaining.
+- `Bot_BuildFrameCommand()` applies a small back/strafe command during that recovery window, after normal route yaw selection, while leaving ordinary route-following commands unchanged.
+- Normal `sv_bot_frame_command_smoke 3` reports `stuck_recovery_activations=0`, `stuck_recovery_frames=0`, `recovery_command_uses=0`, `route_failures=0`, and `pass=1`; stalled `sv_bot_frame_command_smoke 4` reports `stuck_recovery_activations=2`, `stuck_recovery_frames=11`, `recovery_command_uses=11`, `last_recovery_forward_move=-80`, `last_recovery_side_move=-140`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-stuck-recovery-command-2026-06-18.md`.
+
+2026-06-18 nav goal-blacklist cooldown slice:
+
+- `bot_nav.*` now blacklists the current active-pickup goal for the stuck bot when the stuck-progress watchdog fires and the item is still available.
+- The blacklist is per bot and per item identity, using entity number, spawn count, and item id; active-pickup scans skip matching blacklisted goals and immediately continue scoring other pickups.
+- Clearing a persistent goal due to blacklist uses `last_goal_clear_reason=5` and preserves the active short recovery window so the dodge/back-off command still runs.
+- Normal `sv_bot_frame_command_smoke 3` reports `item_goal_blacklist_activations=0`, `item_goal_blacklist_skips=0`, `item_goal_blacklist_active=0`, `route_failures=0`, and `pass=1`; stalled `sv_bot_frame_command_smoke 4` reports `item_goal_blacklist_activations=2`, `item_goal_blacklist_skips=2`, `item_goal_blacklist_active=2`, `last_item_goal_blacklisted_entity=68`, `last_goal_clear_reason=5`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-goal-blacklist-cooldown-2026-06-18.md`.
+
+2026-06-18 nav failed-goal reason slice:
+
+- `bot_nav.*` now records explicit failed-goal reasons before abandoned persistent goal state is cleared.
+- Route fallback, item unavailable, and blacklisted item goals count as failed-goal events; reached goals and resets do not count as failures.
+- The live route debug label includes the route slot's last failed reason, and `sv_bot_frame_command_smoke` reports the failed event count plus last failed reason, client, area, entity, and item id.
+- Normal `sv_bot_frame_command_smoke 3` reports `failed_goal_events=0`, `last_failed_goal_reason=0`, `route_failures=0`, and `pass=1`; stalled `sv_bot_frame_command_smoke 4` reports `failed_goal_events=2`, `last_goal_clear_reason=5`, `last_failed_goal_reason=3`, `last_failed_goal_client=1`, `last_failed_goal_area=251`, `last_failed_goal_entity=74`, `last_failed_goal_item=2`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-failed-goal-reason-2026-06-18.md`.
+
+2026-06-18 nav movement-state command slice:
+
+- `Bot_BuildFrameCommand()` now maps selected AAS reachability travel types to Q2 `usercmd_t` button intent after route yaw and forward movement are chosen.
+- Crouch reachability presses `BUTTON_CROUCH`; barrier jump, jump, and waterjump press `BUTTON_JUMP`; swim and ladder reachability press jump or crouch based on whether the current route target is above or below the bot.
+- `sv_bot_frame_command_smoke` modes `5`, `6`, and `7` force jump, crouch, and swim reachability command translation through the normal sgame command builder without widening the extension ABI.
+- Normal `sv_bot_frame_command_smoke 3` reports real `mm-rage` walk reachability with `movement_state_attempts=17`, `movement_state_commands=0`, `last_movement_state_travel_type=2`, and `pass=1`; forced jump/crouch/swim smokes report `movement_state_jump_commands=17`, `movement_state_crouch_commands=17`, and `movement_state_swim_commands=17` respectively with `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-movement-state-commands-2026-06-18.md`.
+
+2026-06-18 bot brain command ownership slice:
+
+- `bot_brain.*` now owns the current high-level frame command/status implementation, including route steering, recovery command application, movement-state button intent, and frame-command smoke status.
+- `bot_think.*` remains as the stable `Bot_*` wrapper surface used by existing game/server extension callers, delegating to `BotBrain_*` without widening the ABI.
+- `bot_brain.cpp` is now part of the `sgame` build and `bot_brain.hpp` is included by the bot umbrella header for future brain-owned policy growth.
+- Refreshed-install smokes on `mm-rage` keep normal command dispatch clean with `frames=17`, `commands=17`, `route_failures=0`, and `pass=1`; forced jump smoke reports `movement_state_jump_commands=17` and `pass=1`; stalled-command smoke reports `stuck_detections=2`, `failed_goal_events=2`, `recovery_command_uses=11`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-bot-brain-command-ownership-2026-06-18.md`.
+
+2026-06-18 nav position-goal slice:
+
+- `bot_brain.*` now builds an internal debug/smoke route request for a world-space position goal, and `bot_nav.*` prioritizes that request over item-goal scans while preserving normal item-goal behavior when no position goal is active.
+- `Q3A_BotLibImport_BuildRouteSteerToGoal()` and `BotLibAdapter_BuildRouteSteerToGoal()` preserve the exact resolved position-goal origin for preferred-goal routing, while existing area-only item and fallback routes keep the old `BuildRouteSteer()` path.
+- `sv_bot_frame_command_smoke 8` is a one-bot position-goal proof on `mm-rage`, reporting `position_goal_requests=8`, `position_goal_resolved=8`, `position_goal_assignments=1`, `position_goal_cache_reuses=6`, `item_goal_scans=0`, `route_goal_fallbacks=0`, `last_position_goal_area=227`, `last_position_goal_z=98`, `route_failures=0`, and `pass=1`.
+- Normal, stalled, and forced-jump regression smokes keep `position_goal_requests=0`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-position-goal-2026-06-18.md`.
+
+2026-06-18 nav natural travel-goal slice:
+
+- `Q3A_BotLibImport_BuildRouteSteerForTravelType()` and `BotLibAdapter_BuildRouteSteerForTravelType()` now support route requests whose selected next reachability must match a requested AAS travel type.
+- `Q3A_BotLibImport_FindRouteStartForTravelType()` provides a validated smoke start finder so the natural movement-state proof can begin on a real requested-travel-type-capable `mm-rage` AAS area instead of forcing a travel type at the default spawn.
+- `bot_nav.*` tracks travel-type goal requests, resolutions, assignments, cache reuses, clears, and last selected travel-type goal metadata separately from item and position goals.
+- `sv_bot_frame_command_smoke 9` requests natural `TRAVEL_JUMP`, enables a smoke-only start warp, and reports `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=107`, `last_travel_type_goal_start_goal_area=111`, `travel_type_goal_resolved=2`, `travel_type_goal_assignments=1`, `travel_type_goal_cache_reuses=6`, `last_reachability_type=5`, `movement_state_jump_commands=8`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`.
+- `sv_bot_frame_command_smoke 10` requests natural `TRAVEL_LADDER`, enables the same smoke-only start warp, and reports `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=142`, `last_travel_type_goal_start_goal_area=143`, `travel_type_goal_resolved=2`, `travel_type_goal_assignments=1`, `travel_type_goal_cache_reuses=6`, `last_reachability_type=6`, `movement_state_ladder_commands=8`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`.
+- `sv_bot_frame_command_smoke 11` requests natural `TRAVEL_WALKOFFLEDGE`, treats it as a route-only travel-type goal, and reports `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=29`, `last_travel_type_goal_start_goal_area=34`, `travel_type_goal_resolved=2`, `travel_type_goal_assignments=1`, `travel_type_goal_cache_reuses=6`, `last_reachability_type=7`, `route_commands=8`, `movement_state_commands=0`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`.
+- `sv_bot_frame_command_smoke 12` requests natural `TRAVEL_ELEVATOR`, treats it as a route-only travel-type goal, and reports `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=241`, `last_travel_type_goal_start_goal_area=261`, `travel_type_goal_resolved=2`, `travel_type_goal_assignments=1`, `travel_type_goal_cache_reuses=6`, `last_reachability_type=11`, `route_commands=8`, `movement_state_commands=0`, `movement_state_unsupported=0`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`.
+- `sv_bot_frame_command_smoke 13` requests natural `TRAVEL_BARRIERJUMP`, uses the direct outgoing-reachability fallback for the packaged `mm-rage.aas` barrier candidate, and reports `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=292`, `last_travel_type_goal_start_goal_area=318`, `travel_type_goal_resolved=8`, `travel_type_goal_assignments=8`, `last_reachability=319`, `last_reachability_type=4`, `movement_state_jump_commands=8`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`.
+- Normal, stalled, forced-jump, and position-goal regression smokes keep `travel_type_goal_requests=0`, `travel_type_goal_start_warps=0`, `route_failures=0`, and `pass=1`.
+- Natural map-backed crouch, swim, and waterjump validation remains pending.
+- Full door/elevator cooperation remains pending above the route-only `TRAVEL_ELEVATOR` AAS reachability proof.
+- Implementation logs: `docs-dev/q3a-botlib-nav-natural-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-ladder-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-walkoffledge-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-elevator-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-barrierjump-travel-goal-2026-06-18.md`.
+
+2026-06-18 nav rocket-jump route policy slice:
+
+- Q3A route queries now use a runtime policy from `sg_bot_allow_rocketjump`, keeping `TFL_ROCKETJUMP` out of normal route flags unless the cvar is explicitly enabled.
+- Direct travel-type helper and fallback paths obey the same policy, so internal route-goal smokes cannot bypass the default-off rocket-jump gate.
+- `sv_bot_frame_command_smoke 14` enables `sg_bot_allow_rocketjump 1`, requests natural `TRAVEL_ROCKETJUMP`, and reports `travel_type_goal_resolved=2`, `travel_type_goal_assignments=1`, `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=282`, `last_travel_type_goal_start_goal_area=304`, `last_reachability=312`, `last_reachability_type=12`, `route_failures=0`, and `pass=1`.
+- `sv_bot_frame_command_smoke 15` leaves rocket-jump routing disabled, expects the travel-type goal to be blocked, and reports `commands=0`, `route_commands=0`, `travel_type_goal_requests=8`, `travel_type_goal_resolved=0`, `travel_type_goal_assignments=0`, `travel_type_goal_start_warps=0`, `route_failures=8`, `travel_type_goal_expect_blocked=1`, and `pass=1`.
+- Normal, elevator, and barrier-jump regression smokes keep `route_failures=0` and `pass=1` after the route policy gate.
+- Actual rocket-jump weapon/action execution remains pending above route selection.
+- Implementation log: `docs-dev/q3a-botlib-nav-rocketjump-policy-2026-06-18.md`.
+
+2026-06-18 nav four-bot frame-command smoke slice:
+
+- `sv_bot_frame_command_smoke 16` now targets up to four public bot slots and grows the smoke bot count one server frame at a time.
+- The smoke harness reports `q3a_bot_frame_command_smoke_multi_bot_target=4`, adds `B|Mover`, `B|MoverTwo`, `B|MoverThree`, and `B|MoverFour`, and reuses the existing frame-command status pass criteria with `expected_min_frames=4` and `expected_min_commands=4`.
+- The refreshed-install four-bot smoke on `mm-rage` reports `frames=38`, `commands=38`, `route_requests=38`, `route_queries=11`, `route_refreshes=11`, `route_reuses=27`, `route_commands=38`, `route_failures=0`, `route_goal_assignments=4`, `item_goal_assignments=4`, `item_goal_reservation_skips=6`, `item_goal_active_reservations=4`, `route_debug_routes=38`, `route_debug_goals=38`, and `pass=1`.
+- Normal two-bot `sv_bot_frame_command_smoke 3` regression still reports `route_failures=0`, `item_goal_active_reservations=2`, and `pass=1` after the shared add loop change.
+- Implementation log: `docs-dev/q3a-botlib-nav-four-bot-frame-command-smoke-2026-06-18.md`.
+
+2026-06-18 nav eight-bot frame-command smoke slice:
+
+- `sv_bot_frame_command_smoke 17` now targets up to eight public bot slots while preserving the existing four-bot mode `16`.
+- The smoke bot-name helper now covers `B|Mover` through `B|MoverEight`, letting the existing one-bot-per-frame add loop grow to eight active fake clients.
+- The refreshed-install eight-bot smoke on `mm-rage` reports `frames=92`, `commands=92`, `route_requests=92`, `route_queries=29`, `route_refreshes=29`, `route_reuses=63`, `route_commands=92`, `route_failures=0`, `route_goal_assignments=11`, `item_goal_assignments=11`, `item_goal_reservation_skips=49`, `item_goal_active_reservations=8`, `route_debug_routes=92`, `route_debug_goals=92`, and `pass=1`.
+- Four-bot `sv_bot_frame_command_smoke 16` regression still reports `frames=38`, `commands=38`, `route_commands=38`, `route_failures=0`, `item_goal_active_reservations=4`, and `pass=1` after the mode `17` extension.
+- Implementation log: `docs-dev/q3a-botlib-nav-eight-bot-frame-command-smoke-2026-06-18.md`.
+
+2026-06-18 nav soak frame-command smoke slice:
+
+- `sv_bot_frame_command_smoke 18` now runs an eight-bot long-duration route-command soak, defaulting to `600000` ms through `sv_bot_frame_command_smoke_soak_ms`.
+- The soak prints begin/progress/complete lines, keeps the normal final `q3a_bot_frame_command_status`, and sets internal `sg_bot_frame_command_smoke_soak=1` so the long-run pass gate focuses on command throughput and zero route failures while mode `17` remains the active-reservation pressure proof.
+- `bot_nav` now records `item_goal_peak_active_reservations`, and `SV_BotClientThink()` tops up local bot command budget before applying server-authored bot commands to avoid long-run `commandMsec underflow` noise.
+- The refreshed-install 10-minute mode `18` soak on `mm-rage` reports `elapsed_ms=600001`, `reports=9`, `frames=192036`, `commands=192036`, `route_commands=192036`, `route_failures=0`, `route_goal_assignments=4889`, `item_goal_assignments=1451`, `item_goal_reservation_skips=3455`, `item_goal_active_reservations=1`, `item_goal_peak_active_reservations=2`, `stuck_detections=11789`, `stuck_recovery_activations=11789`, `recovery_command_uses=72066`, `skipped_inactive=0`, and `pass=1`.
+- Eight-bot mode `17` regression still reports `frames=92`, `commands=92`, `route_failures=0`, `item_goal_active_reservations=8`, `item_goal_peak_active_reservations=8`, and `pass=1` after the soak harness changes.
+- Implementation log: `docs-dev/q3a-botlib-nav-soak-frame-command-smoke-2026-06-18.md`.
+
+2026-06-18 nav map-change repeat smoke slice:
+
+- `sv_bot_frame_command_smoke 19` now runs an eight-bot route-command proof, queues `gamemap` for the current map, waits for a new `sv.spawncount`, and repeats the proof after reload.
+- `sv_bot_frame_command_smoke_map_repeat_cycles` defaults to `2` and clamps to `2..8`; `sv_bot_frame_command_smoke_map_repeat_reload_timeout_ms` defaults to `10000` and clamps to `1000..120000`.
+- Mode `19` emits cycle begin, cycle status requested/complete, reload queued, reload observed, timeout, cleanup, failure, and completion markers so tools can validate each phase without scraping ambiguous game chatter.
+- The refreshed-install mode `19` smoke on `mm-rage` reports cycle 1 `frames=92`, `commands=92`, `route_failures=0`, `item_goal_peak_active_reservations=8`, `pass=1`; reload observed in `61` ms; cycle 2 `frames=184`, `commands=183`, `route_failures=0`, `item_goal_peak_active_reservations=8`, `pass=1`; final `cycles=2`, `map_changes=1`, `final_count=0`, and no `commandMsec underflow`.
+- The follow-up lifecycle proof adds `sv_bot_frame_command_smoke_map_repeat_restart`, default `0`. When enabled, mode `19` uses `map "<current map>" force` instead of `gamemap`, reports `command=map_force restart=1`, reports `realtime_reset=1` when the forced restart resets `svs.realtime`, and gates cleanup with `q3a_bot_frame_command_smoke_map_repeat_cleanup_status ... count=0 active_reservations=0 pass=1`.
+- Restart validation on `mm-rage` passed three proof cycles with two forced restart transitions, all cycle status checks `pass=1`, all cleanup checks `count=0 active_reservations=0 pass=1`, final `cycles=3`, `map_changes=2`, `final_count=0`, and no `commandMsec underflow`. The default `gamemap` path still passes with `command=gamemap restart=0`, two cycles, one map change, and final count zero.
+- Mode `17` regression still reports eight active item reservations, zero route failures, and `pass=1`.
+- Implementation logs: `docs-dev/q3a-botlib-nav-map-change-repeat-smoke-2026-06-18.md`, `docs-dev/q3a-botlib-nav-map-restart-lifecycle-smoke-2026-06-18.md`.
+
+2026-06-18 nav natural movement and interaction retry slice:
+
+- `bot_nav.*` and `bot_brain.cpp` now report `q3a_bot_nav_natural_support_status` for natural `TRAVEL_CROUCH`, `TRAVEL_SWIM`, and `TRAVEL_WATERJUMP` support in the loaded AAS.
+- Current packaged `mm-rage.aas` reports `natural_movement_support_aas_loaded=1`, `natural_movement_support_checks=3`, `natural_movement_supported=0`, `natural_movement_unsupported=3`, with per-type unsupported flags for crouch, swim, and waterjump.
+- The natural-support status now also reports an unsupported bitmask, per-type reason codes, resolved AAS area/goal-area pairs, and route-start origins when a reference map provides a matching natural route. On `mm-rage`, the new fields intentionally report unsupported reason data and zero areas/origins for crouch, swim, and waterjump.
+- First-pass interaction retry telemetry now covers mover/platform/door/button/trigger candidates, with wait/use command accounting; the elevator proof reports `nav_interaction_activations=1`, `nav_interaction_elevator_activations=1`, `nav_interaction_wait_frames=8`, `nav_interaction_use_frames=8`, `interaction_wait_command_uses=8`, and `interaction_use_command_uses=8`.
+- Interaction diagnostics now include a separate context line for visible world interaction candidates by type, including doors, buttons, platforms, trains, water volumes, triggers, movers, and use/touch-capable entities.
+- Forced crouch and swim smokes still report `movement_state_crouch_commands=17` and `movement_state_swim_commands=17` with `pass=1`.
+- Natural crouch/swim/waterjump runtime proof now needs reference AAS maps with nonzero crouch, swim, and water-jump travel counts.
+- Implementation logs: `docs-dev/q3a-botlib-nav-natural-movement-door-retry-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-interaction-diagnostics-2026-06-18.md`.
 
 Exit criteria:
 
@@ -789,8 +1005,12 @@ Implementation checklist:
   - [ ] Invulnerability/protection.
   - [ ] Invisibility.
   - [ ] Techs/runes/CTF items if enabled.
-- [ ] Add item reservation to avoid every bot choosing the same pickup.
-- [ ] Add inventory use through existing `Bot_UseItem`.
+- [x] Add item reservation to avoid every bot choosing the same pickup.
+- [ ] Add inventory use through a new WORR bot action dispatcher; do not resurrect the removed Q2R `Bot_UseItem` callback.
+  - [x] Add first compile-ready `bot_actions.*`, `bot_items.*`, and `bot_combat.*` action/decision boundary with status structs and intent-only weapon/inventory behavior.
+  - [x] Wire a telemetry-only `bot_brain.*` sampling bridge that evaluates action decisions each command frame and emits `q3a_bot_action_status` without calling `BotActions_ApplyDecision()`.
+  - [ ] Promote dispatcher decisions into command ownership once perception, candidate discovery, inventory, aim, and route ownership inputs are available.
+- Implementation logs: `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`, `docs-dev/q3a-botlib-behavior-action-brain-telemetry-2026-06-18.md`.
 
 Exit criteria:
 
@@ -892,6 +1112,33 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-profile-behavior-fields-2026-06-17.md`: richer profile behavior fields and expanded profile smoke log.
 - [x] `docs-dev/q3a-botlib-team-policy-cleanup-2026-06-17.md`: bot team-limit and mode-change cleanup log.
 - [x] `docs-dev/q3a-botlib-team-policy-smoke-2026-06-17.md`: direct game-side bot team-policy smoke log.
+- [x] `docs-dev/q3a-botlib-nav-item-goal-2026-06-18.md`: active-pickup route-goal selection and item-goal smoke log.
+- [x] `docs-dev/q3a-botlib-nav-item-reservation-2026-06-18.md`: active-pickup reservation policy and two-bot smoke log.
+- [x] `docs-dev/q3a-botlib-nav-lookahead-steering-2026-06-18.md`: route-point look-ahead steering and smoke log.
+- [x] `docs-dev/q3a-botlib-nav-velocity-steering-2026-06-18.md`: velocity-aware command yaw steering and smoke log.
+- [x] `docs-dev/q3a-botlib-nav-stuck-repath-2026-06-18.md`: stuck-progress watchdog, repath, and stalled-command smoke log.
+- [x] `docs-dev/q3a-botlib-nav-stuck-recovery-command-2026-06-18.md`: short stuck recovery command window and stalled-command smoke log.
+- [x] `docs-dev/q3a-botlib-nav-goal-blacklist-cooldown-2026-06-18.md`: item-goal blacklist cooldown and stalled-command smoke log.
+- [x] `docs-dev/q3a-botlib-nav-failed-goal-reason-2026-06-18.md`: failed-goal reason diagnostics and smoke log.
+- [x] `docs-dev/q3a-botlib-nav-movement-state-commands-2026-06-18.md`: reachability-aware movement-state command smoke log.
+- [x] `docs-dev/q3a-botlib-bot-brain-command-ownership-2026-06-18.md`: bot brain command ownership split and smoke log.
+- [x] `docs-dev/q3a-botlib-nav-position-goal-2026-06-18.md`: explicit position route-goal smoke log.
+- [x] `docs-dev/q3a-botlib-nav-natural-travel-goal-2026-06-18.md`: natural `TRAVEL_JUMP`, `TRAVEL_LADDER`, `TRAVEL_WALKOFFLEDGE`, `TRAVEL_ELEVATOR`, and `TRAVEL_BARRIERJUMP` route-goal smoke log.
+- [x] `docs-dev/q3a-botlib-nav-natural-ladder-travel-goal-2026-06-18.md`: natural `TRAVEL_LADDER` staged validation smoke log.
+- [x] `docs-dev/q3a-botlib-nav-natural-walkoffledge-travel-goal-2026-06-18.md`: natural `TRAVEL_WALKOFFLEDGE` staged validation smoke log.
+- [x] `docs-dev/q3a-botlib-nav-natural-elevator-travel-goal-2026-06-18.md`: natural `TRAVEL_ELEVATOR` staged validation smoke log.
+- [x] `docs-dev/q3a-botlib-nav-natural-barrierjump-travel-goal-2026-06-18.md`: natural `TRAVEL_BARRIERJUMP` staged validation smoke log.
+- [x] `docs-dev/q3a-botlib-nav-rocketjump-policy-2026-06-18.md`: default-off `TRAVEL_ROCKETJUMP` route policy gate and opt-in/blocked smoke log.
+- [x] `docs-dev/q3a-botlib-nav-four-bot-frame-command-smoke-2026-06-18.md`: four-bot frame-command smoke and item-reservation validation log.
+- [x] `docs-dev/q3a-botlib-nav-eight-bot-frame-command-smoke-2026-06-18.md`: eight-bot frame-command smoke and higher-load reservation validation log.
+- [x] `docs-dev/q3a-botlib-nav-soak-frame-command-smoke-2026-06-18.md`: ten-minute eight-bot frame-command soak and long-run route-clean validation log.
+- [x] `docs-dev/q3a-botlib-nav-map-change-repeat-smoke-2026-06-18.md`: same-map reload repeat smoke and reload timeout marker log.
+- [x] `docs-dev/q3a-botlib-nav-natural-movement-door-retry-2026-06-18.md`: natural movement support diagnostics and interaction wait/use retry log.
+- [x] `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`: first behavior/action dispatcher boundary log.
+- [x] `docs-dev/q3a-botlib-scenario-smoke-harness-2026-06-18.md`: scenario harness, catalog/report, and parser test log.
+- [x] `docs-dev/q3a-botlib-pending-scenario-counters-2026-06-18.md`: pending scenario counter/pass contract.
+- [x] `docs-dev/q3a-botlib-bot-perf-telemetry-2026-06-18.md`: performance telemetry analyzer, budget, report, and test log.
+- [x] `docs-dev/q3a-botlib-bot-perf-source-counters-2026-06-18.md`: proposed source counter plan for CPU/visibility/trace budgets.
 - [x] `docs-dev/q3a-botlib-bridge-time-vector-2026-06-17.md`: bridge time and vector helper implementation log.
 - [x] `docs-dev/q3a-botlib-bsp-entity-bridge-2026-06-17.md`: active-map Q2 BSP entity-lump bridge implementation log.
 - [x] `docs-dev/q3a-botlib-bsp-model-bridge-2026-06-17.md`: active-map Q2 BSP model-lump bridge implementation log.
@@ -994,22 +1241,30 @@ Validation checklist:
   - [x] Start dedicated server on reference map with real BotLib initialized.
   - [x] Run dedicated self-smoke with `sg_bot_lifecycle_smoke 3` so `mm-rage` loads, reloads once, captures `q3a_lifecycle_clean_unloads=1` during each shutdown, and exits.
   - [x] Verify dedicated team-policy smoke counts bot `gclient_t::sess.team` state through the game module and reports `playing=2`, `spectators=1`, `bots=3` for a three-bot Duel setup.
-  - [ ] Add one bot.
-  - [ ] Add four bots.
-  - [ ] Add eight bots.
-  - [ ] Run 10 minutes without crash.
-  - [ ] Map change and repeat.
+  - [x] Add one bot.
+  - [x] Select an active item goal for a spawned bot on `mm-rage`.
+  - [x] Add two bots and verify the second bot skips the first bot's reserved item goal on `mm-rage`.
+  - [x] Add four bots.
+  - [x] Add eight bots.
+  - [x] Run 10 minutes without crash.
+  - [x] Map change and repeat.
 - [ ] Scenario tests:
-  - [ ] Spawn and route to item.
+  - [x] Add local scenario smoke harness with catalog, JSON, Markdown, comparison, and parser tests.
+  - [x] Add pending-scenario promotion gap reporting for enemy engagement, weapon switching, health/armor pickup, and team objective counters.
+  - [x] Spawn and route to item.
   - [ ] Engage enemy.
   - [ ] Switch weapons.
   - [ ] Pick up health/armor.
   - [ ] Follow team objective.
-  - [ ] Recover from blocked route.
+  - [x] Recover from blocked route.
 - [ ] Performance:
   - [ ] CPU cost per bot.
-  - [ ] Route recomputation rate.
+    - [x] Derived per-bot command, route, debug, and recovery pressure baselines from smoke logs.
+    - [ ] Add source-side CPU timing counters.
+  - [x] Route recomputation rate.
+  - [x] Add analyzer comparison guards for mixed scenario names, bot counts, duration sources, and missing duration data.
   - [ ] Visibility trace count.
+    - [x] Proposed source-side visibility/PVS/PHS/trace counters and analyzer integration contract.
   - [ ] Memory used by AAS.
   - [ ] High bot count degradation policy.
 - [ ] Packaging:

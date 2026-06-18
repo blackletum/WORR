@@ -1014,6 +1014,9 @@ DisconnectResult ClientSessionServiceImpl::ClientDisconnect(local_game_import_t&
 	FreeClientFollowers(ent);
 
 	const int clientIndex = ent->s.number - 1;
+	if (cl->sess.is_a_bot || (ent->svFlags & SVF_BOT) != 0) {
+		BotNav_ResetClient(clientIndex);
+	}
 	MapSelector_ClearVote(level, clientIndex);
 	MapSelector_SyncVotes(level);
 

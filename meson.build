@@ -343,13 +343,14 @@ bgame_src = [
 ]
 
 sgame_src = bgame_src + [
-  'src/game/sgame/bots/bot_debug.cpp',
-  'src/game/sgame/bots/bot_exports.cpp',
+  'src/game/sgame/bots/bot_actions.cpp',
+  'src/game/sgame/bots/bot_brain.cpp',
+  'src/game/sgame/bots/bot_combat.cpp',
+  'src/game/sgame/bots/bot_items.cpp',
   'src/game/sgame/bots/bot_nav.cpp',
   'src/game/sgame/bots/botlib_adapter.cpp',
   'src/game/sgame/bots/bot_runtime.cpp',
   'src/game/sgame/bots/bot_think.cpp',
-  'src/game/sgame/bots/bot_utils.cpp',
   'src/game/sgame/bots/q3a/q3a_botlib_boundary.cpp',
   'src/game/sgame/client/client_session_service_impl.cpp',
   'src/game/sgame/client/client_stats_service.cpp',

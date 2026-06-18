@@ -1,0 +1,79 @@
+{
+  "schema": "worr-bot-perf-budget-v1",
+  "description": "Generous baseline budget for the 2026-06-18 ten-minute eight-bot mm-rage frame-command soak.",
+  "checks": {
+    "metrics": {
+      "pass": {
+        "min": 1,
+        "max": 1,
+        "description": "The smoke harness must pass."
+      },
+      "duration_sec": {
+        "min": 540,
+        "max": 720,
+        "description": "Expected ten-minute soak with room for local timing variance."
+      },
+      "bot_count": {
+        "min": 8,
+        "max": 8,
+        "description": "This budget is scoped to the eight-bot soak."
+      },
+      "commands_per_bot_sec": {
+        "min": 20,
+        "max": 80,
+        "description": "Detects severe command starvation or runaway duplicate command submission."
+      },
+      "route_queries_per_bot_sec": {
+        "max": 25,
+        "description": "Derived route-query pressure budget from the current baseline plus slack."
+      },
+      "route_refresh_ratio": {
+        "max": 0.55,
+        "description": "Route refreshes should remain well below total route requests."
+      },
+      "route_reuse_ratio": {
+        "min": 0.4,
+        "description": "Route cache reuse should remain a meaningful share of route requests."
+      },
+      "debug_work_units_per_bot_sec": {
+        "max": 1500,
+        "description": "Debug overlay pressure proxy while route and goal debug are enabled."
+      },
+      "recovery_command_uses_per_bot_sec": {
+        "max": 45,
+        "description": "Recovery command churn budget with headroom over the first soak baseline."
+      },
+      "progress_reports": {
+        "min": 8,
+        "max": 12,
+        "description": "Ten-minute soak should report roughly once per minute."
+      }
+    },
+    "status": {
+      "commands": {
+        "min": 120000,
+        "description": "Raw final status command count should show sustained bot command throughput."
+      },
+      "route_commands": {
+        "min": 120000,
+        "description": "Raw final status route command count should show sustained route steering."
+      },
+      "route_failures": {
+        "max": 0,
+        "description": "No route failures are acceptable for this baseline smoke."
+      },
+      "route_invalid_slots": {
+        "max": 0,
+        "description": "No invalid route slots should be observed."
+      },
+      "route_debug_missing_frames": {
+        "max": 0,
+        "description": "Route debug output should keep pace with route command frames."
+      },
+      "skipped_inactive": {
+        "max": 0,
+        "description": "All eight bots should stay active through the soak."
+      }
+    }
+  }
+}

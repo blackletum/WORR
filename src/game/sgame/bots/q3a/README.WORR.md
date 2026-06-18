@@ -71,15 +71,29 @@ Current state:
   bot route exists, including current-area labels, next-reachability labels, and
   a bounded sampled route polyline. `sg_bot_debug_client` filters the native
   cached route/goal overlay by zero-based client slot, with `-1` retaining the
-  all-bots mode. The imported Q3A route-overlay smoke
-  is retained as an early fallback. Q3A debug polygon
-  create/delete callbacks route through WORR debug-line outline rendering, and
+  all-bots mode. Active-pickup route goals, the first item reservation policy,
+  route-point look-ahead command steering, velocity-aware command steering,
+  stuck-progress repath, short stuck recovery commands, item-goal blacklist
+  cooldowns, failed-goal reason diagnostics, and reachability-aware
+  movement-state command intent, exact-origin position route goals, and
+  smoke-backed natural travel-type route goals are WORR-native behavior layered over
+  adapter-owned Q3A AAS point/route queries. Current high-level frame
+  command/status ownership now lives in WORR-native `bot_brain.*`; `bot_think.*`
+  stays as the stable lifecycle and server-extension wrapper surface for
+  existing callers. The imported Q3A route-overlay smoke is retained as an
+  early fallback. Q3A debug polygon create/delete callbacks route through
+  WORR debug-line outline rendering, and
   imported `AAS_ShowArea` / `AAS_ShowAreaPolygons` now have a `sg_bot_debug_aas
   3` smoke path.
 - The full Quake III Arena BotLib runtime has not been copied into this
   directory yet.
 - The planned upstream baseline is `id-Software/Quake-III-Arena` commit
   `dbe4ddb10315479fc00086f08e25d968b4b43c49`.
+- The inherited Quake II Rerelease `src/game/sgame/bots/bot_debug.*`,
+  `bot_exports.*`, and `bot_utils.*` layer has been removed from sgame. New
+  bot action, debug, entity-state, weapon, item, and use behavior should build
+  through the WORR runtime/nav/thinking/adapter surface here, not through the old
+  Q2R engine-side bot callbacks.
 
 Import rules:
 

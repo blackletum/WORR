@@ -312,6 +312,7 @@ void Q3A_BotLibImport_SetFilesystemCallbacks(
 void Q3A_BotLibImport_SetEntityTraceCallback(Q3ABotLibImportEntityTraceCallback callback);
 void Q3A_BotLibImport_SetDebugDrawCallback(Q3ABotLibImportDebugDrawCallback callback);
 void Q3A_BotLibImport_SetDebugPolygonCallback(Q3ABotLibImportDebugPolygonCallback callback);
+void Q3A_BotLibImport_SetRoutePolicy(int allowRocketJump);
 int Q3A_BotLibImport_RunLibVarSmoke(void);
 int Q3A_BotLibImport_RunDebugDrawSmoke(void);
 int Q3A_BotLibImport_RunDebugPolygonSmoke(void);
@@ -332,6 +333,24 @@ int Q3A_BotLibImport_BuildRouteSteer(
 	const float origin[3],
 	int preferredGoalArea,
 	Q3ABotLibImportRouteSteerResult *result);
+int Q3A_BotLibImport_BuildRouteSteerToGoal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	Q3ABotLibImportRouteSteerResult *result);
+int Q3A_BotLibImport_BuildRouteSteerForTravelType(
+	const float origin[3],
+	int travelType,
+	Q3ABotLibImportRouteSteerResult *result);
+int Q3A_BotLibImport_FindRouteStartForTravelType(
+	int travelType,
+	float outOrigin[3],
+	int *outArea,
+	int *outGoalArea);
+int Q3A_BotLibImport_FindRouteAreaForPoint(
+	const float origin[3],
+	int *outArea,
+	float outOrigin[3]);
 void Q3A_BotLibImport_ClearBspEntityData(void);
 void Q3A_BotLibImport_ClearBspModelData(void);
 void Q3A_BotLibImport_ClearBspCollisionData(void);

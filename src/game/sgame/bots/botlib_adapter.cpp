@@ -317,6 +317,40 @@ void CopyImportStatus() {
 	botLibAdapterStatus.bspLeafLinkMessage = status->bspLeafLinkMessage != nullptr ? status->bspLeafLinkMessage : "";
 	botLibAdapterStatus.bspVisibilityMessage = status->bspVisibilityMessage != nullptr ? status->bspVisibilityMessage : "";
 }
+
+void CopyRouteSteerResult(
+	const Q3ABotLibImportRouteSteerResult &q3aResult,
+	BotLibAdapterRouteSteer *result) {
+	if (result == nullptr) {
+		return;
+	}
+
+	result->success = q3aResult.success != 0;
+	result->startArea = q3aResult.startArea;
+	result->goalArea = q3aResult.goalArea;
+	result->routeEndArea = q3aResult.routeEndArea;
+	result->travelTime = q3aResult.travelTime;
+	result->reachability = q3aResult.reachability;
+	result->reachabilityTravelType = q3aResult.reachabilityTravelType;
+	result->reachabilityTravelFlags = q3aResult.reachabilityTravelFlags;
+	result->reachabilityEndArea = q3aResult.reachabilityEndArea;
+	result->stopEvent = q3aResult.stopEvent;
+	result->routePointCount = q3aResult.routePointCount;
+	if (result->routePointCount < 0) {
+		result->routePointCount = 0;
+	} else if (result->routePointCount > BOTLIB_ADAPTER_MAX_ROUTE_POINTS) {
+		result->routePointCount = BOTLIB_ADAPTER_MAX_ROUTE_POINTS;
+	}
+	for (int i = 0; i < 3; ++i) {
+		result->moveTarget[i] = q3aResult.moveTarget[i];
+		result->goalOrigin[i] = q3aResult.goalOrigin[i];
+	}
+	for (int pointIndex = 0; pointIndex < result->routePointCount; ++pointIndex) {
+		for (int axis = 0; axis < 3; ++axis) {
+			result->routePoints[pointIndex][axis] = q3aResult.routePoints[pointIndex][axis];
+		}
+	}
+}
 } // namespace
 
 void BotLibAdapter_Init() {
@@ -392,6 +426,10 @@ void BotLibAdapter_SetDebugPolygonCallback(BotLibAdapterDebugPolygonCallback cal
 	Q3A_BotLibImport_SetDebugPolygonCallback(
 		botLibAdapterDebugPolygonCallback != nullptr ? BotLibAdapter_Q3ADebugPolygon : nullptr);
 	CopyImportStatus();
+}
+
+void BotLibAdapter_SetRoutePolicy(bool allowRocketJump) {
+	Q3A_BotLibImport_SetRoutePolicy(allowRocketJump ? 1 : 0);
 }
 
 void BotLibAdapter_BeginLevel(const char *mapName, const char *aasPath) {
@@ -609,34 +647,70 @@ bool BotLibAdapter_BuildRouteSteer(
 	}
 
 	const bool routed = Q3A_BotLibImport_BuildRouteSteer(origin, preferredGoalArea, &q3aResult) != 0;
-	if (result != nullptr) {
-		result->success = q3aResult.success != 0;
-		result->startArea = q3aResult.startArea;
-		result->goalArea = q3aResult.goalArea;
-		result->routeEndArea = q3aResult.routeEndArea;
-		result->travelTime = q3aResult.travelTime;
-		result->reachability = q3aResult.reachability;
-		result->reachabilityTravelType = q3aResult.reachabilityTravelType;
-		result->reachabilityTravelFlags = q3aResult.reachabilityTravelFlags;
-		result->reachabilityEndArea = q3aResult.reachabilityEndArea;
-		result->stopEvent = q3aResult.stopEvent;
-		result->routePointCount = q3aResult.routePointCount;
-		if (result->routePointCount < 0) {
-			result->routePointCount = 0;
-		} else if (result->routePointCount > BOTLIB_ADAPTER_MAX_ROUTE_POINTS) {
-			result->routePointCount = BOTLIB_ADAPTER_MAX_ROUTE_POINTS;
-		}
-		for (int i = 0; i < 3; ++i) {
-			result->moveTarget[i] = q3aResult.moveTarget[i];
-			result->goalOrigin[i] = q3aResult.goalOrigin[i];
-		}
-		for (int pointIndex = 0; pointIndex < result->routePointCount; ++pointIndex) {
-			for (int axis = 0; axis < 3; ++axis) {
-				result->routePoints[pointIndex][axis] = q3aResult.routePoints[pointIndex][axis];
-			}
-		}
-	}
+	CopyRouteSteerResult(q3aResult, result);
 	return routed;
+}
+
+bool BotLibAdapter_BuildRouteSteerToGoal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	BotLibAdapterRouteSteer *result) {
+	Q3ABotLibImportRouteSteerResult q3aResult{};
+
+	if (!botLibAdapterStatus.initialized) {
+		BotLibAdapter_Init();
+	}
+
+	const bool routed = Q3A_BotLibImport_BuildRouteSteerToGoal(
+		origin,
+		preferredGoalArea,
+		preferredGoalOrigin,
+		&q3aResult) != 0;
+	CopyRouteSteerResult(q3aResult, result);
+	return routed;
+}
+
+bool BotLibAdapter_BuildRouteSteerForTravelType(
+	const float origin[3],
+	int travelType,
+	BotLibAdapterRouteSteer *result) {
+	Q3ABotLibImportRouteSteerResult q3aResult{};
+
+	if (!botLibAdapterStatus.initialized) {
+		BotLibAdapter_Init();
+	}
+
+	const bool routed = Q3A_BotLibImport_BuildRouteSteerForTravelType(origin, travelType, &q3aResult) != 0;
+	CopyRouteSteerResult(q3aResult, result);
+	return routed;
+}
+
+bool BotLibAdapter_FindRouteStartForTravelType(
+	int travelType,
+	float outOrigin[3],
+	int *outArea,
+	int *outGoalArea) {
+	if (!botLibAdapterStatus.initialized) {
+		BotLibAdapter_Init();
+	}
+
+	return Q3A_BotLibImport_FindRouteStartForTravelType(
+		travelType,
+		outOrigin,
+		outArea,
+		outGoalArea) != 0;
+}
+
+bool BotLibAdapter_FindRouteAreaForPoint(
+	const float origin[3],
+	int *outArea,
+	float outOrigin[3]) {
+	if (!botLibAdapterStatus.initialized) {
+		BotLibAdapter_Init();
+	}
+
+	return Q3A_BotLibImport_FindRouteAreaForPoint(origin, outArea, outOrigin) != 0;
 }
 
 const BotLibAdapterStatus &BotLibAdapter_GetStatus() {

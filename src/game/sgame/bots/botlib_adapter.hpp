@@ -320,6 +320,7 @@ void BotLibAdapter_SetFilesystemCallbacks(
 void BotLibAdapter_SetEntityTraceCallback(BotLibAdapterEntityTraceCallback callback);
 void BotLibAdapter_SetDebugDrawCallback(BotLibAdapterDebugDrawCallback callback);
 void BotLibAdapter_SetDebugPolygonCallback(BotLibAdapterDebugPolygonCallback callback);
+void BotLibAdapter_SetRoutePolicy(bool allowRocketJump);
 void BotLibAdapter_BeginLevel(const char *mapName, const char *aasPath);
 bool BotLibAdapter_LoadBspEntityData(const char *mapName, const char *bspPath, const void *data, int length);
 bool BotLibAdapter_LoadBspModelData(const char *mapName, const char *bspPath, const void *data, int length);
@@ -340,5 +341,23 @@ bool BotLibAdapter_BuildRouteSteer(
 	const float origin[3],
 	int preferredGoalArea,
 	BotLibAdapterRouteSteer *result);
+bool BotLibAdapter_BuildRouteSteerToGoal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	BotLibAdapterRouteSteer *result);
+bool BotLibAdapter_BuildRouteSteerForTravelType(
+	const float origin[3],
+	int travelType,
+	BotLibAdapterRouteSteer *result);
+bool BotLibAdapter_FindRouteStartForTravelType(
+	int travelType,
+	float outOrigin[3],
+	int *outArea,
+	int *outGoalArea);
+bool BotLibAdapter_FindRouteAreaForPoint(
+	const float origin[3],
+	int *outArea,
+	float outOrigin[3]);
 
 const BotLibAdapterStatus &BotLibAdapter_GetStatus();

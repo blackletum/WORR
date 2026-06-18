@@ -4107,8 +4107,6 @@ extern cvar_t *ai_model_scale;
 extern cvar_t *ai_movement_disabled;
 extern cvar_t *ai_widow_roof_spawn;
 
-extern cvar_t *bot_debug_follow_actor;
-extern cvar_t *bot_debug_move_to_point;
 extern cvar_t *sg_bot_enable;
 extern cvar_t *sg_bot_debug;
 extern cvar_t *sg_bot_debug_aas;

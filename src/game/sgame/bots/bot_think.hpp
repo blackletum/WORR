@@ -3,6 +3,9 @@
 
 #pragma once
 
+struct gentity_t;
+struct usercmd_t;
+
 void Bot_BeginFrame( gentity_t * bot );
 void Bot_EndFrame( gentity_t * bot );
 bool Bot_BuildFrameCommand( gentity_t * bot, usercmd_t * cmd );

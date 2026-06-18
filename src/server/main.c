@@ -101,6 +101,10 @@ static cvar_t  *sv_bot_min_players_smoke;
 static cvar_t  *sv_bot_profile_smoke;
 static cvar_t  *sv_bot_team_policy_smoke;
 static cvar_t  *sv_bot_frame_command_smoke;
+static cvar_t  *sv_bot_frame_command_smoke_soak_ms;
+static cvar_t  *sv_bot_frame_command_smoke_map_repeat_cycles;
+static cvar_t  *sv_bot_frame_command_smoke_map_repeat_reload_timeout_ms;
+static cvar_t  *sv_bot_frame_command_smoke_map_repeat_restart;
 static cvar_t  *sg_bot_enable;
 static cvar_t  *sg_bot_min_players;
 static cvar_t  *sg_bot_profile;
@@ -2171,6 +2175,399 @@ static void SV_BotFrameCommandStatus(int expected_min_frames,
     api->PrintStatus(expected_min_frames, expected_min_commands);
 }
 
+#define SV_BOT_FRAME_COMMAND_STATUS_CAPTURE_TARGET 19
+#define SV_BOT_FRAME_COMMAND_STATUS_CAPTURE_SIZE 8192
+
+static char sv_bot_frame_command_status_capture[
+    SV_BOT_FRAME_COMMAND_STATUS_CAPTURE_SIZE];
+static size_t sv_bot_frame_command_status_capture_len;
+
+static void SV_BotFrameCommandStatusCaptureReset(void)
+{
+    sv_bot_frame_command_status_capture_len = 0;
+    sv_bot_frame_command_status_capture[0] = 0;
+}
+
+static void SV_BotFrameCommandStatusCaptureFlush(int redirected,
+                                                 const char *outputbuf,
+                                                 size_t len)
+{
+    size_t copy_len;
+
+    (void)redirected;
+
+    if (!outputbuf || !len ||
+        sv_bot_frame_command_status_capture_len >=
+        sizeof(sv_bot_frame_command_status_capture) - 1) {
+        return;
+    }
+
+    copy_len = min(
+        len,
+        sizeof(sv_bot_frame_command_status_capture) - 1 -
+            sv_bot_frame_command_status_capture_len);
+    memcpy(sv_bot_frame_command_status_capture +
+               sv_bot_frame_command_status_capture_len,
+           outputbuf, copy_len);
+    sv_bot_frame_command_status_capture_len += copy_len;
+    sv_bot_frame_command_status_capture[
+        sv_bot_frame_command_status_capture_len] = 0;
+}
+
+static const char *SV_BotFrameCommandStatusCapture(int expected_min_frames,
+                                                   int expected_min_commands)
+{
+    char redirect_buffer[MAXPRINTMSG];
+
+    SV_BotFrameCommandStatusCaptureReset();
+    Com_BeginRedirect(SV_BOT_FRAME_COMMAND_STATUS_CAPTURE_TARGET,
+                      redirect_buffer, sizeof(redirect_buffer),
+                      SV_BotFrameCommandStatusCaptureFlush);
+    SV_BotFrameCommandStatus(expected_min_frames, expected_min_commands);
+    Com_EndRedirect();
+
+    return sv_bot_frame_command_status_capture;
+}
+
+static bool SV_BotFrameCommandStatusReadInt(const char *status,
+                                            const char *field,
+                                            int *value)
+{
+    char pattern[64];
+    const char *cursor;
+    char *end;
+    long parsed;
+
+    if (!status || !field || !value ||
+        Q_snprintf(pattern, sizeof(pattern), "%s=", field) >=
+            sizeof(pattern)) {
+        return false;
+    }
+
+    cursor = strstr(status, pattern);
+    if (!cursor) {
+        return false;
+    }
+
+    cursor += strlen(pattern);
+    parsed = strtol(cursor, &end, 10);
+    if (end == cursor) {
+        return false;
+    }
+
+    *value = (int)parsed;
+    return true;
+}
+
+static int SV_BotFrameCommandStatusCapturedPass(const char *status,
+                                                int expected_min_frames,
+                                                int expected_min_commands,
+                                                bool *official_pass)
+{
+    int pass;
+    int frames;
+    int commands;
+    int route_commands;
+    int route_failures;
+    int item_goal_reservation_skips;
+    int item_goal_peak_active_reservations;
+
+    if (official_pass) {
+        *official_pass = false;
+    }
+
+    if (SV_BotFrameCommandStatusReadInt(status, "pass", &pass) &&
+        (pass == 0 || pass == 1)) {
+        if (official_pass) {
+            *official_pass = true;
+        }
+        return pass;
+    }
+
+    if (!SV_BotFrameCommandStatusReadInt(status, "frames", &frames) ||
+        !SV_BotFrameCommandStatusReadInt(status, "commands", &commands) ||
+        !SV_BotFrameCommandStatusReadInt(status, "route_commands",
+                                         &route_commands) ||
+        !SV_BotFrameCommandStatusReadInt(status, "route_failures",
+                                         &route_failures) ||
+        !SV_BotFrameCommandStatusReadInt(status, "item_goal_reservation_skips",
+                                         &item_goal_reservation_skips) ||
+        !SV_BotFrameCommandStatusReadInt(
+            status, "item_goal_peak_active_reservations",
+            &item_goal_peak_active_reservations)) {
+        return -1;
+    }
+
+    if (frames < expected_min_frames ||
+        commands < expected_min_commands ||
+        route_commands < expected_min_commands ||
+        route_failures != 0 ||
+        item_goal_reservation_skips <= 0 ||
+        item_goal_peak_active_reservations < expected_min_commands) {
+        return 0;
+    }
+
+    return 1;
+}
+
+static int SV_BotFrameCommandStatusCapturedCleanupPass(
+    const char *status,
+    int bot_count,
+    int *active_reservations)
+{
+    int reservations;
+
+    if (active_reservations) {
+        *active_reservations = -1;
+    }
+
+    if (!SV_BotFrameCommandStatusReadInt(status,
+                                         "item_goal_active_reservations",
+                                         &reservations)) {
+        return 0;
+    }
+
+    if (active_reservations) {
+        *active_reservations = reservations;
+    }
+
+    return bot_count == 0 && reservations == 0;
+}
+
+static int SV_BotFrameCommandSmokeMode(void)
+{
+    return sv_bot_frame_command_smoke ? sv_bot_frame_command_smoke->integer : 0;
+}
+
+static bool SV_BotFrameCommandSmokeStallsMovement(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 4;
+}
+
+static bool SV_BotFrameCommandSmokeIsSoak(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 18;
+}
+
+static bool SV_BotFrameCommandSmokeIsMapRepeat(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 19;
+}
+
+static int SV_BotFrameCommandSmokeSoakMilliseconds(void)
+{
+    int duration_ms = sv_bot_frame_command_smoke_soak_ms ?
+        sv_bot_frame_command_smoke_soak_ms->integer : 600000;
+
+    if (duration_ms < 1000) {
+        duration_ms = 1000;
+    }
+
+    return duration_ms;
+}
+
+static int SV_BotFrameCommandSmokeSoakProgressMilliseconds(void)
+{
+    const int duration_ms = SV_BotFrameCommandSmokeSoakMilliseconds();
+    int progress_ms = duration_ms / 4;
+
+    if (progress_ms < 1000) {
+        progress_ms = 1000;
+    }
+    if (progress_ms > 60000) {
+        progress_ms = 60000;
+    }
+
+    return progress_ms;
+}
+
+static int SV_BotFrameCommandSmokeMapRepeatCycles(void)
+{
+    int cycles = sv_bot_frame_command_smoke_map_repeat_cycles ?
+        sv_bot_frame_command_smoke_map_repeat_cycles->integer : 2;
+
+    if (cycles < 2) {
+        cycles = 2;
+    }
+    if (cycles > 8) {
+        cycles = 8;
+    }
+
+    return cycles;
+}
+
+static int SV_BotFrameCommandSmokeMapRepeatReloadTimeoutMilliseconds(void)
+{
+    int timeout_ms = sv_bot_frame_command_smoke_map_repeat_reload_timeout_ms ?
+        sv_bot_frame_command_smoke_map_repeat_reload_timeout_ms->integer :
+        10000;
+
+    if (timeout_ms < 1000) {
+        timeout_ms = 1000;
+    }
+    if (timeout_ms > 120000) {
+        timeout_ms = 120000;
+    }
+
+    return timeout_ms;
+}
+
+static bool SV_BotFrameCommandSmokeMapRepeatRestartReload(void)
+{
+    return sv_bot_frame_command_smoke_map_repeat_restart &&
+        sv_bot_frame_command_smoke_map_repeat_restart->integer > 0;
+}
+
+static const char *SV_BotFrameCommandSmokeMapRepeatReloadCommand(void)
+{
+    return SV_BotFrameCommandSmokeMapRepeatRestartReload() ?
+        "map_force" : "gamemap";
+}
+
+static unsigned SV_BotFrameCommandSmokeElapsedMilliseconds(
+    unsigned start_realtime,
+    bool *realtime_reset)
+{
+    if (realtime_reset) {
+        *realtime_reset = false;
+    }
+
+    if (svs.realtime < start_realtime) {
+        if (realtime_reset) {
+            *realtime_reset = true;
+        }
+        return 0;
+    }
+
+    return svs.realtime - start_realtime;
+}
+
+static const char *SV_BotFrameCommandSmokeMapRepeatPhase(int completed_cycles)
+{
+    return completed_cycles <= 0 ? "pre_reload" : "post_reload";
+}
+
+static const char *SV_BotFrameCommandSmokeMapRepeatCyclePhase(int cycle)
+{
+    return cycle <= 1 ? "pre_reload" : "post_reload";
+}
+
+static bool SV_BotFrameCommandSmokeUsesPositionGoal(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 8;
+}
+
+static bool SV_BotFrameCommandSmokeUsesTravelTypeGoal(void)
+{
+    switch (SV_BotFrameCommandSmokeMode()) {
+    case 9:
+    case 10:
+    case 11:
+    case 12:
+    case 13:
+    case 14:
+    case 15:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static int SV_BotFrameCommandSmokeTargetBots(void)
+{
+    if (SV_BotFrameCommandSmokeUsesPositionGoal() ||
+        SV_BotFrameCommandSmokeUsesTravelTypeGoal()) {
+        return 1;
+    }
+
+    if (SV_BotFrameCommandSmokeIsSoak() ||
+        SV_BotFrameCommandSmokeIsMapRepeat() ||
+        SV_BotFrameCommandSmokeMode() == 17) {
+        return min(8, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeMode() == 16) {
+        return min(4, bot_public_client_limit());
+    }
+
+    return SV_BotFrameCommandSmokeMode() >= 3 ?
+        min(2, bot_public_client_limit()) : 1;
+}
+
+static const char *SV_BotFrameCommandSmokeBotName(int index)
+{
+    static const char *names[] = {
+        "Mover",
+        "MoverTwo",
+        "MoverThree",
+        "MoverFour",
+        "MoverFive",
+        "MoverSix",
+        "MoverSeven",
+        "MoverEight"
+    };
+
+    if (index >= 0 && index < q_countof(names)) {
+        return names[index];
+    }
+
+    return NULL;
+}
+
+static int SV_BotFrameCommandSmokeForcedTravelType(void)
+{
+    switch (SV_BotFrameCommandSmokeMode()) {
+    case 5:
+        return 5; /* TRAVEL_JUMP */
+    case 6:
+        return 3; /* TRAVEL_CROUCH */
+    case 7:
+        return 8; /* TRAVEL_SWIM */
+    default:
+        return 0;
+    }
+}
+
+static int SV_BotFrameCommandSmokeTravelTypeGoal(void)
+{
+    switch (SV_BotFrameCommandSmokeMode()) {
+    case 9:
+        return 5; /* TRAVEL_JUMP */
+    case 10:
+        return 6; /* TRAVEL_LADDER */
+    case 11:
+        return 7; /* TRAVEL_WALKOFFLEDGE */
+    case 12:
+        return 11; /* TRAVEL_ELEVATOR */
+    case 13:
+        return 4; /* TRAVEL_BARRIERJUMP */
+    case 14:
+    case 15:
+        return 12; /* TRAVEL_ROCKETJUMP */
+    default:
+        return 0;
+    }
+}
+
+static bool SV_BotFrameCommandSmokeAllowsRocketJump(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 14;
+}
+
+static bool SV_BotFrameCommandSmokeExpectsBlockedTravelTypeGoal(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 15;
+}
+
+static int SV_BotFrameCommandSmokeExpectedCommands(int target_bots)
+{
+    if (SV_BotFrameCommandSmokeExpectsBlockedTravelTypeGoal()) {
+        return 0;
+    }
+
+    return target_bots;
+}
+
 static void SV_BotRunFrameCommands(void)
 {
     const bot_frame_command_api_v1_t *api;
@@ -2196,9 +2593,59 @@ static void SV_BotRunFrameCommands(void)
 
         memset(&cmd, 0, sizeof(cmd));
         if (api->BuildCommand(cl->edict, &cmd)) {
+            if (SV_BotFrameCommandSmokeStallsMovement()) {
+                continue;
+            }
             SV_BotClientThink(cl, &cmd);
         }
     }
+}
+
+static void SV_BotFrameCommandSmokeResetRuntimeCvars(void)
+{
+    Cvar_Set("sg_bot_enable", "0");
+    Cvar_Set("sg_bot_min_players", "0");
+    Cvar_Set("sg_bot_frame_command_smoke_travel_type", "0");
+    Cvar_Set("sg_bot_nav_position_goal_enable", "0");
+    Cvar_Set("sg_bot_nav_travel_type_goal", "0");
+    Cvar_Set("sg_bot_nav_travel_type_goal_warp", "0");
+    Cvar_Set("sg_bot_nav_travel_type_goal_expect_blocked", "0");
+    Cvar_Set("sg_bot_frame_command_smoke_soak", "0");
+    Cvar_Set("sg_bot_allow_rocketjump", "0");
+}
+
+static int SV_BotFrameCommandSmokeMapRepeatCleanupStatus(int cycle,
+                                                         const char *phase,
+                                                         const char *reason)
+{
+    const char *captured_status;
+    int active_reservations;
+    int pass;
+
+    Com_Printf("q3a_bot_frame_command_smoke_map_repeat_cleanup_status_requested "
+               "cycle=%d phase=%s reason=%s count=%d status_line=next\n",
+               cycle, phase, reason, SV_BotCount());
+
+    captured_status = SV_BotFrameCommandStatusCapture(0, 0);
+    if (captured_status[0]) {
+        Com_Printf("%s", captured_status);
+        if (sv_bot_frame_command_status_capture_len == 0 ||
+            captured_status[sv_bot_frame_command_status_capture_len - 1] !=
+                '\n') {
+            Com_Printf("\n");
+        }
+    }
+
+    pass = SV_BotFrameCommandStatusCapturedCleanupPass(
+        captured_status, SV_BotCount(), &active_reservations);
+
+    Com_Printf("\nq3a_bot_frame_command_smoke_map_repeat_cleanup_status "
+               "cycle=%d phase=%s reason=%s count=%d "
+               "active_reservations=%d pass=%d status_line=previous\n",
+               cycle, phase, reason, SV_BotCount(), active_reservations,
+               pass);
+
+    return pass;
 }
 
 static void SV_BotFrameCommandSmokeFrame(void)
@@ -2206,6 +2653,20 @@ static void SV_BotFrameCommandSmokeFrame(void)
     static int seen_spawncount;
     static int stage;
     static int settle_frames;
+    static bool soak_active;
+    static unsigned soak_start_realtime;
+    static unsigned soak_last_progress_realtime;
+    static int soak_progress_reports;
+    static int map_repeat_cycle;
+    static int map_repeat_completed_cycles;
+    static int map_repeat_map_changes;
+    static bool map_repeat_reload_pending;
+    static int map_repeat_reload_spawncount;
+    static unsigned map_repeat_reload_request_realtime;
+    static char map_repeat_map[MAX_QPATH];
+    int target_bots;
+    int forced_travel_type;
+    int travel_type_goal;
     bool added;
 
     if (!sv_bot_frame_command_smoke ||
@@ -2217,11 +2678,123 @@ static void SV_BotFrameCommandSmokeFrame(void)
         return;
     }
 
+    target_bots = SV_BotFrameCommandSmokeTargetBots();
+    if (target_bots < 1) {
+        target_bots = 1;
+    }
+
     if (seen_spawncount != sv.spawncount) {
         seen_spawncount = sv.spawncount;
         stage = 0;
         settle_frames = 0;
+        soak_active = false;
+        soak_start_realtime = 0;
+        soak_last_progress_realtime = 0;
+        soak_progress_reports = 0;
+        if (SV_BotFrameCommandSmokeIsMapRepeat()) {
+            if (map_repeat_reload_pending) {
+                bool reload_realtime_reset;
+                const unsigned reload_elapsed_ms =
+                    SV_BotFrameCommandSmokeElapsedMilliseconds(
+                        map_repeat_reload_request_realtime,
+                        &reload_realtime_reset);
+                const int reload_timeout_ms =
+                    SV_BotFrameCommandSmokeMapRepeatReloadTimeoutMilliseconds();
+
+                map_repeat_reload_pending = false;
+                map_repeat_cycle++;
+                Com_Printf("q3a_bot_frame_command_smoke_map_repeat_reloaded "
+                           "cycle=%d completed_cycles=%d map_changes=%d "
+                           "old_spawncount=%d new_spawncount=%d map=%s\n",
+                           map_repeat_cycle, map_repeat_completed_cycles,
+                           map_repeat_map_changes,
+                           map_repeat_reload_spawncount, sv.spawncount,
+                           sv.name);
+                Com_Printf("q3a_bot_frame_command_smoke_map_repeat_reload=observed "
+                           "cycle=%d phase=%s completed_cycles=%d "
+                           "map_changes=%d old_spawncount=%d "
+                           "new_spawncount=%d elapsed_ms=%u "
+                           "realtime_reset=%d timeout_ms=%d map=%s "
+                           "command=%s restart=%d\n",
+                           map_repeat_cycle,
+                           SV_BotFrameCommandSmokeMapRepeatPhase(
+                               map_repeat_completed_cycles),
+                           map_repeat_completed_cycles,
+                           map_repeat_map_changes,
+                           map_repeat_reload_spawncount, sv.spawncount,
+                           reload_elapsed_ms, reload_realtime_reset ? 1 : 0,
+                           reload_timeout_ms, sv.name,
+                           SV_BotFrameCommandSmokeMapRepeatReloadCommand(),
+                           SV_BotFrameCommandSmokeMapRepeatRestartReload() ?
+                               1 : 0);
+                map_repeat_reload_request_realtime = 0;
+            } else {
+                map_repeat_cycle = 1;
+                map_repeat_completed_cycles = 0;
+                map_repeat_map_changes = 0;
+                map_repeat_reload_spawncount = 0;
+                map_repeat_reload_request_realtime = 0;
+                map_repeat_map[0] = 0;
+            }
+        } else {
+            map_repeat_cycle = 0;
+            map_repeat_completed_cycles = 0;
+            map_repeat_map_changes = 0;
+            map_repeat_reload_pending = false;
+            map_repeat_reload_spawncount = 0;
+            map_repeat_reload_request_realtime = 0;
+            map_repeat_map[0] = 0;
+        }
     } else if (stage > 2) {
+        if (SV_BotFrameCommandSmokeIsMapRepeat() &&
+            map_repeat_reload_pending) {
+            const int timeout_ms =
+                SV_BotFrameCommandSmokeMapRepeatReloadTimeoutMilliseconds();
+            bool realtime_reset;
+            const unsigned elapsed_ms =
+                SV_BotFrameCommandSmokeElapsedMilliseconds(
+                    map_repeat_reload_request_realtime, &realtime_reset);
+
+            if (!realtime_reset && elapsed_ms >= (unsigned)timeout_ms) {
+                const int removed = SV_BotRemoveAll();
+
+                SV_BotFrameCommandSmokeResetRuntimeCvars();
+                map_repeat_reload_pending = false;
+                map_repeat_reload_request_realtime = 0;
+                Com_Printf("q3a_bot_frame_command_smoke_map_repeat_reload=timeout "
+                           "cycle=%d next_cycle=%d completed_cycles=%d "
+                           "target_cycles=%d map_changes=%d "
+                           "from_spawncount=%d current_spawncount=%d "
+                           "elapsed_ms=%u realtime_reset=%d timeout_ms=%d "
+                           "map=%s command=%s restart=%d removed=%d pass=0\n",
+                           map_repeat_cycle, map_repeat_cycle + 1,
+                           map_repeat_completed_cycles,
+                           SV_BotFrameCommandSmokeMapRepeatCycles(),
+                           map_repeat_map_changes,
+                           map_repeat_reload_spawncount, sv.spawncount,
+                           elapsed_ms, realtime_reset ? 1 : 0, timeout_ms,
+                           map_repeat_map,
+                           SV_BotFrameCommandSmokeMapRepeatReloadCommand(),
+                           SV_BotFrameCommandSmokeMapRepeatRestartReload() ?
+                               1 : 0,
+                           removed);
+                Com_Printf("q3a_bot_frame_command_smoke_map_repeat_cleanup "
+                           "cycle=%d phase=reload_wait "
+                           "reason=reload_timeout final_count=%d\n",
+                           map_repeat_cycle, SV_BotCount());
+                Com_Printf("q3a_bot_frame_command_smoke_map_repeat=failed "
+                           "reason=reload_timeout cycles=%d map_changes=%d "
+                           "final_map=%s final_spawncount=%d "
+                           "final_count=%d pass=0\n",
+                           map_repeat_completed_cycles,
+                           map_repeat_map_changes, sv.name, sv.spawncount,
+                           SV_BotCount());
+                stage = 4;
+                if (sv_bot_frame_command_smoke->integer >= 2) {
+                    Com_Quit(NULL, ERR_DISCONNECT);
+                }
+            }
+        }
         return;
     }
 
@@ -2230,7 +2803,85 @@ static void SV_BotFrameCommandSmokeFrame(void)
         Cvar_Set("sg_bot_enable", "1");
         Cvar_Set("sg_bot_min_players", "0");
         Cvar_Set("g_gametype", "0");
+        Cvar_Set("sg_bot_allow_rocketjump",
+                 SV_BotFrameCommandSmokeAllowsRocketJump() ? "1" : "0");
+        Cvar_Set("sg_bot_nav_travel_type_goal_expect_blocked",
+                 SV_BotFrameCommandSmokeExpectsBlockedTravelTypeGoal() ? "1" : "0");
+        Cvar_Set("sg_bot_frame_command_smoke_soak",
+                 SV_BotFrameCommandSmokeIsSoak() ? "1" : "0");
         Com_Printf("q3a_bot_frame_command_smoke=begin\n");
+        if (SV_BotFrameCommandSmokeAllowsRocketJump()) {
+            Com_Printf("q3a_bot_frame_command_smoke_allow_rocketjump=1\n");
+        }
+        if (SV_BotFrameCommandSmokeExpectsBlockedTravelTypeGoal()) {
+            Com_Printf("q3a_bot_frame_command_smoke_travel_type_goal_expect_blocked=1\n");
+        }
+        if (SV_BotFrameCommandSmokeStallsMovement()) {
+            Com_Printf("q3a_bot_frame_command_smoke_stall_commands=1\n");
+        }
+        if (target_bots > 2) {
+            Com_Printf("q3a_bot_frame_command_smoke_multi_bot_target=%d\n",
+                       target_bots);
+        }
+        if (SV_BotFrameCommandSmokeIsSoak()) {
+            Com_Printf("q3a_bot_frame_command_smoke_soak_ms=%d\n",
+                       SV_BotFrameCommandSmokeSoakMilliseconds());
+        }
+        if (SV_BotFrameCommandSmokeIsMapRepeat()) {
+            Com_Printf("q3a_bot_frame_command_smoke_map_repeat_cycle=begin "
+                       "cycle=%d phase=%s target_cycles=%d completed_cycles=%d "
+                       "map_changes=%d map=%s spawncount=%d command=%s "
+                       "restart=%d\n",
+                       map_repeat_cycle,
+                       SV_BotFrameCommandSmokeMapRepeatPhase(
+                           map_repeat_completed_cycles),
+                       SV_BotFrameCommandSmokeMapRepeatCycles(),
+                       map_repeat_completed_cycles,
+                       map_repeat_map_changes,
+                       sv.name,
+                       sv.spawncount,
+                       SV_BotFrameCommandSmokeMapRepeatReloadCommand(),
+                       SV_BotFrameCommandSmokeMapRepeatRestartReload() ? 1 : 0);
+        }
+        forced_travel_type = SV_BotFrameCommandSmokeForcedTravelType();
+        if (forced_travel_type > 0) {
+            char forced_travel_type_value[16];
+            Q_snprintf(forced_travel_type_value,
+                       sizeof(forced_travel_type_value),
+                       "%d",
+                       forced_travel_type);
+            Cvar_Set("sg_bot_frame_command_smoke_travel_type",
+                     forced_travel_type_value);
+            Com_Printf("q3a_bot_frame_command_smoke_forced_travel_type=%d\n",
+                       forced_travel_type);
+        } else {
+            Cvar_Set("sg_bot_frame_command_smoke_travel_type", "0");
+        }
+        if (SV_BotFrameCommandSmokeUsesPositionGoal()) {
+            Cvar_Set("sg_bot_nav_position_goal_enable", "1");
+            Cvar_Set("sg_bot_nav_position_goal_x", "64");
+            Cvar_Set("sg_bot_nav_position_goal_y", "-304");
+            Cvar_Set("sg_bot_nav_position_goal_z", "82");
+            Com_Printf("q3a_bot_frame_command_smoke_position_goal=64 -304 82\n");
+        } else {
+            Cvar_Set("sg_bot_nav_position_goal_enable", "0");
+        }
+        travel_type_goal = SV_BotFrameCommandSmokeTravelTypeGoal();
+        if (travel_type_goal > 0) {
+            char travel_type_goal_value[16];
+            Q_snprintf(travel_type_goal_value,
+                       sizeof(travel_type_goal_value),
+                       "%d",
+                       travel_type_goal);
+            Cvar_Set("sg_bot_nav_travel_type_goal",
+                     travel_type_goal_value);
+            Cvar_Set("sg_bot_nav_travel_type_goal_warp", "1");
+            Com_Printf("q3a_bot_frame_command_smoke_travel_type_goal=%d\n",
+                       travel_type_goal);
+        } else {
+            Cvar_Set("sg_bot_nav_travel_type_goal", "0");
+            Cvar_Set("sg_bot_nav_travel_type_goal_warp", "0");
+        }
         settle_frames = 0;
         stage = 1;
         return;
@@ -2242,34 +2893,237 @@ static void SV_BotFrameCommandSmokeFrame(void)
             return;
         }
 
-        added = SV_BotAdd("Mover", NULL);
+        added = SV_BotAdd(SV_BotFrameCommandSmokeBotName(0), NULL);
         Com_Printf("q3a_bot_frame_command_smoke_after_add_request "
-                   "added=%d count=%d\n",
-                   added, SV_BotCount());
+                   "added=%d count=%d target=%d\n",
+                   added, SV_BotCount(), target_bots);
         stage = 2;
         return;
     }
 
-    if (SV_BotCount() < 1) {
+    if (SV_BotCount() < target_bots) {
+        const int bot_index = SV_BotCount();
+
+        added = SV_BotAdd(SV_BotFrameCommandSmokeBotName(bot_index), NULL);
+        Com_Printf("q3a_bot_frame_command_smoke_after_extra_add_request "
+                   "index=%d added=%d count=%d target=%d\n",
+                   bot_index, added, SV_BotCount(), target_bots);
         return;
     }
 
-    if (++settle_frames < 8) {
+    if (SV_BotFrameCommandSmokeIsSoak()) {
+        const int duration_ms = SV_BotFrameCommandSmokeSoakMilliseconds();
+        const int progress_ms = SV_BotFrameCommandSmokeSoakProgressMilliseconds();
+        const unsigned now = svs.realtime;
+        unsigned elapsed_ms;
+
+        if (!soak_active) {
+            soak_active = true;
+            soak_start_realtime = now;
+            soak_last_progress_realtime = now;
+            soak_progress_reports = 0;
+            Com_Printf("q3a_bot_frame_command_smoke_soak=begin "
+                       "target=%d duration_ms=%d progress_ms=%d count=%d\n",
+                       target_bots, duration_ms, progress_ms, SV_BotCount());
+            return;
+        }
+
+        elapsed_ms = now - soak_start_realtime;
+        if (elapsed_ms < (unsigned)duration_ms) {
+            if (now - soak_last_progress_realtime >= (unsigned)progress_ms) {
+                soak_progress_reports++;
+                soak_last_progress_realtime = now;
+                Com_Printf("q3a_bot_frame_command_smoke_soak_progress "
+                           "elapsed_ms=%u duration_ms=%d count=%d reports=%d\n",
+                           elapsed_ms, duration_ms, SV_BotCount(),
+                           soak_progress_reports);
+            }
+            return;
+        }
+
+        Com_Printf("q3a_bot_frame_command_smoke_soak=complete "
+                   "elapsed_ms=%u duration_ms=%d count=%d reports=%d\n",
+                   elapsed_ms, duration_ms, SV_BotCount(), soak_progress_reports);
+    } else if (++settle_frames <
+               (SV_BotFrameCommandSmokeStallsMovement() ? 14 : 8)) {
         return;
     }
 
+    if (SV_BotFrameCommandSmokeIsMapRepeat()) {
+        const char *phase = SV_BotFrameCommandSmokeMapRepeatPhase(
+            map_repeat_completed_cycles);
+
+        Com_Printf("q3a_bot_frame_command_smoke_map_repeat_cycle_status_requested "
+                   "cycle=%d phase=%s target_cycles=%d count=%d "
+                   "map=%s spawncount=%d status_line=next\n",
+                   map_repeat_cycle, phase,
+                   SV_BotFrameCommandSmokeMapRepeatCycles(), SV_BotCount(),
+                   sv.name, sv.spawncount);
+    }
     Com_Printf("q3a_bot_frame_command_smoke_status_requested count=%d\n",
                SV_BotCount());
-    SV_BotFrameCommandStatus(1, 1);
+
+    if (SV_BotFrameCommandSmokeIsMapRepeat()) {
+        const int expected_commands =
+            SV_BotFrameCommandSmokeExpectedCommands(target_bots);
+        const char *captured_status = SV_BotFrameCommandStatusCapture(
+            target_bots, expected_commands);
+        const char *phase = SV_BotFrameCommandSmokeMapRepeatPhase(
+            map_repeat_completed_cycles);
+        bool official_pass;
+        int status_pass;
+
+        if (captured_status[0]) {
+            Com_Printf("%s", captured_status);
+            if (sv_bot_frame_command_status_capture_len == 0 ||
+                captured_status[
+                    sv_bot_frame_command_status_capture_len - 1] != '\n') {
+                Com_Printf("\n");
+            }
+        }
+
+        status_pass = SV_BotFrameCommandStatusCapturedPass(
+            captured_status, target_bots, expected_commands, &official_pass);
+
+        Com_Printf("\nq3a_bot_frame_command_smoke_map_repeat_cycle_status_complete "
+                   "cycle=%d phase=%s target_cycles=%d "
+                   "status_line=previous pass=%d pass_source=%s "
+                   "official_pass=%d\n",
+                   map_repeat_cycle, phase,
+                   SV_BotFrameCommandSmokeMapRepeatCycles(),
+                   status_pass,
+                   official_pass ? "q3a_bot_frame_command_status" :
+                       (status_pass >= 0 ? "server_summary" : "unavailable"),
+                   official_pass ? 1 : 0);
+        if (status_pass == 0) {
+            const int removed = SV_BotRemoveAll();
+
+            SV_BotFrameCommandSmokeResetRuntimeCvars();
+            Com_Printf("q3a_bot_frame_command_smoke_map_repeat_cleanup "
+                       "cycle=%d phase=%s reason=cycle_status_failed "
+                       "removed=%d final_count=%d\n",
+                       map_repeat_cycle, phase, removed, SV_BotCount());
+            Com_Printf("q3a_bot_frame_command_smoke_map_repeat=failed "
+                       "reason=cycle_status_failed cycle=%d phase=%s "
+                       "completed_cycles=%d map_changes=%d final_map=%s "
+                       "final_spawncount=%d final_count=%d pass=0\n",
+                       map_repeat_cycle, phase, map_repeat_completed_cycles,
+                       map_repeat_map_changes, sv.name, sv.spawncount,
+                       SV_BotCount());
+            stage = 4;
+            soak_active = false;
+            if (sv_bot_frame_command_smoke->integer >= 2) {
+                Com_Quit(NULL, ERR_DISCONNECT);
+            }
+            return;
+        }
+        map_repeat_completed_cycles++;
+        Com_Printf("q3a_bot_frame_command_smoke_map_repeat_cycle=complete "
+                   "cycle=%d phase=%s completed_cycles=%d target_cycles=%d "
+                   "map_changes=%d map=%s spawncount=%d count=%d\n",
+                   map_repeat_cycle, phase, map_repeat_completed_cycles,
+                   SV_BotFrameCommandSmokeMapRepeatCycles(),
+                   map_repeat_map_changes, sv.name, sv.spawncount,
+                   SV_BotCount());
+    } else {
+        SV_BotFrameCommandStatus(
+            target_bots,
+            SV_BotFrameCommandSmokeExpectedCommands(target_bots));
+    }
 
     SV_BotRemoveAll();
     Com_Printf("q3a_bot_frame_command_smoke_removed_all count=%d\n",
                SV_BotCount());
-    Cvar_Set("sg_bot_enable", "0");
-    Cvar_Set("sg_bot_min_players", "0");
+    SV_BotFrameCommandSmokeResetRuntimeCvars();
+    if (SV_BotFrameCommandSmokeIsMapRepeat()) {
+        const int target_cycles = SV_BotFrameCommandSmokeMapRepeatCycles();
+        const char *cleanup_phase =
+            SV_BotFrameCommandSmokeMapRepeatCyclePhase(map_repeat_cycle);
+        const char *cleanup_reason =
+            map_repeat_completed_cycles < target_cycles ?
+                "before_reload" : "final_cycle_complete";
+
+        if (!SV_BotFrameCommandSmokeMapRepeatCleanupStatus(
+                map_repeat_cycle, cleanup_phase, cleanup_reason)) {
+            Com_Printf("q3a_bot_frame_command_smoke_map_repeat_cleanup "
+                       "cycle=%d phase=%s reason=cleanup_status_failed "
+                       "final_count=%d\n",
+                       map_repeat_cycle, cleanup_phase, SV_BotCount());
+            Com_Printf("q3a_bot_frame_command_smoke_map_repeat=failed "
+                       "reason=cleanup_status_failed cycle=%d phase=%s "
+                       "completed_cycles=%d map_changes=%d final_map=%s "
+                       "final_spawncount=%d final_count=%d pass=0\n",
+                       map_repeat_cycle, cleanup_phase,
+                       map_repeat_completed_cycles, map_repeat_map_changes,
+                       sv.name, sv.spawncount, SV_BotCount());
+            stage = 4;
+            soak_active = false;
+            if (sv_bot_frame_command_smoke->integer >= 2) {
+                Com_Quit(NULL, ERR_DISCONNECT);
+            }
+            return;
+        }
+    }
     Com_Printf("q3a_bot_frame_command_smoke=end final_count=%d\n",
                SV_BotCount());
     stage = 3;
+    soak_active = false;
+
+    if (SV_BotFrameCommandSmokeIsMapRepeat()) {
+        const int target_cycles = SV_BotFrameCommandSmokeMapRepeatCycles();
+
+        if (map_repeat_completed_cycles < target_cycles) {
+            const int reload_timeout_ms =
+                SV_BotFrameCommandSmokeMapRepeatReloadTimeoutMilliseconds();
+
+            Q_strlcpy(map_repeat_map, sv.name, sizeof(map_repeat_map));
+            map_repeat_map_changes++;
+            map_repeat_reload_pending = true;
+            map_repeat_reload_spawncount = sv.spawncount;
+            map_repeat_reload_request_realtime = svs.realtime;
+            Com_Printf("q3a_bot_frame_command_smoke_map_repeat_map_change_request "
+                       "completed_cycles=%d target_cycles=%d map_changes=%d "
+                       "from_spawncount=%d map=%s timeout_ms=%d "
+                       "command=%s restart=%d\n",
+                       map_repeat_completed_cycles, target_cycles,
+                       map_repeat_map_changes, sv.spawncount, map_repeat_map,
+                       reload_timeout_ms,
+                       SV_BotFrameCommandSmokeMapRepeatReloadCommand(),
+                       SV_BotFrameCommandSmokeMapRepeatRestartReload() ? 1 : 0);
+            Com_Printf("q3a_bot_frame_command_smoke_map_repeat_reload=queued "
+                       "cycle=%d next_cycle=%d completed_cycles=%d "
+                       "target_cycles=%d map_changes=%d "
+                       "from_spawncount=%d map=%s timeout_ms=%d "
+                       "command=%s restart=%d\n",
+                       map_repeat_cycle, map_repeat_cycle + 1,
+                       map_repeat_completed_cycles, target_cycles,
+                       map_repeat_map_changes, sv.spawncount, map_repeat_map,
+                       reload_timeout_ms,
+                       SV_BotFrameCommandSmokeMapRepeatReloadCommand(),
+                       SV_BotFrameCommandSmokeMapRepeatRestartReload() ? 1 : 0);
+            if (SV_BotFrameCommandSmokeMapRepeatRestartReload()) {
+                Cbuf_AddText(&cmd_buffer, va("map \"%s\" force\n",
+                                             map_repeat_map));
+            } else {
+                Cbuf_AddText(&cmd_buffer, va("gamemap \"%s\"\n",
+                                             map_repeat_map));
+            }
+            return;
+        }
+
+        Com_Printf("q3a_bot_frame_command_smoke_map_repeat_cleanup "
+                   "cycle=%d phase=%s reason=final_cycle_complete "
+                   "final_count=%d\n",
+                   map_repeat_cycle,
+                   SV_BotFrameCommandSmokeMapRepeatCyclePhase(
+                       map_repeat_cycle),
+                   SV_BotCount());
+        Com_Printf("q3a_bot_frame_command_smoke_map_repeat=complete "
+                   "cycles=%d map_changes=%d final_map=%s "
+                   "final_spawncount=%d final_count=%d\n",
+                   map_repeat_completed_cycles, map_repeat_map_changes,
+                   sv.name, sv.spawncount, SV_BotCount());
+    }
 
     if (sv_bot_frame_command_smoke->integer >= 2) {
         Com_Quit(NULL, ERR_DISCONNECT);
@@ -3594,6 +4448,15 @@ void SV_Init(void)
     sv_bot_profile_smoke = Cvar_Get("sv_bot_profile_smoke", "0", 0);
     sv_bot_team_policy_smoke = Cvar_Get("sv_bot_team_policy_smoke", "0", 0);
     sv_bot_frame_command_smoke = Cvar_Get("sv_bot_frame_command_smoke", "0", 0);
+    sv_bot_frame_command_smoke_soak_ms =
+        Cvar_Get("sv_bot_frame_command_smoke_soak_ms", "600000", 0);
+    sv_bot_frame_command_smoke_map_repeat_cycles =
+        Cvar_Get("sv_bot_frame_command_smoke_map_repeat_cycles", "2", 0);
+    sv_bot_frame_command_smoke_map_repeat_reload_timeout_ms =
+        Cvar_Get("sv_bot_frame_command_smoke_map_repeat_reload_timeout_ms",
+                 "10000", 0);
+    sv_bot_frame_command_smoke_map_repeat_restart =
+        Cvar_Get("sv_bot_frame_command_smoke_map_repeat_restart", "0", 0);
     sg_bot_enable = Cvar_Get("sg_bot_enable", "0", 0);
     sg_bot_min_players = Cvar_Get("sg_bot_min_players", "0", 0);
     sg_bot_profile = Cvar_Get("sg_bot_profile", "", 0);

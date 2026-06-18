@@ -144,7 +144,6 @@ void SP_info_teleport_destination(gentity_t *self);
 void SP_info_ctf_teleport_destination(gentity_t *self);
 void SP_info_landmark(gentity_t *self);
 void SP_info_world_text(gentity_t *self);
-void SP_info_nav_lock(gentity_t *self);
 void SP_team_redobelisk(gentity_t *ent);
 void SP_team_blueobelisk(gentity_t *ent);
 void SP_team_neutralobelisk(gentity_t *ent);
@@ -431,7 +430,6 @@ static const std::initializer_list<spawn_t> spawns = {
 	{ "info_notnull", SP_info_notnull },
 	{ "info_landmark", SP_info_landmark },
 	{ "info_world_text", SP_info_world_text },
-	{ "info_nav_lock", SP_info_nav_lock },
 	{ "domination_point", SP_domination_point },
 	{ "headhunters_receptacle", HeadHunters::SP_headhunters_receptacle },
 	{ "team_redobelisk", SP_team_redobelisk },

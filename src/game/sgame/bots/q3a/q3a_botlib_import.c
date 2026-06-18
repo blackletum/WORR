@@ -37,6 +37,7 @@
 botlib_import_t botimport;
 int bot_developer = 0;
 vec3_t vec3_origin = { 0.0f, 0.0f, 0.0f };
+static int q3aRouteAllowRocketJump = qfalse;
 
 typedef struct Q3AMemoryFile {
 	const char *name;
@@ -4199,6 +4200,24 @@ static int Q3A_BotLibImport_FindRoutableAreaAfter(int afterArea, int *outArea, v
 	return qfalse;
 }
 
+void Q3A_BotLibImport_SetRoutePolicy(int allowRocketJump) {
+	q3aRouteAllowRocketJump = allowRocketJump ? qtrue : qfalse;
+}
+
+static int Q3A_BotLibImport_RouteTravelFlags(void) {
+	int travelFlags = TFL_DEFAULT;
+	if (q3aRouteAllowRocketJump) {
+		travelFlags |= TFL_ROCKETJUMP;
+	}
+	return travelFlags;
+}
+
+static int Q3A_BotLibImport_TravelTypeAllowedForRoutes(int travelType) {
+	const int travelFlag = AAS_TravelFlagForType(travelType);
+	return travelFlag != TFL_INVALID &&
+		(travelFlag & Q3A_BotLibImport_RouteTravelFlags()) != 0;
+}
+
 static float Q3A_BotLibImport_DistanceSquared(const vec3_t a, const vec3_t b) {
 	float dx = a[0] - b[0];
 	float dy = a[1] - b[1];
@@ -4206,7 +4225,41 @@ static float Q3A_BotLibImport_DistanceSquared(const vec3_t a, const vec3_t b) {
 	return dx * dx + dy * dy + dz * dz;
 }
 
-static int Q3A_BotLibImport_FindRouteAreaForPoint(const vec3_t origin, int *outArea, vec3_t outOrigin) {
+static float Q3A_BotLibImport_ClampComponent(float value, float minValue, float maxValue) {
+	if (value < minValue) {
+		return minValue;
+	}
+	if (value > maxValue) {
+		return maxValue;
+	}
+	return value;
+}
+
+static void Q3A_BotLibImport_ClampPointToArea(
+	const aas_areainfo_t *areaInfo,
+	const vec3_t point,
+	vec3_t outPoint) {
+	int axis;
+	const float inset = 0.5f;
+
+	if (areaInfo == NULL) {
+		VectorCopy(point, outPoint);
+		return;
+	}
+
+	for (axis = 0; axis < 3; ++axis) {
+		float minValue = areaInfo->mins[axis] + inset;
+		float maxValue = areaInfo->maxs[axis] - inset;
+
+		if (minValue > maxValue) {
+			minValue = areaInfo->center[axis];
+			maxValue = areaInfo->center[axis];
+		}
+		outPoint[axis] = Q3A_BotLibImport_ClampComponent(point[axis], minValue, maxValue);
+	}
+}
+
+int Q3A_BotLibImport_FindRouteAreaForPoint(const float origin[3], int *outArea, float outOrigin[3]) {
 	static const float zOffsets[] = { 0.0f, 16.0f, -16.0f, 32.0f, -32.0f, 64.0f, -64.0f };
 	int i;
 	int area;
@@ -4281,14 +4334,17 @@ static int Q3A_BotLibImport_TryRouteGoalArea(
 	int startArea,
 	vec3_t startOrigin,
 	int candidateArea,
+	const float candidateOrigin[3],
 	int *outGoalArea,
 	vec3_t outGoalOrigin,
 	int *outTravelTime,
 	int *outReachability) {
 	aas_areainfo_t goalInfo;
+	vec3_t goalPoint;
 	int pointGoalArea;
 	int travelTime;
 	int reachability;
+	const int routeTravelFlags = Q3A_BotLibImport_RouteTravelFlags();
 
 	if (candidateArea <= 0 || candidateArea >= aasworld.numareas || candidateArea == startArea) {
 		return qfalse;
@@ -4297,18 +4353,24 @@ static int Q3A_BotLibImport_TryRouteGoalArea(
 		return qfalse;
 	}
 
-	Com_Memset(&goalInfo, 0, sizeof(goalInfo));
-	if (!AAS_AreaInfo(candidateArea, &goalInfo)) {
-		return qfalse;
+	VectorClear(goalPoint);
+	if (candidateOrigin != NULL) {
+		VectorCopy(candidateOrigin, goalPoint);
+	} else {
+		Com_Memset(&goalInfo, 0, sizeof(goalInfo));
+		if (!AAS_AreaInfo(candidateArea, &goalInfo)) {
+			return qfalse;
+		}
+		VectorCopy(goalInfo.center, goalPoint);
 	}
 
-	pointGoalArea = AAS_PointAreaNum(goalInfo.center);
+	pointGoalArea = AAS_PointAreaNum(goalPoint);
 	if (pointGoalArea <= 0 || pointGoalArea == startArea) {
 		return qfalse;
 	}
 
-	travelTime = AAS_AreaTravelTimeToGoalArea(startArea, startOrigin, pointGoalArea, TFL_DEFAULT);
-	reachability = AAS_AreaReachabilityToGoalArea(startArea, startOrigin, pointGoalArea, TFL_DEFAULT);
+	travelTime = AAS_AreaTravelTimeToGoalArea(startArea, startOrigin, pointGoalArea, routeTravelFlags);
+	reachability = AAS_AreaReachabilityToGoalArea(startArea, startOrigin, pointGoalArea, routeTravelFlags);
 	if (travelTime <= 0 || reachability <= 0) {
 		return qfalse;
 	}
@@ -4317,7 +4379,7 @@ static int Q3A_BotLibImport_TryRouteGoalArea(
 		*outGoalArea = pointGoalArea;
 	}
 	if (outGoalOrigin != NULL) {
-		VectorCopy(goalInfo.center, outGoalOrigin);
+		VectorCopy(goalPoint, outGoalOrigin);
 	}
 	if (outTravelTime != NULL) {
 		*outTravelTime = travelTime;
@@ -4332,6 +4394,7 @@ static int Q3A_BotLibImport_FindRouteGoalFrom(
 	int startArea,
 	vec3_t startOrigin,
 	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
 	int *outGoalArea,
 	vec3_t outGoalOrigin,
 	int *outTravelTime,
@@ -4360,6 +4423,7 @@ static int Q3A_BotLibImport_FindRouteGoalFrom(
 			startArea,
 			startOrigin,
 			preferredGoalArea,
+			preferredGoalOrigin,
 			outGoalArea,
 			outGoalOrigin,
 			outTravelTime,
@@ -4381,6 +4445,7 @@ static int Q3A_BotLibImport_FindRouteGoalFrom(
 				startArea,
 				startOrigin,
 				candidateArea,
+				NULL,
 				outGoalArea,
 				outGoalOrigin,
 				outTravelTime,
@@ -4392,11 +4457,12 @@ static int Q3A_BotLibImport_FindRouteGoalFrom(
 	return qfalse;
 }
 
-int Q3A_BotLibImport_BuildRouteSteer(
-	const float origin[3],
+static int Q3A_BotLibImport_BuildRouteSteerFromArea(
+	int startArea,
+	const float resolvedStartOrigin[3],
 	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
 	Q3ABotLibImportRouteSteerResult *result) {
-	int startArea = 0;
 	int goalArea = 0;
 	int travelTime = 0;
 	int reachability = 0;
@@ -4407,6 +4473,7 @@ int Q3A_BotLibImport_BuildRouteSteer(
 	aas_predictroute_t stepRoute;
 	aas_predictroute_t pointRoute;
 	int routePointIndex;
+	const int routeTravelFlags = Q3A_BotLibImport_RouteTravelFlags();
 
 	if (result == NULL) {
 		return qfalse;
@@ -4420,19 +4487,21 @@ int Q3A_BotLibImport_BuildRouteSteer(
 	Com_Memset(&stepRoute, 0, sizeof(stepRoute));
 	Com_Memset(&pointRoute, 0, sizeof(pointRoute));
 
-	if (!aasworld.loaded || !aasworld.initialized || origin == NULL) {
+	if (!aasworld.loaded ||
+		!aasworld.initialized ||
+		startArea <= 0 ||
+		startArea >= aasworld.numareas ||
+		resolvedStartOrigin == NULL) {
 		return qfalse;
 	}
 
-	if (!Q3A_BotLibImport_FindRouteAreaForPoint(origin, &startArea, startOrigin)) {
-		return qfalse;
-	}
-
+	VectorCopy(resolvedStartOrigin, startOrigin);
 	result->startArea = startArea;
 	if (!Q3A_BotLibImport_FindRouteGoalFrom(
 			startArea,
 			startOrigin,
 			preferredGoalArea,
+			preferredGoalOrigin,
 			&goalArea,
 			goalOrigin,
 			&travelTime,
@@ -4452,7 +4521,7 @@ int Q3A_BotLibImport_BuildRouteSteer(
 		result->reachabilityEndArea = reach.areanum;
 	}
 
-	if (!AAS_PredictRoute(&fullRoute, startArea, startOrigin, goalArea, TFL_DEFAULT, 0, 0, RSE_NONE, 0, 0, 0) ||
+	if (!AAS_PredictRoute(&fullRoute, startArea, startOrigin, goalArea, routeTravelFlags, 0, 0, RSE_NONE, 0, 0, 0) ||
 		fullRoute.endarea != goalArea) {
 		result->routeEndArea = fullRoute.endarea;
 		result->stopEvent = fullRoute.stopevent;
@@ -4466,7 +4535,7 @@ int Q3A_BotLibImport_BuildRouteSteer(
 			startArea,
 			startOrigin,
 			goalArea,
-			TFL_DEFAULT,
+			routeTravelFlags,
 			routePointIndex + 1,
 			0,
 			RSE_NONE,
@@ -4484,7 +4553,7 @@ int Q3A_BotLibImport_BuildRouteSteer(
 		}
 	}
 
-	(void)AAS_PredictRoute(&stepRoute, startArea, startOrigin, goalArea, TFL_DEFAULT, 1, 0, RSE_NONE, 0, 0, 0);
+	(void)AAS_PredictRoute(&stepRoute, startArea, startOrigin, goalArea, routeTravelFlags, 1, 0, RSE_NONE, 0, 0, 0);
 	result->routeEndArea = stepRoute.endarea;
 	result->stopEvent = stepRoute.stopevent;
 	if (stepRoute.endarea <= 0 || stepRoute.stopevent == RSE_NOROUTE) {
@@ -4494,6 +4563,475 @@ int Q3A_BotLibImport_BuildRouteSteer(
 
 	result->success = qtrue;
 	return qtrue;
+}
+
+static int Q3A_BotLibImport_BuildRouteSteerInternal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	Q3ABotLibImportRouteSteerResult *result) {
+	int startArea = 0;
+	vec3_t startOrigin;
+
+	if (result == NULL) {
+		return qfalse;
+	}
+
+	Com_Memset(result, 0, sizeof(*result));
+	VectorClear(startOrigin);
+
+	if (!aasworld.loaded || !aasworld.initialized || origin == NULL) {
+		return qfalse;
+	}
+
+	if (!Q3A_BotLibImport_FindRouteAreaForPoint(origin, &startArea, startOrigin)) {
+		return qfalse;
+	}
+
+	return Q3A_BotLibImport_BuildRouteSteerFromArea(
+		startArea,
+		startOrigin,
+		preferredGoalArea,
+		preferredGoalOrigin,
+		result);
+}
+
+static int Q3A_BotLibImport_BuildDirectReachRouteSteer(
+	int startArea,
+	const vec3_t startOrigin,
+	int reachNum,
+	const aas_reachability_t *reach,
+	Q3ABotLibImportRouteSteerResult *result) {
+	int travelTime;
+	vec3_t localStartOrigin;
+	vec3_t reachStart;
+
+	if (result == NULL) {
+		return qfalse;
+	}
+
+	Com_Memset(result, 0, sizeof(*result));
+	if (!aasworld.loaded ||
+		!aasworld.initialized ||
+		startArea <= 0 ||
+		startArea >= aasworld.numareas ||
+		startOrigin == NULL ||
+		reach == NULL ||
+		reachNum <= 0 ||
+		reachNum >= aasworld.reachabilitysize ||
+		reach->areanum <= 0 ||
+		reach->areanum >= aasworld.numareas ||
+		!Q3A_BotLibImport_TravelTypeAllowedForRoutes(reach->traveltype & TRAVELTYPE_MASK)) {
+		return qfalse;
+	}
+
+	VectorCopy(startOrigin, localStartOrigin);
+	VectorCopy(reach->start, reachStart);
+	travelTime = AAS_AreaTravelTime(startArea, localStartOrigin, reachStart) + reach->traveltime;
+	if (travelTime <= 0) {
+		travelTime = reach->traveltime;
+	}
+
+	result->success = qtrue;
+	result->startArea = startArea;
+	result->goalArea = reach->areanum;
+	result->routeEndArea = reach->areanum;
+	result->travelTime = travelTime;
+	result->reachability = reachNum;
+	result->reachabilityTravelType = reach->traveltype & TRAVELTYPE_MASK;
+	result->reachabilityTravelFlags = AAS_TravelFlagForType(reach->traveltype);
+	result->reachabilityEndArea = reach->areanum;
+	result->stopEvent = RSE_NONE;
+	VectorCopy(reach->end, result->moveTarget);
+	VectorCopy(reach->end, result->goalOrigin);
+	VectorCopy(reach->end, result->routePoints[0]);
+	result->routePointCount = 1;
+	return qtrue;
+}
+
+static int Q3A_BotLibImport_BuildDirectRouteSteerForTravelType(
+	int startArea,
+	const vec3_t startOrigin,
+	int travelType,
+	Q3ABotLibImportRouteSteerResult *result) {
+	aas_areasettings_t *settings;
+	int reachIndex;
+
+	if (!aasworld.loaded ||
+		!aasworld.initialized ||
+		startArea <= 0 ||
+		startArea >= aasworld.numareas ||
+		startArea >= aasworld.numareasettings ||
+		startOrigin == NULL ||
+		travelType <= 0 ||
+		!Q3A_BotLibImport_TravelTypeAllowedForRoutes(travelType)) {
+		if (result != NULL) {
+			Com_Memset(result, 0, sizeof(*result));
+		}
+		return qfalse;
+	}
+
+	settings = &aasworld.areasettings[startArea];
+	for (reachIndex = 0; reachIndex < settings->numreachableareas; ++reachIndex) {
+		const int reachNum = settings->firstreachablearea + reachIndex;
+		aas_reachability_t *reach;
+
+		if (reachNum <= 0 || reachNum >= aasworld.reachabilitysize) {
+			continue;
+		}
+
+		reach = &aasworld.reachability[reachNum];
+		if ((reach->traveltype & TRAVELTYPE_MASK) != travelType) {
+			continue;
+		}
+
+		return Q3A_BotLibImport_BuildDirectReachRouteSteer(
+			startArea,
+			startOrigin,
+			reachNum,
+			reach,
+			result);
+	}
+
+	if (result != NULL) {
+		Com_Memset(result, 0, sizeof(*result));
+		result->startArea = startArea;
+	}
+	return qfalse;
+}
+
+static int Q3A_BotLibImport_CandidateMapsToRouteArea(int area, const vec3_t origin) {
+	int candidateArea = 0;
+	vec3_t candidateOrigin;
+
+	VectorClear(candidateOrigin);
+	return Q3A_BotLibImport_FindRouteAreaForPoint(origin, &candidateArea, candidateOrigin) &&
+		candidateArea == area;
+}
+
+static int Q3A_BotLibImport_FindRouteGoalForTravelType(
+	int startArea,
+	vec3_t startOrigin,
+	int desiredTravelType,
+	int *outGoalArea,
+	vec3_t outGoalOrigin) {
+	int offset;
+
+	if (outGoalArea != NULL) {
+		*outGoalArea = 0;
+	}
+	if (outGoalOrigin != NULL) {
+		VectorClear(outGoalOrigin);
+	}
+	if (!aasworld.loaded ||
+		!aasworld.initialized ||
+		startArea <= 0 ||
+		startArea >= aasworld.numareas ||
+		desiredTravelType <= 0 ||
+		!Q3A_BotLibImport_TravelTypeAllowedForRoutes(desiredTravelType)) {
+		return qfalse;
+	}
+
+	for (offset = 1; offset < aasworld.numareas; ++offset) {
+		int candidateArea = startArea + offset;
+		int goalArea = 0;
+		int reachability = 0;
+		vec3_t goalOrigin;
+		aas_reachability_t reach;
+
+		while (candidateArea >= aasworld.numareas) {
+			candidateArea -= aasworld.numareas - 1;
+		}
+
+		VectorClear(goalOrigin);
+		Com_Memset(&reach, 0, sizeof(reach));
+		if (!Q3A_BotLibImport_TryRouteGoalArea(
+				startArea,
+				startOrigin,
+				candidateArea,
+				NULL,
+				&goalArea,
+				goalOrigin,
+				NULL,
+				&reachability)) {
+			continue;
+		}
+
+		AAS_ReachabilityFromNum(reachability, &reach);
+		if ((reach.traveltype & TRAVELTYPE_MASK) != desiredTravelType) {
+			continue;
+		}
+
+		if (outGoalArea != NULL) {
+			*outGoalArea = goalArea;
+		}
+		if (outGoalOrigin != NULL) {
+			VectorCopy(goalOrigin, outGoalOrigin);
+		}
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
+int Q3A_BotLibImport_BuildRouteSteer(
+	const float origin[3],
+	int preferredGoalArea,
+	Q3ABotLibImportRouteSteerResult *result) {
+	return Q3A_BotLibImport_BuildRouteSteerInternal(origin, preferredGoalArea, NULL, result);
+}
+
+int Q3A_BotLibImport_BuildRouteSteerToGoal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	Q3ABotLibImportRouteSteerResult *result) {
+	return Q3A_BotLibImport_BuildRouteSteerInternal(
+		origin,
+		preferredGoalArea,
+		preferredGoalOrigin,
+		result);
+}
+
+int Q3A_BotLibImport_BuildRouteSteerForTravelType(
+	const float origin[3],
+	int travelType,
+	Q3ABotLibImportRouteSteerResult *result) {
+	int startArea = 0;
+	int goalArea = 0;
+	vec3_t startOrigin;
+	vec3_t directStartOrigin;
+	vec3_t goalOrigin;
+
+	if (result == NULL) {
+		return qfalse;
+	}
+
+	Com_Memset(result, 0, sizeof(*result));
+	VectorClear(startOrigin);
+	VectorClear(directStartOrigin);
+	VectorClear(goalOrigin);
+
+	if (!aasworld.loaded ||
+		!aasworld.initialized ||
+		origin == NULL ||
+		travelType <= 0 ||
+		!Q3A_BotLibImport_TravelTypeAllowedForRoutes(travelType)) {
+		return qfalse;
+	}
+	if (!Q3A_BotLibImport_FindRouteAreaForPoint(origin, &startArea, startOrigin)) {
+		return qfalse;
+	}
+
+	if (Q3A_BotLibImport_FindRouteGoalForTravelType(
+			startArea,
+			startOrigin,
+			travelType,
+			&goalArea,
+			goalOrigin)) {
+		if (Q3A_BotLibImport_BuildRouteSteerFromArea(
+				startArea,
+				startOrigin,
+				goalArea,
+				goalOrigin,
+				result) &&
+			result->success &&
+			result->reachabilityTravelType == travelType) {
+			return qtrue;
+		}
+	}
+
+	VectorCopy(origin, directStartOrigin);
+	if (Q3A_BotLibImport_BuildDirectRouteSteerForTravelType(
+			startArea,
+			directStartOrigin,
+			travelType,
+			result) ||
+		Q3A_BotLibImport_BuildDirectRouteSteerForTravelType(
+			startArea,
+			startOrigin,
+			travelType,
+			result)) {
+		return result->success && result->reachabilityTravelType == travelType;
+	}
+
+	result->startArea = startArea;
+	return qfalse;
+}
+
+int Q3A_BotLibImport_FindRouteStartForTravelType(
+	int travelType,
+	float outOrigin[3],
+	int *outArea,
+	int *outGoalArea) {
+	int area;
+
+	if (outOrigin != NULL) {
+		VectorClear(outOrigin);
+	}
+	if (outArea != NULL) {
+		*outArea = 0;
+	}
+	if (outGoalArea != NULL) {
+		*outGoalArea = 0;
+	}
+	if (!aasworld.loaded ||
+		!aasworld.initialized ||
+		travelType <= 0 ||
+		!Q3A_BotLibImport_TravelTypeAllowedForRoutes(travelType)) {
+		return qfalse;
+	}
+
+	for (area = 1; area < aasworld.numareas; ++area) {
+		aas_areainfo_t areaInfo;
+		int goalArea = 0;
+		vec3_t goalOrigin;
+		Q3ABotLibImportRouteSteerResult route;
+
+		if (!AAS_AreaReachability(area)) {
+			continue;
+		}
+
+		Com_Memset(&areaInfo, 0, sizeof(areaInfo));
+		VectorClear(goalOrigin);
+		Com_Memset(&route, 0, sizeof(route));
+		if (!AAS_AreaInfo(area, &areaInfo)) {
+			continue;
+		}
+		if (!Q3A_BotLibImport_FindRouteGoalForTravelType(
+				area,
+				areaInfo.center,
+				travelType,
+				&goalArea,
+				goalOrigin)) {
+			continue;
+		}
+		if (!Q3A_BotLibImport_BuildRouteSteerInternal(areaInfo.center, goalArea, goalOrigin, &route) ||
+			!route.success ||
+			route.startArea != area ||
+			route.reachabilityTravelType != travelType) {
+			continue;
+		}
+
+		if (outOrigin != NULL) {
+			VectorCopy(areaInfo.center, outOrigin);
+		}
+		if (outArea != NULL) {
+			*outArea = area;
+		}
+		if (outGoalArea != NULL) {
+			*outGoalArea = route.goalArea;
+		}
+		return qtrue;
+	}
+
+	for (area = 1; area < aasworld.numareas; ++area) {
+		aas_areasettings_t *settings;
+		aas_areainfo_t areaInfo;
+		int reachIndex;
+
+		if (!AAS_AreaReachability(area) ||
+			area >= aasworld.numareasettings) {
+			continue;
+		}
+		Com_Memset(&areaInfo, 0, sizeof(areaInfo));
+		if (!AAS_AreaInfo(area, &areaInfo)) {
+			continue;
+		}
+
+		settings = &aasworld.areasettings[area];
+		for (reachIndex = 0; reachIndex < settings->numreachableareas; ++reachIndex) {
+			const int reachNum = settings->firstreachablearea + reachIndex;
+			aas_reachability_t *reach;
+			vec3_t reachStartOrigin;
+			vec3_t reachStartCenterZOrigin;
+			vec3_t validatedStartOrigin;
+			Q3ABotLibImportRouteSteerResult route;
+
+			if (reachNum <= 0 || reachNum >= aasworld.reachabilitysize) {
+				continue;
+			}
+
+			reach = &aasworld.reachability[reachNum];
+			if ((reach->traveltype & TRAVELTYPE_MASK) != travelType ||
+				reach->areanum <= 0 ||
+				reach->areanum >= aasworld.numareas) {
+				continue;
+			}
+
+			Com_Memset(&route, 0, sizeof(route));
+			if (Q3A_BotLibImport_BuildRouteSteerInternal(areaInfo.center, reach->areanum, reach->end, &route) &&
+				route.success &&
+				route.startArea == area &&
+				route.reachabilityTravelType == travelType) {
+				if (outOrigin != NULL) {
+					VectorCopy(areaInfo.center, outOrigin);
+				}
+				if (outArea != NULL) {
+					*outArea = area;
+				}
+				if (outGoalArea != NULL) {
+					*outGoalArea = route.goalArea;
+				}
+				return qtrue;
+			}
+
+			VectorClear(reachStartOrigin);
+			VectorClear(reachStartCenterZOrigin);
+			VectorClear(validatedStartOrigin);
+			Q3A_BotLibImport_ClampPointToArea(&areaInfo, reach->start, reachStartOrigin);
+			VectorCopy(reachStartOrigin, reachStartCenterZOrigin);
+			reachStartCenterZOrigin[2] = areaInfo.center[2];
+
+			Com_Memset(&route, 0, sizeof(route));
+			if (Q3A_BotLibImport_BuildDirectReachRouteSteer(
+					area,
+					reachStartOrigin,
+					reachNum,
+					reach,
+					&route) &&
+				Q3A_BotLibImport_CandidateMapsToRouteArea(area, reachStartOrigin)) {
+				VectorCopy(reachStartOrigin, validatedStartOrigin);
+			} else {
+				Com_Memset(&route, 0, sizeof(route));
+				if (Q3A_BotLibImport_BuildDirectReachRouteSteer(
+						area,
+						reachStartCenterZOrigin,
+						reachNum,
+						reach,
+						&route) &&
+					Q3A_BotLibImport_CandidateMapsToRouteArea(area, reachStartCenterZOrigin)) {
+					VectorCopy(reachStartCenterZOrigin, validatedStartOrigin);
+				} else {
+					Com_Memset(&route, 0, sizeof(route));
+					if (!Q3A_BotLibImport_BuildDirectReachRouteSteer(
+							area,
+							areaInfo.center,
+							reachNum,
+							reach,
+							&route)) {
+						continue;
+					}
+					VectorCopy(areaInfo.center, validatedStartOrigin);
+				}
+			}
+
+			if (route.success) {
+				if (outOrigin != NULL) {
+					VectorCopy(validatedStartOrigin, outOrigin);
+				}
+				if (outArea != NULL) {
+					*outArea = area;
+				}
+				if (outGoalArea != NULL) {
+					*outGoalArea = route.goalArea;
+				}
+				return qtrue;
+			}
+		}
+	}
+
+	return qfalse;
 }
 
 static int Q3A_BotLibImport_RunAASRouteSmoke(void) {

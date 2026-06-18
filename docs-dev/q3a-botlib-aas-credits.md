@@ -302,9 +302,297 @@ Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
 - Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated smoke with `sg_bot_debug_client 0` reports `route_debug_routes=8`, `route_debug_filtered_slots=0`, `last_debug_filter_client=0`, and `pass=1`; dedicated smoke with `sg_bot_debug_client 1` reports `route_debug_routes=0`, `route_debug_filtered_slots=8`, `route_debug_filter_miss_frames=10`, `last_debug_filter_client=1`, and `pass=1`.
 - Implementation log: `docs-dev/q3a-botlib-nav-debug-client-filter-2026-06-17.md`.
 
+## Native Bridge Update: Nav Persistent Goal
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_nav.*`, `src/game/sgame/bots/bot_think.cpp`, and `src/game/sgame/bots/botlib_adapter.*` now carry per-client persistent route-goal ownership across cache reuses and route refreshes.
+- The native adapter can ask imported Q3A AAS routing for a preferred goal area, while `bot_nav` clears or falls back when that area is reached or stops routing.
+- No new upstream source files were imported for this slice.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated smoke with `sg_bot_debug_route 1`, `sg_bot_debug_goal 1`, and `sv_bot_frame_command_smoke 2` reports `route_goal_requests=1`, `route_goal_assignments=1`, `route_goal_cache_reuses=6`, `route_goal_clears=0`, `route_goal_fallbacks=0`, `last_persistent_goal_area=227`, `last_goal_clear_reason=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-persistent-goal-2026-06-18.md`.
+
+## Native Bridge Update: Nav Item Goals
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/q3a/q3a_botlib_import.*`, `src/game/sgame/bots/botlib_adapter.*`, `src/game/sgame/bots/bot_nav.*`, and `src/game/sgame/bots/bot_think.cpp` now expose point-to-route-area lookup through the Q3A adapter boundary and use it to select live active-pickup route goals.
+- `bot_nav` scores active pickup entities, records selected item entity/spawn/item identity, and clears the persistent goal when that item disappears, respawn-hides, or stops routing to the requested AAS area.
+- No new upstream source files were imported for this slice; the work is WORR-native adapter and navigation code around already imported Q3A AAS route/sample behavior.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 2` on `mm-rage` reports `item_goal_scans=1`, `item_goal_candidates=45`, `item_goal_assignments=1`, `item_goal_reuses=7`, `item_goal_clears=0`, `last_item_goal_entity=32`, `last_item_goal_area=415`, `last_item_goal_item=53`, `last_item_goal_score=828`, `last_persistent_goal_area=415`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-item-goal-2026-06-18.md`.
+
+## Native Bridge Update: Nav Item Reservations
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T15`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_nav.*`, `src/game/sgame/bots/bot_think.cpp`, `src/game/sgame/bots/bot_includes.hpp`, `src/game/sgame/client/client_session_service_impl.cpp`, and `src/server/main.c` now add a first item reservation policy over active-pickup route goals.
+- `bot_nav` skips active pickups already selected by another bot's live route slot, reports reservation counters in the frame-command status, and releases stale reservations when bot clients disconnect.
+- The server frame-command smoke keeps the existing one-bot mode and adds `sv_bot_frame_command_smoke 3` as a two-bot reservation proof.
+- No new upstream source files were imported for this slice; the work is WORR-native route-goal ownership policy above the existing BotLib/AAS adapter path.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 3` on `mm-rage` reports `frames=17`, `commands=17`, `route_goal_assignments=2`, `item_goal_scans=2`, `item_goal_candidates=89`, `item_goal_assignments=2`, `item_goal_reservation_skips=1`, `item_goal_active_reservations=2`, `last_item_goal_reserved_entity=32`, `last_item_goal_reserved_by_client=0`, `last_item_goal_entity=74`, `last_item_goal_area=251`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-item-reservation-2026-06-18.md`.
+
+## Native Bridge Update: Nav Look-Ahead Steering
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native file `src/game/sgame/bots/bot_think.cpp` now selects a command steering target from the bounded route-point payload returned by the BotLib adapter, rather than always aiming only at the immediate route step.
+- The frame-command status reports look-ahead attempts, uses, selected index, and route-point count so the behavior can be validated headlessly.
+- No new upstream source files were imported for this slice; this is WORR-native command steering over already imported Q3A AAS route-query output exposed through `botlib_adapter.*`.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 3` on `mm-rage` reports `frames=17`, `commands=17`, `last_route_point_count=2`, `lookahead_attempts=17`, `lookahead_uses=9`, `last_lookahead_index=0`, `last_lookahead_point_count=2`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-lookahead-steering-2026-06-18.md`.
+
+## Native Bridge Update: Nav Velocity-Aware Steering
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native file `src/game/sgame/bots/bot_think.cpp` now adjusts command yaw from a short projected horizontal bot origin when the bot is already moving toward a route target.
+- The frame-command status reports velocity-lead attempts, uses, last speed squared, and last lead-offset squared so the behavior can be validated headlessly.
+- No new upstream source files were imported for this slice; this is WORR-native command steering over already imported Q3A AAS route-query output exposed through `botlib_adapter.*`.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 3` on `mm-rage` reports `frames=17`, `commands=17`, `lookahead_attempts=9`, `lookahead_uses=9`, `velocity_lead_attempts=17`, `velocity_lead_uses=3`, `last_velocity_lead_speed_sq=182`, `last_velocity_lead_offset_sq=1`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-velocity-steering-2026-06-18.md`.
+
+## Native Bridge Update: Nav Stuck Repath
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_nav.*`, `src/game/sgame/bots/bot_think.cpp`, and `src/server/main.c` now add a progress watchdog over cached route goals, report stuck reason counters, and expose an internal stalled-command smoke mode.
+- `BotNavRefreshReason::Stuck` forces the existing native route refresh path when a bot remains stagnant toward its active goal for a sustained window.
+- No new upstream source files were imported for this slice; this is WORR-native route-cache and validation policy over already imported Q3A AAS route-query output exposed through `botlib_adapter.*`.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; normal dedicated `sv_bot_frame_command_smoke 3` on `mm-rage` reports `stuck_detections=0`, `stuck_repath_refreshes=0`, `route_failures=0`, and `pass=1`; stalled `sv_bot_frame_command_smoke 4` reports `frames=29`, `commands=29`, `stuck_checks=27`, `stuck_stalls=25`, `stuck_detections=2`, `stuck_repath_refreshes=2`, `last_stuck_reason=1`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-stuck-repath-2026-06-18.md`.
+
+## Native Bridge Update: Nav Stuck Recovery Command
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_nav.*` and `src/game/sgame/bots/bot_think.cpp` now add a short back/strafe recovery command window after the native stuck-progress watchdog fires.
+- `bot_nav` tracks recovery activations, active recovery frames, last recovery client, side, and frames remaining; `bot_think` reports recovery command uses and last movement values.
+- No new upstream source files were imported for this slice; this is WORR-native command recovery policy above already imported Q3A AAS route-query output exposed through `botlib_adapter.*`.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; normal dedicated `sv_bot_frame_command_smoke 3` on `mm-rage` reports `stuck_recovery_activations=0`, `stuck_recovery_frames=0`, `recovery_command_uses=0`, `route_failures=0`, and `pass=1`; stalled `sv_bot_frame_command_smoke 4` reports `frames=29`, `commands=29`, `stuck_recovery_activations=2`, `stuck_recovery_frames=11`, `last_stuck_recovery_side=-1`, `recovery_command_uses=11`, `last_recovery_forward_move=-80`, `last_recovery_side_move=-140`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-stuck-recovery-command-2026-06-18.md`.
+
+## Native Bridge Update: Nav Goal Blacklist Cooldown
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_nav.*` and `src/game/sgame/bots/bot_think.cpp` now add a per-bot active-pickup goal blacklist cooldown after stuck detections.
+- `bot_nav` records the stuck item's entity number, spawn count, item id, and cooldown expiry; active-pickup scans skip matching blacklisted goals for that bot and continue scoring alternate pickups.
+- The stuck blacklist clear path records `last_goal_clear_reason=5` and preserves the already active short recovery movement window. No new upstream source files were imported for this slice.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; normal dedicated `sv_bot_frame_command_smoke 3` on `mm-rage` reports `item_goal_blacklist_activations=0`, `item_goal_blacklist_skips=0`, `item_goal_blacklist_active=0`, `route_failures=0`, and `pass=1`; stalled `sv_bot_frame_command_smoke 4` reports `frames=29`, `commands=29`, `item_goal_blacklist_activations=2`, `item_goal_blacklist_skips=2`, `item_goal_blacklist_active=2`, `last_item_goal_blacklisted_entity=68`, `last_item_goal_blacklisted_by_client=1`, `last_item_goal_blacklist_frames_remaining=96`, `last_goal_clear_reason=5`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-goal-blacklist-cooldown-2026-06-18.md`.
+
+## Native Bridge Update: Nav Failed Goal Reason
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_nav.*` and `src/game/sgame/bots/bot_think.cpp` now record failed-goal reason diagnostics for abandoned persistent route goals.
+- `bot_nav` records route fallback, item unavailable, and blacklisted item goals as failed-goal events before clearing the persistent goal state. Reached goals and resets do not count as failed goals.
+- The debug label and frame-command smoke now expose the last failed reason, client, area, entity, and item id. No new upstream source files were imported for this slice.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; normal dedicated `sv_bot_frame_command_smoke 3` on `mm-rage` reports `failed_goal_events=0`, `last_failed_goal_reason=0`, `route_failures=0`, and `pass=1`; stalled `sv_bot_frame_command_smoke 4` reports `frames=29`, `commands=29`, `failed_goal_events=2`, `last_goal_clear_reason=5`, `last_failed_goal_reason=3`, `last_failed_goal_client=1`, `last_failed_goal_area=251`, `last_failed_goal_entity=74`, `last_failed_goal_item=2`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-failed-goal-reason-2026-06-18.md`.
+
+## Native Bridge Update: Nav Movement State Commands
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_think.cpp` and `src/server/main.c` now translate selected AAS reachability travel types into Q2 `usercmd_t` button intent and expose forced movement-state smoke modes.
+- `bot_think` maps crouch reachability to `BUTTON_CROUCH`, jump/barrier-jump/waterjump reachability to `BUTTON_JUMP`, and swim/ladder reachability to vertical jump/crouch intent based on the current route target height.
+- No new upstream source files were imported for this slice; this is WORR-native command translation over already imported Q3A AAS route-query output exposed through `botlib_adapter.*`.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; normal dedicated `sv_bot_frame_command_smoke 3` on `mm-rage` reports `movement_state_attempts=17`, `movement_state_commands=0`, `last_movement_state_travel_type=2`, and `pass=1`; forced `sv_bot_frame_command_smoke 5`, `6`, and `7` report `movement_state_jump_commands=17`, `movement_state_crouch_commands=17`, and `movement_state_swim_commands=17` respectively with `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-movement-state-commands-2026-06-18.md`.
+
+## Native Bridge Update: Legacy Q2R Bot Surface Removal
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T12`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- Removed the inherited Q2R `src/game/sgame/bots/bot_debug.*`, `bot_exports.*`, and `bot_utils.*` layer from the active server-game bot implementation because it targeted a different engine-side bot system.
+- WORR bot work now continues through `bot_runtime.*`, `botlib_adapter.*`, `bot_nav.*`, `bot_think.*`, and the quarantined `q3a/` BotLib/AAS boundary.
+- No new upstream source files were imported for this slice; this is a local removal/replacement-boundary cleanup.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 2` on `mm-rage` reports `frames=8`, `commands=8`, `route_failures=0`, `route_goal_assignments=1`, `last_persistent_goal_area=227`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-legacy-bot-surface-removal-2026-06-18.md`.
+
+## Native Bridge Update: Bot Brain Command Ownership
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_brain.*`, `src/game/sgame/bots/bot_think.cpp`, `src/game/sgame/bots/bot_includes.hpp`, and `meson.build` now split current high-level frame command/status ownership into `bot_brain.*`.
+- `bot_think.cpp` keeps the stable `Bot_*` wrapper surface for existing game/server extension callers, while `bot_brain.cpp` owns the existing route steering, look-ahead steering, velocity lead, recovery command, movement-state button intent, and frame-command smoke status implementation.
+- No new upstream source files were imported for this slice; this is WORR-native module ownership around the existing BotLib/AAS adapter and native navigation path.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; normal dedicated `sv_bot_frame_command_smoke 3` on `mm-rage` reports `frames=17`, `commands=17`, `route_failures=0`, `movement_state_commands=0`, and `pass=1`; forced jump `sv_bot_frame_command_smoke 5` reports `movement_state_jump_commands=17` and `pass=1`; stalled `sv_bot_frame_command_smoke 4` reports `stuck_detections=2`, `failed_goal_events=2`, `recovery_command_uses=11`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-bot-brain-command-ownership-2026-06-18.md`.
+
+## Native Bridge Update: Nav Position Goals
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T12`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_brain.cpp`, `src/game/sgame/bots/bot_nav.*`, `src/game/sgame/bots/botlib_adapter.*`, `src/game/sgame/bots/q3a/q3a_botlib_import.*`, and `src/server/main.c` now support a debug/smoke world-position route goal path.
+- `bot_nav.*` resolves position goals through the adapter, records position-goal counters, and skips item-goal scans while a position goal is active.
+- `Q3A_BotLibImport_BuildRouteSteerToGoal()` and `BotLibAdapter_BuildRouteSteerToGoal()` preserve the exact resolved goal origin for preferred position routes while leaving existing area-only item and fallback routes on `BuildRouteSteer()`.
+- No new upstream source files were imported for this slice; this is WORR-native adapter and command-policy work over already imported Q3A AAS route-query output.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 8` on `mm-rage` reports `position_goal_requests=8`, `position_goal_resolved=8`, `position_goal_assignments=1`, `position_goal_cache_reuses=6`, `item_goal_scans=0`, `route_goal_fallbacks=0`, `last_position_goal_area=227`, `last_position_goal_z=98`, `route_failures=0`, and `pass=1`; normal, stalled, and forced-jump regression smokes also report `route_failures=0` and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-position-goal-2026-06-18.md`.
+
+## Native Bridge Update: Nav Natural Travel Goals
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T12`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_brain.cpp`, `src/game/sgame/bots/bot_nav.*`, `src/game/sgame/bots/botlib_adapter.*`, `src/game/sgame/bots/q3a/q3a_botlib_import.*`, and `src/server/main.c` now support an internal travel-type route-goal smoke path.
+- `Q3A_BotLibImport_BuildRouteSteerForTravelType()` and `BotLibAdapter_BuildRouteSteerForTravelType()` find a route whose selected next AAS reachability matches the requested travel type.
+- `Q3A_BotLibImport_FindRouteStartForTravelType()` and the adapter wrapper validate a smoke start area whose normal route result begins with the requested travel type, letting the natural movement-state smokes prove real AAS jump and ladder reachability without forcing `sg_bot_frame_command_smoke_travel_type`.
+- The travel-type route helper now falls back to direct reachability endpoint selection when broad area-goal scanning misses a deterministic route, enabling route-only `TRAVEL_WALKOFFLEDGE`, route-only `TRAVEL_ELEVATOR`, and direct `TRAVEL_BARRIERJUMP` validation on packaged `mm-rage.aas`.
+- No new upstream source files were imported for this slice; this is WORR-native adapter, route-request, and smoke harness work over already imported Q3A AAS route-query output.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 9` on `mm-rage` reports `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=107`, `last_travel_type_goal_start_goal_area=111`, `last_reachability_type=5`, `movement_state_jump_commands=8`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`; dedicated `sv_bot_frame_command_smoke 10` reports `last_travel_type_goal_start_area=142`, `last_travel_type_goal_start_goal_area=143`, `last_reachability_type=6`, `movement_state_ladder_commands=8`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`; dedicated `sv_bot_frame_command_smoke 11` reports `last_travel_type_goal_start_area=29`, `last_travel_type_goal_start_goal_area=34`, `last_reachability_type=7`, `route_commands=8`, `movement_state_commands=0`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`; dedicated `sv_bot_frame_command_smoke 12` reports `last_travel_type_goal_start_area=241`, `last_travel_type_goal_start_goal_area=261`, `last_reachability_type=11`, `route_commands=8`, `movement_state_commands=0`, `movement_state_unsupported=0`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`; dedicated `sv_bot_frame_command_smoke 13` reports `last_travel_type_goal_start_area=292`, `last_travel_type_goal_start_goal_area=318`, `last_reachability=319`, `last_reachability_type=4`, `movement_state_jump_commands=8`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`; normal and elevator regression smokes also report `route_failures=0` and `pass=1`.
+- Implementation logs: `docs-dev/q3a-botlib-nav-natural-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-ladder-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-walkoffledge-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-elevator-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-barrierjump-travel-goal-2026-06-18.md`.
+
+## Native Bridge Update: Nav Rocket-Jump Route Policy
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T12`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_brain.cpp`, `src/game/sgame/bots/bot_nav.cpp`, `src/game/sgame/bots/botlib_adapter.*`, `src/game/sgame/bots/q3a/q3a_botlib_import.*`, and `src/server/main.c` now support a runtime rocket-jump route policy.
+- `Q3A_BotLibImport_SetRoutePolicy()` keeps `TRAVEL_ROCKETJUMP` out of default route flags and adds `TFL_ROCKETJUMP` only when `sg_bot_allow_rocketjump` is enabled.
+- Direct travel-type start/route helpers obey the same policy as ordinary route queries, so debug/smoke travel-type requests cannot bypass the default-off rocket-jump gate.
+- No new upstream source files were imported for this slice; this is WORR-native adapter, route-policy, and smoke-harness work over already imported Q3A AAS route-query output.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 14` on `mm-rage` enables `sg_bot_allow_rocketjump 1` and reports `travel_type_goal_resolved=2`, `travel_type_goal_assignments=1`, `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=282`, `last_travel_type_goal_start_goal_area=304`, `last_reachability=312`, `last_reachability_type=12`, `route_failures=0`, and `pass=1`; dedicated `sv_bot_frame_command_smoke 15` leaves rocket-jump routing disabled and reports `travel_type_goal_expect_blocked=1`, `commands=0`, `route_commands=0`, `travel_type_goal_resolved=0`, `travel_type_goal_assignments=0`, `travel_type_goal_start_warps=0`, `route_failures=8`, and `pass=1`; normal, elevator, and barrier-jump regression smokes also report `route_failures=0` and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-rocketjump-policy-2026-06-18.md`.
+
+## Native Bridge Update: Nav Four-Bot Frame Command Smoke
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native file `src/server/main.c` now supports `sv_bot_frame_command_smoke 16`, a four-bot route-command validation mode.
+- The smoke harness grows the bot target one bot per server frame, reports `q3a_bot_frame_command_smoke_multi_bot_target=4`, and reuses the existing route-command status contract with `expected_min_frames=4` and `expected_min_commands=4`.
+- No new upstream source files were imported for this slice; this is WORR-native dedicated-server smoke harness work over the existing bot slot lifecycle, route cache, item-goal, item-reservation, and command dispatch paths.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 16` on `mm-rage` adds `B|Mover`, `B|MoverTwo`, `B|MoverThree`, and `B|MoverFour`, then reports `frames=38`, `commands=38`, `route_requests=38`, `route_queries=11`, `route_refreshes=11`, `route_reuses=27`, `route_commands=38`, `route_failures=0`, `route_goal_assignments=4`, `item_goal_assignments=4`, `item_goal_reservation_skips=6`, `item_goal_active_reservations=4`, `route_debug_routes=38`, `route_debug_goals=38`, and `pass=1`; normal two-bot `sv_bot_frame_command_smoke 3` regression also reports `route_failures=0`, `item_goal_active_reservations=2`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-four-bot-frame-command-smoke-2026-06-18.md`.
+
+## Native Bridge Update: Nav Eight-Bot Frame Command Smoke
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native file `src/server/main.c` now supports `sv_bot_frame_command_smoke 17`, an eight-bot route-command validation mode.
+- The mode reuses the existing one-bot-per-frame smoke add loop and extends the smoke bot-name helper through `B|MoverEight`.
+- No new upstream source files were imported for this slice; this is WORR-native dedicated-server smoke harness work over the existing bot lifecycle, item-reservation, route-cache, debug overlay, and command dispatch paths.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 17` on `mm-rage` adds `B|Mover` through `B|MoverEight`, then reports `frames=92`, `commands=92`, `route_requests=92`, `route_queries=29`, `route_refreshes=29`, `route_reuses=63`, `route_commands=92`, `route_failures=0`, `route_goal_assignments=11`, `item_goal_assignments=11`, `item_goal_reservation_skips=49`, `item_goal_active_reservations=8`, `route_debug_routes=92`, `route_debug_goals=92`, and `pass=1`; four-bot `sv_bot_frame_command_smoke 16` regression also reports `route_failures=0`, `item_goal_active_reservations=4`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-eight-bot-frame-command-smoke-2026-06-18.md`.
+
+## Native Bridge Update: Nav Soak Frame Command Smoke
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native file `src/server/main.c` now supports `sv_bot_frame_command_smoke 18`, an eight-bot long-running route-command soak with configurable `sv_bot_frame_command_smoke_soak_ms` duration.
+- WORR native file `src/server/user.c` now preserves bot fake-client command accounting during server-authored command playback so long bot runs do not hit the human-client `commandMsec underflow` path.
+- WORR native files `src/game/sgame/bots/bot_nav.*` and `src/game/sgame/bots/bot_brain.cpp` now report peak active item reservations and keep mode `18` pass semantics focused on sustained commands plus zero route failures while mode `17` remains the short reservation-pressure proof.
+- No new upstream source files were imported for this slice; this is WORR-native dedicated-server smoke harness, command-accounting, and bot status work over the existing bot lifecycle, route-cache, item-goal, and command dispatch paths.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated `sv_bot_frame_command_smoke 18` on `mm-rage` ran for `elapsed_ms=600001`, reported `reports=9`, `frames=192036`, `commands=192036`, `route_requests=187232`, `route_commands=192036`, `route_failures=0`, `route_goal_assignments=4889`, `item_goal_assignments=1451`, `item_goal_reservation_skips=3455`, `item_goal_active_reservations=1`, `item_goal_peak_active_reservations=2`, `stuck_detections=11789`, `stuck_recovery_activations=11789`, `recovery_command_uses=72066`, `skipped_inactive=0`, and `pass=1`; eight-bot `sv_bot_frame_command_smoke 17` regression reports `item_goal_active_reservations=8`, `item_goal_peak_active_reservations=8`, `route_failures=0`, and `pass=1`.
+- Implementation log: `docs-dev/q3a-botlib-nav-soak-frame-command-smoke-2026-06-18.md`.
+
+## Native Bridge Update: Nav Map-Change Repeat Smoke
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native file `src/server/main.c` now supports `sv_bot_frame_command_smoke 19`, a same-map reload repeat smoke for the eight-bot route-command path.
+- The mode adds `sv_bot_frame_command_smoke_map_repeat_cycles` and `sv_bot_frame_command_smoke_map_repeat_reload_timeout_ms`, emits explicit cycle/reload/cleanup markers, and fails cleanly on reload timeout.
+- No new upstream source files were imported for this slice; this is WORR-native dedicated-server smoke harness work over the existing bot lifecycle and route-command path.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; dedicated mode `19` on `mm-rage` reports cycle 1 `route_failures=0`, `item_goal_peak_active_reservations=8`, and `pass=1`, observes same-map reload in `61` ms, reports cycle 2 `route_failures=0`, `item_goal_peak_active_reservations=8`, and `pass=1`, and completes with `cycles=2`, `map_changes=1`, `final_count=0`; mode `17` regression also passes.
+- Implementation log: `docs-dev/q3a-botlib-nav-map-change-repeat-smoke-2026-06-18.md`.
+
+## Native Bridge Update: Nav Map Restart Lifecycle Smoke
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T13`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native file `src/server/main.c` now extends mode `19` with `sv_bot_frame_command_smoke_map_repeat_restart`, default `0`, so the same lifecycle proof can exercise either `gamemap` or forced `map "<current map>" force` reload behavior.
+- The mode reports `command=<gamemap|map_force>`, `restart=<0|1>`, `realtime_reset=<0|1>`, and a cleanup status gate that requires both bot count and active item reservations to return to zero between cycles.
+- No new upstream source files were imported for this slice; this is WORR-native dedicated-server lifecycle-smoke hardening.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; forced restart mode `19` on `mm-rage` passed three proof cycles, two forced restart transitions, all cleanup checks with `count=0 active_reservations=0 pass=1`, final `cycles=3`, `map_changes=2`, `final_count=0`, and no `commandMsec underflow`; default `gamemap` regression still passes with two cycles, one map change, and final count zero.
+- Implementation log: `docs-dev/q3a-botlib-nav-map-restart-lifecycle-smoke-2026-06-18.md`.
+
+## Native Bridge Update: Nav Natural Movement and Interaction Retry
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_nav.*` and `src/game/sgame/bots/bot_brain.cpp` now report natural crouch/swim/waterjump AAS support status and first-pass interaction wait/use retry telemetry.
+- Current packaged `mm-rage.aas` reports no natural crouch, swim, or water-jump routes, so the slice records exact reference-map requirements instead of claiming runtime proof for unsupported travel types.
+- Follow-up telemetry adds unsupported masks, per-type reason codes, resolved AAS area/goal-area fields, route-start origins for future reference maps, and interaction context counters by world entity type.
+- The elevator/platform proof now records interaction wait/use activations and command uses while keeping the existing route-command smoke pass gates.
+- No new upstream source files were imported for this slice; this is WORR-native navigation policy/status work over existing imported route output.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; elevator smoke mode `12` passes with `nav_interaction_elevator_activations=1`, `interaction_wait_command_uses=8`, and `interaction_use_command_uses=8`; forced crouch mode `6` and forced swim mode `7` still pass.
+- Implementation logs: `docs-dev/q3a-botlib-nav-natural-movement-door-retry-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-interaction-diagnostics-2026-06-18.md`.
+
+## Native Bridge Update: Behavior Action Dispatcher Boundary
+
+Date: 2026-06-18
+
+Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
+
+- WORR native files `src/game/sgame/bots/bot_actions.*`, `bot_items.*`, and `bot_combat.*` now provide the first compile-ready action/decision boundary above the movement path.
+- The boundary exposes status-bearing APIs for future item, combat, inventory, weapon, and world-use policy while keeping weapon switching and inventory use as intent-only until `bot_brain.*` integration.
+- WORR native file `src/game/sgame/bots/bot_brain.cpp` now samples that boundary as telemetry only and emits `q3a_bot_action_status`; it intentionally does not call `BotActions_ApplyDecision()` or mutate attack/use command buttons from this new boundary.
+- `meson.build` now compiles the new WORR-native units. No new upstream source files were imported.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py --package-q2aas-aas`; mode `17` smoke reports `action_evaluations=92`, `action_noop_decisions=92`, `action_applied_cmds=0`, `action_applied_attack_buttons=0`, and `action_applied_use_buttons=0`; `git diff --check` with only existing LF/CRLF warnings.
+- Implementation logs: `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`, `docs-dev/q3a-botlib-behavior-action-brain-telemetry-2026-06-18.md`.
+
+## Native Tooling Update: Scenario and Performance Validation
+
+Date: 2026-06-18
+
+Tasks: `DV-03-T05`, `DV-05-T02`, `DV-05-T03`, `DV-05-T05`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native tool directory `tools/bot_scenarios/` now contains a local scenario-smoke harness, catalog output, JSON/Markdown/comparison reports, fixture-aware parser tests, and a README.
+- WORR native tool directory `tools/bot_scenarios/` now also contains pending promotion metadata and a `--pending-gap-report` mode that evaluates existing JSON reports for missing scenario rows and missing promotion counters without launching the game.
+- WORR native tool directory `tools/bot_perf/` now contains a bot smoke log analyzer, default soak budget, multi-run comparison and Markdown reporting, scenario-report duration sidecar support, comparison guard warnings, parser/fixture tests, and a README.
+- `docs-dev/q3a-botlib-pending-scenario-counters-2026-06-18.md` records proposed status counters and pass gates for enemy engagement, weapon switching, health/armor pickup, and team-objective scenario promotion.
+- `docs-dev/q3a-botlib-bot-perf-source-counters-2026-06-18.md` records the follow-up source-counter plan for true bot CPU, route CPU, visibility/PVS/PHS, and trace-pressure budgets.
+- No new upstream source files were imported for this slice; this is WORR-native validation tooling and planning work.
+- Validation: scenario harness tests pass with eight standard-library tests and fixture validation when `.tmp/bot_scenarios/latest_report.json` exists; pending-gap report against the current implemented report returns four blocked pending rows; perf analyzer tests pass with eight standard-library tests and the real soak fixture; the default soak budget passes the current ten-minute mode `18` log.
+- Implementation logs: `docs-dev/q3a-botlib-scenario-smoke-harness-2026-06-18.md`, `docs-dev/q3a-botlib-pending-scenario-counters-2026-06-18.md`, `docs-dev/q3a-botlib-scenario-pending-gap-report-2026-06-18.md`, `docs-dev/q3a-botlib-bot-perf-telemetry-2026-06-18.md`, `docs-dev/q3a-botlib-bot-perf-source-counters-2026-06-18.md`.
+
 ## Candidate Source Inventory
 
-These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, and nav debug-client-filter bridges are recorded as native adapter work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
+These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, bot validation tooling, and legacy Q2R bot surface removal work is recorded as native adapter/replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
 
 | Candidate | Upstream / Local Ref | Current Use Decision | Required Before Import |
 |---|---|---|---|

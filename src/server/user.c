@@ -1013,6 +1013,9 @@ void SV_BotClientThink(client_t *client, usercmd_t *cmd)
     sv_client = client;
     sv_player = client->edict;
 
+    if (client->command_msec < cmd->msec) {
+        client->command_msec = cmd->msec;
+    }
     SV_ClientThink(cmd);
     client->lastcmd = *cmd;
 

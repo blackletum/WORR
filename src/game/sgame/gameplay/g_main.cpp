@@ -135,8 +135,6 @@ cvar_t *ai_widow_roof_spawn;
 cvar_t *bob_pitch;
 cvar_t *bob_roll;
 cvar_t *bob_up;
-cvar_t *bot_debug_follow_actor;
-cvar_t *bot_debug_move_to_point;
 cvar_t *sg_bot_enable;
 cvar_t *sg_bot_debug;
 cvar_t *sg_bot_debug_aas;
@@ -1047,10 +1045,6 @@ static void InitGame() {
   g_debug_monster_paths = gi.cvar("g_debug_monster_paths", "0", CVAR_NOFLAGS);
   g_debug_monster_kills = gi.cvar("g_debug_monster_kills", "0", CVAR_LATCH);
 
-  bot_debug_follow_actor = gi.cvar("bot_debug_follow_actor", "0", CVAR_NOFLAGS);
-  bot_debug_move_to_point =
-      gi.cvar("bot_debug_move_to_point", "0", CVAR_NOFLAGS);
-
   // noset vars
   g_dedicated = gi.cvar("dedicated", "0", CVAR_NOSET);
 
@@ -1386,6 +1380,32 @@ static void ShutdownGame() {
   gi.FreeTags(TAG_GAME);
 }
 
+static void Entity_ForceLookAtPoint(gentity_t *entity, gvec3_cref_t point) {
+  if (entity == nullptr) {
+    return;
+  }
+
+  Vector3 viewOrigin = entity->s.origin;
+  if (entity->client != nullptr) {
+    viewOrigin += entity->client->ps.viewOffset;
+  }
+
+  const Vector3 ideal = (point - viewOrigin).normalized();
+
+  Vector3 viewAngles = VectorToAngles(ideal);
+  if (viewAngles.x < -180.0f) {
+    viewAngles.x = anglemod(viewAngles.x + 360.0f);
+  }
+
+  if (entity->client != nullptr) {
+    entity->client->ps.pmove.deltaAngles =
+        (viewAngles - entity->client->resp.cmdAngles);
+    entity->client->ps.viewAngles = {};
+    entity->client->vAngle = {};
+    entity->s.angles = {};
+  }
+}
+
 static void *G_GetExtension(const char *name) {
   static const bot_frame_command_api_v1_t botFrameCommandApi = {
       1,
@@ -1461,12 +1481,12 @@ Q2GAME_API game_export_t *GetGameAPI(game_import_t *import) {
   globals.PrepFrame = G_PrepFrame;
 
   globals.ServerCommand = ServerCommand;
-  globals.Bot_SetWeapon = Bot_SetWeapon;
-  globals.Bot_TriggerEntity = Bot_TriggerEntity;
-  globals.Bot_GetItemID = Bot_GetItemID;
-  globals.Bot_UseItem = Bot_UseItem;
+  globals.Bot_SetWeapon = nullptr;
+  globals.Bot_TriggerEntity = nullptr;
+  globals.Bot_GetItemID = nullptr;
+  globals.Bot_UseItem = nullptr;
   globals.Entity_ForceLookAtPoint = Entity_ForceLookAtPoint;
-  globals.Bot_PickedUpItem = Bot_PickedUpItem;
+  globals.Bot_PickedUpItem = nullptr;
 
   globals.Entity_IsVisibleToPlayer = Entity_IsVisibleToPlayer;
   globals.GetShadowLightData = GetShadowLightData;
@@ -2274,7 +2294,6 @@ static inline void G_RunFrame_(bool main_loop) {
   Bot_EnforceMatchTeamPolicy(true);
   CheckPowerupsDisabled(); // disable unwanted powerups
   CheckRuleset();          // ruleset enforcement
-  Bot_UpdateDebug();       // debug AI states
   {
     uint32_t hud_flags = 0;
     if ((g_instaGib && g_instaGib->integer) ||
@@ -2437,8 +2456,6 @@ static inline void G_RunFrame_(bool main_loop) {
         ent->s.effects &= ~EF_COLOR_SHELL;
       }
     }
-
-    Entity_UpdateState(ent);
 
     if (i >= 1 && i < 1 + static_cast<size_t>(game.maxClients)) {
       ClientBeginServerFrame(ent);
