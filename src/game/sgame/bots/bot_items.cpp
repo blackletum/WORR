@@ -834,6 +834,14 @@ BotItemUtilityKind BotItems_ClassifyUtility(const Item *item) {
 	return BotItems_ClassifyItem(item);
 }
 
+BotItemSpecialKind BotItems_ClassifySpecial(const Item *item) {
+	return BotItems_ClassifySpecialItem(item);
+}
+
+bool BotItems_IsPowerArmorUtility(const Item *item) {
+	return BotItems_IsPowerArmorItem(item);
+}
+
 BotItemContext BotItems_BuildContextForEntity(const gentity_t *bot, const gentity_t *candidate, int candidateScore, bool candidateReserved, BotItemFocus focus) {
 	return BotItems_BuildContextForTimedEntity(
 		bot,

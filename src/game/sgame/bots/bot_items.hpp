@@ -279,6 +279,8 @@ BotItemTimingConsumerResult BotItems_EvaluateTimingConsumer(const BotItemTimingC
 BotItemContext BotItems_ApplyTimingConsumerResult(BotItemContext context, const BotItemTimingConsumerResult &timing);
 int BotItems_CurrentArmor(const gclient_t *client);
 BotItemUtilityKind BotItems_ClassifyUtility(const Item *item);
+BotItemSpecialKind BotItems_ClassifySpecial(const Item *item);
+bool BotItems_IsPowerArmorUtility(const Item *item);
 BotItemContext BotItems_BuildContextForEntity(const gentity_t *bot, const gentity_t *candidate, int candidateScore, bool candidateReserved, BotItemFocus focus);
 BotItemContext BotItems_BuildContextForTimedEntity(const gentity_t *bot, const gentity_t *candidate, int candidateScore, bool candidateReserved, BotItemFocus focus, bool pickupObserved, int observedPickupMilliseconds = 0);
 BotItemContext BotItems_BuildContextForItem(const gentity_t *bot, const Item *candidateItem, int candidateEntity, int candidateScore, bool candidateAvailable, bool candidateReserved, int candidateCount, BotItemFocus focus, int candidateSpawnCount = 0);

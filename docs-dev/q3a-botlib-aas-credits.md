@@ -990,9 +990,129 @@ Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
 - Implementation log:
   `docs-dev/q3a-botlib-estimate-aware-weapon-selection-2026-06-20.md`.
 
+## Native Runtime Update: Carried Arsenal Selection
+
+Date: 2026-06-20
+
+Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native action work now scans carried weapon inventory after enemy facts
+  are enriched and feeds the best scorer-approved candidate into combat as the
+  preferred switch target.
+- The scanner defers to existing pending weapon switches and keeps range, ammo,
+  readiness, splash safety, and estimate-aware scoring centralized in
+  `bot_combat.*`.
+- Compact action status exposes weapon-inventory scan, candidate, selection,
+  and last-selection reason fields for scenario/tooling visibility.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-carried-arsenal-selection-2026-06-20.md`.
+
+## Native Runtime Update: Non-Weapon Inventory Policy
+
+Date: 2026-06-20
+
+Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native action work now scans carried usable non-weapon inventory after
+  enemy facts and carried-arsenal enrichment.
+- The policy selects conservative combat/survival uses for damage boosts,
+  protection, invisibility, mobility, regeneration, and power armor while
+  deferring active timed effects, spheres/deployables, environment-only utility,
+  weapon items, already-active power armor, and power armor without cells.
+- Compact and detailed action status expose inventory-policy scan, candidate,
+  selection, deferral, last-item, priority, score, special-kind, and reason
+  fields for scenario/tooling visibility.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-nonweapon-inventory-policy-2026-06-20.md`.
+
+## Native Runtime Update: Utility and Deployable Inventory Policy
+
+Date: 2026-06-20
+
+Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native action work now extends carried non-weapon inventory use to
+  environment utility and sphere deployable cases.
+- Enviro suit/rebreather respond to actual hazard or underwater pressure,
+  IR goggles and silencer respond to narrow combat utility cases, and
+  defender/hunter/vengeance spheres launch only under combat/survival pressure.
+- Action status exposes utility, environment, deployable, and owned-sphere
+  deferral counters for scenario/tooling visibility.
+- This earlier utility/sphere round did not enable nuke, doppelganger, or
+  personal teleporter; the follow-on escape/deployable round adds doppelganger
+  placement and teleporter escape checks while keeping nuke deferred.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-utility-deployable-inventory-policy-2026-06-20.md`.
+
+## Native Runtime Update: Escape and Deployable Inventory Policy
+
+Date: 2026-06-20
+
+Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native action work now adds placement-aware doppelganger use and
+  last-resort personal teleporter escape use to the carried inventory policy.
+- Doppelganger scoring reuses the same gameplay spawn and ground-support
+  helpers as the item callback before requesting the item.
+- Personal teleporter scoring requires deathmatch inventory semantics, avoids
+  CTF objective carriers, and only triggers under critical health plus immediate
+  enemy or hazard pressure.
+- Action status exposes escape-use, placement-check, placement-deferral, and
+  nuke-deferral counters for scenario/tooling visibility.
+- This escape/deployable round still deferred nuke; the follow-on safe-nuke
+  round adds friendly-fire, blast-radius, objective, self-pressure, launch, and
+  enemy-value checks.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-escape-deployable-inventory-policy-2026-06-20.md`.
+
+## Native Runtime Update: Safe Nuke Inventory Policy
+
+Date: 2026-06-20
+
+Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native action work now turns nuke from an unconditional deferral into a
+  conservative safety-gated combat utility option.
+- The policy requires deathmatch inventory semantics, avoids CTF objective
+  carriers, requires actionable enemy pressure, checks target distance and enemy
+  value, rejects low self-resource or hazard pressure, checks launch clearance,
+  and avoids live teammate exposure inside the nuke falloff-risk radius.
+- Action status exposes nuke safety-check, friendly-deferral, self-deferral,
+  use, and general deferral counters for scenario/tooling visibility.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-safe-nuke-inventory-policy-2026-06-20.md`.
+
+## Native Runtime Update: Nuke Retreat Route Ownership
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native brain/route work now arms a short-lived retreat route owner after
+  a submitted safe nuke inventory command.
+- The retreat source prefers the bot blackboard's remembered enemy and falls
+  back to the launch direction when no live remembered enemy is available.
+- Active retreat state overlays a temporary position route goal and exposes
+  `nuke_retreat_*` plus `last_nuke_retreat_*` frame-command status fields for
+  scenario/tooling visibility.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-nuke-retreat-route-ownership-2026-06-21.md`.
+
 ## Candidate Source Inventory
 
-These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
+These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nuke retreat route ownership, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
 
 | Candidate | Upstream / Local Ref | Current Use Decision | Required Before Import |
 |---|---|---|---|

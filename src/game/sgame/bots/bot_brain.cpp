@@ -83,6 +83,198 @@ void BotBrain_PrintCompactActionStatus(
 		actionStatus.pendingWeaponSwitches);
 	BotBrain_AppendCompactStatusField(
 		line,
+		"action_weapon_inventory_scans",
+		actionStatus.weaponInventoryScans);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_weapon_inventory_candidates",
+		actionStatus.weaponInventoryCandidates);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_weapon_inventory_ready_candidates",
+		actionStatus.weaponInventoryReadyCandidates);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_weapon_inventory_selections",
+		actionStatus.weaponInventorySelections);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_weapon_inventory_switch_recommendations",
+		actionStatus.weaponInventorySwitchRecommendations);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_weapon_inventory_keep_current",
+		actionStatus.weaponInventoryKeepCurrent);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_weapon_inventory_pending_deferrals",
+		actionStatus.weaponInventoryPendingDeferrals);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_weapon_inventory_no_enemy_skips",
+		actionStatus.weaponInventoryNoEnemySkips);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_weapon_inventory_no_candidate_skips",
+		actionStatus.weaponInventoryNoCandidateSkips);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_weapon_inventory_candidates",
+		actionStatus.lastWeaponInventoryCandidateCount);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_weapon_inventory_ready_candidates",
+		actionStatus.lastWeaponInventoryReadyCount);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_weapon_inventory_current_item",
+		actionStatus.lastWeaponInventoryCurrentItem);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_weapon_inventory_selected_item",
+		actionStatus.lastWeaponInventorySelectedItem);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_weapon_inventory_selected_score",
+		actionStatus.lastWeaponInventorySelectedScore);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_weapon_inventory_current_score",
+		actionStatus.lastWeaponInventoryCurrentScore);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_weapon_inventory_reason",
+		actionStatus.lastWeaponInventoryReason);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_scans",
+		actionStatus.inventoryPolicyScans);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_candidates",
+		actionStatus.inventoryPolicyCandidates);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_usable_candidates",
+		actionStatus.inventoryPolicyUsableCandidates);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_selections",
+		actionStatus.inventoryPolicySelections);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_combat_uses",
+		actionStatus.inventoryPolicyCombatUses);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_survival_uses",
+		actionStatus.inventoryPolicySurvivalUses);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_utility_uses",
+		actionStatus.inventoryPolicyUtilityUses);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_environment_uses",
+		actionStatus.inventoryPolicyEnvironmentUses);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_deployable_uses",
+		actionStatus.inventoryPolicyDeployableUses);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_escape_uses",
+		actionStatus.inventoryPolicyEscapeUses);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_placement_checks",
+		actionStatus.inventoryPolicyPlacementChecks);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_placement_deferrals",
+		actionStatus.inventoryPolicyPlacementDeferrals);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_power_armor_uses",
+		actionStatus.inventoryPolicyPowerArmorUses);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_nuke_deferrals",
+		actionStatus.inventoryPolicyNukeDeferrals);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_nuke_safety_checks",
+		actionStatus.inventoryPolicyNukeSafetyChecks);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_nuke_friendly_deferrals",
+		actionStatus.inventoryPolicyNukeFriendlyDeferrals);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_nuke_self_deferrals",
+		actionStatus.inventoryPolicyNukeSelfDeferrals);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_nuke_uses",
+		actionStatus.inventoryPolicyNukeUses);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_existing_request_deferrals",
+		actionStatus.inventoryPolicyExistingRequestDeferrals);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_active_deferrals",
+		actionStatus.inventoryPolicyActiveDeferrals);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_owned_sphere_deferrals",
+		actionStatus.inventoryPolicyOwnedSphereDeferrals);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_no_cells_skips",
+		actionStatus.inventoryPolicyNoCellsSkips);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_no_candidate_skips",
+		actionStatus.inventoryPolicyNoCandidateSkips);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"action_inventory_policy_no_usable_skips",
+		actionStatus.inventoryPolicyNoUsableSkips);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_inventory_policy_candidates",
+		actionStatus.lastInventoryPolicyCandidateCount);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_inventory_policy_usable_candidates",
+		actionStatus.lastInventoryPolicyUsableCount);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_inventory_policy_item",
+		actionStatus.lastInventoryPolicyItem);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_inventory_policy_score",
+		actionStatus.lastInventoryPolicyScore);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_inventory_policy_priority",
+		actionStatus.lastInventoryPolicyPriority);
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_inventory_policy_special_kind",
+		static_cast<int>(actionStatus.lastInventoryPolicySpecialKind));
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_inventory_policy_special_kind_name",
+		BotItems_SpecialKindName(actionStatus.lastInventoryPolicySpecialKind));
+	BotBrain_AppendCompactStatusField(
+		line,
+		"last_action_inventory_policy_reason",
+		actionStatus.lastInventoryPolicyReason);
+	BotBrain_AppendCompactStatusField(
+		line,
 		"action_command_request_builds",
 		actionStatus.commandRequestBuilds);
 	BotBrain_AppendCompactStatusField(
@@ -1162,6 +1354,21 @@ struct BotFrameCommandStatus {
 	int lastTravelTypeGoalStartType = 0;
 	int lastTravelTypeGoalStartArea = 0;
 	int lastTravelTypeGoalStartGoalArea = 0;
+	int nukeRetreatActivations = 0;
+	int nukeRetreatFallbackSources = 0;
+	int nukeRetreatRouteRequests = 0;
+	int nukeRetreatRouteDeferrals = 0;
+	int nukeRetreatExpirations = 0;
+	int nukeRetreatInvalidSkips = 0;
+	int lastNukeRetreatClient = -1;
+	int lastNukeRetreatRemainingMilliseconds = 0;
+	int lastNukeRetreatSourceX = 0;
+	int lastNukeRetreatSourceY = 0;
+	int lastNukeRetreatSourceZ = 0;
+	int lastNukeRetreatGoalX = 0;
+	int lastNukeRetreatGoalY = 0;
+	int lastNukeRetreatGoalZ = 0;
+	int lastNukeRetreatDistanceSquared = 0;
 	uint64_t botFrameCpuNs = 0;
 	int botFrameCpuSamples = 0;
 	uint64_t botFrameCpuMaxNs = 0;
@@ -1191,6 +1398,10 @@ struct BotBrainBlackboardSlot {
 	int aimBurstShotsFired = 0;
 	int aimBurstCooldownUntilMilliseconds = 0;
 	int aimLastAttackTimeMilliseconds = 0;
+	int nukeRetreatUntilMilliseconds = 0;
+	Vector3 nukeRetreatSource = vec3_origin;
+	Vector3 nukeRetreatFallbackDirection = vec3_origin;
+	Vector3 nukeRetreatGoal = vec3_origin;
 	int lastScanFrame = -1;
 	int lastHeardEventKeyMilliseconds = 0;
 	int lastDamageEventKeyMilliseconds = 0;
@@ -1331,6 +1542,9 @@ constexpr float BOT_COMMAND_VELOCITY_MIN_SPEED_SQUARED = 12.0f * 12.0f;
 constexpr float BOT_COMMAND_VERTICAL_INTENT_EPSILON = 8.0f;
 constexpr float BOT_COMMAND_STUCK_RECOVERY_FORWARD_MOVE = -80.0f;
 constexpr float BOT_COMMAND_STUCK_RECOVERY_SIDE_MOVE = 140.0f;
+constexpr float BOT_COMMAND_NUKE_RETREAT_DISTANCE = 1024.0f;
+constexpr float BOT_COMMAND_NUKE_RETREAT_MIN_DIRECTION_SQUARED = 64.0f;
+constexpr int BOT_COMMAND_NUKE_RETREAT_MILLISECONDS = 6000;
 
 constexpr int BOT_COMMAND_TRAVEL_WALK = 2;
 constexpr int BOT_COMMAND_TRAVEL_CROUCH = 3;
@@ -3026,6 +3240,171 @@ void Bot_CommandRecordSmokeObjectiveRouteResult(
 	}
 }
 
+Vector3 Bot_CommandNukeRetreatFallbackDirection(gentity_t *bot) {
+	Vector3 forward = { 1.0f, 0.0f, 0.0f };
+	if (bot != nullptr && bot->client != nullptr) {
+		Vector3 viewAngles = Bot_CommandCurrentViewAngles(bot);
+		viewAngles[PITCH] = 0.0f;
+		viewAngles[ROLL] = 0.0f;
+		AngleVectors(viewAngles, forward, nullptr, nullptr);
+	}
+
+	forward.z = 0.0f;
+	if (forward.lengthSquared() < 1.0f) {
+		forward = { 1.0f, 0.0f, 0.0f };
+	}
+	return (forward * -1.0f).normalized();
+}
+
+gentity_t *Bot_CommandNukeRetreatEnemySource(gentity_t *bot) {
+	const int clientIndex = Bot_PerceptionClientIndex(bot);
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(botBrainBlackboardSlots.size())) {
+		return nullptr;
+	}
+
+	const BotBrainBlackboardSnapshot &snapshot =
+		botBrainBlackboardSlots[clientIndex].snapshot;
+	if (!snapshot.valid || snapshot.currentEnemyEntity < 0) {
+		return nullptr;
+	}
+
+	gentity_t *enemy = Bot_PerceptionEntityFromMemory(
+		snapshot.currentEnemyEntity,
+		snapshot.currentEnemySpawnCount);
+	if (!Bot_PerceptionEntityAlive(enemy) || enemy == bot) {
+		return nullptr;
+	}
+	return enemy;
+}
+
+void Bot_CommandRecordNukeRetreatLast(
+	int clientIndex,
+	int remainingMilliseconds,
+	const Vector3 &source,
+	const Vector3 &goal,
+	float distanceSquared) {
+	botFrameCommandStatus.lastNukeRetreatClient = clientIndex;
+	botFrameCommandStatus.lastNukeRetreatRemainingMilliseconds =
+		std::max(remainingMilliseconds, 0);
+	botFrameCommandStatus.lastNukeRetreatSourceX = static_cast<int>(source.x);
+	botFrameCommandStatus.lastNukeRetreatSourceY = static_cast<int>(source.y);
+	botFrameCommandStatus.lastNukeRetreatSourceZ = static_cast<int>(source.z);
+	botFrameCommandStatus.lastNukeRetreatGoalX = static_cast<int>(goal.x);
+	botFrameCommandStatus.lastNukeRetreatGoalY = static_cast<int>(goal.y);
+	botFrameCommandStatus.lastNukeRetreatGoalZ = static_cast<int>(goal.z);
+	botFrameCommandStatus.lastNukeRetreatDistanceSquared =
+		Bot_PerceptionClampDistanceSquared(distanceSquared);
+}
+
+bool Bot_CommandApplyNukeRetreatRouteGoal(
+	gentity_t *bot,
+	BotNavRouteRequest *request) {
+	int clientIndex = -1;
+	BotBrainBlackboardSlot *slot = Bot_BlackboardEnsureSlot(bot, &clientIndex);
+	if (slot == nullptr || request == nullptr) {
+		botFrameCommandStatus.nukeRetreatInvalidSkips++;
+		return false;
+	}
+	if (slot->nukeRetreatUntilMilliseconds <= 0) {
+		return false;
+	}
+
+	const int nowMilliseconds = Bot_CommandCurrentTimeMilliseconds();
+	const int remainingMilliseconds = slot->nukeRetreatUntilMilliseconds - nowMilliseconds;
+	if (remainingMilliseconds <= 0) {
+		slot->nukeRetreatUntilMilliseconds = 0;
+		slot->nukeRetreatSource = vec3_origin;
+		slot->nukeRetreatFallbackDirection = vec3_origin;
+		slot->nukeRetreatGoal = vec3_origin;
+		botFrameCommandStatus.nukeRetreatExpirations++;
+		Bot_CommandRecordNukeRetreatLast(
+			clientIndex,
+			0,
+			vec3_origin,
+			vec3_origin,
+			0.0f);
+		return false;
+	}
+
+	if (request->hasPositionGoal || request->hasTravelTypeGoal) {
+		botFrameCommandStatus.nukeRetreatRouteDeferrals++;
+		Bot_CommandRecordNukeRetreatLast(
+			clientIndex,
+			remainingMilliseconds,
+			slot->nukeRetreatSource,
+			slot->nukeRetreatGoal,
+			0.0f);
+		return false;
+	}
+
+	Vector3 away = bot->s.origin - slot->nukeRetreatSource;
+	away.z = 0.0f;
+	if (away.lengthSquared() < BOT_COMMAND_NUKE_RETREAT_MIN_DIRECTION_SQUARED) {
+		away = slot->nukeRetreatFallbackDirection;
+		away.z = 0.0f;
+	}
+	if (away.lengthSquared() < 1.0f) {
+		botFrameCommandStatus.nukeRetreatInvalidSkips++;
+		return false;
+	}
+
+	away = away.normalized();
+	slot->nukeRetreatGoal = bot->s.origin + (away * BOT_COMMAND_NUKE_RETREAT_DISTANCE);
+	slot->nukeRetreatGoal.z = bot->s.origin.z;
+	request->hasPositionGoal = true;
+	request->positionGoal[0] = slot->nukeRetreatGoal.x;
+	request->positionGoal[1] = slot->nukeRetreatGoal.y;
+	request->positionGoal[2] = slot->nukeRetreatGoal.z;
+	botFrameCommandStatus.nukeRetreatRouteRequests++;
+	Bot_CommandRecordNukeRetreatLast(
+		clientIndex,
+		remainingMilliseconds,
+		slot->nukeRetreatSource,
+		slot->nukeRetreatGoal,
+		(bot->s.origin - slot->nukeRetreatSource).lengthSquared());
+	return true;
+}
+
+void Bot_CommandActivateNukeRetreat(
+	gentity_t *bot,
+	const BotActionCommandRequest &request) {
+	if (request.kind != BotActionCommandRequestKind::UseInventoryIndex ||
+		request.item != static_cast<int>(IT_AMMO_NUKE)) {
+		return;
+	}
+
+	int clientIndex = -1;
+	BotBrainBlackboardSlot *slot = Bot_BlackboardEnsureSlot(bot, &clientIndex);
+	if (slot == nullptr) {
+		botFrameCommandStatus.nukeRetreatInvalidSkips++;
+		return;
+	}
+
+	const Vector3 fallbackDirection = Bot_CommandNukeRetreatFallbackDirection(bot);
+	Vector3 source = bot->s.origin - (fallbackDirection * BOT_COMMAND_NUKE_RETREAT_DISTANCE);
+	if (gentity_t *enemy = Bot_CommandNukeRetreatEnemySource(bot)) {
+		source = enemy->s.origin;
+	} else {
+		botFrameCommandStatus.nukeRetreatFallbackSources++;
+	}
+
+	const int nowMilliseconds = Bot_CommandCurrentTimeMilliseconds();
+	slot->nukeRetreatUntilMilliseconds =
+		nowMilliseconds + BOT_COMMAND_NUKE_RETREAT_MILLISECONDS;
+	slot->nukeRetreatSource = source;
+	slot->nukeRetreatFallbackDirection = fallbackDirection;
+	slot->nukeRetreatGoal = bot->s.origin + (fallbackDirection * BOT_COMMAND_NUKE_RETREAT_DISTANCE);
+	slot->nukeRetreatGoal.z = bot->s.origin.z;
+
+	botFrameCommandStatus.nukeRetreatActivations++;
+	Bot_CommandRecordNukeRetreatLast(
+		clientIndex,
+		BOT_COMMAND_NUKE_RETREAT_MILLISECONDS,
+		slot->nukeRetreatSource,
+		slot->nukeRetreatGoal,
+		(bot->s.origin - slot->nukeRetreatSource).lengthSquared());
+}
+
 void Bot_CommandBuildRouteRequest(BotNavRouteRequest *request) {
 	if (request == nullptr) {
 		return;
@@ -3534,6 +3913,8 @@ BotActionDecision Bot_CommandSampleActionDecision(gentity_t *bot) {
 			Bot_CommandApplySmokeEnemyFacts(bot, &actionContext, facts);
 		}
 	}
+	BotActions_EnrichCombatInventory(bot, &actionContext);
+	BotActions_EnrichInventoryUse(bot, &actionContext);
 	return BotActions_Decide(actionContext);
 }
 
@@ -3714,6 +4095,9 @@ bool Bot_CommandDispatchPendingActionRequest(
 			request,
 			submitted);
 	}
+	if (submitted && actionApply.inventoryUsePending) {
+		Bot_CommandActivateNukeRetreat(bot, request);
+	}
 	return submitted;
 }
 
@@ -3852,6 +4236,7 @@ bool BotBrain_BuildFrameCommand( gentity_t * bot, usercmd_t * cmd ) {
 	BotObjectiveAssignment objectiveAssignment{};
 	BotObjectiveRouteGoal objectiveRouteGoal{};
 	Bot_CommandBuildRouteRequest(&routeRequest);
+	(void)Bot_CommandApplyNukeRetreatRouteGoal(bot, &routeRequest);
 	const bool objectiveRouteRequested = Bot_CommandBuildSmokeObjectiveRoute(
 		bot,
 		smokeSlot,
@@ -3986,6 +4371,21 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  "travel_type_goal_clears={} "
 			  "travel_type_goal_start_warps={} "
 			  "travel_type_goal_expect_blocked={} "
+			  "nuke_retreat_activations={} "
+			  "nuke_retreat_fallback_sources={} "
+			  "nuke_retreat_route_requests={} "
+			  "nuke_retreat_route_deferrals={} "
+			  "nuke_retreat_expirations={} "
+			  "nuke_retreat_invalid_skips={} "
+			  "last_nuke_retreat_client={} "
+			  "last_nuke_retreat_remaining_ms={} "
+			  "last_nuke_retreat_source_x={} "
+			  "last_nuke_retreat_source_y={} "
+			  "last_nuke_retreat_source_z={} "
+			  "last_nuke_retreat_goal_x={} "
+			  "last_nuke_retreat_goal_y={} "
+			  "last_nuke_retreat_goal_z={} "
+			  "last_nuke_retreat_distance_sq={} "
 			  "route_debug_frames={} "
 			  "route_debug_routes={} route_debug_goals={} "
 			  "route_debug_missing_frames={} route_debug_lines={} "
@@ -4096,6 +4496,21 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  routeStatus.travelTypeGoalClears,
 			  botFrameCommandStatus.travelTypeGoalStartWarps,
 			  expectTravelTypeGoalBlocked ? 1 : 0,
+			  botFrameCommandStatus.nukeRetreatActivations,
+			  botFrameCommandStatus.nukeRetreatFallbackSources,
+			  botFrameCommandStatus.nukeRetreatRouteRequests,
+			  botFrameCommandStatus.nukeRetreatRouteDeferrals,
+			  botFrameCommandStatus.nukeRetreatExpirations,
+			  botFrameCommandStatus.nukeRetreatInvalidSkips,
+			  botFrameCommandStatus.lastNukeRetreatClient,
+			  botFrameCommandStatus.lastNukeRetreatRemainingMilliseconds,
+			  botFrameCommandStatus.lastNukeRetreatSourceX,
+			  botFrameCommandStatus.lastNukeRetreatSourceY,
+			  botFrameCommandStatus.lastNukeRetreatSourceZ,
+			  botFrameCommandStatus.lastNukeRetreatGoalX,
+			  botFrameCommandStatus.lastNukeRetreatGoalY,
+			  botFrameCommandStatus.lastNukeRetreatGoalZ,
+			  botFrameCommandStatus.lastNukeRetreatDistanceSquared,
 			  routeStatus.debugOverlayFrames,
 			  routeStatus.debugOverlayRoutes,
 			  routeStatus.debugOverlayGoals,
@@ -4768,6 +5183,38 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  "action_noop_decisions={} action_applied_cmds={} "
 			  "action_applied_attack_buttons={} action_applied_use_buttons={} "
 			  "action_pending_weapon_switches={} action_pending_inventory_uses={} "
+			  "action_inventory_policy_scans={} "
+			  "action_inventory_policy_candidates={} "
+			  "action_inventory_policy_usable_candidates={} "
+			  "action_inventory_policy_selections={} "
+			  "action_inventory_policy_combat_uses={} "
+			  "action_inventory_policy_survival_uses={} "
+			  "action_inventory_policy_utility_uses={} "
+			  "action_inventory_policy_environment_uses={} "
+			  "action_inventory_policy_deployable_uses={} "
+			  "action_inventory_policy_escape_uses={} "
+			  "action_inventory_policy_placement_checks={} "
+			  "action_inventory_policy_placement_deferrals={} "
+			  "action_inventory_policy_power_armor_uses={} "
+			  "action_inventory_policy_nuke_deferrals={} "
+			  "action_inventory_policy_nuke_safety_checks={} "
+			  "action_inventory_policy_nuke_friendly_deferrals={} "
+			  "action_inventory_policy_nuke_self_deferrals={} "
+			  "action_inventory_policy_nuke_uses={} "
+			  "action_inventory_policy_existing_request_deferrals={} "
+			  "action_inventory_policy_active_deferrals={} "
+			  "action_inventory_policy_owned_sphere_deferrals={} "
+			  "action_inventory_policy_no_cells_skips={} "
+			  "action_inventory_policy_no_candidate_skips={} "
+			  "action_inventory_policy_no_usable_skips={} "
+			  "last_action_inventory_policy_candidates={} "
+			  "last_action_inventory_policy_usable_candidates={} "
+			  "last_action_inventory_policy_item={} "
+			  "last_action_inventory_policy_score={} "
+			  "last_action_inventory_policy_priority={} "
+			  "last_action_inventory_policy_special_kind={} "
+			  "last_action_inventory_policy_special_kind_name={} "
+			  "last_action_inventory_policy_reason={} "
 			  "action_command_request_builds={} "
 			  "action_command_request_accepted={} "
 			  "action_command_request_rejected={} "
@@ -4928,6 +5375,38 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  actionStatus.appliedUseButtons,
 			  actionStatus.pendingWeaponSwitches,
 			  actionStatus.pendingInventoryUses,
+			  actionStatus.inventoryPolicyScans,
+			  actionStatus.inventoryPolicyCandidates,
+			  actionStatus.inventoryPolicyUsableCandidates,
+			  actionStatus.inventoryPolicySelections,
+			  actionStatus.inventoryPolicyCombatUses,
+			  actionStatus.inventoryPolicySurvivalUses,
+			  actionStatus.inventoryPolicyUtilityUses,
+			  actionStatus.inventoryPolicyEnvironmentUses,
+			  actionStatus.inventoryPolicyDeployableUses,
+			  actionStatus.inventoryPolicyEscapeUses,
+			  actionStatus.inventoryPolicyPlacementChecks,
+			  actionStatus.inventoryPolicyPlacementDeferrals,
+			  actionStatus.inventoryPolicyPowerArmorUses,
+			  actionStatus.inventoryPolicyNukeDeferrals,
+			  actionStatus.inventoryPolicyNukeSafetyChecks,
+			  actionStatus.inventoryPolicyNukeFriendlyDeferrals,
+			  actionStatus.inventoryPolicyNukeSelfDeferrals,
+			  actionStatus.inventoryPolicyNukeUses,
+			  actionStatus.inventoryPolicyExistingRequestDeferrals,
+			  actionStatus.inventoryPolicyActiveDeferrals,
+			  actionStatus.inventoryPolicyOwnedSphereDeferrals,
+			  actionStatus.inventoryPolicyNoCellsSkips,
+			  actionStatus.inventoryPolicyNoCandidateSkips,
+			  actionStatus.inventoryPolicyNoUsableSkips,
+			  actionStatus.lastInventoryPolicyCandidateCount,
+			  actionStatus.lastInventoryPolicyUsableCount,
+			  actionStatus.lastInventoryPolicyItem,
+			  actionStatus.lastInventoryPolicyScore,
+			  actionStatus.lastInventoryPolicyPriority,
+			  static_cast<int>(actionStatus.lastInventoryPolicySpecialKind),
+			  BotItems_SpecialKindName(actionStatus.lastInventoryPolicySpecialKind),
+			  actionStatus.lastInventoryPolicyReason,
 			  actionStatus.commandRequestBuilds,
 			  actionStatus.commandRequestAccepted,
 			  actionStatus.commandRequestRejected,
