@@ -20,13 +20,13 @@ The port is not a blind file drop. The target is a maintained WORR bot stack wit
 
 ## Completion Snapshot
 
-Last refreshed: 2026-06-21 tournament replay reset proof round.
+Last refreshed: 2026-06-21 match logging catalog round.
 
-- Total checklist completion: 680 of 773 items complete, or 88.0%.
-- Phase checklist completion: 678 of 759 phase items complete, or 89.3%.
-- Completed in the latest worker lanes: live combat aim-profile policy and brain-owned live-aim/projectile-lead consumption, live pickup/observed-respawn item timing consumers with status-friendly counters, coop and resource policy helper metadata, stricter scenario marker gates for live aim and match-policy evidence, reference-map required-feature diagnostics, long-soak source-counter completeness diagnostics, richer first-party botfile behavior metadata, default-off FFA roam-route ownership, default-off FFA spawn-camp avoidance route ownership, default-off TDM role-combat ownership, default-off TDM role-combat/friendly-fire precedence proof, duel surplus-bot spectator queue proof, tournament bot veto-exclusion proof, tournament replay reset proof, map-restart cleanup scenario proof, warmup bot-start readiness proof, vote bot-exclusion proof, admin bot privilege audit proof, MyMap bot queue proof, scoreboard bot classification proof, intermission bot cleanup proof, queued nextmap transition proof, and map-vote bot-exclusion transition proof. These land on top of the earlier same-day promotion, packaging, source-counter, scenario, botfile, and documentation lanes.
-- Latest implementation round: Tournament replay reset proof now has a first-class status and scenario harness gate. `Tournament_ReplayGame()` no longer clears completed-series history through the generic match setup refresh before replay state is inspected, missing replay maps are rejected before wins/history mutate, and the new `tournament_replay_reset` row uses `sv_bot_tournament_smoke 3` to seed a completed best-of-three history. The scenario rejects out-of-range replay game `99` with `reason=range_error` and `preserved=1`, then replays game `2` with `reset_applied=1`, `games_played=1`, one retained winner/map/id, player wins rewound to `1-0`, and the series reopened. Focused `tournament_replay_reset` passed from `.tmp\bot_scenarios\20260621T154924Z`, the full implemented suite passed with 49 passed, 0 failed, 0 timed out, 0 errored, and 0 pending from `.tmp\bot_scenarios\20260621T155255Z`, and the default implemented scenario catalog now contains 49 short-run rows plus one manual degradation row.
-- Still pending: durable autonomous role consumption beyond the current default-off FFA route/anti-camp, TDM, CTF, coop, and duel queue proof bridges, broader live scoring and item-route behavior in FFA/TDM/CTF flows, match logging, competitive admin documentation/hardening beyond the current intermission, scoreboard, vote, admin-audit, tournament-veto, tournament-replay-reset, MyMap queue, queued nextmap transition, map-vote, warmup, map-change, and map-restart cleanup smokes, deeper coop behavior beyond leader-route/readiness/progress-wait/lead-advance/interaction-retry/resource-share/anti-blocking/target-share/door-elevator proofs, broader campaign-specific trigger/key/objective coordination, staging additional reference maps beyond the current available `mm-rage` set, CI/platform breadth, fresh long-soak CPU baselines with current source-counter fields, and the final imported BotLib runtime/adapter catch-all log.
+- Total checklist completion: 685 of 778 items complete, or 88.0%.
+- Phase checklist completion: 683 of 764 phase items complete, or 89.4%.
+- Completed in the latest worker lanes: live combat aim-profile policy and brain-owned live-aim/projectile-lead consumption, live pickup/observed-respawn item timing consumers with status-friendly counters, coop and resource policy helper metadata, stricter scenario marker gates for live aim and match-policy evidence, reference-map required-feature diagnostics, long-soak source-counter completeness diagnostics, richer first-party botfile behavior metadata, default-off FFA roam-route ownership, default-off FFA spawn-camp avoidance route ownership, default-off TDM role-combat ownership, default-off TDM role-combat/friendly-fire precedence proof, duel surplus-bot spectator queue proof, tournament bot veto-exclusion proof, tournament replay reset proof, match logging schema/versioning proof, match logging catalog/downstream index proof, competitive server operator docs, map-restart cleanup scenario proof, warmup bot-start readiness proof, vote bot-exclusion proof, admin bot privilege audit proof, MyMap bot queue proof, scoreboard bot classification proof, intermission bot cleanup proof, queued nextmap transition proof, and map-vote bot-exclusion transition proof. These land on top of the earlier same-day promotion, packaging, source-counter, scenario, botfile, and documentation lanes.
+- Latest implementation round: Match logging now writes a schema-stamped downstream discovery catalog at `basew/matches/catalog.json` whenever match-stats or tournament-series exports succeed. The catalog advertises `schemaName=worr.match_catalog`, schema/artifact version `1`, relative `jsonPath`/optional `htmlPath` entries, source artifact schema metadata, summary fields, and latest-artifact IDs for match stats and tournament series. `MatchLogging_PrintSchemaStatus()` now emits `q3a_match_logging_catalog`; the existing `match_logging_schema` scenario hard-gates catalog schema metadata, two indexed artifacts, latest pointers, relative JSON paths, scratch catalog write/read proof, and final zero-bot cleanup. Focused `match_logging_schema` passed from `.tmp\bot_scenarios\20260621T163834Z`, and the current implemented scenario count remains 50 short-run rows plus one manual degradation row.
+- Still pending: durable autonomous role consumption beyond the current default-off FFA route/anti-camp, TDM, CTF, coop, and duel queue proof bridges, broader live scoring and item-route behavior in FFA/TDM/CTF flows, competitive admin hardening beyond the current intermission, scoreboard, vote, admin-audit, tournament-veto, tournament-replay-reset, MyMap queue, queued nextmap transition, map-vote, warmup, map-change, and map-restart cleanup smokes, deeper coop behavior beyond leader-route/readiness/progress-wait/lead-advance/interaction-retry/resource-share/anti-blocking/target-share/door-elevator proofs, broader campaign-specific trigger/key/objective coordination, staging additional reference maps beyond the current available `mm-rage` set, CI/platform breadth, fresh long-soak CPU baselines with current source-counter fields, and the final imported BotLib runtime/adapter catch-all log.
 
 ## Source Baseline
 
@@ -1252,6 +1252,8 @@ Implementation checklist:
   - [x] Map queue/mymap.
   - [x] Scoreboard classification.
   - [x] Intermission and reconnect cleanup.
+  - [x] Match logging schema/versioning proof.
+  - [x] Match logging catalog/downstream index proof.
 - [ ] Coop later phase:
   - [x] Coop context/policy helper metadata for follow, wait, regroup, lead, and support intents.
   - [x] Resource context/policy helper metadata for self-pickup, team-share, teammate-reserve, enemy-deny, and objective-resource decisions.
@@ -1275,13 +1277,15 @@ Implementation checklist:
 - Latest admin audit update: `admin_bot_privilege_audit` adds `BOT_ADMIN_AUDIT_STATUS_API_V1`, a registered-command audit helper, game-side `q3a_bot_admin_audit_status` and `q3a_bot_admin_audit_attempt` markers, plus `sv_bot_admin_audit_smoke 2`; the promoted scenario temporarily grants a bot admin session bit, attempts the registered `lock_team red` admin command, requires `reason=bot_admin_blocked` with `executed=0`, restores the bot admin bit, and verifies `red_locked=0` through final cleanup.
 - Latest tournament veto update: `tournament_bot_veto_exclusion` adds `BOT_TOURNAMENT_STATUS_API_V1`, a bot guard in `CanActorVeto()`, game-side `q3a_bot_tournament_status`, `q3a_bot_tournament_setup`, and `q3a_bot_tournament_veto` markers, plus `sv_bot_tournament_smoke 2`; the promoted scenario assigns a bot the active home-side tournament identity, attempts a veto pick, requires `reason=bot_blocked` with `allowed=0`, and verifies `picks=0` and `bans=0` through final cleanup.
 - Latest tournament replay update: `tournament_replay_reset` extends `BOT_TOURNAMENT_STATUS_API_V1` and `sv_bot_tournament_smoke` with mode `3`, seeds a completed best-of-three tournament history, proves an out-of-range replay preserves state with `reason=range_error`, and proves replaying game `2` truncates history to one retained game, rewinds wins to `1-0`, queues the replay map, and reopens the series with `reset_applied=1`.
+- Latest match logging update: `match_logging_schema` adds `MATCH_LOGGING_STATUS_API_V1`, top-level schema/artifact metadata to match-stats and tournament-series JSON exporters, `basew/matches/catalog.json` as a schema-stamped downstream index, and `sv_bot_matchlog_smoke 2`; the promoted scenario hard-gates `worr.match_stats`, `worr.tournament_series`, `worr.match_catalog`, version `1`, retained players/event-log/matches arrays, embedded match schema metadata, latest-artifact pointers, relative JSON paths, scratch catalog write/read proof, and final zero-bot cleanup.
 - Latest MyMap update: `mymap_queue_bot_request` adds `BOT_MYMAP_STATUS_API_V1`, game-side `q3a_bot_mymap_status`, queue, and consume markers, plus `sv_bot_mymap_smoke 2`; the promoted scenario hard-gates one playing bot, MyMap cvar enablement, deterministic social attribution, `playQueue`/`myMapQueue` insertion, `ConsumeQueuedMap` cleanup, and final zero-bot/no-queue status. The smoke helper seeds the active map only when the map pool is empty, which keeps the staged-install proof runnable while making the temporary seed visible through `last_queue_map_seeded`.
 - Latest scoreboard update: `scoreboard_bot_classification` adds `BOT_SCOREBOARD_STATUS_API_V1`, game-side `q3a_bot_scoreboard_status` and `q3a_bot_scoreboard_scores` markers, plus `sv_bot_scoreboard_smoke 2`; the promoted scenario hard-gates two bot-only FFA participants, zero voting clients, sorted bot rows, deterministic 7/3 proof scores, bot-owned leader and runner-up rows, ordered ranks, and final zero-bot cleanup.
 - Latest intermission update: `intermission_bot_cleanup` adds `BOT_INTERMISSION_STATUS_API_V1`, game-side `q3a_bot_intermission_status` and `q3a_bot_intermission_begin` markers, plus `sv_bot_intermission_smoke 2`; the promoted scenario hard-gates two bot-only FFA participants, native intermission entry, frozen/freecam/non-solid bot state, current-map transition targeting, and final zero-bot/zero-connected/zero-sorted-client cleanup while intermission remains active.
 - Latest queued nextmap update: `queued_nextmap_transition` adds `BOT_NEXTMAP_STATUS_API_V1`, game-side `q3a_bot_nextmap_status` and `q3a_bot_nextmap_transition` markers, plus `sv_bot_nextmap_smoke 2`; the promoted scenario hard-gates bot-attributed MyMap queue insertion, queued transition success, play/MyMap queue consumption, observed same-map `gamemap` reload, retained transition status, and final zero-bot cleanup after reload.
 - Latest map-vote update: `mapvote_bot_exclusion_transition` adds `BOT_MAPVOTE_STATUS_API_V1`, game-side `q3a_bot_mapvote_status`, `q3a_bot_mapvote_begin`, `q3a_bot_mapvote_bot_vote`, and `q3a_bot_mapvote_finalize` markers, plus `sv_bot_mapvote_smoke 2`; the promoted scenario hard-gates bot-only selector setup, a blocked bot ballot with zero counted votes, deterministic finalization to the current map, observed same-map reload, retained finalize status, and final zero-bot cleanup.
+- Latest operator-doc update: `docs-user/competitive-server-tools.md` now covers the public competitive server cvars and commands for warmup/bot practice, voting, MyMap/nextmap/map selector, Duel queue, tournament veto/replay, admin controls, and match logging. The page documents the bot boundaries proven by the smoke suite and closes `FR-07-T05`.
 - Implementation logs: `docs-dev/q3a-botlib-team-objective-helper-scaffold-2026-06-18.md`, `docs-dev/q3a-botlib-team-objective-proof-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-depth-2026-06-18.md`, `docs-dev/q3a-botlib-ffa-tdm-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-ffa-roam-route-2026-06-21.md`, `docs-dev/q3a-botlib-ffa-spawn-camp-avoidance-2026-06-21.md`, `docs-dev/q3a-botlib-team-role-route-2026-06-21.md`, `docs-dev/q3a-botlib-team-item-role-selection-2026-06-21.md`, `docs-dev/q3a-botlib-team-role-combat-2026-06-21.md`, `docs-dev/q3a-botlib-team-role-combat-avoidance-2026-06-21.md`, `docs-dev/q3a-botlib-duel-queue-spectator-2026-06-21.md`, `docs-dev/q3a-botlib-map-restart-cleanup-2026-06-21.md`, `docs-dev/q3a-botlib-warmup-bot-start-readiness-2026-06-21.md`, `docs-dev/q3a-botlib-vote-bot-exclusion-2026-06-21.md`, `docs-dev/q3a-botlib-admin-bot-privilege-audit-2026-06-21.md`, `docs-dev/q3a-botlib-tournament-bot-veto-exclusion-2026-06-21.md`, `docs-dev/q3a-botlib-mymap-bot-queue-2026-06-21.md`, `docs-dev/q3a-botlib-scoreboard-bot-classification-2026-06-21.md`, `docs-dev/q3a-botlib-intermission-bot-cleanup-2026-06-21.md`, `docs-dev/q3a-botlib-queued-nextmap-transition-2026-06-21.md`, `docs-dev/q3a-botlib-mapvote-bot-exclusion-transition-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-role-route-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-role-combat-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-dropped-flag-route-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-carrier-support-route-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-base-return-route-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-objective-route-policy-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-objective-route-precedence-2026-06-21.md`, `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`, `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-leader-route-scenario-2026-06-21.md`, `docs-dev/q3a-botlib-coop-lead-advance-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-resource-share-route-selection-2026-06-21.md`, `docs-dev/q3a-botlib-coop-anti-blocking-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-target-share-2026-06-21.md`, `docs-dev/q3a-botlib-coop-door-elevator-2026-06-21.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-ctf-objective-gameplay-hooks-2026-06-18.md`.
-- Additional implementation log: `docs-dev/q3a-botlib-tournament-replay-reset-2026-06-21.md`.
+- Additional implementation logs: `docs-dev/q3a-botlib-tournament-replay-reset-2026-06-21.md`, `docs-dev/q3a-botlib-match-logging-schema-2026-06-21.md`, `docs-dev/q3a-botlib-match-logging-catalog-2026-06-21.md`, `docs-dev/q3a-botlib-competitive-server-tools-docs-2026-06-21.md`.
 
 Exit criteria:
 
@@ -1466,6 +1470,8 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-vote-bot-exclusion-2026-06-21.md`: bot-origin vote exclusion status proof log.
 - [x] `docs-dev/q3a-botlib-mymap-bot-queue-2026-06-21.md`: bot-attributed MyMap queue/consume status proof log.
 - [x] `docs-dev/q3a-botlib-scoreboard-bot-classification-2026-06-21.md`: scoreboard bot classification status proof log.
+- [x] `docs-dev/q3a-botlib-competitive-server-tools-docs-2026-06-21.md`: competitive server tooling operator-doc round.
+- [x] `docs-dev/q3a-botlib-match-logging-catalog-2026-06-21.md`: match logging downstream catalog/index proof log.
 - [x] `docs-dev/q3a-botlib-ctf-role-route-2026-06-21.md`: CTF match role/lane timed route-goal owner proof log.
 - [x] `docs-dev/q3a-botlib-ctf-role-combat-2026-06-21.md`: CTF match role/lane live attack-decision owner proof log.
 - [x] `docs-dev/q3a-botlib-ctf-dropped-flag-route-2026-06-21.md`: CTF dropped enemy flag route-owner proof log.
@@ -1508,6 +1514,7 @@ Docs checklist:
   - [x] Known limitations.
   - [x] AAS generation/package behavior in practical language.
 - [x] `docs-user/bot-map-readiness.md`: approachable AAS/map readiness checks, staged/package locations, and troubleshooting commands.
+- [x] `docs-user/competitive-server-tools.md`: approachable competitive server tooling cvars, commands, and bot-boundary notes.
 - [ ] Roadmap updated after each task reaches `Done`.
 
 Exit criteria:
@@ -1645,9 +1652,9 @@ Exit criteria:
 
 The remaining work is now concentrated in depth, breadth, and release hardening
 rather than missing core proof-helper APIs. The default installed scenario suite
-now reports 49 implemented short-run rows plus one manual degradation row, and
-the latest full implemented run passed all 49 short-run rows from
-`.tmp\bot_scenarios\20260621T155255Z`. Modes
+now reports 50 implemented short-run rows plus one manual degradation row, and
+the latest full implemented run passed all 50 short-run rows from
+`.tmp\bot_scenarios\20260621T161434Z`. Modes
 `20` through `45` are implemented smoke scenarios, `trace_checked_corner_cutting`
 reuses the route-rich mode `21` proof, `ffa_roam_route` uses dedicated four-bot
 FFA mode `42`, `ffa_spawn_camp_avoidance` uses dedicated four-bot FFA mode
@@ -1668,7 +1675,9 @@ cvars, `coop_lead_advance` uses dedicated one-bot coop mode `27`, and
 four-bot CTF modes `35`, `36`, `37`, `38`, `39`, `40`, and `41`; and
 `map_change_repeat` plus `map_restart_cleanup` both reuse mode `19`, with the
 restart row requiring `sv_bot_frame_command_smoke_map_repeat_restart 1` and
-`command=map_force` evidence, while `warmup_bot_start_readiness` uses
+`command=map_force` evidence; `match_logging_schema` uses
+`sv_bot_matchlog_smoke 2` to validate match-stats, tournament-series, and
+catalog schema/index metadata; `warmup_bot_start_readiness` uses
 `sv_bot_warmup_smoke 2` to validate bot-only ready-up and final cleanup,
 `vote_bot_exclusion` uses `sv_bot_vote_smoke 2` to validate bot vote exclusion,
 `admin_bot_privilege_audit` uses `sv_bot_admin_audit_smoke 2` to validate
@@ -1709,7 +1718,7 @@ Broader outstanding plan work remains in Phase 4 fairness and blackboard state
 consumers, Phase 5 broader natural-movement/reference-map evidence, Phase 6
 campaign-specific trigger/key/objective coordination above the interaction
 retry and door/elevator proof bridges, Phase 7 broader live FFA/TDM/CTF role
-consumption plus match logging, admin tooling, and deeper coop
+consumption plus downstream match logging consumers, admin hardening, and deeper coop
 behavior, and Phase 9 broader reference-map, CI, strict
 performance-budget, and fresh long-soak CPU baseline coverage.
 

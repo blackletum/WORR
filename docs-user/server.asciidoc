@@ -10,6 +10,14 @@ descriptions of console variables and commands added to or modified by WORR
 since the original Quake 2 release. Cvars and commands inherited from original
 Quake 2 are not described here (yet).
 
+Practical Guides
+----------------
+
+- link:server-quickstart.md[Server Quickstart]
+- link:competitive-server-tools.md[Competitive Server Tools]
+- link:bots.md[Bots]
+- link:bot-map-readiness.md[Bot Map Readiness]
+
 Variables
 ---------
 

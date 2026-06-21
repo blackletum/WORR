@@ -77,3 +77,4 @@ typedef struct {
 #include "bot_tournament_status.h"
 #include "bot_vote_status.h"
 #include "bot_warmup_status.h"
+#include "match_logging_status.h"

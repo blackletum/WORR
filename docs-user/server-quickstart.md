@@ -65,6 +65,11 @@ Use [Bot Profiles](bot-profiles.md) for the full operator guide, including
 where installed botfiles live, what can be overridden, profile fields, and safe
 examples.
 
+## Competitive Match Tools
+
+For voting, MyMap, queued nextmap, map selector, tournament, admin, and match
+logging setup, use [Competitive Server Tools](competitive-server-tools.md).
+
 ## Troubleshooting
 
 - Server starts then exits: check map name and data path (`basedir`).

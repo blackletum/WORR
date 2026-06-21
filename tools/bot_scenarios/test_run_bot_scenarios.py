@@ -754,6 +754,96 @@ class BotScenarioHarnessTests(unittest.TestCase):
             replay_results,
         )
 
+    def test_match_logging_schema_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["match_logging_schema"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_matchlog_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "logging", "schema"])
+
+        selected = {scenario.name for scenario in harness.select_scenarios(["schema"])}
+        self.assertIn("match_logging_schema", selected)
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            (
+                harness.MATCH_LOGGING_SCHEMA_MARKER,
+                "match_schema_name",
+                "eq",
+                "worr.match_stats",
+            ),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (
+                harness.MATCH_LOGGING_SCHEMA_MARKER,
+                "series_artifact_type",
+                "eq",
+                "tournament_series",
+            ),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (
+                harness.MATCH_LOGGING_CATALOG_MARKER,
+                "catalog_schema_name",
+                "eq",
+                "worr.match_catalog",
+            ),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (
+                harness.MATCH_LOGGING_CATALOG_MARKER,
+                "latest_match_stats",
+                "eq",
+                "schema-smoke-match",
+            ),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_matchlog_smoke=begin target=0 schema=1",
+            "q3a_match_logging_schema attempted=1 "
+            "match_schema_name=worr.match_stats match_schema_version=1 "
+            "match_artifact_type=match_stats match_artifact_version=1 "
+            "match_has_players_array=1 match_has_event_log_array=1 "
+            "series_schema_name=worr.tournament_series "
+            "series_schema_version=1 series_artifact_type=tournament_series "
+            "series_artifact_version=1 series_has_matches_array=1 "
+            "series_match_schema_version=1 pass=1",
+            "q3a_match_logging_catalog attempted=1 "
+            "catalog_schema_name=worr.match_catalog catalog_schema_version=1 "
+            "catalog_artifact_type=match_catalog catalog_artifact_version=1 "
+            "catalog_artifact_count=2 latest_match_stats=schema-smoke-match "
+            "latest_tournament_series=schema-smoke-series "
+            "first_artifact_type=match_stats first_json_path=schema-smoke-match.json "
+            "second_artifact_type=tournament_series "
+            "second_json_path=series_schema-smoke-series.json "
+            "catalog_write_pass=1 catalog_write_artifact_count=2 pass=1",
+            "q3a_bot_matchlog_smoke_schema_requested pass=1",
+            "q3a_bot_matchlog_smoke=end final_count=0 pass=1",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        schema_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in schema_results),
+            schema_results,
+        )
+
     def test_mapvote_bot_exclusion_transition_catalog_and_marker_checks(self) -> None:
         scenario = harness.scenario_map()["mapvote_bot_exclusion_transition"]
         report = harness.catalog_report([scenario])

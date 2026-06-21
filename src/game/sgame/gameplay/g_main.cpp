@@ -32,6 +32,7 @@ change game behavior on the fly.*/
 #include "../../../../inc/shared/bot_tournament_status.h"
 #include "../../../../inc/shared/bot_vote_status.h"
 #include "../../../../inc/shared/bot_warmup_status.h"
+#include "../../../../inc/shared/match_logging_status.h"
 #include "g_clients.hpp"
 #include "g_headhunters.hpp"
 #include "g_hud_blob.hpp"
@@ -1457,6 +1458,8 @@ static void *G_GetExtension(const char *name) {
       BotScoreboard_ResetStatus};
   static const bot_warmup_status_api_v1_t botWarmupStatusApi = {
       1, BotWarmup_PrintStatus};
+  static const match_logging_status_api_v1_t matchLoggingStatusApi = {
+      1, MatchLogging_PrintSchemaStatus};
 
   if (!name)
     return nullptr;
@@ -1497,6 +1500,10 @@ static void *G_GetExtension(const char *name) {
 
   if (!std::strcmp(name, BOT_WARMUP_STATUS_API_V1))
     return const_cast<bot_warmup_status_api_v1_t *>(&botWarmupStatusApi);
+
+  if (!std::strcmp(name, MATCH_LOGGING_STATUS_API_V1))
+    return const_cast<match_logging_status_api_v1_t *>(
+        &matchLoggingStatusApi);
 
   return nullptr;
 }

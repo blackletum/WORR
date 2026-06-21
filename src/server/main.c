@@ -110,6 +110,7 @@ static cvar_t  *sv_bot_mymap_smoke;
 static cvar_t  *sv_bot_intermission_smoke;
 static cvar_t  *sv_bot_nextmap_smoke;
 static cvar_t  *sv_bot_scoreboard_smoke;
+static cvar_t  *sv_bot_matchlog_smoke;
 static cvar_t  *sv_bot_frame_command_smoke;
 static cvar_t  *sv_bot_frame_command_smoke_soak_ms;
 static cvar_t  *sv_bot_frame_command_smoke_map_repeat_cycles;
@@ -4193,6 +4194,74 @@ static void SV_BotScoreboardSmokeFrame(void)
     }
 }
 
+static const match_logging_status_api_v1_t *SV_MatchLoggingStatusApi(void)
+{
+    const match_logging_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(MATCH_LOGGING_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1 || !api->PrintSchemaStatus) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static int SV_BotMatchLogSmokePrintSchema(void)
+{
+    const match_logging_status_api_v1_t *api = SV_MatchLoggingStatusApi();
+
+    if (!api) {
+        Com_Printf("q3a_match_logging_schema attempted=1 pass=0 "
+                   "reason=unavailable\n");
+        return 0;
+    }
+
+    return api->PrintSchemaStatus();
+}
+
+static void SV_BotMatchLogSmokeFrame(void)
+{
+    static int seen_spawncount;
+    static int stage;
+    int pass;
+
+    if (!sv_bot_matchlog_smoke ||
+        sv_bot_matchlog_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        seen_spawncount = sv.spawncount;
+        stage = 0;
+    } else if (stage > 0) {
+        return;
+    }
+
+    SV_BotRemoveAll();
+    Cvar_Set("deathmatch", "1");
+    Cvar_Set("coop", "0");
+    Cvar_Set("g_gametype", "0");
+    Cvar_Set("g_statex_export_html", "0");
+    Com_Printf("q3a_bot_matchlog_smoke=begin target=0 schema=1\n");
+
+    pass = SV_BotMatchLogSmokePrintSchema();
+    Com_Printf("q3a_bot_matchlog_smoke_schema_requested pass=%d\n", pass);
+    Com_Printf("q3a_bot_matchlog_smoke=end final_count=%d pass=%d\n",
+               SV_BotCount(), pass);
+    stage = 1;
+
+    if (sv_bot_matchlog_smoke->integer >= 2) {
+        Com_Quit(NULL, ERR_DISCONNECT);
+    }
+}
+
 static const bot_frame_command_api_v1_t *SV_BotFrameCommandApi(void)
 {
     const bot_frame_command_api_v1_t *api = NULL;
@@ -6720,6 +6789,7 @@ unsigned SV_Frame(unsigned msec)
         SV_BotIntermissionSmokeFrame();
         SV_BotNextMapSmokeFrame();
         SV_BotScoreboardSmokeFrame();
+        SV_BotMatchLogSmokeFrame();
         SV_BotFrameCommandSmokeFrame();
 
         // send messages back to the UDP clients
@@ -7030,6 +7100,7 @@ void SV_Init(void)
         Cvar_Get("sv_bot_intermission_smoke", "0", 0);
     sv_bot_nextmap_smoke = Cvar_Get("sv_bot_nextmap_smoke", "0", 0);
     sv_bot_scoreboard_smoke = Cvar_Get("sv_bot_scoreboard_smoke", "0", 0);
+    sv_bot_matchlog_smoke = Cvar_Get("sv_bot_matchlog_smoke", "0", 0);
     sv_bot_frame_command_smoke = Cvar_Get("sv_bot_frame_command_smoke", "0", 0);
     sv_bot_frame_command_smoke_soak_ms =
         Cvar_Get("sv_bot_frame_command_smoke_soak_ms", "600000", 0);

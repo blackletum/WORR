@@ -5319,6 +5319,7 @@ void Match_UpdateDuelRecords();
 //
 // match_logging.cpp
 //
+int MatchLogging_PrintSchemaStatus();
 
 //
 // g_chase.cpp

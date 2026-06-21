@@ -2248,9 +2248,115 @@ Tasks: `FR-04-T06`, `FR-07-T02`, `DV-03-T05`, `FR-04-T16`,
 - Implementation log:
   `docs-dev/q3a-botlib-tournament-replay-reset-2026-06-21.md`.
 
+## Native Runtime Update: Match Logging Schema Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-07-T03`, `DV-03-T05`, `FR-04-T16`, `DV-07-T06`
+
+- WORR-native match logging work now stamps match-stats and
+  tournament-series JSON artifacts with top-level `schemaName`,
+  `schemaVersion`, `artifactType`, and `artifactVersion` fields.
+- `MATCH_LOGGING_STATUS_API_V1` and `sv_bot_matchlog_smoke 2` provide a
+  zero-bot proof path that builds sample artifacts through the native JSON
+  exporters and emits `q3a_match_logging_schema` for the scenario harness.
+- The promoted `match_logging_schema` scenario validates `worr.match_stats`,
+  `worr.tournament_series`, version `1`, retained players/event-log/matches
+  arrays, embedded match schema metadata, and final zero-bot cleanup.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m pytest
+  tools\bot_scenarios\test_run_bot_scenarios.py -k match_logging_schema`
+  passed 1 selected test; `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `meson compile -C
+  builddir-win worr_ded_engine_x86_64 sgame_x86_64` passed; `python
+  tools\refresh_install.py --build-dir builddir-win --install-dir .install
+  --base-game basew --platform-id windows-x86_64 --package-q2aas-aas`
+  passed; focused `match_logging_schema` passed from
+  `.tmp\bot_scenarios\20260621T161415Z`; and the full implemented scenario
+  suite reported 50 passed, 0 failed, 0 timed out, 0 errored, and 0 pending
+  from `.tmp\bot_scenarios\20260621T161434Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-match-logging-schema-2026-06-21.md`.
+
+## Native Runtime Update: Match Logging Catalog Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-07-T03`, `DV-03-T05`, `FR-04-T16`, `DV-07-T04`,
+`DV-07-T06`
+
+- WORR-native match logging now writes `basew/matches/catalog.json` after
+  successful match-stats or tournament-series exports.
+- The catalog advertises `schemaName=worr.match_catalog`,
+  `schemaVersion=1`, `artifactType=match_catalog`, and
+  `artifactVersion=1`, then records relative artifact paths, source artifact
+  schema metadata, summary fields, and latest-artifact IDs for downstream
+  tooling.
+- Catalog writes are guarded by a dedicated mutex because match-stat exports
+  are processed by the detached worker while tournament series exports can be
+  emitted from the game thread.
+- `MatchLogging_PrintSchemaStatus()` now emits
+  `q3a_match_logging_catalog`, and the existing `match_logging_schema`
+  scenario hard-gates catalog schema metadata, artifact count, latest pointers,
+  relative JSON paths, scratch catalog write/read proof, and final zero-bot cleanup through
+  `sv_bot_matchlog_smoke 2`.
+- `docs-user/competitive-server-tools.md` now notes the catalog location and
+  `worr.match_catalog` schema for operators.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m pytest
+  tools\bot_scenarios\test_run_bot_scenarios.py -k match_logging_schema`
+  passed 1 selected test; `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `meson compile -C
+  builddir-win worr_ded_engine_x86_64 sgame_x86_64` passed; `python
+  tools\refresh_install.py --build-dir builddir-win --install-dir .install
+  --base-game basew --platform-id windows-x86_64 --package-q2aas-aas`
+  passed; focused `match_logging_schema` passed from
+  `.tmp\bot_scenarios\20260621T163834Z`; and `python -m pytest
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed 45 tests.
+- Implementation log:
+  `docs-dev/q3a-botlib-match-logging-catalog-2026-06-21.md`.
+
+## Native Documentation Update: Competitive Server Tools Operator Docs
+
+Date: 2026-06-21
+
+Tasks: `FR-07-T05`, `DV-07-T04`, `DV-07-T06`
+
+- WORR-native user documentation now gives server operators a practical guide
+  for competitive cvars and commands spanning warmup, bot practice, voting,
+  MyMap, queued nextmap, map selection, Duel queue, tournament veto/replay,
+  admin controls, and match logging.
+- `docs-user/competitive-server-tools.md` records the expected public cvars
+  and commands rather than internal smoke cvars, including
+  `g_allow_voting`, `g_allow_vote_mid_game`, `g_allow_spec_vote`,
+  `g_vote_limit`, `g_vote_flags`, `g_maps_selector`, `g_maps_mymap`,
+  `g_allow_mymap`, `g_maps_mymap_queue_limit`, `g_allow_duel_queue`,
+  `match_setup_type`, `match_setup_bestof`, `g_tourney_cfg`,
+  `g_statex_enabled`, `g_statex_humans_present`, and
+  `g_statex_export_html`.
+- The guide also documents the bot-boundary behavior proven by the recent
+  scenario suite: bots cannot call or cast votes, cannot cross the admin
+  boundary, are rejected from tournament veto identity, and do not satisfy
+  human-presence match-log requirements when `g_statex_humans_present 1` is
+  active.
+- `docs-user/server-quickstart.md` and `docs-user/server.asciidoc` now link to
+  the competitive guide, and the roadmap marks `FR-07-T05` complete.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: source grep checks confirmed the documented cvars and commands
+  in `g_main.cpp`, `command_voting.cpp`, `command_client.cpp`,
+  `command_admin.cpp`, and `match_logging.cpp`; documentation/progress grep
+  checked the new links and task references; `git diff --check` passed.
+- Implementation log:
+  `docs-dev/q3a-botlib-competitive-server-tools-docs-2026-06-21.md`.
+
 ## Candidate Source Inventory
 
-These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nuke retreat route ownership, timed route-goal ownership, teleporter escape route ownership, team role route ownership, team item-role route selection, team fire-avoidance command suppression, team role-combat command ownership, FFA roam-route ownership, CTF role-route ownership, CTF role-combat command ownership, CTF dropped-flag route ownership, CTF carrier-support route ownership, CTF base-return route ownership, CTF objective route-policy ownership, CTF objective route precedence ownership, coop leader route ownership and validation gating, coop lead-advance route ownership, coop progress-wait command ownership, coop interaction-retry command ownership, coop resource-share route selection, coop anti-blocking command ownership, coop target-sharing blackboard adoption, coop door/elevator source-hold command ownership, bot warmup readiness status and smoke validation, bot vote-exclusion status and smoke validation, bot admin-audit status/attempt smoke validation, bot tournament status/veto/replay smoke validation, bot MyMap status/queue/consume smoke validation, bot queued-nextmap transition status and smoke validation, bot map-vote status/finalize smoke validation, bot scoreboard classification status and smoke validation, bot intermission cleanup status and smoke validation, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, map-restart cleanup scenario promotion, warmup bot-start readiness scenario promotion, vote bot-exclusion scenario promotion, admin bot privilege audit scenario promotion, tournament bot veto-exclusion scenario promotion, tournament replay reset scenario promotion, MyMap queue scenario promotion, queued nextmap transition scenario promotion, map-vote bot-exclusion transition scenario promotion, scoreboard bot-classification scenario promotion, intermission bot-cleanup scenario promotion, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
+These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nuke retreat route ownership, timed route-goal ownership, teleporter escape route ownership, team role route ownership, team item-role route selection, team fire-avoidance command suppression, team role-combat command ownership, FFA roam-route ownership, CTF role-route ownership, CTF role-combat command ownership, CTF dropped-flag route ownership, CTF carrier-support route ownership, CTF base-return route ownership, CTF objective route-policy ownership, CTF objective route precedence ownership, coop leader route ownership and validation gating, coop lead-advance route ownership, coop progress-wait command ownership, coop interaction-retry command ownership, coop resource-share route selection, coop anti-blocking command ownership, coop target-sharing blackboard adoption, coop door/elevator source-hold command ownership, bot warmup readiness status and smoke validation, bot vote-exclusion status and smoke validation, bot admin-audit status/attempt smoke validation, bot tournament status/veto/replay smoke validation, match logging schema status and smoke validation, match logging catalog/index status and smoke validation, bot MyMap status/queue/consume smoke validation, bot queued-nextmap transition status and smoke validation, bot map-vote status/finalize smoke validation, bot scoreboard classification status and smoke validation, bot intermission cleanup status and smoke validation, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, map-restart cleanup scenario promotion, warmup bot-start readiness scenario promotion, vote bot-exclusion scenario promotion, admin bot privilege audit scenario promotion, tournament bot veto-exclusion scenario promotion, tournament replay reset scenario promotion, match logging schema scenario promotion, match logging catalog/index scenario proof, MyMap queue scenario promotion, queued nextmap transition scenario promotion, map-vote bot-exclusion transition scenario promotion, scoreboard bot-classification scenario promotion, intermission bot-cleanup scenario promotion, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, competitive server tools operator documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
 
 | Candidate | Upstream / Local Ref | Current Use Decision | Required Before Import |
 |---|---|---|---|
