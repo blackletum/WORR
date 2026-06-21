@@ -54,6 +54,17 @@ Implemented:
 - `recover_from_stall`: mode `4`, verifies stuck detection and recovery commands.
 - `multi_bot_reservation`: mode `17`, verifies eight-bot route pressure and item reservation peak.
 - `map_change_repeat`: mode `19`, verifies two map-repeat cycles, one map change, and final bot cleanup.
+- `map_restart_cleanup`: mode `19` with `sv_bot_frame_command_smoke_map_repeat_restart 1`, verifies two route-proof cycles across a forced restart plus final bot cleanup.
+- `warmup_bot_start_readiness`: `sv_bot_warmup_smoke 2`, verifies bot-only warmup ready-up start eligibility and final cleanup.
+- `vote_bot_exclusion`: `sv_bot_vote_smoke 2`, verifies bot-only players do not count as voting clients, bot-origin vote launches are rejected, and cleanup leaves no active vote.
+- `admin_bot_privilege_audit`: `sv_bot_admin_audit_smoke 2`, verifies a forced-admin bot is still blocked from executing the registered `lock_team` admin command and cleanup leaves red team unlocked.
+- `tournament_bot_veto_exclusion`: `sv_bot_tournament_smoke 2`, verifies a bot holding the active tournament side identity is still blocked from veto picks and cleanup leaves zero picks/bans.
+- `tournament_replay_reset`: `sv_bot_tournament_smoke 3`, verifies invalid replay requests preserve completed-series state and valid game-2 replay rewinds wins/history.
+- `mymap_queue_bot_request`: `sv_bot_mymap_smoke 2`, verifies a bot-attributed MyMap request enters both map queues, is consumed, and cleanup leaves no queued map behind.
+- `scoreboard_bot_classification`: `sv_bot_scoreboard_smoke 2`, verifies bot-only FFA standings are sorted by score with bot-classified leader and runner-up rows, then cleaned up.
+- `intermission_bot_cleanup`: `sv_bot_intermission_smoke 2`, verifies bot-only intermission entry freezes/moves bots to freecam state and cleanup leaves no sorted-client residue.
+- `queued_nextmap_transition`: `sv_bot_nextmap_smoke 2`, verifies a bot-attributed queued map is consumed by nextmap transition, reloads the map, and cleans up retained fake clients.
+- `mapvote_bot_exclusion_transition`: `sv_bot_mapvote_smoke 2`, verifies bot selector ballots are blocked, the deterministic selector finalizes, the map reload is observed, and retained fake clients are cleaned up.
 - `profile_backed_spawn`: `sv_bot_profile_smoke 2`, verifies profile-backed spawn, userinfo profile fields, and final cleanup.
 - `team_policy_duel_readiness`: `sv_bot_team_policy_smoke 2`, verifies existing bot team-policy status before and after cleanup.
 - `duel_queue_spectator`: `sv_bot_team_policy_smoke 3`, verifies a surplus Duel bot remains spectator-owned while entering the duel queue.
@@ -125,6 +136,11 @@ Current optional discovery families:
 - `route_target_stabilization_counters`: route-target stabilization checks, applications, skips, and last sampled target metadata from frame-command status.
 - `trace_checked_corner_cutting_signals`: trace-checked corner-cut candidate, trace, accept/reject, and last-corner metadata.
 - `team_mode_readiness_signals`: team-policy, objective role/lane, and blackboard team-role signals used by FFA/TDM/CTF/coop readiness work.
+- `mymap_match_flow_signals`: bot-attributed MyMap request, queue counts, and queued-map consumption status from match-flow MyMap smoke.
+- `scoreboard_match_flow_signals`: bot/human standings classification, sorted-client ranks, and score application status from match-flow scoreboard smoke.
+- `intermission_match_flow_signals`: bot-only intermission entry, frozen/freecam state, change-map target, and cleanup status from match-flow intermission smoke.
+- `nextmap_match_flow_signals`: queued nextmap target, queue consumption, map-transition request, and post-reload cleanup status from match-flow nextmap smoke.
+- `mapvote_match_flow_signals`: map selector activity, candidate/vote/finalize state, bot ballot exclusion, reload transition, and post-reload cleanup status from match-flow map-vote smoke.
 - `ffa_roam_route_counters`: default-off FFA roam/collect/engage route-owner requests, activations, route requests, and latest role metadata from frame-command status.
 - `ffa_spawn_camp_avoidance_counters`: default-off FFA anti-camp route-source requests, policy/source selections, activations, fallbacks, route requests, and latest source/goal metadata from compact frame-command status.
 - `team_role_route_counters`: default-off match role/lane route-owner requests, activations, route requests, and latest role metadata from frame-command status.
@@ -207,6 +223,13 @@ The promoted source-backed smoke mode numbers are fixed for compatibility with s
 Additional promoted rows reuse existing smoke coverage:
 
 - `trace_checked_corner_cutting`: mode `21`, using the existing switch-weapon reserved smoke because it produces deterministic route corner-cut trace and acceptance telemetry.
+- `map_restart_cleanup`: mode `19`, with extra cvar `sv_bot_frame_command_smoke_map_repeat_restart 1`, so the existing map-repeat smoke runs the forced restart path and validates restart cleanup markers.
+- `warmup_bot_start_readiness`: `sv_bot_warmup_smoke 2`, so the warmup smoke reports `q3a_bot_warmup_status` before and after cleanup while validating the bot-only `match_start_no_humans` path.
+- `vote_bot_exclusion`: `sv_bot_vote_smoke 2`, so the vote smoke reports `q3a_bot_vote_status`, tries a harmless bot-origin `random 2` vote through the game vote helper, and requires the explicit `bot_blocked` rejection path.
+- `admin_bot_privilege_audit`: `sv_bot_admin_audit_smoke 2`, so the admin audit smoke reports `q3a_bot_admin_audit_status`, temporarily grants a bot admin session state, attempts `lock_team red`, requires `reason=bot_admin_blocked`, and verifies `red_locked=0` after cleanup.
+- `tournament_bot_veto_exclusion`: `sv_bot_tournament_smoke 2`, so the tournament smoke reports `q3a_bot_tournament_status`, assigns the bot the active home-side veto identity, attempts a veto pick, requires `reason=bot_blocked`, and verifies `picks=0` and `bans=0` after cleanup.
+- `tournament_replay_reset`: `sv_bot_tournament_smoke 3`, so the tournament smoke seeds a completed best-of-three history, requires an out-of-range replay to preserve state with `reason=range_error`, then replays game 2 and verifies `games_played=1`, one retained winner/map/id, reopened series state, and `reset_applied=1`.
+- `mapvote_bot_exclusion_transition`: `sv_bot_mapvote_smoke 2`, so the map-vote smoke reports `q3a_bot_mapvote_status`, begins the native selector on the staged current map, proves a bot ballot is blocked with zero counted votes, finalizes, observes reload, and validates final cleanup.
 - `coop_match_readiness`: mode `3`, with extra cvars `deathmatch 0` and `coop 1`, so the existing frame-command smoke reports `q3a_bot_coop_readiness_status pass=1`.
 - `coop_leader_route`: mode `3`, with extra cvars `deathmatch 0` and `coop 1`, so the existing frame-command smoke reports `coop_leader_route_*` route-owner counters on both the verbose frame-command marker and compact coop command marker.
 - `coop_progress_wait`: mode `3`, with extra cvars `deathmatch 0`, `coop 1`, and `sg_bot_coop_progress_wait 1`, so the existing frame-command smoke reports `coop_progress_wait_*` command-owner counters and WaitForLeader objective policy telemetry.

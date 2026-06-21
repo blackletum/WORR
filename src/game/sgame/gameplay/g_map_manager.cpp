@@ -321,6 +321,8 @@ MapSelector_CastVote
 void MapSelector_CastVote(gentity_t *ent, int voteIndex) {
   if (!ent || !ent->client || voteIndex < 0 || voteIndex >= 3)
     return;
+  if ((ent->svFlags & SVF_BOT) || ent->client->sess.is_a_bot)
+    return;
 
   auto &ms = level.mapSelector;
 

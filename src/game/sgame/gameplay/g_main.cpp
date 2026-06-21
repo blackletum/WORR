@@ -21,8 +21,17 @@ change game behavior on the fly.*/
 #include "../bots/bot_includes.hpp"
 #include "../commands/commands.hpp"
 #include "../g_local.hpp"
+#include "../../../../inc/shared/bot_admin_audit_status.h"
 #include "../../../../inc/shared/bot_frame_command.h"
+#include "../../../../inc/shared/bot_intermission_status.h"
+#include "../../../../inc/shared/bot_mapvote_status.h"
+#include "../../../../inc/shared/bot_mymap_status.h"
+#include "../../../../inc/shared/bot_nextmap_status.h"
+#include "../../../../inc/shared/bot_scoreboard_status.h"
 #include "../../../../inc/shared/bot_team_policy_status.h"
+#include "../../../../inc/shared/bot_tournament_status.h"
+#include "../../../../inc/shared/bot_vote_status.h"
+#include "../../../../inc/shared/bot_warmup_status.h"
 #include "g_clients.hpp"
 #include "g_headhunters.hpp"
 #include "g_hud_blob.hpp"
@@ -1420,6 +1429,34 @@ static void *G_GetExtension(const char *name) {
       }};
   static const bot_team_policy_status_api_v1_t botTeamPolicyStatusApi = {
       1, BotTeamPolicy_PrintStatus};
+  static const bot_admin_audit_status_api_v1_t botAdminAuditStatusApi = {
+      1, BotAdminAudit_PrintStatus, BotAdminAudit_TryFirstBotAdminCommand,
+      BotAdminAudit_ResetStatus};
+  static const bot_tournament_status_api_v1_t botTournamentStatusApi = {
+      1, BotTournament_PrintStatus, BotTournament_SetupBotVetoState,
+      BotTournament_TryFirstBotVetoPick, BotTournament_SetupReplayState,
+      BotTournament_TryReplayGame, BotTournament_ResetStatus};
+  static const bot_vote_status_api_v1_t botVoteStatusApi = {
+      1, BotVote_PrintStatus, BotVote_TryLaunchFirstBotVote,
+      BotVote_ResetStatus};
+  static const bot_mapvote_status_api_v1_t botMapVoteStatusApi = {
+      1, BotMapVote_PrintStatus, BotMapVote_BeginCurrentMapVote,
+      BotMapVote_TryCastFirstBotVote, BotMapVote_FinalizeAndExit,
+      BotMapVote_ResetStatus};
+  static const bot_mymap_status_api_v1_t botMyMapStatusApi = {
+      1, BotMyMap_PrintStatus, BotMyMap_TryQueueFirstBotMyMap,
+      BotMyMap_ConsumeQueuedMap, BotMyMap_ResetStatus, BotMyMap_ClearQueues};
+  static const bot_intermission_status_api_v1_t botIntermissionStatusApi = {
+      1, BotIntermission_PrintStatus, BotIntermission_BeginIntermission,
+      BotIntermission_ResetStatus};
+  static const bot_nextmap_status_api_v1_t botNextMapStatusApi = {
+      1, BotNextMap_PrintStatus, BotNextMap_TransitionQueuedMap,
+      BotNextMap_ResetStatus};
+  static const bot_scoreboard_status_api_v1_t botScoreboardStatusApi = {
+      1, BotScoreboard_PrintStatus, BotScoreboard_ApplyTestScores,
+      BotScoreboard_ResetStatus};
+  static const bot_warmup_status_api_v1_t botWarmupStatusApi = {
+      1, BotWarmup_PrintStatus};
 
   if (!name)
     return nullptr;
@@ -1429,6 +1466,37 @@ static void *G_GetExtension(const char *name) {
 
   if (!std::strcmp(name, BOT_TEAM_POLICY_STATUS_API_V1))
     return const_cast<bot_team_policy_status_api_v1_t *>(&botTeamPolicyStatusApi);
+
+  if (!std::strcmp(name, BOT_ADMIN_AUDIT_STATUS_API_V1))
+    return const_cast<bot_admin_audit_status_api_v1_t *>(
+        &botAdminAuditStatusApi);
+
+  if (!std::strcmp(name, BOT_TOURNAMENT_STATUS_API_V1))
+    return const_cast<bot_tournament_status_api_v1_t *>(
+        &botTournamentStatusApi);
+
+  if (!std::strcmp(name, BOT_VOTE_STATUS_API_V1))
+    return const_cast<bot_vote_status_api_v1_t *>(&botVoteStatusApi);
+
+  if (!std::strcmp(name, BOT_MAPVOTE_STATUS_API_V1))
+    return const_cast<bot_mapvote_status_api_v1_t *>(&botMapVoteStatusApi);
+
+  if (!std::strcmp(name, BOT_MYMAP_STATUS_API_V1))
+    return const_cast<bot_mymap_status_api_v1_t *>(&botMyMapStatusApi);
+
+  if (!std::strcmp(name, BOT_INTERMISSION_STATUS_API_V1))
+    return const_cast<bot_intermission_status_api_v1_t *>(
+        &botIntermissionStatusApi);
+
+  if (!std::strcmp(name, BOT_NEXTMAP_STATUS_API_V1))
+    return const_cast<bot_nextmap_status_api_v1_t *>(&botNextMapStatusApi);
+
+  if (!std::strcmp(name, BOT_SCOREBOARD_STATUS_API_V1))
+    return const_cast<bot_scoreboard_status_api_v1_t *>(
+        &botScoreboardStatusApi);
+
+  if (!std::strcmp(name, BOT_WARMUP_STATUS_API_V1))
+    return const_cast<bot_warmup_status_api_v1_t *>(&botWarmupStatusApi);
 
   return nullptr;
 }

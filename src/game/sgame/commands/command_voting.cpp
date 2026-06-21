@@ -34,6 +34,11 @@ static std::unordered_map<std::string, VoteCommand, StringViewHash,
     s_voteCommands;
 static std::vector<VoteDefinitionView> s_voteDefinitions;
 
+static bool IsBotVoteClient(const gentity_t *ent) {
+  return ent && ent->client &&
+         ((ent->svFlags & SVF_BOT) || ent->client->sess.is_a_bot);
+}
+
 bool IsVoteCommandEnabled(std::string_view name) {
   if (!g_allowVoting || !g_allowVoting->integer) {
     return false;
@@ -476,6 +481,14 @@ VoteLaunchResult TryLaunchVote(gentity_t *ent, std::string_view voteName,
   VoteLaunchResult result;
   std::string validationError;
 
+  if (!ent || !ent->client) {
+    result.message = "Vote caller is not a client.";
+    return result;
+  }
+  if (IsBotVoteClient(ent)) {
+    result.message = "Bots cannot call votes.";
+    return result;
+  }
   if (!g_allowVoting || !g_allowVoting->integer) {
     result.message = "Voting is disabled on this server.";
     return result;
@@ -590,6 +603,13 @@ VoteLaunchResult TryLaunchVote(gentity_t *ent, std::string_view voteName,
 // --- Main Command Functions ---
 
 void CallVote(gentity_t *ent, const CommandArgs &args) {
+  if (!ent || !ent->client) {
+    return;
+  }
+  if (IsBotVoteClient(ent)) {
+    gi.LocClient_Print(ent, PRINT_HIGH, "Bots cannot call votes.\n");
+    return;
+  }
   if (!g_allowVoting->integer) {
     gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_13161b3d1478");
     return;

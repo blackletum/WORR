@@ -117,7 +117,7 @@ Tasks: `FR-04-T04`, `FR-04-T16`, `DV-03-T05`, `DV-07-T06`
 
 - WORR native files `inc/shared/bot_team_policy_status.h`, `src/game/sgame/g_local.hpp`, `src/game/sgame/gameplay/g_svcmds.cpp`, `src/game/sgame/player/p_client.cpp`, `src/server/main.c`, and `tools/bot_scenarios/*` now expose a queue-enabled Duel team-policy smoke proof. The server smoke enables `g_allow_duel_queue`, bot initial team assignment routes queue-capable surplus Duel bots through the normal `SetTeam` path, the game-side status extension verifies `queued=1` for the surplus spectator bot, and the promoted `duel_queue_spectator` scenario preserves the proof in the implemented suite.
 - No new Q3A, BSPC, or q2proto files were imported or modified. This is WORR-owned validation and harness code layered over the existing bot team-policy and scenario surfaces.
-- Validation: `meson compile -C builddir-win`; `refresh_install.py`; focused `duel_queue_spectator`; full implemented scenario suite reports 38 passed.
+- Validation: `meson compile -C builddir-win`; `refresh_install.py`; focused `duel_queue_spectator`; full implemented scenario suite passed for that round.
 - Implementation log: `docs-dev/q3a-botlib-duel-queue-spectator-2026-06-21.md`.
 
 ## Native Bridge Update: AAS Debug Area Helpers
@@ -943,7 +943,7 @@ Tasks: `FR-04-T03`, `FR-04-T04`, `FR-04-T13`, `FR-04-T14`, `FR-04-T15`, `FR-04-T
 
 - WORR-native server smoke modes `24`, `25`, and `26` now drive aim/fairness, item-timer, and FFA/TDM match-readiness proof lanes. The existing mode `21` route-rich smoke now gates trace-checked corner cutting, and the existing mode `3` frame-command smoke gates coop readiness under cooperative cvars.
 - WORR-native `bot_brain.*` status/proof plumbing records aim-policy, item-timer, match-readiness, route-owner, FFA spawn-camp avoidance, friendly-fire, TDM role-combat, TDM role-combat/friendly-fire precedence, CTF role-route, CTF role-combat, CTF dropped-flag route, CTF carrier-support route, CTF base-return route, and CTF objective-route proof fields through the existing action/detail/match/frame-command status surfaces.
-- WORR-native `tools/bot_scenarios/` now treats `aim_fairness_policy_integration`, `item_timer_fairness_signals`, `trace_checked_corner_cutting`, `ffa_tdm_match_readiness`, `ffa_roam_route`, `ffa_spawn_camp_avoidance`, `team_role_route`, `team_item_roles`, `team_fire_avoidance`, `team_role_combat`, `team_role_combat_avoidance`, `ctf_role_route`, `ctf_role_combat`, `ctf_dropped_flag_route`, `ctf_carrier_support_route`, `ctf_base_return_route`, `ctf_objective_route`, `ctf_objective_route_precedence`, `coop_match_readiness`, `coop_leader_route`, `coop_lead_advance`, `coop_resource_share`, `coop_anti_blocking`, `coop_target_share`, `coop_door_elevator`, `coop_progress_wait`, and `coop_interaction_retry` as implemented rows. The default implemented suite reports 37 passed, 0 failed, 0 timed out, 0 errored, and 0 pending from `.tmp/bot_scenarios/latest_report.json`.
+- WORR-native `tools/bot_scenarios/` now treats `aim_fairness_policy_integration`, `item_timer_fairness_signals`, `trace_checked_corner_cutting`, `ffa_tdm_match_readiness`, `ffa_roam_route`, `ffa_spawn_camp_avoidance`, `team_role_route`, `team_item_roles`, `team_fire_avoidance`, `team_role_combat`, `team_role_combat_avoidance`, `ctf_role_route`, `ctf_role_combat`, `ctf_dropped_flag_route`, `ctf_carrier_support_route`, `ctf_base_return_route`, `ctf_objective_route`, `ctf_objective_route_precedence`, `coop_match_readiness`, `coop_leader_route`, `coop_lead_advance`, `coop_resource_share`, `coop_anti_blocking`, `coop_target_share`, `coop_door_elevator`, `coop_progress_wait`, and `coop_interaction_retry` as implemented rows. The then-current default implemented suite passed with no failed, timed-out, errored, or pending rows from `.tmp/bot_scenarios/latest_report.json`.
 - First-party WORR botfile scripts under `assets/botfiles/scripts/*_s.c` gained additive named tactical routines. Q3A and Gladiator assets were consulted for layout/vocabulary parity, but no reference script text was copied.
 - No new upstream Q3A, Gladiator, or BSPC source files were imported for this update.
 - Validation: `python -m unittest tools.bot_scenarios.test_run_bot_scenarios` passed 32 tests; `python -m py_compile tools\bot_scenarios\run_bot_scenarios.py tools\bot_scenarios\test_run_bot_scenarios.py` passed; `meson compile -C builddir-win` passed; `python tools\refresh_install.py --build-dir builddir-win --install-dir .install --package-q2aas-aas` passed; focused promotion and full implemented scenario runs passed from the refreshed `.install` payload.
@@ -1819,14 +1819,438 @@ Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
   builddir-win --install-dir .install --base-game basew --platform-id
   windows-x86_64` passed; focused `trace_checked_corner_cutting` and
   `ffa_spawn_camp_avoidance` passed; and the full implemented scenario suite
-  reported 37 passed, 0 failed, 0 timed out, 0 errored, and 0 pending from
+  passed with no failed, timed-out, errored, or pending rows from
   `.tmp\bot_scenarios\20260621T111215Z`.
 - Implementation log:
   `docs-dev/q3a-botlib-ffa-spawn-camp-avoidance-2026-06-21.md`.
 
+## Native Runtime Update: Map-Restart Cleanup Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-04-T16`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native scenario harness work now promotes the restart-capable mode `19`
+  map-repeat smoke into the implemented `map_restart_cleanup` row.
+- The scenario keeps the existing server restart path, enables
+  `sv_bot_frame_command_smoke_map_repeat_restart 1`, and hard-gates
+  `command=map_force` plus `restart=1` on the cycle-begin, queued-reload, and
+  observed-reload markers.
+- The row also requires the observed reload to happen after one completed proof
+  cycle, verifies cleanup status with `count=0`, and accepts final completion
+  only when `cycles=2`, `map_changes=1`, and `final_count=0`.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 34 tests; the implemented
+  scenario catalog reported 39 implemented rows and 0 pending rows; focused
+  `map_restart_cleanup` passed from the current staged install with
+  `commands=91`, `route_commands=91`, `route_failures=0`,
+  `item_goal_peak_active_reservations=8`, `cycles=2`, `map_changes=1`, and
+  `final_count=0`; and the full implemented scenario suite reported 39 passed,
+  0 failed, 0 timed out, 0 errored, and 0 pending.
+- Implementation log:
+  `docs-dev/q3a-botlib-map-restart-cleanup-2026-06-21.md`.
+
+## Native Runtime Update: Warmup Bot-Start Readiness Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native server/game extension work now adds `BOT_WARMUP_STATUS_API_V1`
+  and a game-side `q3a_bot_warmup_status` line for warmup population,
+  ready-up, minplayers, bot-only start, and cleanup evidence.
+- The new `sv_bot_warmup_smoke 2` path configures a two-bot FFA warmup with
+  `warmup_do_ready_up 1`, `match_start_no_humans 1`, and `minplayers 2`,
+  then validates `bots=2`, `playing=2`, `minplayers_met=1`,
+  `bot_only_start=1`, `can_start=1`, and `pass=1` before removing all bots.
+- The promoted `warmup_bot_start_readiness` scenario validates the live warmup
+  status and final cleanup through marker checks and optional team/match
+  readiness field discovery.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 35 tests; `meson compile
+  -C builddir-win` passed; `python tools\refresh_install.py --build-dir
+  builddir-win --install-dir .install --base-game basew --platform-id
+  windows-x86_64` passed; focused `warmup_bot_start_readiness` passed from
+  `.install`; and the full implemented scenario suite reported 40 passed, 0
+  failed, 0 timed out, 0 errored, and 0 pending.
+- Implementation log:
+  `docs-dev/q3a-botlib-warmup-bot-start-readiness-2026-06-21.md`.
+
+## Native Runtime Update: Vote Bot-Exclusion Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-07-T01`, `DV-03-T05`, `FR-04-T16`,
+`DV-07-T06`
+
+- WORR-native server/game extension work now adds `BOT_VOTE_STATUS_API_V1`
+  and a game-side `q3a_bot_vote_status` line for vote population, active
+  vote state, vote caller/voter breakdowns, and the last bot-origin launch
+  attempt.
+- The vote command layer now rejects bot-origin vote launch and vote-cast
+  paths explicitly, so future bot client-command dispatch work cannot
+  accidentally let fake clients skew human vote flow.
+- The new `sv_bot_vote_smoke 2` path configures two bot-only FFA
+  participants with voting enabled, validates `voting_clients=0`, attempts a
+  harmless bot-origin `random 2` vote through the game vote helper, requires
+  `q3a_bot_vote_launch reason=bot_blocked`, and verifies cleanup leaves zero
+  bots and no active vote.
+- The promoted `vote_bot_exclusion` scenario validates the status/launch
+  markers and contributes the vote slice of `FR-07-T01`; MyMap queue, queued
+  nextmap, and map-vote selector coverage are recorded in later sections.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 36 tests; `meson compile
+  -C builddir-win` passed; `python tools\refresh_install.py --build-dir
+  builddir-win --install-dir .install --base-game basew --platform-id
+  windows-x86_64` passed; focused `vote_bot_exclusion` passed from
+  `.install`; and the full implemented scenario suite reported 41 passed, 0
+  failed, 0 timed out, 0 errored, and 0 pending from
+  `.tmp\bot_scenarios\20260621T123039Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-vote-bot-exclusion-2026-06-21.md`.
+
+## Native Runtime Update: MyMap Bot Queue Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-07-T01`, `DV-03-T05`, `FR-04-T16`,
+`DV-07-T06`
+
+- WORR-native server/game extension work now adds
+  `BOT_MYMAP_STATUS_API_V1`, a game-side `q3a_bot_mymap_status` line, and
+  dedicated `q3a_bot_mymap_queue` / `q3a_bot_mymap_consume` markers for map
+  queue population, MyMap queue population, MyMap cvar gates, front queued
+  map/social IDs, and the latest queue/consume attempt.
+- The new `sv_bot_mymap_smoke 2` path configures one bot-only FFA participant,
+  enables MyMap, assigns a deterministic test social ID to the bot when needed,
+  validates the MyMap gate, queues the active map through `MapSystem`, consumes
+  the queued map through `ConsumeQueuedMap`, and verifies cleanup leaves zero
+  bots with empty queues.
+- The smoke helper seeds a temporary active-map `MapEntry` only when the map
+  pool is empty. Current staged installs do not include a loose
+  `basew/mapdb.json` for the direct `std::ifstream` pool loader, so the proof
+  exposes that fallback through `last_queue_map_seeded=1` instead of hiding it.
+- The promoted `mymap_queue_bot_request` scenario validates the queue/status
+  markers and contributes the MyMap queue slice of `FR-07-T01`; queued nextmap
+  and map-vote selector coverage are recorded in later sections.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 37 tests; `meson compile
+  -C builddir-win sgame_x86_64` passed; `meson compile -C builddir-win`
+  passed; `python tools\refresh_install.py --build-dir builddir-win
+  --install-dir .install --base-game basew --platform-id windows-x86_64`
+  passed; focused `mymap_queue_bot_request` passed from
+  `.tmp\bot_scenarios\20260621T125839Z`; and the full implemented scenario
+  suite reported 42 passed, 0 failed, 0 timed out, 0 errored, and 0 pending
+  from `.tmp\bot_scenarios\20260621T125848Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-mymap-bot-queue-2026-06-21.md`.
+
+## Native Runtime Update: Scoreboard Bot Classification Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-07-T01`, `DV-03-T05`, `FR-04-T16`,
+`DV-07-T06`
+
+- WORR-native server/game extension work now adds
+  `BOT_SCOREBOARD_STATUS_API_V1`, a game-side
+  `q3a_bot_scoreboard_status` line, and a `q3a_bot_scoreboard_scores`
+  marker for bot/human/player counts, voting-client counts, sorted-client
+  classification, leader/runner-up row metadata, score ordering, FFA rank
+  ordering, and the latest diagnostic score-application outcome.
+- The new `sv_bot_scoreboard_smoke 2` path configures two bot-only FFA
+  participants, waits for both queued fake clients to materialize, validates
+  the zero-score standings view, applies deterministic proof scores of 7 and
+  3 through the game-side diagnostic hook, and verifies cleanup leaves zero
+  bots with no sorted clients.
+- The promoted `scoreboard_bot_classification` scenario validates the
+  scoreboard status/score markers and contributes the scoreboard-classification
+  slice of Phase 7 match tooling; intermission and nextmap transition scenarios
+  remain separate follow-up work.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 38 tests; `meson compile
+  -C builddir-win` passed; `python tools\refresh_install.py --build-dir
+  builddir-win --install-dir .install --base-game basew --platform-id
+  windows-x86_64` passed; focused `scoreboard_bot_classification` passed from
+  `.tmp\bot_scenarios\20260621T132803Z`; and the full implemented scenario
+  suite reported 43 passed, 0 failed, 0 timed out, 0 errored, and 0 pending
+  from `.tmp\bot_scenarios\20260621T132811Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-scoreboard-bot-classification-2026-06-21.md`.
+
+## Native Runtime Update: Intermission Bot Cleanup Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-07-T01`, `DV-03-T05`, `FR-04-T16`,
+`DV-07-T06`
+
+- WORR-native server/game extension work now adds
+  `BOT_INTERMISSION_STATUS_API_V1`, a game-side
+  `q3a_bot_intermission_status` line, and a
+  `q3a_bot_intermission_begin` marker for bot/human/player counts,
+  connected and sorted-client counts, intermission/queued/post-exit state,
+  current/change-map target state, frozen/freecam/non-solid bot counts, and
+  the latest native begin-intermission outcome.
+- The new `sv_bot_intermission_smoke 2` path configures two bot-only FFA
+  participants, waits for both queued fake clients to materialize, enters the
+  native `BeginIntermission()` / `MoveClientToIntermission()` path through the
+  game-side extension, validates frozen/freecam/non-solid bot state, removes
+  all bots while the map remains in intermission, and verifies cleanup leaves
+  zero bots, zero connected clients, and no sorted clients.
+- The promoted `intermission_bot_cleanup` scenario validates the intermission
+  status/begin markers and contributes the intermission/reconnect cleanup slice
+  of Phase 7 match tooling; queued nextmap and map-vote selector coverage are
+  recorded in the following sections.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 39 tests; `meson compile
+  -C builddir-win` passed; `python tools\refresh_install.py --build-dir
+  builddir-win --install-dir .install --base-game basew --platform-id
+  windows-x86_64` passed; focused `intermission_bot_cleanup` passed from
+  `.tmp\bot_scenarios\20260621T134839Z`; and the full implemented scenario
+  suite reported 44 passed, 0 failed, 0 timed out, 0 errored, and 0 pending
+  from `.tmp\bot_scenarios\20260621T134846Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-intermission-bot-cleanup-2026-06-21.md`.
+
+## Native Runtime Update: Queued Nextmap Transition Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-07-T01`, `DV-03-T05`, `FR-04-T16`,
+`DV-07-T06`
+
+- WORR-native server/game extension work now adds
+  `BOT_NEXTMAP_STATUS_API_V1`, a game-side `q3a_bot_nextmap_status` line, and
+  a `q3a_bot_nextmap_transition` marker for bot/human/player counts, connected
+  clients, current/front queued map state, queue sizes, `changeMap` state,
+  queued-transition outcome, queue consumption, override flags, and target map
+  retention.
+- The new `sv_bot_nextmap_smoke 2` path configures one bot-only FFA
+  participant, enables MyMap, queues the current staged map through the existing
+  MyMap helper, executes the queued transition through the game-side extension,
+  waits for the dedicated server `sv.spawncount` reload edge, prints
+  post-reload status, removes retained fake clients, and verifies final
+  zero-bot cleanup.
+- The promoted `queued_nextmap_transition` scenario validates the status,
+  transition, reload, and cleanup markers and contributes the queued nextmap
+  transition slice of Phase 7 match tooling; map-vote selector coverage is
+  recorded in the next section, while broader tournament/admin match-flow
+  hardening remains follow-up work.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 40 tests; `meson compile
+  -C builddir-win` passed; `python tools\refresh_install.py --build-dir
+  builddir-win --install-dir .install --base-game basew --platform-id
+  windows-x86_64` passed; focused `queued_nextmap_transition` passed from
+  `.tmp\bot_scenarios\20260621T140550Z`; and the full implemented scenario
+  suite reported 45 passed, 0 failed, 0 timed out, 0 errored, and 0 pending
+  from `.tmp\bot_scenarios\20260621T140557Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-queued-nextmap-transition-2026-06-21.md`.
+
+## Native Runtime Update: Map-Vote Bot Exclusion Transition Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-07-T01`, `DV-03-T05`, `FR-04-T16`,
+`DV-07-T06`
+
+- WORR-native server/game extension work now adds
+  `BOT_MAPVOTE_STATUS_API_V1`, a game-side `q3a_bot_mapvote_status` line,
+  and dedicated `q3a_bot_mapvote_begin`, `q3a_bot_mapvote_bot_vote`, and
+  `q3a_bot_mapvote_finalize` markers for selector state, candidates, vote
+  counts, bot/human ballot attribution, selected map, reload request state,
+  and retained finalization status.
+- The map selector vote path now explicitly ignores bot clients before
+  storing or broadcasting selector votes. That keeps bot-origin selector input
+  out of human map-vote flow even after future fake-client command dispatch
+  grows more capable.
+- The new `sv_bot_mapvote_smoke 2` path configures two bot-only FFA
+  participants, enables the map selector, seeds the current staged map only
+  when the runtime map pool is empty, starts a deterministic selector against
+  that map, attempts a bot ballot through the guarded cast path, finalizes the
+  selector, observes the dedicated server `sv.spawncount` reload edge, and
+  verifies final zero-bot cleanup.
+- The promoted `mapvote_bot_exclusion_transition` scenario validates the
+  status, bot-vote, finalize, reload, and cleanup markers and closes the
+  map-vote selector slice of `FR-07-T01`. Tournament veto/replay and match
+  logging remain separate FR-07 work; command-level bot/admin isolation is
+  covered by the admin audit update below.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 41 tests; `meson compile
+  -C builddir-win` passed; `python tools\refresh_install.py --build-dir
+  builddir-win --install-dir .install --base-game basew --platform-id
+  windows-x86_64` passed; focused `mapvote_bot_exclusion_transition` passed
+  from `.tmp\bot_scenarios\20260621T142951Z`; and the full implemented
+  scenario suite reported 46 passed, 0 failed, 0 timed out, 0 errored, and 0
+  pending from `.tmp\bot_scenarios\20260621T142957Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-mapvote-bot-exclusion-transition-2026-06-21.md`.
+
+## Native Runtime Update: Admin Bot Privilege Audit Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-07-T04`, `DV-03-T05`, `FR-04-T16`
+
+- WORR-native command and status work now adds
+  `BOT_ADMIN_AUDIT_STATUS_API_V1`, game-side
+  `q3a_bot_admin_audit_status` and `q3a_bot_admin_audit_attempt` markers,
+  and a registered-command audit helper that can inspect admin-only commands
+  without routing a fake client through the normal network print path.
+- The admin command permission path now treats bot clients as ineligible
+  before checking cvar/session admin state. This makes bot admin rejection
+  deterministic even when a test temporarily forces a bot session admin bit.
+- The new `sv_bot_admin_audit_smoke 2` path stages one bot-only FFA
+  participant, enables admin commands globally, temporarily sets that bot's
+  admin session flag, attempts the registered `lock_team red` command,
+  restores the session flag, and verifies the red team remains unlocked
+  through cleanup.
+- The promoted `admin_bot_privilege_audit` scenario validates command lookup,
+  `admin_only=1`, `admin_session=1`, `allowed=0`, `executed=0`,
+  `blocked=1`, `reason=bot_admin_blocked`, `admin_bots=0`, and
+  `red_locked=0` after final zero-bot cleanup. This closes the first
+  command-level bot/admin isolation proof for `FR-07-T04`.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `git diff --check` passed; `python -m pytest
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed 42 tests; `python -m
+  py_compile tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `meson compile -C
+  builddir-win worr_ded_engine_x86_64 sgame_x86_64` passed; `python
+  tools\refresh_install.py --build-dir builddir-win --install-dir .install
+  --base-game basew --platform-id windows-x86_64 --package-q2aas-aas`
+  passed; focused `admin_bot_privilege_audit` passed from
+  `.tmp\bot_scenarios\20260621T150348Z`; and the full implemented scenario
+  suite reported 47 passed, 0 failed, 0 timed out, 0 errored, and 0 pending
+  from `.tmp\bot_scenarios\20260621T150437Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-admin-bot-privilege-audit-2026-06-21.md`.
+
+## Native Runtime Update: Tournament Bot Veto Exclusion Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-07-T02`, `DV-03-T05`, `FR-04-T16`,
+`DV-07-T06`
+
+- WORR-native tournament/status work now adds
+  `BOT_TOURNAMENT_STATUS_API_V1`, game-side
+  `q3a_bot_tournament_status`, `q3a_bot_tournament_setup`, and
+  `q3a_bot_tournament_veto` markers for tournament activation, veto phase
+  state, active-side identity, map pool size, pick/ban counts, and the latest
+  bot veto attempt outcome.
+- The tournament veto authorization path now explicitly rejects bot clients
+  before checking social ID, captain, or active-side eligibility. That prevents
+  a fake client from making a tournament veto choice even if its session
+  identity matches the active side.
+- The new `sv_bot_tournament_smoke 2` path stages one bot-only FFA
+  participant, configures a minimal best-of-three tournament veto state,
+  assigns that bot the active home-side identity, attempts a veto pick through
+  `Tournament_HandleVetoAction()`, and verifies no pick or ban state changes.
+- The promoted `tournament_bot_veto_exclusion` scenario validates
+  `active=1`, `veto_started=1`, `last_setup_bot_is_home=1`, `allowed=0`,
+  `blocked=1`, `reason=bot_blocked`, `picks=0`, and `bans=0` after final
+  zero-bot cleanup. Tournament replay reset/error handling is covered by the
+  follow-up native runtime update below.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m pytest
+  tools\bot_scenarios\test_run_bot_scenarios.py -k
+  "tournament_bot_veto_exclusion or admin_bot_privilege_audit"` passed 2
+  selected tests; `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `meson compile -C
+  builddir-win worr_ded_engine_x86_64 sgame_x86_64` passed; `python
+  tools\refresh_install.py --build-dir builddir-win --install-dir .install
+  --base-game basew --platform-id windows-x86_64 --package-q2aas-aas`
+  passed; focused `tournament_bot_veto_exclusion` passed from
+  `.tmp\bot_scenarios\20260621T152536Z`; and the full implemented scenario
+  suite reported 48 passed, 0 failed, 0 timed out, 0 errored, and 0 pending
+  from `.tmp\bot_scenarios\20260621T153725Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-tournament-bot-veto-exclusion-2026-06-21.md`.
+
+## Native Runtime Update: Tournament Replay Reset Scenario
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T06`, `FR-07-T02`, `DV-03-T05`, `FR-04-T16`,
+`DV-07-T06`
+
+- WORR-native tournament replay work now extends
+  `BOT_TOURNAMENT_STATUS_API_V1` with replay setup and replay attempt helpers,
+  plus game-side `q3a_bot_tournament_replay_setup` and
+  `q3a_bot_tournament_replay` markers for completed history setup, invalid
+  replay preservation, valid replay rewind state, target map, win totals, and
+  retained match history counts.
+- `Tournament_ReplayGame()` now avoids clearing a completed tournament series
+  through the generic match setup refresh before replay state is inspected, and
+  rejects a missing replay map before mutating wins, match history, or
+  map-change state.
+- The new `sv_bot_tournament_smoke 3` path seeds a completed best-of-three
+  tournament history without requiring bot participants, attempts out-of-range
+  replay game `99`, verifies state preservation, then replays game `2` and
+  verifies the history is truncated to one retained winner/map/id, wins rewind
+  to `1-0`, the replay map is queued, and the series is reopened.
+- The promoted `tournament_replay_reset` scenario validates
+  `reason=range_error`, `preserved=1`, `reason=queued_replay`,
+  `reset_applied=1`, `games_played=1`, `match_winners=1`, and
+  `last_replay_reset_applied=1` through final zero-bot cleanup.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m pytest
+  tools\bot_scenarios\test_run_bot_scenarios.py -k
+  "tournament_replay_reset or tournament_bot_veto_exclusion"` passed 2
+  selected tests; `python -m pytest
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed 44 tests; `python -m
+  py_compile tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `meson compile -C
+  builddir-win worr_ded_engine_x86_64 sgame_x86_64` passed; `python
+  tools\refresh_install.py --build-dir builddir-win --install-dir .install
+  --base-game basew --platform-id windows-x86_64 --package-q2aas-aas`
+  passed; focused `tournament_replay_reset` passed from
+  `.tmp\bot_scenarios\20260621T154924Z`; and the full implemented scenario
+  suite reported 49 passed, 0 failed, 0 timed out, 0 errored, and 0 pending
+  from `.tmp\bot_scenarios\20260621T155255Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-tournament-replay-reset-2026-06-21.md`.
+
 ## Candidate Source Inventory
 
-These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nuke retreat route ownership, timed route-goal ownership, teleporter escape route ownership, team role route ownership, team item-role route selection, team fire-avoidance command suppression, team role-combat command ownership, FFA roam-route ownership, CTF role-route ownership, CTF role-combat command ownership, CTF dropped-flag route ownership, CTF carrier-support route ownership, CTF base-return route ownership, CTF objective route-policy ownership, CTF objective route precedence ownership, coop leader route ownership and validation gating, coop lead-advance route ownership, coop progress-wait command ownership, coop interaction-retry command ownership, coop resource-share route selection, coop anti-blocking command ownership, coop target-sharing blackboard adoption, coop door/elevator source-hold command ownership, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
+These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nuke retreat route ownership, timed route-goal ownership, teleporter escape route ownership, team role route ownership, team item-role route selection, team fire-avoidance command suppression, team role-combat command ownership, FFA roam-route ownership, CTF role-route ownership, CTF role-combat command ownership, CTF dropped-flag route ownership, CTF carrier-support route ownership, CTF base-return route ownership, CTF objective route-policy ownership, CTF objective route precedence ownership, coop leader route ownership and validation gating, coop lead-advance route ownership, coop progress-wait command ownership, coop interaction-retry command ownership, coop resource-share route selection, coop anti-blocking command ownership, coop target-sharing blackboard adoption, coop door/elevator source-hold command ownership, bot warmup readiness status and smoke validation, bot vote-exclusion status and smoke validation, bot admin-audit status/attempt smoke validation, bot tournament status/veto/replay smoke validation, bot MyMap status/queue/consume smoke validation, bot queued-nextmap transition status and smoke validation, bot map-vote status/finalize smoke validation, bot scoreboard classification status and smoke validation, bot intermission cleanup status and smoke validation, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, map-restart cleanup scenario promotion, warmup bot-start readiness scenario promotion, vote bot-exclusion scenario promotion, admin bot privilege audit scenario promotion, tournament bot veto-exclusion scenario promotion, tournament replay reset scenario promotion, MyMap queue scenario promotion, queued nextmap transition scenario promotion, map-vote bot-exclusion transition scenario promotion, scoreboard bot-classification scenario promotion, intermission bot-cleanup scenario promotion, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
 
 | Candidate | Upstream / Local Ref | Current Use Decision | Required Before Import |
 |---|---|---|---|

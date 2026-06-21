@@ -315,6 +315,866 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(parsed[marker][0]["map_changes"], 1)
         self.assertEqual(parsed[marker][0]["final_count"], 0)
 
+    def test_map_restart_cleanup_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["map_restart_cleanup"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_mode"], 19)
+        self.assertEqual(row["selection_tags"], ["match", "restart"])
+        self.assertEqual(
+            row["extra_cvars"],
+            [
+                {"name": "sv_bot_frame_command_smoke_map_repeat_cycles", "value": "2"},
+                {"name": "sv_bot_frame_command_smoke_map_repeat_restart", "value": "1"},
+            ],
+        )
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            (
+                "q3a_bot_frame_command_smoke_map_repeat_cycle=begin",
+                "command",
+                "eq",
+                "map_force",
+            ),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (
+                "q3a_bot_frame_command_smoke_map_repeat_reload=observed",
+                "restart",
+                "eq",
+                1,
+            ),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (
+                "q3a_bot_frame_command_smoke_map_repeat_cleanup_status",
+                "count",
+                "eq",
+                0,
+            ),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_frame_command_smoke_map_repeat_cycle=begin "
+            "cycle=1 command=map_force restart=1",
+            "q3a_bot_frame_command_smoke_map_repeat_reload=queued "
+            "cycle=1 next_cycle=2 command=map_force restart=1",
+            "q3a_bot_frame_command_smoke_map_repeat_reload=observed "
+            "cycle=2 completed_cycles=1 map_changes=1 command=map_force restart=1",
+            "q3a_bot_frame_command_smoke_map_repeat_cleanup_status "
+            "cycle=2 phase=post_reload reason=final_cycle_complete count=0 pass=1",
+            "q3a_bot_frame_command_smoke_map_repeat=complete "
+            "cycles=2 map_changes=1 final_count=0",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        restart_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in restart_results),
+            restart_results,
+        )
+
+    def test_warmup_bot_start_readiness_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["warmup_bot_start_readiness"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_warmup_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "warmup"])
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            ("q3a_bot_warmup_status", "bot_only_start", "any_eq", 1),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_warmup_smoke=end", "final_count", "eq", 0),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_warmup_smoke=begin target=2 minplayers=2 "
+            "ready_up=1 start_no_humans=1",
+            "q3a_bot_warmup_smoke_after_add_requests "
+            "added_alpha=1 added_bravo=1 count=1",
+            "q3a_bot_warmup_smoke_status_requested count=2",
+            "q3a_bot_warmup_status bots=2 humans=0 playing=2 "
+            "minplayers_met=1 bot_only_start=1 can_start=1 pass=1",
+            "q3a_bot_warmup_smoke_removed_all count=0",
+            "q3a_bot_warmup_status bots=0 humans=0 playing=0 "
+            "minplayers_met=0 bot_only_start=0 can_start=1 pass=1",
+            "q3a_bot_warmup_smoke=end final_count=0",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        warmup_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in warmup_results),
+            warmup_results,
+        )
+
+    def test_vote_bot_exclusion_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["vote_bot_exclusion"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_vote_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "votes"])
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.VOTE_STATUS_MARKER, "voting_clients", "any_eq", 0),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_vote_launch", "reason", "eq", "bot_blocked"),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_vote_smoke=begin target=2 allow_voting=1 "
+            "allow_spec_vote=0 bot_vote_block=1",
+            "q3a_bot_vote_smoke_after_add_requests "
+            "added_alpha=1 added_bravo=1 count=1",
+            "q3a_bot_vote_smoke_status_requested count=2",
+            "q3a_bot_vote_status bots=2 humans=0 playing=2 "
+            "voting_clients=0 active_vote=0 last_launch_attempted=0 "
+            "last_launch_success=0 last_launch_blocked=0 pass=1",
+            "q3a_bot_vote_launch attempted=1 bot_found=1 client=0 "
+            "vote=random arg=2 success=0 blocked=1 reason=bot_blocked "
+            "active_vote=0 voting_clients=0",
+            "q3a_bot_vote_smoke_launch_requested count=2 success=0",
+            "q3a_bot_vote_status bots=2 humans=0 playing=2 "
+            "voting_clients=0 active_vote=0 last_launch_attempted=1 "
+            "last_launch_success=0 last_launch_blocked=1 pass=1",
+            "q3a_bot_vote_smoke_removed_all count=0",
+            "q3a_bot_vote_status bots=0 humans=0 playing=0 "
+            "voting_clients=0 active_vote=0 last_launch_attempted=1 "
+            "last_launch_success=0 last_launch_blocked=1 pass=1",
+            "q3a_bot_vote_smoke=end final_count=0",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        vote_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in vote_results),
+            vote_results,
+        )
+
+    def test_admin_bot_privilege_audit_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["admin_bot_privilege_audit"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_admin_audit_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "admin"])
+
+        selected = {scenario.name for scenario in harness.select_scenarios(["admin"])}
+        self.assertIn("admin_bot_privilege_audit", selected)
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            ("q3a_bot_admin_audit_attempt", "reason", "eq", "bot_admin_blocked"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.ADMIN_AUDIT_STATUS_MARKER, "red_locked", "eq", 0),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_admin_audit_smoke=begin target=1 "
+            "admin_command=lock_team bot_admin_block=1",
+            "q3a_bot_admin_audit_smoke_after_add_requests added=1 count=1",
+            "q3a_bot_admin_audit_smoke_status_requested count=1",
+            "q3a_bot_admin_audit_status bots=1 humans=0 playing=1 "
+            "bot_playing=1 human_playing=0 spectators=0 admin_bots=0 "
+            "admin_humans=0 red_locked=0 blue_locked=0 allow_admin=1 "
+            "last_attempted=0 last_bot_found=0 last_client=-1 "
+            "last_forced_admin=0 last_admin_session=0 last_command=none "
+            "last_command_found=0 last_admin_only=0 last_allowed=0 "
+            "last_executed=0 last_blocked=0 last_reason=none "
+            "last_red_locked_before=0 last_red_locked_after=0 pass=1",
+            "q3a_bot_admin_audit_attempt attempted=1 bot_found=1 client=0 "
+            "forced_admin=1 admin_session=1 command=lock_team "
+            "command_found=1 admin_only=1 allowed=0 executed=0 blocked=1 "
+            "reason=bot_admin_blocked red_locked_before=0 "
+            "red_locked_after=0 admin_bots=0",
+            "q3a_bot_admin_audit_smoke_command_requested count=1 blocked=1",
+            "q3a_bot_admin_audit_status bots=1 humans=0 playing=1 "
+            "bot_playing=1 human_playing=0 spectators=0 admin_bots=0 "
+            "admin_humans=0 red_locked=0 blue_locked=0 allow_admin=1 "
+            "last_attempted=1 last_bot_found=1 last_client=0 "
+            "last_forced_admin=1 last_admin_session=1 "
+            "last_command=lock_team last_command_found=1 "
+            "last_admin_only=1 last_allowed=0 last_executed=0 "
+            "last_blocked=1 last_reason=bot_admin_blocked "
+            "last_red_locked_before=0 last_red_locked_after=0 pass=1",
+            "q3a_bot_admin_audit_smoke_removed_all count=0",
+            "q3a_bot_admin_audit_status bots=0 humans=0 playing=0 "
+            "bot_playing=0 human_playing=0 spectators=0 admin_bots=0 "
+            "admin_humans=0 red_locked=0 blue_locked=0 allow_admin=1 "
+            "last_attempted=1 last_bot_found=1 last_client=0 "
+            "last_forced_admin=1 last_admin_session=1 "
+            "last_command=lock_team last_command_found=1 "
+            "last_admin_only=1 last_allowed=0 last_executed=0 "
+            "last_blocked=1 last_reason=bot_admin_blocked "
+            "last_red_locked_before=0 last_red_locked_after=0 pass=1",
+            "q3a_bot_admin_audit_smoke=end final_count=0 pass=1",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        audit_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in audit_results),
+            audit_results,
+        )
+
+    def test_tournament_bot_veto_exclusion_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["tournament_bot_veto_exclusion"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_tournament_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "tournament"])
+
+        selected = {scenario.name for scenario in harness.select_scenarios(["tournament"])}
+        self.assertIn("tournament_bot_veto_exclusion", selected)
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            ("q3a_bot_tournament_veto", "reason", "eq", "bot_blocked"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.TOURNAMENT_STATUS_MARKER, "picks", "eq", 0),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_tournament_smoke=begin target=1 "
+            "bot_veto_block=1 action=pick",
+            "q3a_bot_tournament_smoke_after_add_requests added=1 count=1",
+            "q3a_bot_tournament_setup attempted=1 bot_found=1 client=0 "
+            "configured=1 active=1 veto_started=1 bot_is_home=1 "
+            "bot_social=bot-tournament-home map0=mm-rage pool=3 "
+            "best_of=3 picks_needed=2",
+            "q3a_bot_tournament_smoke_setup_requested count=1 configured=1",
+            "q3a_bot_tournament_status bots=1 humans=0 playing=1 "
+            "bot_playing=1 human_playing=0 spectators=0 active=1 "
+            "veto_started=1 veto_complete=0 home_turn=1 team_based=0 "
+            "pool=3 picks=0 bans=0 order=0 picks_needed=2 "
+            "home_id=bot-tournament-home away_id=human-tournament-away "
+            "first_map=mm-rage last_setup_attempted=1 "
+            "last_setup_configured=1 last_setup_bot_is_home=1 "
+            "last_veto_attempted=0 last_veto_bot_found=0 "
+            "last_veto_client=-1 last_veto_map=none last_veto_allowed=0 "
+            "last_veto_blocked=0 last_veto_reason=none "
+            "last_veto_picks_before=0 last_veto_picks_after=0 "
+            "last_veto_bans_before=0 last_veto_bans_after=0 pass=1",
+            "q3a_bot_tournament_veto attempted=1 bot_found=1 client=0 "
+            "map=mm-rage active_before=1 veto_started_before=1 "
+            "veto_complete_before=0 picks_before=0 bans_before=0 "
+            "allowed=0 blocked=1 reason=bot_blocked picks_after=0 "
+            "bans_after=0 veto_complete_after=0",
+            "q3a_bot_tournament_smoke_veto_requested count=1 blocked=1",
+            "q3a_bot_tournament_status bots=1 humans=0 playing=1 "
+            "bot_playing=1 human_playing=0 spectators=0 active=1 "
+            "veto_started=1 veto_complete=0 home_turn=1 team_based=0 "
+            "pool=3 picks=0 bans=0 order=0 picks_needed=2 "
+            "home_id=bot-tournament-home away_id=human-tournament-away "
+            "first_map=mm-rage last_setup_attempted=1 "
+            "last_setup_configured=1 last_setup_bot_is_home=1 "
+            "last_veto_attempted=1 last_veto_bot_found=1 "
+            "last_veto_client=0 last_veto_map=mm-rage "
+            "last_veto_allowed=0 last_veto_blocked=1 "
+            "last_veto_reason=bot_blocked last_veto_picks_before=0 "
+            "last_veto_picks_after=0 last_veto_bans_before=0 "
+            "last_veto_bans_after=0 pass=1",
+            "q3a_bot_tournament_smoke_removed_all count=0",
+            "q3a_bot_tournament_status bots=0 humans=0 playing=0 "
+            "bot_playing=0 human_playing=0 spectators=0 active=1 "
+            "veto_started=1 veto_complete=0 home_turn=1 team_based=0 "
+            "pool=3 picks=0 bans=0 order=0 picks_needed=2 "
+            "home_id=bot-tournament-home away_id=human-tournament-away "
+            "first_map=mm-rage last_setup_attempted=1 "
+            "last_setup_configured=1 last_setup_bot_is_home=1 "
+            "last_veto_attempted=1 last_veto_bot_found=1 "
+            "last_veto_client=0 last_veto_map=mm-rage "
+            "last_veto_allowed=0 last_veto_blocked=1 "
+            "last_veto_reason=bot_blocked last_veto_picks_before=0 "
+            "last_veto_picks_after=0 last_veto_bans_before=0 "
+            "last_veto_bans_after=0 pass=1",
+            "q3a_bot_tournament_smoke=end final_count=0 pass=1",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        tournament_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in tournament_results),
+            tournament_results,
+        )
+
+    def test_tournament_replay_reset_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["tournament_replay_reset"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_tournament_smoke")
+        self.assertEqual(row["smoke_mode"], 3)
+        self.assertEqual(row["selection_tags"], ["match", "tournament", "replay"])
+
+        selected = {scenario.name for scenario in harness.select_scenarios(["replay"])}
+        self.assertIn("tournament_replay_reset", selected)
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            ("q3a_bot_tournament_replay", "reason", "any_eq", "range_error"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_tournament_replay", "reset_applied", "eq", 1),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_tournament_smoke=begin target=0 replay_reset=1 "
+            "invalid_game=99 replay_game=2",
+            "q3a_bot_tournament_replay_setup attempted=1 configured=1 "
+            "active=1 order=3 history=3 games_played=3 "
+            "player0_wins=2 player1_wins=1 series_complete=1 "
+            "replay_map=mm-rage best_of=3 win_target=2",
+            "q3a_bot_tournament_smoke_replay_setup_requested configured=1",
+            "q3a_bot_tournament_status games_played=3 series_complete=1 "
+            "match_winners=3 match_ids=3 match_maps=3 player0_wins=2 "
+            "player1_wins=1 picks=2 pass=1",
+            "q3a_bot_tournament_replay attempted=1 game=99 active_before=1 "
+            "success=0 rejected=1 reason=range_error target_map=none "
+            "games_before=3 games_after=3 winners_before=3 winners_after=3 "
+            "ids_before=3 ids_after=3 maps_before=3 maps_after=3 "
+            "player0_wins_before=2 player0_wins_after=2 "
+            "player1_wins_before=1 player1_wins_after=1 "
+            "series_complete_before=1 series_complete_after=1 "
+            "change_map_before=0 change_map_after=0 preserved=1 "
+            "reset_applied=0",
+            "q3a_bot_tournament_smoke_replay_invalid_requested "
+            "game=99 preserved=1",
+            "q3a_bot_tournament_replay attempted=1 game=2 active_before=1 "
+            "success=1 rejected=0 reason=queued_replay target_map=mm-rage "
+            "games_before=3 games_after=1 winners_before=3 winners_after=1 "
+            "ids_before=3 ids_after=1 maps_before=3 maps_after=1 "
+            "player0_wins_before=2 player0_wins_after=1 "
+            "player1_wins_before=1 player1_wins_after=0 "
+            "series_complete_before=1 series_complete_after=0 "
+            "change_map_before=0 change_map_after=0 preserved=0 "
+            "reset_applied=1",
+            "q3a_bot_tournament_smoke_replay_valid_requested "
+            "game=2 reset=1",
+            "q3a_bot_tournament_status games_played=1 series_complete=0 "
+            "match_winners=1 match_ids=1 match_maps=1 player0_wins=1 "
+            "player1_wins=0 last_replay_success=1 "
+            "last_replay_reset_applied=1 pass=1",
+            "q3a_bot_tournament_smoke_removed_all count=0",
+            "q3a_bot_tournament_smoke=end final_count=0 pass=1",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        replay_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in replay_results),
+            replay_results,
+        )
+
+    def test_mapvote_bot_exclusion_transition_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["mapvote_bot_exclusion_transition"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_mapvote_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "votes", "mapvote"])
+
+        selected = {scenario.name for scenario in harness.select_scenarios(["mapvote"])}
+        self.assertIn("mapvote_bot_exclusion_transition", selected)
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            ("q3a_bot_mapvote_bot_vote", "reason", "eq", "bot_blocked"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_mapvote_finalize", "reason", "eq", "selected_exit"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_mapvote_smoke_reload=observed", "new_spawncount", "gt", 0),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_mapvote_smoke=begin target=2 map=mm-rage "
+            "selector=1 bot_vote_block=1",
+            "q3a_bot_mapvote_smoke_after_add_requests "
+            "added_alpha=1 added_bravo=1 count=1",
+            "q3a_bot_mapvote_smoke_status_requested count=2",
+            "q3a_bot_mapvote_status bots=2 humans=0 playing=2 "
+            "active=0 candidates=0 bot_votes=0 human_votes=0 "
+            "change_map_set=0 last_bot_vote_blocked=0 "
+            "last_finalize_success=0 pass=1",
+            "q3a_bot_mapvote_begin attempted=1 success=1 "
+            "reason=seeded_current map=mm-rage map_seeded=1 active=1 "
+            "candidates=1 candidate0=mm-rage vote_count0=0 "
+            "vote_count1=0 vote_count2=0",
+            "q3a_bot_mapvote_smoke_begin_requested count=2 "
+            "map=mm-rage success=1",
+            "q3a_bot_mapvote_status bots=2 humans=0 playing=2 "
+            "active=1 candidates=1 candidate0=mm-rage "
+            "vote_count0=0 vote_count1=0 vote_count2=0 "
+            "bot_votes=0 human_votes=0 change_map_set=0 "
+            "last_bot_vote_blocked=0 last_finalize_success=0 pass=1",
+            "q3a_bot_mapvote_bot_vote attempted=1 bot_found=1 client=0 "
+            "requested_index=0 active=1 blocked=1 counted=0 "
+            "stored_vote=-1 reason=bot_blocked vote_count0=0 "
+            "vote_count1=0 vote_count2=0 bot_votes=0 human_votes=0",
+            "q3a_bot_mapvote_smoke_bot_vote_requested count=2 blocked=1",
+            "q3a_bot_mapvote_status bots=2 humans=0 playing=2 "
+            "active=1 candidates=1 candidate0=mm-rage "
+            "vote_count0=0 vote_count1=0 vote_count2=0 "
+            "bot_votes=0 human_votes=0 change_map_set=0 "
+            "last_bot_vote_blocked=1 last_bot_vote_counted=0 "
+            "last_finalize_success=0 pass=1",
+            "q3a_bot_mapvote_finalize attempted=1 success=1 "
+            "reason=selected_exit target_map=mm-rage current_map=mm-rage "
+            "selected_index=0 selected_votes=0 candidates=1 "
+            "exit_requested=1 change_map_set=0 active=0 "
+            "vote_count0=0 vote_count1=0 vote_count2=0",
+            "q3a_bot_mapvote_smoke_finalize_requested count=2 "
+            "map=mm-rage success=1",
+            "q3a_bot_mapvote_status bots=2 humans=0 playing=2 "
+            "active=0 candidates=1 candidate0=mm-rage "
+            "vote_count0=0 vote_count1=0 vote_count2=0 "
+            "bot_votes=0 human_votes=0 change_map_set=0 "
+            "last_bot_vote_blocked=1 last_finalize_success=1 "
+            "last_finalize_reason=selected_exit pass=1",
+            "q3a_bot_mapvote_smoke_reload=queued from_spawncount=4 "
+            "target_map=mm-rage timeout_ms=10000",
+            "q3a_bot_mapvote_smoke_reload=observed old_spawncount=4 "
+            "reload_spawncount=4 new_spawncount=5 elapsed_ms=100 "
+            "realtime_reset=0 target_map=mm-rage current_map=mm-rage",
+            "q3a_bot_mapvote_smoke_post_reload_status_requested "
+            "count=2 observed_reload=1",
+            "q3a_bot_mapvote_status bots=2 humans=0 playing=2 "
+            "active=0 candidates=0 bot_votes=0 human_votes=0 "
+            "change_map_set=0 last_bot_vote_blocked=1 "
+            "last_finalize_success=1 last_finalize_reason=selected_exit "
+            "pass=1",
+            "q3a_bot_mapvote_smoke_removed_all count=0 removed=2",
+            "q3a_bot_mapvote_status bots=0 humans=0 playing=0 "
+            "active=0 candidates=0 bot_votes=0 human_votes=0 "
+            "change_map_set=0 last_bot_vote_blocked=1 "
+            "last_finalize_success=1 last_finalize_reason=selected_exit "
+            "pass=1",
+            "q3a_bot_mapvote_smoke=end final_count=0 target_map=mm-rage "
+            "current_map=mm-rage pass=1",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        mapvote_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in mapvote_results),
+            mapvote_results,
+        )
+
+    def test_mymap_queue_bot_request_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["mymap_queue_bot_request"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_mymap_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "mymap"])
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.MYMAP_STATUS_MARKER, "last_queue_success", "any_eq", 1),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_mymap_queue", "reason", "eq", "queued"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_mymap_consume", "reason", "eq", "consumed"),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_mymap_smoke=begin target=1 map=mm-rage "
+            "maps_mymap=1 allow_mymap=1 queue_limit=2",
+            "q3a_bot_mymap_smoke_after_add_request added=1 count=1",
+            "q3a_bot_mymap_smoke_status_requested count=1",
+            "q3a_bot_mymap_status bots=1 humans=0 playing=1 "
+            "play_queue=0 mymap_queue=0 allow_mymap=1 maps_mymap=1 "
+            "queue_limit=2 last_queue_map_seeded=0 last_queue_success=0 "
+            "last_consume_success=0 pass=1",
+            "q3a_bot_mymap_queue attempted=1 bot_found=1 client=0 "
+            "map=mm-rage social=bot_mymap_0 social_assigned=1 "
+            "map_seeded=1 success=1 rejected=0 reason=queued "
+            "play_queue=1 mymap_queue=1",
+            "q3a_bot_mymap_smoke_queue_requested count=1 map=mm-rage success=1",
+            "q3a_bot_mymap_status bots=1 humans=0 playing=1 "
+            "play_queue=1 mymap_queue=1 allow_mymap=1 maps_mymap=1 "
+            "queue_limit=2 last_queue_map_seeded=1 last_queue_success=1 "
+            "last_consume_success=0 pass=1",
+            "q3a_bot_mymap_consume attempted=1 success=1 reason=consumed "
+            "map=mm-rage social=bot_mymap_0 play_queue=0 mymap_queue=0",
+            "q3a_bot_mymap_smoke_consume_requested count=1 success=1",
+            "q3a_bot_mymap_status bots=1 humans=0 playing=1 "
+            "play_queue=0 mymap_queue=0 last_queue_success=1 "
+            "last_consume_success=1 pass=1",
+            "q3a_bot_mymap_smoke_removed_all count=0",
+            "q3a_bot_mymap_status bots=0 humans=0 playing=0 "
+            "play_queue=0 mymap_queue=0 last_queue_success=1 "
+            "last_consume_success=1 pass=1",
+            "q3a_bot_mymap_smoke=end final_count=0 map=mm-rage",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        mymap_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in mymap_results),
+            mymap_results,
+        )
+
+    def test_scoreboard_bot_classification_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["scoreboard_bot_classification"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_scoreboard_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "scoreboard"])
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCOREBOARD_STATUS_MARKER, "rank_ordered", "any_eq", 1),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_scoreboard_scores", "reason", "eq", "applied"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.SCOREBOARD_STATUS_MARKER, "bots", "eq", 0),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_scoreboard_smoke=begin target=2 "
+            "leader_score=7 runner_score=3",
+            "q3a_bot_scoreboard_smoke_after_add_requests "
+            "added_alpha=1 added_bravo=1 count=2",
+            "q3a_bot_scoreboard_smoke_status_requested count=2",
+            "q3a_bot_scoreboard_status bots=2 humans=0 playing=2 "
+            "bot_playing=2 human_playing=0 spectators=0 voting_clients=0 "
+            "connected_clients=2 sorted_clients=2 sorted_bots=2 "
+            "leader_bot=1 runner_bot=1 top_score=0 second_score=0 "
+            "rank_ordered=0 pass=1",
+            "q3a_bot_scoreboard_scores attempted=1 bot_count=2 applied=1 "
+            "leader_client=0 runner_client=1 leader_score=7 runner_score=3 "
+            "reason=applied top_client=0 top_score=7 sorted_bots=2",
+            "q3a_bot_scoreboard_smoke_scores_requested count=2 success=1",
+            "q3a_bot_scoreboard_status bots=2 humans=0 playing=2 "
+            "bot_playing=2 human_playing=0 spectators=0 voting_clients=0 "
+            "connected_clients=2 sorted_clients=2 sorted_bots=2 "
+            "leader_bot=1 runner_bot=1 score_ordered=1 rank_ordered=1 "
+            "top_client=0 top_bot=1 top_score=7 top_rank=0 "
+            "second_client=1 second_bot=1 second_score=3 second_rank=1 "
+            "last_score_applied=1 last_score_reason=applied pass=1",
+            "q3a_bot_scoreboard_smoke_removed_all count=0",
+            "q3a_bot_scoreboard_status bots=0 humans=0 playing=0 "
+            "connected_clients=0 sorted_clients=0 sorted_bots=0 "
+            "leader_bot=0 runner_bot=0 last_score_applied=1 pass=1",
+            "q3a_bot_scoreboard_smoke=end final_count=0",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        scoreboard_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in scoreboard_results),
+            scoreboard_results,
+        )
+
+    def test_intermission_bot_cleanup_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["intermission_bot_cleanup"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_intermission_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "intermission"])
+
+        selected = {scenario.name for scenario in harness.select_scenarios(["intermission"])}
+        self.assertIn("intermission_bot_cleanup", selected)
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.INTERMISSION_STATUS_MARKER, "pm_freeze_bots", "any_eq", 2),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_intermission_begin", "reason", "eq", "begun"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.INTERMISSION_STATUS_MARKER, "sorted_clients", "eq", 0),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_intermission_smoke=begin target=2",
+            "q3a_bot_intermission_smoke_after_add_requests "
+            "added_alpha=1 added_bravo=1 count=2",
+            "q3a_bot_intermission_smoke_status_requested count=2",
+            "q3a_bot_intermission_status bots=2 humans=0 playing=2 "
+            "bot_playing=2 human_playing=0 spectators=0 connected_clients=2 "
+            "sorted_clients=2 sorted_bots=2 sorted_humans=0 "
+            "intermission=0 post_intermission=0 change_map_current=0 "
+            "intermission_bots=0 pm_freeze_bots=0 freecam_bots=0 "
+            "solid_not_bots=0 last_begin_success=0 pass=1",
+            "q3a_bot_intermission_begin attempted=1 bot_count=2 success=1 "
+            "reason=begun map=base1 intermission=1 change_map_current=1 "
+            "intermission_bots=2 pm_freeze_bots=2 sorted_bots=2",
+            "q3a_bot_intermission_smoke_begin_requested count=2 success=1",
+            "q3a_bot_intermission_status bots=2 humans=0 playing=2 "
+            "bot_playing=2 human_playing=0 spectators=0 connected_clients=2 "
+            "sorted_clients=2 sorted_bots=2 sorted_humans=0 "
+            "intermission=1 intermission_queued=0 post_intermission=0 "
+            "ready_to_exit=0 change_map_set=1 change_map_current=1 "
+            "change_map=base1 current_map=base1 intermission_bots=2 "
+            "pm_freeze_bots=2 freecam_bots=2 solid_not_bots=2 "
+            "last_begin_attempted=1 last_begin_success=1 "
+            "last_begin_bot_count=2 last_begin_reason=begun pass=1",
+            "q3a_bot_intermission_smoke_removed_all count=0",
+            "q3a_bot_intermission_status bots=0 humans=0 playing=0 "
+            "connected_clients=0 sorted_clients=0 sorted_bots=0 "
+            "intermission=1 post_intermission=0 pm_freeze_bots=0 "
+            "freecam_bots=0 solid_not_bots=0 last_begin_success=1 "
+            "last_begin_reason=begun pass=1",
+            "q3a_bot_intermission_smoke=end final_count=0",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        intermission_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in intermission_results),
+            intermission_results,
+        )
+
+    def test_queued_nextmap_transition_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["queued_nextmap_transition"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_cvar"], "sv_bot_nextmap_smoke")
+        self.assertEqual(row["smoke_mode"], 2)
+        self.assertEqual(row["selection_tags"], ["match", "nextmap"])
+
+        selected = {scenario.name for scenario in harness.select_scenarios(["nextmap"])}
+        self.assertIn("queued_nextmap_transition", selected)
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            ("q3a_bot_nextmap_transition", "reason", "eq", "queued_exit"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            ("q3a_bot_nextmap_smoke_reload=observed", "new_spawncount", "gt", 0),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.NEXTMAP_STATUS_MARKER, "bots", "eq", 0),
+            required_marker_metrics,
+        )
+
+        text = "\n".join((
+            "q3a_bot_nextmap_smoke=begin target=1 map=mm-rage "
+            "maps_mymap=1 allow_mymap=1 queue_limit=2",
+            "q3a_bot_nextmap_smoke_after_add_request added=1 count=1",
+            "q3a_bot_nextmap_smoke_status_requested count=1",
+            "q3a_bot_mymap_status bots=1 humans=0 playing=1 "
+            "play_queue=0 mymap_queue=0 last_queue_success=0 pass=1",
+            "q3a_bot_nextmap_status bots=1 humans=0 playing=1 "
+            "play_queue=0 mymap_queue=0 change_map_set=0 "
+            "last_transition_success=0 last_transition_consumed=0 pass=1",
+            "q3a_bot_mymap_queue attempted=1 bot_found=1 client=0 "
+            "map=mm-rage social=bot_mymap_0 social_assigned=1 "
+            "map_seeded=1 success=1 rejected=0 reason=queued "
+            "play_queue=1 mymap_queue=1",
+            "q3a_bot_nextmap_smoke_queue_requested count=1 "
+            "map=mm-rage success=1",
+            "q3a_bot_mymap_status bots=1 humans=0 playing=1 "
+            "play_queue=1 mymap_queue=1 last_queue_success=1 pass=1",
+            "q3a_bot_nextmap_status bots=1 humans=0 playing=1 "
+            "play_queue=1 mymap_queue=1 front_map=mm-rage "
+            "change_map_set=0 last_transition_success=0 pass=1",
+            "q3a_bot_nextmap_transition attempted=1 success=1 consumed=1 "
+            "reason=queued_exit target_map=mm-rage current_map=mm-rage "
+            "play_queue_before=1 mymap_queue_before=1 play_queue_after=0 "
+            "mymap_queue_after=0 override_enable_flags=0 "
+            "override_disable_flags=0 change_map_set=0",
+            "q3a_bot_nextmap_smoke_transition_requested count=1 "
+            "map=mm-rage success=1",
+            "q3a_bot_nextmap_status bots=1 humans=0 playing=1 "
+            "play_queue=0 mymap_queue=0 change_map_set=0 "
+            "last_transition_success=1 last_transition_consumed=1 "
+            "last_transition_reason=queued_exit pass=1",
+            "q3a_bot_nextmap_smoke_reload=queued from_spawncount=4 "
+            "target_map=mm-rage timeout_ms=10000",
+            "q3a_bot_nextmap_smoke_reload=observed old_spawncount=4 "
+            "reload_spawncount=4 new_spawncount=5 elapsed_ms=100 "
+            "realtime_reset=0 target_map=mm-rage current_map=mm-rage",
+            "q3a_bot_nextmap_smoke_post_reload_status_requested "
+            "count=1 observed_reload=1",
+            "q3a_bot_nextmap_status bots=1 humans=0 playing=1 "
+            "play_queue=0 mymap_queue=0 change_map_set=0 "
+            "last_transition_success=1 last_transition_consumed=1 "
+            "last_transition_reason=queued_exit pass=1",
+            "q3a_bot_nextmap_smoke_removed_all count=0 removed=1",
+            "q3a_bot_nextmap_status bots=0 humans=0 playing=0 "
+            "play_queue=0 mymap_queue=0 change_map_set=0 "
+            "last_transition_success=1 last_transition_consumed=1 "
+            "last_transition_reason=queued_exit pass=1",
+            "q3a_bot_nextmap_smoke=end final_count=0 target_map=mm-rage "
+            "current_map=mm-rage pass=1",
+        ))
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        nextmap_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in nextmap_results),
+            nextmap_results,
+        )
+
     def test_marker_metric_parsing_splits_embedded_status_markers(self) -> None:
         text = "\n".join((
             "q3a_bot_frame_command_status pass=1 route_failures=0 "
@@ -576,6 +1436,26 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(
             [selected.name for selected in harness.select_scenarios(["soak"])],
             ["high_bot_soak_degradation"],
+        )
+        self.assertIn(
+            "map_restart_cleanup",
+            {selected.name for selected in harness.select_scenarios(["implemented"])},
+        )
+        self.assertEqual(
+            [selected.name for selected in harness.select_scenarios(["restart"])],
+            ["map_restart_cleanup"],
+        )
+        self.assertEqual(
+            [selected.name for selected in harness.select_scenarios(["warmup"])],
+            ["warmup_bot_start_readiness"],
+        )
+        self.assertEqual(
+            [selected.name for selected in harness.select_scenarios(["mymap"])],
+            ["mymap_queue_bot_request"],
+        )
+        self.assertEqual(
+            [selected.name for selected in harness.select_scenarios(["scoreboard"])],
+            ["scoreboard_bot_classification"],
         )
         self.assertEqual(
             [selected.name for selected in harness.select_scenarios(["manual"])],

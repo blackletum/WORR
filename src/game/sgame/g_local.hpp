@@ -5068,6 +5068,52 @@ void player_die(gentity_t *self, gentity_t *inflictor, gentity_t *attacker,
 void ServerCommand();
 void BotTeamPolicy_PrintStatus(int expectedPlaying, int expectedSpectators,
                                int expectedBots, int expectedQueued);
+void BotVote_PrintStatus(int expectedBots, int expectedHumans,
+                         int expectedPlaying, int expectedVotingClients,
+                         int expectedActiveVote,
+                         int expectedLastLaunchBlocked);
+int BotVote_TryLaunchFirstBotVote(const char* voteName, const char* voteArg);
+void BotVote_ResetStatus();
+void BotMapVote_PrintStatus(int expectedBots, int expectedActive,
+                            int expectedCandidates,
+                            int expectedLastBotVoteBlocked,
+                            int expectedLastFinalizeSuccess,
+                            int expectedChangeMapSet);
+int BotMapVote_BeginCurrentMapVote();
+int BotMapVote_TryCastFirstBotVote(int voteIndex);
+int BotMapVote_FinalizeAndExit();
+void BotMapVote_ResetStatus();
+void BotMyMap_PrintStatus(int expectedBots, int expectedPlayQueue,
+                          int expectedMyMapQueue,
+                          int expectedLastQueueSuccess,
+                          int expectedLastConsumeSuccess);
+int BotMyMap_TryQueueFirstBotMyMap(const char* mapName);
+int BotMyMap_ConsumeQueuedMap();
+void BotMyMap_ResetStatus();
+void BotMyMap_ClearQueues();
+void BotWarmup_PrintStatus(int expectedBots, int expectedHumans,
+                           int expectedPlaying, int expectedCanStart);
+void BotIntermission_PrintStatus(int expectedBots, int expectedHumans,
+                                 int expectedPlaying,
+                                 int expectedIntermission,
+                                 int expectedPmFreezeBots,
+                                 int expectedPostIntermission,
+                                 int expectedSortedBots);
+int BotIntermission_BeginIntermission();
+void BotIntermission_ResetStatus();
+void BotNextMap_PrintStatus(int expectedBots, int expectedPlayQueue,
+                            int expectedMyMapQueue,
+                            int expectedLastTransitionSuccess,
+                            int expectedLastTransitionConsumed,
+                            int expectedChangeMapSet);
+int BotNextMap_TransitionQueuedMap();
+void BotNextMap_ResetStatus();
+void BotScoreboard_PrintStatus(int expectedBots, int expectedHumans,
+                               int expectedPlaying, int expectedSortedBots,
+                               int expectedLeaderBot, int expectedTopScore,
+                               int expectedSecondScore);
+int BotScoreboard_ApplyTestScores(int leaderScore, int runnerScore);
+void BotScoreboard_ResetStatus();
 bool G_FilterPacket(const char *from);
 void G_LoadIPFilters();
 void G_SaveIPFilters();
@@ -5237,8 +5283,26 @@ std::optional<MapEntry> AutoSelectNextMap();
 std::vector<const MapEntry *> MapSelectorVoteCandidates(int maxCandidates = 3);
 void MapSelector_ClearVote(LevelLocals &levelState, int clientIndex);
 int MapSelector_SyncVotes(LevelLocals &levelState);
+void MapSelectorFinalize();
+void MapSelector_CastVote(gentity_t *ent, int voteIndex);
 int PrintMapListFiltered(gentity_t *ent, bool cycleOnly,
                          const std::string &filterQuery);
+
+void BotAdminAudit_PrintStatus(int expectedBots, int expectedAdminBots,
+                               int expectedLastBlocked,
+                               int expectedRedLocked);
+int BotAdminAudit_TryFirstBotAdminCommand();
+void BotAdminAudit_ResetStatus();
+
+void BotTournament_PrintStatus(int expectedBots, int expectedActive,
+                               int expectedVetoStarted, int expectedPicks,
+                               int expectedBans,
+                               int expectedLastVetoBlocked);
+int BotTournament_SetupBotVetoState();
+int BotTournament_TryFirstBotVetoPick(const char *mapName);
+int BotTournament_SetupReplayState();
+int BotTournament_TryReplayGame(int gameNumber);
+void BotTournament_ResetStatus();
 
 //
 // match_state.cpp
