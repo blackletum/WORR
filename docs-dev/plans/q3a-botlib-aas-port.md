@@ -20,13 +20,13 @@ The port is not a blind file drop. The target is a maintained WORR bot stack wit
 
 ## Completion Snapshot
 
-Last refreshed: 2026-06-21 coop target-sharing round.
+Last refreshed: 2026-06-21 CTF role-route ownership round.
 
-- Total checklist completion: 648 of 763 items complete, or 84.9%.
-- Phase checklist completion: 648 of 751 phase items complete, or 86.3%.
+- Total checklist completion: 652 of 764 items complete, or 85.3%.
+- Phase checklist completion: 652 of 752 phase items complete, or 86.7%.
 - Completed in the latest worker lanes: live combat aim-profile policy and brain-owned live-aim/projectile-lead consumption, live pickup/observed-respawn item timing consumers with status-friendly counters, coop and resource policy helper metadata, stricter scenario marker gates for live aim and match-policy evidence, reference-map required-feature diagnostics, long-soak source-counter completeness diagnostics, and richer first-party botfile behavior metadata. These land on top of the earlier same-day promotion, packaging, source-counter, scenario, botfile, and documentation lanes.
-- Latest implementation round: coop monster target sharing now has a default-off blackboard adoption bridge behind `sg_bot_coop_target_share`. Server smoke mode `30` runs a two-bot coop proof with a lightweight hostile `SVF_MONSTER` target, support-policy bots can adopt a teammate's current target, compact status exposes `coop_target_share_*` evidence, and the promoted `coop_target_share` scenario hard-gates source-candidate, adoption, target-entity, and support-combat intent evidence.
-- Still pending: durable autonomous role consumption in live FFA/TDM/CTF flows, deeper coop behavior beyond leader-route/readiness/progress-wait/lead-advance/interaction-retry/resource-share/anti-blocking/target-share proofs, campaign-specific door/elevator/trigger coordination, staging additional reference maps beyond the current available `mm-rage` set, CI/platform breadth, fresh long-soak CPU baselines with current source-counter fields, and the final imported BotLib runtime/adapter catch-all log.
+- Latest implementation round: live CTF role/lane decisions now have a default-off timed route-goal ownership proof behind `sg_bot_ctf_role_route`. Server smoke mode `35` runs a four-bot CTF proof, preserves the legacy mode `23` team-objective setup, frame-command status exposes `ctf_role_route_*` evidence, and the promoted `ctf_role_route` scenario gates CTF team-mode readiness, Capture the Flag match-policy selection, route owner kind `6`, route requests, and last role/lane/distance metadata.
+- Still pending: durable autonomous role consumption beyond the TDM and CTF route-owner and TDM item-route proofs in live FFA/TDM/CTF flows, deeper coop behavior beyond leader-route/readiness/progress-wait/lead-advance/interaction-retry/resource-share/anti-blocking/target-share/door-elevator proofs, broader campaign-specific trigger/key/objective coordination, staging additional reference maps beyond the current available `mm-rage` set, CI/platform breadth, fresh long-soak CPU baselines with current source-counter fields, and the final imported BotLib runtime/adapter catch-all log.
 
 ## Source Baseline
 
@@ -266,6 +266,11 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`: default-off coop WaitForLeader command owner and promoted `coop_progress_wait` scenario.
 - `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`: default-off route interaction wait/use retry command owner and promoted `coop_interaction_retry` scenario.
 - `docs-dev/q3a-botlib-coop-target-share-2026-06-21.md`: default-off coop monster target-sharing blackboard adoption bridge and promoted `coop_target_share` scenario.
+- `docs-dev/q3a-botlib-coop-door-elevator-2026-06-21.md`: default-off coop mover/elevator source-owner plus teammate hold command proof and promoted `coop_door_elevator` scenario.
+- `docs-dev/q3a-botlib-team-role-route-2026-06-21.md`: default-off TDM match role/lane timed route-goal owner proof and promoted `team_role_route` scenario.
+- `docs-dev/q3a-botlib-team-item-role-selection-2026-06-21.md`: default-off TDM match item-role pickup scoring proof and promoted `team_item_roles` scenario.
+- `docs-dev/q3a-botlib-team-fire-avoidance-2026-06-21.md`: default-off TDM friendly-fire command suppression proof and promoted `team_fire_avoidance` scenario.
+- `docs-dev/q3a-botlib-ctf-role-route-2026-06-21.md`: default-off CTF match role/lane timed route-goal owner proof and promoted `ctf_role_route` scenario.
 - `docs-dev/q3a-botlib-live-item-timing-consumers-2026-06-18.md`: live pickup and observed respawn timing consumer frames/results plus conservative timing gates.
 - `docs-dev/q3a-botlib-special-item-utility-2026-06-18.md`: special-item utility buckets for damage boosts, protection, invisibility, mobility, utility powerups, techs, and CTF objectives.
 - `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`: deterministic team-objective role policy helpers and role-policy status output.
@@ -1030,7 +1035,7 @@ Implementation checklist:
 - `sv_bot_frame_command_smoke 13` requests natural `TRAVEL_BARRIERJUMP`, uses the direct outgoing-reachability fallback for the packaged `mm-rage.aas` barrier candidate, and reports `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=292`, `last_travel_type_goal_start_goal_area=318`, `travel_type_goal_resolved=8`, `travel_type_goal_assignments=8`, `last_reachability=319`, `last_reachability_type=4`, `movement_state_jump_commands=8`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`.
 - Normal, stalled, forced-jump, and position-goal regression smokes keep `travel_type_goal_requests=0`, `travel_type_goal_start_warps=0`, `route_failures=0`, and `pass=1`.
 - Natural map-backed crouch, swim, and waterjump validation remains pending.
-- Full door/elevator cooperation remains pending above the route-only `TRAVEL_ELEVATOR` AAS reachability proof.
+- Campaign-specific door/elevator sequencing remains pending above the route-only `TRAVEL_ELEVATOR` AAS reachability proof and the later cvar-gated coop source/hold proof.
 - Implementation logs: `docs-dev/q3a-botlib-nav-natural-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-ladder-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-walkoffledge-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-elevator-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-barrierjump-travel-goal-2026-06-18.md`.
 
 2026-06-18 nav rocket-jump route policy slice:
@@ -1203,9 +1208,10 @@ Implementation checklist:
   - [ ] Avoid spawn camping loops where possible.
 - [ ] TDM:
   - [x] Objective-side role, item-role, and friendly-fire policy helper metadata.
+  - [x] Default-off role/lane timed route-owner proof for live TDM match policy.
   - [ ] Team-aware target selection.
-  - [ ] Item role split.
-  - [ ] Avoid friendly fire where rules require it.
+  - [x] Item role split.
+  - [x] Avoid friendly fire where rules require it through a default-off live attack-input suppression bridge.
 - [ ] CTF:
   - [x] Objective helper scaffold and status vocabulary for enemy flag, own flag return, neutral flag, and base defense assignments.
   - [x] Deterministic enemy-flag target selection from world flags, dropped flags, carriers, and smoke-friendly enemy anchors.
@@ -1216,7 +1222,8 @@ Implementation checklist:
   - [x] Deterministic role-policy helpers for attacker, defender, returner, and support selection with status output.
   - [x] Lane/depth helper metadata for attack, defense, midfield, carrier support, dropped-flag response, and own-base return lanes.
   - [x] Attack/defense/midfield role-policy helper metadata.
-  - [ ] Live attack/defend/mid role consumption in route/combat ownership.
+  - [x] Live attack/defend/mid role consumption in route ownership through a default-off CTF timed route-goal proof.
+  - [ ] Live attack/defend/mid role consumption in combat ownership.
   - [ ] Flag carrier support.
   - [ ] Dropped flag response.
   - [ ] Base return priorities.
@@ -1233,7 +1240,7 @@ Implementation checklist:
   - [x] Coop context/policy helper metadata for follow, wait, regroup, lead, and support intents.
   - [x] Resource context/policy helper metadata for self-pickup, team-share, teammate-reserve, enemy-deny, and objective-resource decisions.
   - [x] Follow/wait/lead commands.
-  - [ ] Door/elevator cooperation.
+  - [x] Door/elevator cooperation.
   - [x] Monster target sharing.
   - [x] Resource sharing.
   - [x] Anti-blocking behavior.
@@ -1242,9 +1249,9 @@ Implementation checklist:
 
 - `bot_objectives.*` adds a WORR-native helper boundary for the reserved `sg_bot_frame_command_smoke_team_objective=1` lane. It exposes deterministic flag item/team helpers, target builders, objective assignment structs, role/type names, and counters for future CTF/team-objective policy.
 - `bot_brain.*` now surfaces compact team-objective fields on `q3a_bot_frame_command_status` and a dedicated `q3a_bot_objective_status` line with evaluation, assignment, route, reach, flag pickup/capture, role, and latest-objective facts.
-- The follow-up proof slice adds target-source facts for world flags, dropped flags, carriers, and enemy-team anchors; deterministic enemy-flag target selection; one-call objective assignment; route-goal handoff validation; and entity-aware route/pickup/capture record overloads. Later helper lanes add deterministic role-policy selection, role-policy status, and lane/depth metadata, including carrier-support, dropped-flag response, and own-base-return lanes. The generic item-touch hook deliberately does not infer CTF captures; authoritative CTF pickup, return, and capture event hooks feed objective proof counters from `g_capture.cpp`, and mode `23` now passes as a smoke-level team-objective proof. Autonomous role consumption across live CTF/TDM flows remains pending.
-- The FFA/TDM helper slice adds objective-side match-policy, item-role, and friendly-fire metadata without changing live command ownership. It gives later FFA/TDM consumers deterministic scoring-participant, lane, item-role, and target-block recommendations while leaving actual FFA/TDM behavior integration pending. The latest coop/resource helper lane adds follow/wait/regroup/lead/support intent results and resource-sharing/denial policy results; follow/regroup/support now feed the `coop_leader` timed route owner with a promoted compact-status `coop_leader_route` scenario gate, no-leader LeadAdvance can own a short timed route through default-off `sg_bot_coop_lead_advance`, a default-off `sg_bot_coop_progress_wait` bridge proves WaitForLeader can own a stop-and-face command, a default-off `sg_bot_coop_interaction_retry` bridge proves route-detected interactions can own wait/use retry commands, default-off `sg_bot_coop_resource_share` proves reserve-for-teammate resource policy can defer item route-goal candidates for another coop bot, default-off `sg_bot_coop_anti_blocking` proves close-to-leader anti-blocking can own a short reverse/strafe command, and default-off `sg_bot_coop_target_share` proves support-policy bots can adopt a teammate's current hostile monster target from the blackboard. Autonomous coop decision-making and campaign-specific door/elevator coordination remain pending.
-- Implementation logs: `docs-dev/q3a-botlib-team-objective-helper-scaffold-2026-06-18.md`, `docs-dev/q3a-botlib-team-objective-proof-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-depth-2026-06-18.md`, `docs-dev/q3a-botlib-ffa-tdm-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`, `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-leader-route-scenario-2026-06-21.md`, `docs-dev/q3a-botlib-coop-lead-advance-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-resource-share-route-selection-2026-06-21.md`, `docs-dev/q3a-botlib-coop-anti-blocking-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-target-share-2026-06-21.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-ctf-objective-gameplay-hooks-2026-06-18.md`.
+- The follow-up proof slice adds target-source facts for world flags, dropped flags, carriers, and enemy-team anchors; deterministic enemy-flag target selection; one-call objective assignment; route-goal handoff validation; and entity-aware route/pickup/capture record overloads. Later helper lanes add deterministic role-policy selection, role-policy status, and lane/depth metadata, including carrier-support, dropped-flag response, and own-base-return lanes. The generic item-touch hook deliberately does not infer CTF captures; authoritative CTF pickup, return, and capture event hooks feed objective proof counters from `g_capture.cpp`, and mode `23` now passes as a smoke-level team-objective proof. Default-off `sg_bot_team_role_route` now proves live TDM match role/lane policy can consume the generic timed route-goal owner in mode `32`; default-off `sg_bot_team_item_roles` now proves live TDM item-route selection can consume match item-role policy in mode `33`; default-off `sg_bot_team_fire_avoidance` now proves live TDM friendly-fire policy can suppress attack input in mode `34`; default-off `sg_bot_ctf_role_route` now proves live CTF match role/lane policy can consume the same timed route-goal owner in mode `35`; durable autonomous combat and flag-objective role behavior across live FFA/TDM/CTF flows remains pending.
+- The FFA/TDM helper slice adds objective-side match-policy, item-role, and friendly-fire metadata. It gives later FFA/TDM consumers deterministic scoring-participant, lane, item-role, and target-block recommendations; default-off `sg_bot_team_role_route` consumes that match policy as a timed route-goal owner for a TDM proof, default-off `sg_bot_team_item_roles` consumes item-role policy as a pickup-candidate score bridge for a TDM proof, and default-off `sg_bot_team_fire_avoidance` consumes friendly-fire policy as a live attack-input suppression bridge for a TDM proof, while broader FFA/TDM behavior integration remains pending. CTF match role/lane policy now also has a default-off route-owner consumer through `sg_bot_ctf_role_route`, but carrier support, dropped-flag response, base-return priorities, and CTF combat ownership remain future work. The latest coop/resource helper lane adds follow/wait/regroup/lead/support intent results and resource-sharing/denial policy results; follow/regroup/support now feed the `coop_leader` timed route owner with a promoted compact-status `coop_leader_route` scenario gate, no-leader LeadAdvance can own a short timed route through default-off `sg_bot_coop_lead_advance`, a default-off `sg_bot_coop_progress_wait` bridge proves WaitForLeader can own a stop-and-face command, a default-off `sg_bot_coop_interaction_retry` bridge proves route-detected interactions can own wait/use retry commands, default-off `sg_bot_coop_resource_share` proves reserve-for-teammate resource policy can defer item route-goal candidates for another coop bot, default-off `sg_bot_coop_anti_blocking` proves close-to-leader anti-blocking can own a short reverse/strafe command, default-off `sg_bot_coop_target_share` proves support-policy bots can adopt a teammate's current hostile monster target from the blackboard, and default-off `sg_bot_coop_door_elevator` proves a source bot can own mover/elevator wait/use interaction while a teammate holds. Autonomous coop decision-making and broader campaign-specific trigger/key/objective coordination remain pending.
+- Implementation logs: `docs-dev/q3a-botlib-team-objective-helper-scaffold-2026-06-18.md`, `docs-dev/q3a-botlib-team-objective-proof-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-depth-2026-06-18.md`, `docs-dev/q3a-botlib-ffa-tdm-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-route-2026-06-21.md`, `docs-dev/q3a-botlib-team-item-role-selection-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-role-route-2026-06-21.md`, `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`, `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-leader-route-scenario-2026-06-21.md`, `docs-dev/q3a-botlib-coop-lead-advance-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-resource-share-route-selection-2026-06-21.md`, `docs-dev/q3a-botlib-coop-anti-blocking-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-target-share-2026-06-21.md`, `docs-dev/q3a-botlib-coop-door-elevator-2026-06-21.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-ctf-objective-gameplay-hooks-2026-06-18.md`.
 
 Exit criteria:
 
@@ -1418,6 +1425,9 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-teleporter-escape-route-owner-2026-06-21.md`: teleporter escape timed route-goal owner and status log.
 - [x] `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`: coop leader timed route-goal owner and status log.
 - [x] `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`: coop WaitForLeader command-owner status and scenario log.
+- [x] `docs-dev/q3a-botlib-coop-door-elevator-2026-06-21.md`: coop door/elevator source-owner and teammate hold command proof log.
+- [x] `docs-dev/q3a-botlib-team-role-route-2026-06-21.md`: TDM match role/lane timed route-goal owner proof log.
+- [x] `docs-dev/q3a-botlib-ctf-role-route-2026-06-21.md`: CTF match role/lane timed route-goal owner proof log.
 - [x] `docs-dev/q3a-botlib-live-item-timing-consumers-2026-06-18.md`: live item timing consumer and status-depth log.
 - [x] `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`: team/coop/resource policy helper log.
 - [x] `docs-dev/q2aas-reference-map-coverage-round-2026-06-18.md`: reference-map required-feature diagnostic coverage log.
@@ -1591,28 +1601,33 @@ Exit criteria:
 
 The remaining work is now concentrated in depth, breadth, and release hardening
 rather than missing core proof-helper APIs. The default installed scenario suite
-now reports 22 passed, 0 failed, 0 timed out, 0 errored, and 0 pending. Modes
-`20` through `30` are implemented smoke scenarios, `trace_checked_corner_cutting`
+now reports 27 passed, 0 failed, 0 timed out, 0 errored, and 0 pending. Modes
+`20` through `35` are implemented smoke scenarios, `trace_checked_corner_cutting`
 reuses the route-rich mode `21` proof, `coop_match_readiness`,
 `coop_leader_route`, and `coop_progress_wait` run mode `3` under coop cvars, while
 `coop_interaction_retry` reuses the route-rich elevator mode `12` under coop
 cvars, `coop_lead_advance` uses dedicated one-bot coop mode `27`, and
-`coop_resource_share`, `coop_anti_blocking`, and `coop_target_share` use
-dedicated two-bot coop modes `28`, `29`, and `30`.
+`coop_resource_share`, `coop_anti_blocking`, `coop_target_share`, and
+`coop_door_elevator` use dedicated two-bot coop modes `28`, `29`, `30`, and
+`31`; `team_role_route` uses dedicated four-bot TDM mode `32`,
+`team_item_roles` uses dedicated four-bot TDM mode `33`,
+`team_fire_avoidance` uses dedicated four-bot TDM mode `34`, and
+`ctf_role_route` uses dedicated four-bot CTF mode `35`.
 
 Those promoted rows are still deliberately smoke-level proofs: follow-up work
 should make enemy engagement and aim behavior less scripted, drive weapon and
 inventory dispatch from richer combat/inventory decisions, exercise health,
 armor, and item-timer behavior under more map/resource states, and turn the
 team/readiness proofs into durable role selection across real FFA, TDM, CTF, and
-coop flows.
+coop flows beyond the current default-off TDM/CTF route-owner and TDM item-route
+selection proofs.
 
 Broader outstanding plan work remains in Phase 4 fairness and blackboard state
 consumers, Phase 5 broader natural-movement/reference-map evidence, Phase 6
-campaign-specific door/elevator/trigger coordination above the interaction
-retry bridge, Phase 7 live FFA/TDM/CTF role consumption plus deeper coop
-behavior, and Phase 9 broader reference-map, CI, strict performance-budget, and
-fresh long-soak CPU baseline coverage.
+campaign-specific trigger/key/objective coordination above the interaction
+retry and door/elevator proof bridges, Phase 7 broader live FFA/TDM/CTF role
+consumption plus deeper coop behavior, and Phase 9 broader reference-map, CI, strict
+performance-budget, and fresh long-soak CPU baseline coverage.
 
 Round-close evidence is tracked in
 `docs-dev/q3a-botlib-docs-progress-tracking-round-2026-06-18.md` and

@@ -70,6 +70,11 @@ Implemented:
 - `coop_resource_share`: mode `28` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_resource_share 1`, verifies coop resource-share policy reserves route-goal candidates for teammates and defers them in item scoring.
 - `coop_anti_blocking`: mode `29` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_anti_blocking 1`, verifies close-to-leader coop policy can own a short anti-blocking movement command.
 - `coop_target_share`: mode `30` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_target_share 1`, verifies a coop bot can adopt a teammate's hostile non-client target from the blackboard.
+- `coop_door_elevator`: mode `31` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_door_elevator 1`, verifies one coop bot can own a route-detected mover/elevator wait/use interaction while a teammate holds.
+- `team_role_route`: mode `32` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_team_role_route 1`, verifies TDM match role/lane policy can own timed route-goal commands.
+- `team_item_roles`: mode `33` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_team_item_roles 1`, verifies TDM match item-role policy can shape live pickup-goal scoring.
+- `team_fire_avoidance`: mode `34` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_team_fire_avoidance 1`, verifies TDM friendly-fire policy can suppress live attack input before `BUTTON_ATTACK` is applied.
+- `ctf_role_route`: mode `35` with `deathmatch 1`, `g_gametype 5`, and `sg_bot_ctf_role_route 1`, verifies CTF match role/lane policy can own timed route-goal commands.
 - `coop_progress_wait`: mode `3` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_progress_wait 1`, verifies WaitForLeader coop policy consumption reaches command ownership.
 - `coop_interaction_retry`: mode `12` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_interaction_retry 1`, verifies detected route interactions can own wait/use command retry windows.
 
@@ -79,7 +84,7 @@ Manual long-running:
 
 Pending placeholders:
 
-- None in the default catalog after the 2026-06-18 promotion round.
+- None in the default catalog after the 2026-06-21 promotion round.
 
 Pending rows are reported but do not fail the suite unless `--fail-on-pending` is passed. With the current catalog, `--scenario pending` is a no-launch empty report unless new future rows are added.
 
@@ -109,12 +114,17 @@ Current optional discovery families:
 - `route_target_stabilization_counters`: route-target stabilization checks, applications, skips, and last sampled target metadata from frame-command status.
 - `trace_checked_corner_cutting_signals`: trace-checked corner-cut candidate, trace, accept/reject, and last-corner metadata.
 - `team_mode_readiness_signals`: team-policy, objective role/lane, and blackboard team-role signals used by FFA/TDM/CTF/coop readiness work.
+- `team_role_route_counters`: default-off match role/lane route-owner requests, activations, route requests, and latest role metadata from frame-command status.
+- `ctf_role_route_counters`: default-off CTF match role/lane route-owner requests, activations, route requests, and latest role metadata from frame-command status.
+- `team_fire_avoidance_counters`: default-off TDM friendly-fire policy evaluations, live attack suppressions, and latest blocked target/line metadata from frame-command status.
+- `team_item_role_counters`: default-off TDM match item-role scoring bridge evaluations, selected pickup goals, and latest role/category metadata from nav policy status.
 - `coop_leader_route_counters`: timed route-goal activation, refresh, source-selection, deferral, and last-leader metadata from frame-command and compact coop command status.
 - `coop_lead_advance_counters`: compact coop command-owner counters for the default-off no-leader LeadAdvance timed route-goal proof.
 - `coop_progress_wait_counters`: compact coop command-owner counters for the default-off WaitForLeader progression-wait proof.
 - `coop_interaction_retry_counters`: compact coop command-owner counters for the default-off route interaction wait/use retry proof.
 - `coop_anti_block_counters`: compact coop command-owner counters for the default-off close-leader anti-blocking proof.
 - `coop_target_share_counters`: compact coop target-sharing counters for blackboard source scans, adoptions, and last shared target/source metadata.
+- `coop_door_elevator_counters`: compact coop command-owner counters for source mover/elevator interaction ownership, teammate hold commands, and last interaction metadata.
 
 These fields are visible in text, JSON, Markdown, and pending-gap reports when present. They do not satisfy or fail scenario gates unless a scenario explicitly promotes one of them into `checks` or `marker_checks`.
 
@@ -134,7 +144,7 @@ Analyze an existing JSON report, usually `.tmp\bot_scenarios\latest_report.json`
 python tools\bot_scenarios\run_bot_scenarios.py --scenario pending --pending-gap-report .tmp\bot_scenarios\latest_report.json --format text --json-out .tmp\bot_scenarios\pending_gap_report.json
 ```
 
-This command does not launch the game. It compares pending placeholders against the report fixture and prints whether each scenario is ready for harness promotion or blocked by missing scenario rows, wrong smoke modes, pending fixture rows, absent status/marker metrics, absent policy-consumer evidence, or failed promotion metric checks. After modes `20` through `30`, `trace_checked_corner_cutting`, `coop_match_readiness`, `coop_leader_route`, `coop_progress_wait`, and `coop_interaction_retry` were promoted, the default pending set is empty.
+This command does not launch the game. It compares pending placeholders against the report fixture and prints whether each scenario is ready for harness promotion or blocked by missing scenario rows, wrong smoke modes, pending fixture rows, absent status/marker metrics, absent policy-consumer evidence, or failed promotion metric checks. After modes `20` through `33`, `trace_checked_corner_cutting`, `coop_match_readiness`, `coop_leader_route`, `coop_progress_wait`, and `coop_interaction_retry` were promoted, the default pending set is empty.
 
 Raw reserved-mode logs can be included when reserved modes have been run outside the normal scenario catalog:
 
@@ -159,6 +169,11 @@ The promoted source-backed smoke mode numbers are fixed for compatibility with s
 - `coop_resource_share`: mode `28`
 - `coop_anti_blocking`: mode `29`
 - `coop_target_share`: mode `30`
+- `coop_door_elevator`: mode `31`
+- `team_role_route`: mode `32`
+- `team_item_roles`: mode `33`
+- `team_fire_avoidance`: mode `34`
+- `ctf_role_route`: mode `35`
 
 Additional promoted rows reuse existing smoke coverage:
 

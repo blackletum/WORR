@@ -667,6 +667,9 @@ class BotScenarioHarnessTests(unittest.TestCase):
         resource_share = scenarios["coop_resource_share"]
         anti_block = scenarios["coop_anti_blocking"]
         target_share = scenarios["coop_target_share"]
+        door_elevator = scenarios["coop_door_elevator"]
+        team_role_route = scenarios["team_role_route"]
+        team_item_roles = scenarios["team_item_roles"]
         progress_wait = scenarios["coop_progress_wait"]
         interaction_retry = scenarios["coop_interaction_retry"]
         report = harness.catalog_report([
@@ -681,12 +684,15 @@ class BotScenarioHarnessTests(unittest.TestCase):
             resource_share,
             anti_block,
             target_share,
+            door_elevator,
+            team_role_route,
+            team_item_roles,
             progress_wait,
             interaction_retry,
         ])
         rows = {row["name"]: row for row in report["scenarios"]}
 
-        self.assertEqual(report["summary"]["implemented"], 13)
+        self.assertEqual(report["summary"]["implemented"], 16)
         self.assertEqual(report["summary"]["pending"], 0)
         self.assertEqual(rows["team_objective"]["smoke_mode"], 23)
         self.assertEqual(rows["aim_fairness_policy_integration"]["smoke_mode"], 24)
@@ -699,6 +705,9 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(rows["coop_resource_share"]["smoke_mode"], 28)
         self.assertEqual(rows["coop_anti_blocking"]["smoke_mode"], 29)
         self.assertEqual(rows["coop_target_share"]["smoke_mode"], 30)
+        self.assertEqual(rows["coop_door_elevator"]["smoke_mode"], 31)
+        self.assertEqual(rows["team_role_route"]["smoke_mode"], 32)
+        self.assertEqual(rows["team_item_roles"]["smoke_mode"], 33)
         self.assertEqual(rows["coop_progress_wait"]["smoke_mode"], 3)
         self.assertEqual(rows["coop_interaction_retry"]["smoke_mode"], 12)
         self.assertEqual(
@@ -753,6 +762,30 @@ class BotScenarioHarnessTests(unittest.TestCase):
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
                 {"name": "sg_bot_coop_target_share", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["coop_door_elevator"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+                {"name": "sg_bot_coop_door_elevator", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["team_role_route"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "1"},
+                {"name": "g_gametype", "value": "3"},
+                {"name": "sg_bot_team_role_route", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["team_item_roles"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "1"},
+                {"name": "g_gametype", "value": "3"},
+                {"name": "sg_bot_team_item_roles", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -1032,6 +1065,122 @@ class BotScenarioHarnessTests(unittest.TestCase):
             target_share_marker_required,
         )
 
+        door_elevator_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["coop_door_elevator"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 31),
+            door_elevator_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "door_elevator", "eq", 1),
+            door_elevator_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target", "ge", 2),
+            door_elevator_marker_required,
+        )
+        self.assertIn(
+            (harness.NAV_POLICY_STATUS_MARKER, "nav_interaction_elevator_activations", "ge", 1),
+            door_elevator_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_door_elevator_source_activations", "ge", 1),
+            door_elevator_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_door_elevator_source_commands", "ge", 1),
+            door_elevator_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_door_elevator_hold_commands", "ge", 1),
+            door_elevator_marker_required,
+        )
+
+        team_role_route_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["team_role_route"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 32),
+            team_role_route_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "team_role_route", "eq", 1),
+            team_role_route_marker_required,
+        )
+        self.assertIn(
+            (harness.MATCH_READINESS_STATUS_MARKER, "tdm_pass", "eq", 1),
+            team_role_route_marker_required,
+        )
+        self.assertIn(
+            (harness.OBJECTIVE_STATUS_MARKER, "team_objective_match_policy_tdm", "ge", 1),
+            team_role_route_marker_required,
+        )
+        self.assertIn(
+            (harness.STATUS_MARKER, "last_timed_route_goal_kind", "eq", 5),
+            team_role_route_marker_required,
+        )
+        self.assertIn(
+            (harness.STATUS_MARKER, "team_role_route_activations", "ge", 1),
+            team_role_route_marker_required,
+        )
+        self.assertIn(
+            (harness.STATUS_MARKER, "team_role_route_route_requests", "ge", 1),
+            team_role_route_marker_required,
+        )
+        self.assertIn(
+            (harness.STATUS_MARKER, "last_team_role_route_mode", "eq", 2),
+            team_role_route_marker_required,
+        )
+        self.assertIn(
+            (harness.STATUS_MARKER, "last_team_role_route_role", "ge", 1),
+            team_role_route_marker_required,
+        )
+        self.assertIn(
+            (harness.STATUS_MARKER, "last_team_role_route_lane", "ge", 1),
+            team_role_route_marker_required,
+        )
+
+        team_item_roles_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["team_item_roles"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 33),
+            team_item_roles_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "team_item_roles", "eq", 1),
+            team_item_roles_marker_required,
+        )
+        self.assertIn(
+            (harness.MATCH_READINESS_STATUS_MARKER, "tdm_pass", "eq", 1),
+            team_item_roles_marker_required,
+        )
+        self.assertIn(
+            (
+                harness.OBJECTIVE_STATUS_MARKER,
+                "team_objective_item_role_policy_selections",
+                "ge",
+                1,
+            ),
+            team_item_roles_marker_required,
+        )
+        self.assertIn(
+            (harness.NAV_POLICY_STATUS_MARKER, "team_item_role_selected_goals", "ge", 1),
+            team_item_roles_marker_required,
+        )
+        self.assertIn(
+            (harness.NAV_POLICY_STATUS_MARKER, "last_team_item_role_mode", "eq", 2),
+            team_item_roles_marker_required,
+        )
+        self.assertIn(
+            (harness.NAV_POLICY_STATUS_MARKER, "last_team_item_role_item_role", "ge", 1),
+            team_item_roles_marker_required,
+        )
+
         progress_wait_marker_required = {
             (check["source"], check["metric"], check["op"], check["expected"])
             for check in rows["coop_progress_wait"]["required_marker_metrics"]
@@ -1193,13 +1342,72 @@ class BotScenarioHarnessTests(unittest.TestCase):
             target_share_command.index("sv_bot_frame_command_smoke"),
         )
 
+        door_elevator_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            door_elevator,
+            "basew",
+            "mm-rage",
+            27979,
+            "coop_door_elevator",
+        )
+        self.assertEqual(door_elevator_command[door_elevator_command.index("coop") + 1], "1")
+        self.assertEqual(
+            door_elevator_command[door_elevator_command.index("sg_bot_coop_door_elevator") + 1],
+            "1",
+        )
+        self.assertLess(
+            door_elevator_command.index("sg_bot_coop_door_elevator"),
+            door_elevator_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        team_role_route_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            team_role_route,
+            "basew",
+            "mm-rage",
+            27980,
+            "team_role_route",
+        )
+        self.assertEqual(team_role_route_command[team_role_route_command.index("deathmatch") + 1], "1")
+        self.assertEqual(team_role_route_command[team_role_route_command.index("g_gametype") + 1], "3")
+        self.assertEqual(
+            team_role_route_command[team_role_route_command.index("sg_bot_team_role_route") + 1],
+            "1",
+        )
+        self.assertLess(
+            team_role_route_command.index("sg_bot_team_role_route"),
+            team_role_route_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        team_item_roles_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            team_item_roles,
+            "basew",
+            "mm-rage",
+            27983,
+            "team_item_roles",
+        )
+        self.assertEqual(team_item_roles_command[team_item_roles_command.index("deathmatch") + 1], "1")
+        self.assertEqual(team_item_roles_command[team_item_roles_command.index("g_gametype") + 1], "3")
+        self.assertEqual(
+            team_item_roles_command[team_item_roles_command.index("sg_bot_team_item_roles") + 1],
+            "1",
+        )
+        self.assertLess(
+            team_item_roles_command.index("sg_bot_team_item_roles"),
+            team_item_roles_command.index("sv_bot_frame_command_smoke"),
+        )
+
         progress_wait_command = harness.build_command(
             pathlib.Path(".install/worr_ded_x86_64.exe"),
             pathlib.Path(".install"),
             progress_wait,
             "basew",
             "mm-rage",
-            27979,
+            27981,
             "coop_progress_wait",
         )
         self.assertEqual(progress_wait_command[progress_wait_command.index("coop") + 1], "1")
@@ -1218,7 +1426,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             interaction_retry,
             "basew",
             "mm-rage",
-            27980,
+            27982,
             "coop_interaction_retry",
         )
         self.assertEqual(interaction_retry_command[interaction_retry_command.index("coop") + 1], "1")
@@ -1246,6 +1454,9 @@ class BotScenarioHarnessTests(unittest.TestCase):
         resource_share = scenarios["coop_resource_share"]
         anti_block = scenarios["coop_anti_blocking"]
         target_share = scenarios["coop_target_share"]
+        door_elevator = scenarios["coop_door_elevator"]
+        team_role_route = scenarios["team_role_route"]
+        team_item_roles = scenarios["team_item_roles"]
         interaction_retry = scenarios["coop_interaction_retry"]
 
         trace_text = "\n".join((
@@ -1461,6 +1672,212 @@ class BotScenarioHarnessTests(unittest.TestCase):
             if not result["passed"]
         ]
         self.assertEqual(target_share_failed, [])
+
+        door_elevator_text = "\n".join((
+            f"{harness.SCENARIO_BEGIN_MARKER} mode=31 combat=0 "
+            "weapon_switch=0 item_focus=0 team_objective=0 target=2 "
+            "gametype=0 door_elevator=1",
+            "q3a_bot_frame_command_status pass=1 route_commands=12 "
+            "route_failures=0",
+            "q3a_bot_nav_policy_status nav_interaction_elevator_activations=1",
+            "q3a_bot_coop_readiness_status pass=1 coop=1 bots=2 "
+            "playing=2 spectators=0 queued=0",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=0 team_mode=0 gametype=0 bots=2 playing=2 "
+            "spectators=0 queued=0 free=2 red=0 blue=0",
+            "q3a_bot_coop_command_status "
+            "coop_door_elevator_requests=8 "
+            "coop_door_elevator_source_activations=1 "
+            "coop_door_elevator_source_commands=4 "
+            "coop_door_elevator_hold_commands=4 "
+            "last_coop_door_elevator_client=1 "
+            "last_coop_door_elevator_source_client=0 "
+            "last_coop_door_elevator_action=3 "
+            "last_coop_door_elevator_kind=3 "
+            "last_coop_door_elevator_entity=17 "
+            "last_coop_door_elevator_intent=5 "
+            "last_coop_door_elevator_intent_name=support_combat",
+        ))
+        door_elevator_marker_metrics = harness.parse_marker_metrics(
+            door_elevator_text,
+            {check.marker for check in door_elevator.marker_checks},
+        )
+        door_elevator_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, door_elevator_marker_metrics)
+                for check in door_elevator.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(door_elevator_failed, [])
+
+        team_role_route_text = "\n".join((
+            f"{harness.SCENARIO_BEGIN_MARKER} mode=32 combat=0 "
+            "weapon_switch=0 item_focus=0 team_objective=0 target=4 "
+            "gametype=3 team_role_route=1",
+            "q3a_bot_frame_command_status pass=1 route_commands=16 "
+            "route_failures=0 last_timed_route_goal_kind=5 "
+            "team_role_route_requests=16 "
+            "team_role_route_policy_selections=16 "
+            "team_role_route_activations=4 "
+            "team_role_route_route_requests=12 "
+            "last_team_role_route_client=2 "
+            "last_team_role_route_mode=2 "
+            "last_team_role_route_mode_name=team_deathmatch "
+            "last_team_role_route_role=5 "
+            "last_team_role_route_role_name=midfielder "
+            "last_team_role_route_lane=3 "
+            "last_team_role_route_lane_name=midfield "
+            "last_team_role_route_priority=780 "
+            "last_team_role_route_goal_distance_sq=802816",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=1 "
+            "deathmatch=1 team_mode=1 gametype=3 bots=4 playing=4 "
+            "spectators=0 queued=0 free=0 red=2 blue=2",
+            "q3a_bot_objective_status "
+            "team_objective_match_policy_tdm=16",
+        ))
+        team_role_route_marker_metrics = harness.parse_marker_metrics(
+            team_role_route_text,
+            {check.marker for check in team_role_route.marker_checks},
+        )
+        team_role_route_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, team_role_route_marker_metrics)
+                for check in team_role_route.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(team_role_route_failed, [])
+
+        ctf_role_route = harness.scenario_map()["ctf_role_route"]
+        ctf_role_route_text = "\n".join((
+            f"{harness.SCENARIO_BEGIN_MARKER} mode=35 combat=0 "
+            "weapon_switch=0 item_focus=0 team_objective=0 target=4 "
+            "gametype=5 ctf_role_route=1",
+            "q3a_bot_frame_command_status pass=1 route_commands=16 "
+            "route_failures=0 last_timed_route_goal_kind=6 "
+            "ctf_role_route_requests=16 "
+            "ctf_role_route_policy_selections=16 "
+            "ctf_role_route_activations=4 "
+            "ctf_role_route_route_requests=12 "
+            "last_ctf_role_route_client=2 "
+            "last_ctf_role_route_mode=3 "
+            "last_ctf_role_route_mode_name=capture_the_flag "
+            "last_ctf_role_route_role=5 "
+            "last_ctf_role_route_role_name=midfielder "
+            "last_ctf_role_route_lane=3 "
+            "last_ctf_role_route_lane_name=midfield "
+            "last_ctf_role_route_priority=760 "
+            "last_ctf_role_route_goal_distance_sq=802816",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=1 team_mode=1 gametype=5 bots=4 playing=4 "
+            "spectators=0 queued=0 free=0 red=2 blue=2",
+            "q3a_bot_objective_status "
+            "team_objective_match_policy_ctf=16",
+        ))
+        ctf_role_route_marker_metrics = harness.parse_marker_metrics(
+            ctf_role_route_text,
+            {check.marker for check in ctf_role_route.marker_checks},
+        )
+        ctf_role_route_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, ctf_role_route_marker_metrics)
+                for check in ctf_role_route.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(ctf_role_route_failed, [])
+
+        team_item_roles_text = "\n".join((
+            f"{harness.SCENARIO_BEGIN_MARKER} mode=33 combat=0 "
+            "weapon_switch=0 item_focus=0 team_objective=0 target=4 "
+            "gametype=3 team_item_roles=1",
+            "q3a_bot_frame_command_status pass=1 route_commands=16 "
+            "route_failures=0 item_goal_assignments=4",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=1 "
+            "deathmatch=1 team_mode=1 gametype=3 bots=4 playing=4 "
+            "spectators=0 queued=0 free=0 red=2 blue=2",
+            "q3a_bot_objective_status "
+            "team_objective_match_policy_tdm=16 "
+            "team_objective_item_role_policy_evaluations=64 "
+            "team_objective_item_role_policy_selections=64",
+            "q3a_bot_nav_policy_status "
+            "team_item_role_evaluations=64 "
+            "team_item_role_selections=64 "
+            "team_item_role_score_boosts=64 "
+            "team_item_role_selected_goals=4 "
+            "last_team_item_role_client=2 "
+            "last_team_item_role_mode=2 "
+            "last_team_item_role_mode_name=team_deathmatch "
+            "last_team_item_role_role=5 "
+            "last_team_item_role_role_name=midfielder "
+            "last_team_item_role_lane=3 "
+            "last_team_item_role_lane_name=midfield "
+            "last_team_item_role_category=4 "
+            "last_team_item_role_category_name=weapon "
+            "last_team_item_role_item_role=2 "
+            "last_team_item_role_item_role_name=weapon_control "
+            "last_team_item_role_priority=175 "
+            "last_team_item_role_score_boost=175 "
+            "last_team_item_role_entity=32 "
+            "last_team_item_role_item=53 "
+            "last_team_item_role_score=860",
+        ))
+        team_item_roles_marker_metrics = harness.parse_marker_metrics(
+            team_item_roles_text,
+            {check.marker for check in team_item_roles.marker_checks},
+        )
+        team_item_roles_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, team_item_roles_marker_metrics)
+                for check in team_item_roles.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(team_item_roles_failed, [])
+
+        team_fire_avoidance = harness.scenario_map()["team_fire_avoidance"]
+        team_fire_avoidance_text = "\n".join((
+            f"{harness.SCENARIO_BEGIN_MARKER} mode=34 combat=engage_enemy "
+            "weapon_switch=0 item_focus=0 team_objective=0 target=4 "
+            "gametype=3 team_fire_avoidance=1",
+            "q3a_bot_frame_command_status pass=1 route_commands=16 "
+            "route_failures=0 team_fire_avoidance_evaluations=4 "
+            "team_fire_avoidance_blocks=2 "
+            "team_fire_avoidance_line_blocks=2 "
+            "last_team_fire_avoidance_client=0 "
+            "last_team_fire_avoidance_target_client=1 "
+            "last_team_fire_avoidance_friendly_line=1 "
+            "last_team_fire_avoidance_target_allowed=1 "
+            "last_team_fire_avoidance_blocked=1 "
+            "last_team_fire_avoidance_reason=friendly_line_damage",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=1 "
+            "deathmatch=1 team_mode=1 gametype=3 bots=4 playing=4 "
+            "spectators=0 queued=0 free=0 red=2 blue=2",
+            "q3a_bot_action_status action_attack_decisions=4 "
+            "action_applied_attack_buttons=2",
+            "q3a_bot_objective_status "
+            "team_objective_match_policy_tdm=16 "
+            "team_objective_friendly_fire_policy_evaluations=8 "
+            "team_objective_friendly_fire_avoidance=2",
+        ))
+        team_fire_avoidance_marker_metrics = harness.parse_marker_metrics(
+            team_fire_avoidance_text,
+            {check.marker for check in team_fire_avoidance.marker_checks},
+        )
+        team_fire_avoidance_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, team_fire_avoidance_marker_metrics)
+                for check in team_fire_avoidance.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(team_fire_avoidance_failed, [])
 
         interaction_retry_text = "\n".join((
             "q3a_bot_frame_command_status pass=1 route_failures=0",
@@ -1739,7 +2156,31 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "q3a_bot_frame_command_status pass=1 route_failures=0 expected_min_commands=1 "
             "route_target_stabilization_checks=3 route_target_stabilizations=1 "
             "route_target_stabilization_skips=2 last_route_target_original_distance_sq=16 "
-            "last_route_target_stable_distance_sq=128 last_route_target_stable_point_index=2",
+            "last_route_target_stable_distance_sq=128 last_route_target_stable_point_index=2 "
+            "team_role_route_requests=4 team_role_route_policy_selections=4 "
+            "team_role_route_activations=2 team_role_route_route_requests=3 "
+            "last_team_role_route_client=1 last_team_role_route_mode=2 "
+            "last_team_role_route_mode_name=team_deathmatch "
+            "last_team_role_route_role=5 last_team_role_route_role_name=midfielder "
+            "last_team_role_route_lane=3 last_team_role_route_lane_name=midfield "
+            "last_team_role_route_priority=780 "
+            "last_team_role_route_goal_distance_sq=802816 "
+            "ctf_role_route_requests=4 ctf_role_route_policy_selections=4 "
+            "ctf_role_route_activations=2 ctf_role_route_route_requests=3 "
+            "last_ctf_role_route_client=1 last_ctf_role_route_mode=3 "
+            "last_ctf_role_route_mode_name=capture_the_flag "
+            "last_ctf_role_route_role=5 last_ctf_role_route_role_name=midfielder "
+            "last_ctf_role_route_lane=3 last_ctf_role_route_lane_name=midfield "
+            "last_ctf_role_route_priority=760 "
+            "last_ctf_role_route_goal_distance_sq=802816 "
+            "team_fire_avoidance_evaluations=4 "
+            "team_fire_avoidance_blocks=2 "
+            "team_fire_avoidance_line_blocks=2 "
+            "last_team_fire_avoidance_client=0 "
+            "last_team_fire_avoidance_target_client=1 "
+            "last_team_fire_avoidance_friendly_line=1 "
+            "last_team_fire_avoidance_blocked=1 "
+            "last_team_fire_avoidance_reason=friendly_line_damage",
             "q3a_bot_coop_command_status "
             "coop_leader_route_activations=5 "
             "coop_leader_route_refreshes=3 "
@@ -1761,6 +2202,17 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "last_coop_anti_block_intent_name=support_combat "
             "last_coop_anti_block_forward_move=-90 "
             "last_coop_anti_block_side_move=130 "
+            "coop_door_elevator_requests=5 "
+            "coop_door_elevator_source_activations=1 "
+            "coop_door_elevator_source_commands=3 "
+            "coop_door_elevator_hold_commands=2 "
+            "last_coop_door_elevator_client=1 "
+            "last_coop_door_elevator_source_client=0 "
+            "last_coop_door_elevator_action=3 "
+            "last_coop_door_elevator_kind=3 "
+            "last_coop_door_elevator_entity=17 "
+            "last_coop_door_elevator_intent=5 "
+            "last_coop_door_elevator_intent_name=support_combat "
             "coop_interaction_retry_commands=3 "
             "last_coop_interaction_retry_action=3 "
             "last_coop_interaction_retry_kind=7",
@@ -1789,7 +2241,26 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "item_timing_consumer_live_pickups=0 "
             "item_last_timing_consumer_reason_name=timer_ready",
             "q3a_bot_nav_policy_status route_corner_cut_trace_checks=3 "
-            "route_corner_cut_accepted=1 route_corner_cut_rejected=2",
+            "route_corner_cut_accepted=1 route_corner_cut_rejected=2 "
+            "team_item_role_evaluations=5 "
+            "team_item_role_selections=4 "
+            "team_item_role_score_boosts=4 "
+            "team_item_role_selected_goals=2 "
+            "last_team_item_role_mode=2 "
+            "last_team_item_role_mode_name=team_deathmatch "
+            "last_team_item_role_role=5 "
+            "last_team_item_role_role_name=midfielder "
+            "last_team_item_role_lane=3 "
+            "last_team_item_role_lane_name=midfield "
+            "last_team_item_role_category=4 "
+            "last_team_item_role_category_name=weapon "
+            "last_team_item_role_item_role=2 "
+            "last_team_item_role_item_role_name=weapon_control "
+            "last_team_item_role_priority=175 "
+            "last_team_item_role_score_boost=175 "
+            "last_team_item_role_entity=32 "
+            "last_team_item_role_item=53 "
+            "last_team_item_role_score=860",
             "q3a_bot_objective_detail_status team_objective_role_policy_evaluations=2 "
             "team_objective_role_policy_lane_midfield_selections=1 "
             "last_team_objective_lane_name=midfield",
@@ -1848,6 +2319,40 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(route_targets["route_target_stabilizations"], 1)
         self.assertEqual(route_targets["last_route_target_stable_point_index"], 2)
 
+        team_role_route = groups[("team_role_route_counters", harness.STATUS_MARKER)]
+        self.assertEqual(team_role_route["team_role_route_requests"], 4)
+        self.assertEqual(team_role_route["team_role_route_policy_selections"], 4)
+        self.assertEqual(team_role_route["team_role_route_activations"], 2)
+        self.assertEqual(team_role_route["team_role_route_route_requests"], 3)
+        self.assertEqual(team_role_route["last_team_role_route_mode"], 2)
+        self.assertEqual(team_role_route["last_team_role_route_role"], 5)
+        self.assertEqual(team_role_route["last_team_role_route_lane"], 3)
+        self.assertEqual(team_role_route["last_team_role_route_goal_distance_sq"], 802816)
+
+        ctf_role_route = groups[("ctf_role_route_counters", harness.STATUS_MARKER)]
+        self.assertEqual(ctf_role_route["ctf_role_route_requests"], 4)
+        self.assertEqual(ctf_role_route["ctf_role_route_policy_selections"], 4)
+        self.assertEqual(ctf_role_route["ctf_role_route_activations"], 2)
+        self.assertEqual(ctf_role_route["ctf_role_route_route_requests"], 3)
+        self.assertEqual(ctf_role_route["last_ctf_role_route_mode"], 3)
+        self.assertEqual(ctf_role_route["last_ctf_role_route_role"], 5)
+        self.assertEqual(ctf_role_route["last_ctf_role_route_lane"], 3)
+        self.assertEqual(ctf_role_route["last_ctf_role_route_goal_distance_sq"], 802816)
+
+        team_fire_avoidance = groups[("team_fire_avoidance_counters", harness.STATUS_MARKER)]
+        self.assertEqual(team_fire_avoidance["team_fire_avoidance_evaluations"], 4)
+        self.assertEqual(team_fire_avoidance["team_fire_avoidance_blocks"], 2)
+        self.assertEqual(team_fire_avoidance["team_fire_avoidance_line_blocks"], 2)
+        self.assertEqual(team_fire_avoidance["last_team_fire_avoidance_friendly_line"], 1)
+
+        team_item_roles = groups[("team_item_role_counters", harness.NAV_POLICY_STATUS_MARKER)]
+        self.assertEqual(team_item_roles["team_item_role_evaluations"], 5)
+        self.assertEqual(team_item_roles["team_item_role_selections"], 4)
+        self.assertEqual(team_item_roles["team_item_role_selected_goals"], 2)
+        self.assertEqual(team_item_roles["last_team_item_role_mode"], 2)
+        self.assertEqual(team_item_roles["last_team_item_role_item_role"], 2)
+        self.assertEqual(team_item_roles["last_team_item_role_item_role_name"], "weapon_control")
+
         leader_route = groups[("coop_leader_route_counters", harness.COOP_COMMAND_STATUS_MARKER)]
         self.assertEqual(leader_route["coop_leader_route_activations"], 5)
         self.assertEqual(leader_route["coop_leader_route_refreshes"], 3)
@@ -1869,6 +2374,17 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(anti_block["last_coop_anti_block_intent_name"], "support_combat")
         self.assertEqual(anti_block["last_coop_anti_block_forward_move"], -90)
 
+        door_elevator = groups[("coop_door_elevator_counters", harness.COOP_COMMAND_STATUS_MARKER)]
+        self.assertEqual(door_elevator["coop_door_elevator_requests"], 5)
+        self.assertEqual(door_elevator["coop_door_elevator_source_activations"], 1)
+        self.assertEqual(door_elevator["coop_door_elevator_source_commands"], 3)
+        self.assertEqual(door_elevator["coop_door_elevator_hold_commands"], 2)
+        self.assertEqual(door_elevator["last_coop_door_elevator_source_client"], 0)
+        self.assertEqual(door_elevator["last_coop_door_elevator_action"], 3)
+        self.assertEqual(door_elevator["last_coop_door_elevator_kind"], 3)
+        self.assertEqual(door_elevator["last_coop_door_elevator_entity"], 17)
+        self.assertEqual(door_elevator["last_coop_door_elevator_intent_name"], "support_combat")
+
         interaction_retry = groups[("coop_interaction_retry_counters", harness.COOP_COMMAND_STATUS_MARKER)]
         self.assertEqual(interaction_retry["coop_interaction_retry_commands"], 3)
         self.assertEqual(interaction_retry["last_coop_interaction_retry_action"], 3)
@@ -1885,10 +2401,14 @@ class BotScenarioHarnessTests(unittest.TestCase):
         text_report = harness.optional_field_text({"optional_fields": optional_fields})
         self.assertIn("action_dispatch_counters<q3a_bot_action_status>", text_report)
         self.assertIn("route_target_stabilization_counters<q3a_bot_frame_command_status>", text_report)
+        self.assertIn("team_role_route_counters<q3a_bot_frame_command_status>", text_report)
+        self.assertIn("ctf_role_route_counters<q3a_bot_frame_command_status>", text_report)
+        self.assertIn("team_item_role_counters<q3a_bot_nav_policy_status>", text_report)
         self.assertIn("item_timer_fairness_signals<q3a_bot_action_detail_status>", text_report)
         self.assertIn("coop_leader_route_counters<q3a_bot_coop_command_status>", text_report)
         self.assertIn("coop_lead_advance_counters<q3a_bot_coop_command_status>", text_report)
         self.assertIn("coop_anti_block_counters<q3a_bot_coop_command_status>", text_report)
+        self.assertIn("coop_door_elevator_counters<q3a_bot_coop_command_status>", text_report)
         self.assertIn("coop_interaction_retry_counters<q3a_bot_coop_command_status>", text_report)
 
     def test_raw_reserved_optional_fields_report_without_new_gates(self) -> None:
