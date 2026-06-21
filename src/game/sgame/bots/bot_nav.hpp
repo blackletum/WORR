@@ -15,6 +15,7 @@ struct BotNavRecoveryMove {
 	bool wait = false;
 	bool use = false;
 	int interactionAction = 0;
+	int interactionKind = 0;
 	int interactionEntity = -1;
 };
 
@@ -267,6 +268,10 @@ struct BotNavBlackboardSnapshot {
 void BotNav_ResetAll();
 void BotNav_ResetClient(int clientIndex);
 bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *request, BotLibAdapterRouteSteer *route);
+bool BotNav_RequestInteractionRetry(
+	const gentity_t *bot,
+	const BotLibAdapterRouteSteer *route,
+	bool fromStuck);
 bool BotNav_GetRecoveryMove(const gentity_t *bot, BotNavRecoveryMove *move);
 bool BotNav_DrawDebugOverlay(bool drawRoute, bool drawGoal, int debugClientIndex);
 const BotNavRouteStatus &BotNav_GetRouteStatus();

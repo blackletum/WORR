@@ -303,6 +303,57 @@ class BotScenarioHarnessTests(unittest.TestCase):
             2,
         )
 
+    def test_status_parsing_splits_embedded_frame_command_proof_markers(self) -> None:
+        text = "\n".join((
+            "q3a_bot_frame_command_status pass=1 frames=184 commands=183 "
+            "route_commands=183 item_goal_peak_active_reservations=8 "
+            "last_stucq3a_bot_frame_command_status pass=1 frames=184 "
+            "commands=183 route_commands=183 route_failures=0 "
+            "expected_min_frames=8 expected_min_commands=8 "
+            "item_goal_peak_active_reservations=8 recovery_command_uses=2",
+            "q3a_bot_frame_command_status pass=1 frames=184 commands=183 "
+            "route_commands=183 route_failures=0 expected_min_commands=0",
+        ))
+
+        _line, metrics = harness.parse_status_line(text)
+
+        self.assertEqual(metrics["expected_min_commands"], 8)
+        self.assertEqual(metrics["item_goal_peak_active_reservations"], 8)
+        self.assertEqual(metrics["recovery_command_uses"], 2)
+        self.assertEqual(metrics["route_commands"], 183)
+
+    def test_marker_checks_use_latest_row_containing_metric(self) -> None:
+        marker_metrics = {
+            harness.ACTION_STATUS_MARKER: [
+                {"combat_fire_decisions": 3, "combat_withheld_fire": 0},
+                {"action_attack_decisions": 2},
+            ],
+        }
+
+        fire = harness.evaluate_marker_check(
+            harness.MarkerMetricCheck(
+                harness.ACTION_STATUS_MARKER,
+                "combat_fire_decisions",
+                "ge",
+                1,
+            ),
+            marker_metrics,
+        )
+        withheld = harness.evaluate_marker_check(
+            harness.MarkerMetricCheck(
+                harness.ACTION_STATUS_MARKER,
+                "combat_withheld_fire",
+                "eq",
+                0,
+            ),
+            marker_metrics,
+        )
+
+        self.assertTrue(fire["passed"])
+        self.assertEqual(fire["actual"], 3)
+        self.assertTrue(withheld["passed"])
+        self.assertEqual(withheld["actual"], 0)
+
     def test_profile_marker_field_parsing_and_exact_marker_matching(self) -> None:
         marker = "q3a_bot_profile_smoke_after_add"
         text = "\n".join((
@@ -611,10 +662,31 @@ class BotScenarioHarnessTests(unittest.TestCase):
         trace = scenarios["trace_checked_corner_cutting"]
         match = scenarios["ffa_tdm_match_readiness"]
         coop = scenarios["coop_match_readiness"]
-        report = harness.catalog_report([team_objective, aim, timers, trace, match, coop])
+        leader_route = scenarios["coop_leader_route"]
+        lead_advance = scenarios["coop_lead_advance"]
+        resource_share = scenarios["coop_resource_share"]
+        anti_block = scenarios["coop_anti_blocking"]
+        target_share = scenarios["coop_target_share"]
+        progress_wait = scenarios["coop_progress_wait"]
+        interaction_retry = scenarios["coop_interaction_retry"]
+        report = harness.catalog_report([
+            team_objective,
+            aim,
+            timers,
+            trace,
+            match,
+            coop,
+            leader_route,
+            lead_advance,
+            resource_share,
+            anti_block,
+            target_share,
+            progress_wait,
+            interaction_retry,
+        ])
         rows = {row["name"]: row for row in report["scenarios"]}
 
-        self.assertEqual(report["summary"]["implemented"], 6)
+        self.assertEqual(report["summary"]["implemented"], 13)
         self.assertEqual(report["summary"]["pending"], 0)
         self.assertEqual(rows["team_objective"]["smoke_mode"], 23)
         self.assertEqual(rows["aim_fairness_policy_integration"]["smoke_mode"], 24)
@@ -622,11 +694,73 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(rows["trace_checked_corner_cutting"]["smoke_mode"], 21)
         self.assertEqual(rows["ffa_tdm_match_readiness"]["smoke_mode"], 26)
         self.assertEqual(rows["coop_match_readiness"]["smoke_mode"], 3)
+        self.assertEqual(rows["coop_leader_route"]["smoke_mode"], 3)
+        self.assertEqual(rows["coop_lead_advance"]["smoke_mode"], 27)
+        self.assertEqual(rows["coop_resource_share"]["smoke_mode"], 28)
+        self.assertEqual(rows["coop_anti_blocking"]["smoke_mode"], 29)
+        self.assertEqual(rows["coop_target_share"]["smoke_mode"], 30)
+        self.assertEqual(rows["coop_progress_wait"]["smoke_mode"], 3)
+        self.assertEqual(rows["coop_interaction_retry"]["smoke_mode"], 12)
         self.assertEqual(
             rows["coop_match_readiness"]["extra_cvars"],
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["coop_leader_route"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["coop_progress_wait"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+                {"name": "sg_bot_coop_progress_wait", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["coop_lead_advance"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+                {"name": "sg_bot_coop_lead_advance", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["coop_resource_share"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+                {"name": "sg_bot_coop_resource_share", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["coop_anti_blocking"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+                {"name": "sg_bot_coop_anti_blocking", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["coop_target_share"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+                {"name": "sg_bot_coop_target_share", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["coop_interaction_retry"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+                {"name": "sg_bot_coop_interaction_retry", "value": "1"},
             ],
         )
 
@@ -745,6 +879,213 @@ class BotScenarioHarnessTests(unittest.TestCase):
             coop_required,
         )
 
+        leader_route_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["coop_leader_route"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.STATUS_MARKER, "last_timed_route_goal_kind", "eq", 3),
+            leader_route_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_leader_route_activations", "ge", 1),
+            leader_route_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_leader_route_refreshes", "ge", 1),
+            leader_route_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_leader_route_spacing_sources", "ge", 1),
+            leader_route_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_leader_route_intent", "ge", 1),
+            leader_route_marker_required,
+        )
+
+        lead_advance_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["coop_lead_advance"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 27),
+            lead_advance_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target", "ge", 1),
+            lead_advance_marker_required,
+        )
+        self.assertIn(
+            (harness.STATUS_MARKER, "last_timed_route_goal_kind", "eq", 4),
+            lead_advance_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_lead_advance_requests", "ge", 1),
+            lead_advance_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_lead_advance_policy_leads", "ge", 1),
+            lead_advance_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_lead_advance_activations", "ge", 1),
+            lead_advance_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_lead_advance_route_requests", "ge", 1),
+            lead_advance_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_lead_advance_intent", "eq", 4),
+            lead_advance_marker_required,
+        )
+        self.assertIn(
+            (harness.OBJECTIVE_STATUS_MARKER, "last_team_objective_coop_intent", "eq", 4),
+            lead_advance_marker_required,
+        )
+
+        resource_share_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["coop_resource_share"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 28),
+            resource_share_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target", "ge", 2),
+            resource_share_marker_required,
+        )
+        self.assertIn(
+            (harness.OBJECTIVE_STATUS_MARKER, "team_objective_coop_policy_resource_share", "ge", 1),
+            resource_share_marker_required,
+        )
+        self.assertIn(
+            (harness.OBJECTIVE_STATUS_MARKER, "team_objective_resource_policy_reserve", "ge", 1),
+            resource_share_marker_required,
+        )
+        self.assertIn(
+            (harness.ACTION_STATUS_MARKER, "item_reserved_deferrals", "ge", 1),
+            resource_share_marker_required,
+        )
+
+        anti_block_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["coop_anti_blocking"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 29),
+            anti_block_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target", "ge", 2),
+            anti_block_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_anti_block_requests", "ge", 1),
+            anti_block_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_anti_block_policy_close", "ge", 1),
+            anti_block_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_anti_block_commands", "ge", 1),
+            anti_block_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_anti_block_intent", "eq", 5),
+            anti_block_marker_required,
+        )
+
+        target_share_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["coop_target_share"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 30),
+            target_share_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target_share", "eq", 1),
+            target_share_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target", "ge", 2),
+            target_share_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_target_share_requests", "ge", 1),
+            target_share_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_target_share_source_candidates", "ge", 1),
+            target_share_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_target_share_adoptions", "ge", 1),
+            target_share_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_target_share_intent", "eq", 5),
+            target_share_marker_required,
+        )
+
+        progress_wait_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["coop_progress_wait"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_progress_wait_requests", "ge", 1),
+            progress_wait_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_progress_wait_policy_waits", "ge", 1),
+            progress_wait_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_progress_wait_commands", "ge", 1),
+            progress_wait_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_progress_wait_intent", "eq", 2),
+            progress_wait_marker_required,
+        )
+        self.assertIn(
+            (harness.OBJECTIVE_STATUS_MARKER, "team_objective_coop_policy_wait", "ge", 1),
+            progress_wait_marker_required,
+        )
+        self.assertIn(
+            (harness.OBJECTIVE_STATUS_MARKER, "last_team_objective_coop_intent", "eq", 2),
+            progress_wait_marker_required,
+        )
+
+        interaction_retry_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["coop_interaction_retry"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_interaction_retry_requests", "ge", 1),
+            interaction_retry_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_interaction_retry_activations", "ge", 1),
+            interaction_retry_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_interaction_retry_commands", "ge", 1),
+            interaction_retry_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_interaction_retry_action", "eq", 3),
+            interaction_retry_marker_required,
+        )
+        self.assertIn(
+            (harness.NAV_INTERACTION_CONTEXT_STATUS_MARKER, "interaction_world_entities", "ge", 1),
+            interaction_retry_marker_required,
+        )
+
         command = harness.build_command(
             pathlib.Path(".install/worr_ded_x86_64.exe"),
             pathlib.Path(".install"),
@@ -764,6 +1105,132 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(command[command.index("coop") + 1], "1")
         self.assertLess(command.index("coop"), command.index("sv_bot_frame_command_smoke"))
 
+        leader_route_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            leader_route,
+            "basew",
+            "mm-rage",
+            27972,
+            "coop_leader_route",
+        )
+        self.assertEqual(leader_route_command[leader_route_command.index("coop") + 1], "1")
+        self.assertLess(leader_route_command.index("coop"), leader_route_command.index("sv_bot_frame_command_smoke"))
+
+        lead_advance_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            lead_advance,
+            "basew",
+            "mm-rage",
+            27973,
+            "coop_lead_advance",
+        )
+        self.assertEqual(lead_advance_command[lead_advance_command.index("coop") + 1], "1")
+        self.assertEqual(
+            lead_advance_command[lead_advance_command.index("sg_bot_coop_lead_advance") + 1],
+            "1",
+        )
+        self.assertLess(
+            lead_advance_command.index("sg_bot_coop_lead_advance"),
+            lead_advance_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        resource_share_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            resource_share,
+            "basew",
+            "mm-rage",
+            27974,
+            "coop_resource_share",
+        )
+        self.assertEqual(resource_share_command[resource_share_command.index("coop") + 1], "1")
+        self.assertEqual(
+            resource_share_command[resource_share_command.index("sg_bot_coop_resource_share") + 1],
+            "1",
+        )
+        self.assertLess(
+            resource_share_command.index("sg_bot_coop_resource_share"),
+            resource_share_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        anti_block_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            anti_block,
+            "basew",
+            "mm-rage",
+            27975,
+            "coop_anti_blocking",
+        )
+        self.assertEqual(anti_block_command[anti_block_command.index("coop") + 1], "1")
+        self.assertEqual(
+            anti_block_command[anti_block_command.index("sg_bot_coop_anti_blocking") + 1],
+            "1",
+        )
+        self.assertLess(
+            anti_block_command.index("sg_bot_coop_anti_blocking"),
+            anti_block_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        target_share_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            target_share,
+            "basew",
+            "mm-rage",
+            27978,
+            "coop_target_share",
+        )
+        self.assertEqual(target_share_command[target_share_command.index("coop") + 1], "1")
+        self.assertEqual(
+            target_share_command[target_share_command.index("sg_bot_coop_target_share") + 1],
+            "1",
+        )
+        self.assertLess(
+            target_share_command.index("sg_bot_coop_target_share"),
+            target_share_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        progress_wait_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            progress_wait,
+            "basew",
+            "mm-rage",
+            27979,
+            "coop_progress_wait",
+        )
+        self.assertEqual(progress_wait_command[progress_wait_command.index("coop") + 1], "1")
+        self.assertEqual(
+            progress_wait_command[progress_wait_command.index("sg_bot_coop_progress_wait") + 1],
+            "1",
+        )
+        self.assertLess(
+            progress_wait_command.index("sg_bot_coop_progress_wait"),
+            progress_wait_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        interaction_retry_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            interaction_retry,
+            "basew",
+            "mm-rage",
+            27980,
+            "coop_interaction_retry",
+        )
+        self.assertEqual(interaction_retry_command[interaction_retry_command.index("coop") + 1], "1")
+        self.assertEqual(
+            interaction_retry_command[interaction_retry_command.index("sg_bot_coop_interaction_retry") + 1],
+            "1",
+        )
+        self.assertLess(
+            interaction_retry_command.index("sg_bot_coop_interaction_retry"),
+            interaction_retry_command.index("sv_bot_frame_command_smoke"),
+        )
+
         pending_names = {
             selected.name
             for selected in harness.select_scenarios(["pending"])
@@ -774,6 +1241,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         scenarios = harness.scenario_map()
         trace = scenarios["trace_checked_corner_cutting"]
         coop = scenarios["coop_match_readiness"]
+        leader_route = scenarios["coop_leader_route"]
+        lead_advance = scenarios["coop_lead_advance"]
+        resource_share = scenarios["coop_resource_share"]
+        anti_block = scenarios["coop_anti_blocking"]
+        target_share = scenarios["coop_target_share"]
+        interaction_retry = scenarios["coop_interaction_retry"]
 
         trace_text = "\n".join((
             RESERVED_MODE_BEGIN_LINES[21],
@@ -819,6 +1292,205 @@ class BotScenarioHarnessTests(unittest.TestCase):
             if not result["passed"]
         ]
         self.assertEqual(coop_failed, [])
+
+        leader_route_text = "\n".join((
+            "q3a_bot_frame_command_status pass=1 route_commands=16 "
+            "route_failures=0 last_timed_route_goal_kind=3",
+            "q3a_bot_coop_readiness_status pass=1 coop=1 bots=2 "
+            "playing=2 spectators=0 queued=0",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=0 team_mode=0 gametype=0 bots=2 playing=2 "
+            "spectators=0 queued=0 free=2 red=0 blue=0",
+            "q3a_bot_coop_command_status "
+            "coop_leader_route_activations=16 "
+            "coop_leader_route_refreshes=14 "
+            "coop_leader_route_spacing_sources=16 "
+            "last_coop_leader_route_intent=5 "
+            "last_coop_leader_route_intent_name=support_combat",
+        ))
+        leader_route_marker_metrics = harness.parse_marker_metrics(
+            leader_route_text,
+            {check.marker for check in leader_route.marker_checks},
+        )
+        leader_route_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, leader_route_marker_metrics)
+                for check in leader_route.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(leader_route_failed, [])
+
+        lead_advance_text = "\n".join((
+            f"{harness.SCENARIO_BEGIN_MARKER} mode=27 combat=0 "
+            "weapon_switch=0 item_focus=0 team_objective=0 target=1 "
+            "gametype=0",
+            "q3a_bot_frame_command_status pass=1 route_commands=12 "
+            "route_failures=0 last_timed_route_goal_kind=4",
+            "q3a_bot_coop_readiness_status pass=1 coop=1 bots=1 "
+            "playing=1 spectators=0 queued=0",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=0 team_mode=0 gametype=0 bots=1 playing=1 "
+            "spectators=0 queued=0 free=1 red=0 blue=0",
+            "q3a_bot_objective_status "
+            "last_team_objective_coop_intent=4 "
+            "last_team_objective_coop_intent_name=lead_advance",
+            "q3a_bot_coop_command_status "
+            "coop_lead_advance_requests=12 "
+            "coop_lead_advance_policy_leads=12 "
+            "coop_lead_advance_activations=12 "
+            "coop_lead_advance_route_requests=12 "
+            "last_coop_lead_advance_intent=4 "
+            "last_coop_lead_advance_intent_name=lead_advance",
+        ))
+        lead_advance_marker_metrics = harness.parse_marker_metrics(
+            lead_advance_text,
+            {check.marker for check in lead_advance.marker_checks},
+        )
+        lead_advance_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, lead_advance_marker_metrics)
+                for check in lead_advance.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(lead_advance_failed, [])
+
+        resource_share_text = "\n".join((
+            f"{harness.SCENARIO_BEGIN_MARKER} mode=28 combat=0 "
+            "weapon_switch=0 item_focus=0 team_objective=0 target=2 "
+            "gametype=0",
+            "q3a_bot_frame_command_status pass=1 route_commands=12 "
+            "route_failures=0",
+            "q3a_bot_coop_readiness_status pass=1 coop=1 bots=2 "
+            "playing=2 spectators=0 queued=0",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=0 team_mode=0 gametype=0 bots=2 playing=2 "
+            "spectators=0 queued=0 free=2 red=0 blue=0",
+            "q3a_bot_objective_status "
+            "team_objective_coop_policy_resource_share=8 "
+            "team_objective_resource_policy_reserve=5 "
+            "last_team_objective_resource_intent=3 "
+            "last_team_objective_resource_intent_name=reserve_for_teammate",
+            "q3a_bot_action_status item_reserved_deferrals=5",
+        ))
+        resource_share_marker_metrics = harness.parse_marker_metrics(
+            resource_share_text,
+            {check.marker for check in resource_share.marker_checks},
+        )
+        resource_share_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, resource_share_marker_metrics)
+                for check in resource_share.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(resource_share_failed, [])
+
+        anti_block_text = "\n".join((
+            f"{harness.SCENARIO_BEGIN_MARKER} mode=29 combat=0 "
+            "weapon_switch=0 item_focus=0 team_objective=0 target=2 "
+            "gametype=0",
+            "q3a_bot_frame_command_status pass=1 route_commands=12 "
+            "route_failures=0",
+            "q3a_bot_coop_readiness_status pass=1 coop=1 bots=2 "
+            "playing=2 spectators=0 queued=0",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=0 team_mode=0 gametype=0 bots=2 playing=2 "
+            "spectators=0 queued=0 free=2 red=0 blue=0",
+            "q3a_bot_coop_command_status "
+            "coop_anti_block_requests=12 "
+            "coop_anti_block_policy_close=8 "
+            "coop_anti_block_commands=8 "
+            "last_coop_anti_block_intent=5 "
+            "last_coop_anti_block_intent_name=support_combat "
+            "last_coop_anti_block_leader_distance_sq=1024",
+        ))
+        anti_block_marker_metrics = harness.parse_marker_metrics(
+            anti_block_text,
+            {check.marker for check in anti_block.marker_checks},
+        )
+        anti_block_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, anti_block_marker_metrics)
+                for check in anti_block.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(anti_block_failed, [])
+
+        target_share_text = "\n".join((
+            f"{harness.SCENARIO_BEGIN_MARKER} mode=30 combat=0 "
+            "weapon_switch=0 item_focus=0 team_objective=0 target=2 "
+            "gametype=0 target_share=1",
+            "q3a_bot_frame_command_status pass=1 route_commands=12 "
+            "route_failures=0",
+            "q3a_bot_coop_readiness_status pass=1 coop=1 bots=2 "
+            "playing=2 spectators=0 queued=0",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=0 team_mode=0 gametype=0 bots=2 playing=2 "
+            "spectators=0 queued=0 free=2 red=0 blue=0",
+            "q3a_bot_coop_command_status "
+            "coop_target_share_requests=8 "
+            "coop_target_share_policy_supports=6 "
+            "coop_target_share_source_scans=6 "
+            "coop_target_share_source_candidates=4 "
+            "coop_target_share_adoptions=4 "
+            "last_coop_target_share_client=1 "
+            "last_coop_target_share_source_client=0 "
+            "last_coop_target_share_target_entity=17 "
+            "last_coop_target_share_target_client=-1 "
+            "last_coop_target_share_target_distance_sq=4096 "
+            "last_coop_target_share_intent=5 "
+            "last_coop_target_share_intent_name=support_combat",
+        ))
+        target_share_marker_metrics = harness.parse_marker_metrics(
+            target_share_text,
+            {check.marker for check in target_share.marker_checks},
+        )
+        target_share_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, target_share_marker_metrics)
+                for check in target_share.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(target_share_failed, [])
+
+        interaction_retry_text = "\n".join((
+            "q3a_bot_frame_command_status pass=1 route_failures=0",
+            "q3a_bot_coop_readiness_status pass=1 coop=1 bots=1 "
+            "playing=1 spectators=0 queued=0",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=0 team_mode=0 gametype=0 bots=1 playing=1 "
+            "spectators=0 queued=0 free=1 red=0 blue=0",
+            "q3a_bot_nav_interaction_context_status "
+            "interaction_world_entities=3 interaction_world_triggers=2",
+            "q3a_bot_coop_command_status "
+            "coop_interaction_retry_requests=4 "
+            "coop_interaction_retry_activations=4 "
+            "coop_interaction_retry_commands=3 "
+            "last_coop_interaction_retry_action=3 "
+            "last_coop_interaction_retry_kind=7",
+        ))
+        interaction_retry_marker_metrics = harness.parse_marker_metrics(
+            interaction_retry_text,
+            {check.marker for check in interaction_retry.marker_checks},
+        )
+        interaction_retry_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, interaction_retry_marker_metrics)
+                for check in interaction_retry.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(interaction_retry_failed, [])
 
     def test_pending_gap_report_identifies_missing_rows_and_metrics(self) -> None:
         report = harness.pending_gap_report(
@@ -1068,6 +1740,30 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "route_target_stabilization_checks=3 route_target_stabilizations=1 "
             "route_target_stabilization_skips=2 last_route_target_original_distance_sq=16 "
             "last_route_target_stable_distance_sq=128 last_route_target_stable_point_index=2",
+            "q3a_bot_coop_command_status "
+            "coop_leader_route_activations=5 "
+            "coop_leader_route_refreshes=3 "
+            "coop_leader_route_spacing_sources=4 "
+            "last_coop_leader_route_intent=5 "
+            "last_coop_leader_route_intent_name=support_combat "
+            "coop_lead_advance_requests=6 "
+            "coop_lead_advance_policy_leads=6 "
+            "coop_lead_advance_activations=5 "
+            "coop_lead_advance_route_requests=4 "
+            "coop_lead_advance_owner_deferrals=1 "
+            "last_coop_lead_advance_intent=4 "
+            "last_coop_lead_advance_intent_name=lead_advance "
+            "coop_progress_wait_commands=2 last_coop_progress_wait_intent=2 "
+            "coop_anti_block_requests=4 "
+            "coop_anti_block_policy_close=3 "
+            "coop_anti_block_commands=3 "
+            "last_coop_anti_block_intent=5 "
+            "last_coop_anti_block_intent_name=support_combat "
+            "last_coop_anti_block_forward_move=-90 "
+            "last_coop_anti_block_side_move=130 "
+            "coop_interaction_retry_commands=3 "
+            "last_coop_interaction_retry_action=3 "
+            "last_coop_interaction_retry_kind=7",
             "q3a_bot_action_status action_command_request_builds=2 "
             "action_command_request_accepted=2 action_command_request_dispatch_attempts=2 "
             "action_command_request_submitted=1 action_command_request_deferred=1 "
@@ -1152,6 +1848,32 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(route_targets["route_target_stabilizations"], 1)
         self.assertEqual(route_targets["last_route_target_stable_point_index"], 2)
 
+        leader_route = groups[("coop_leader_route_counters", harness.COOP_COMMAND_STATUS_MARKER)]
+        self.assertEqual(leader_route["coop_leader_route_activations"], 5)
+        self.assertEqual(leader_route["coop_leader_route_refreshes"], 3)
+        self.assertEqual(leader_route["last_coop_leader_route_intent_name"], "support_combat")
+
+        lead_advance = groups[("coop_lead_advance_counters", harness.COOP_COMMAND_STATUS_MARKER)]
+        self.assertEqual(lead_advance["coop_lead_advance_requests"], 6)
+        self.assertEqual(lead_advance["coop_lead_advance_activations"], 5)
+        self.assertEqual(lead_advance["coop_lead_advance_route_requests"], 4)
+        self.assertEqual(lead_advance["last_coop_lead_advance_intent_name"], "lead_advance")
+
+        progress_wait = groups[("coop_progress_wait_counters", harness.COOP_COMMAND_STATUS_MARKER)]
+        self.assertEqual(progress_wait["coop_progress_wait_commands"], 2)
+        self.assertEqual(progress_wait["last_coop_progress_wait_intent"], 2)
+
+        anti_block = groups[("coop_anti_block_counters", harness.COOP_COMMAND_STATUS_MARKER)]
+        self.assertEqual(anti_block["coop_anti_block_requests"], 4)
+        self.assertEqual(anti_block["coop_anti_block_commands"], 3)
+        self.assertEqual(anti_block["last_coop_anti_block_intent_name"], "support_combat")
+        self.assertEqual(anti_block["last_coop_anti_block_forward_move"], -90)
+
+        interaction_retry = groups[("coop_interaction_retry_counters", harness.COOP_COMMAND_STATUS_MARKER)]
+        self.assertEqual(interaction_retry["coop_interaction_retry_commands"], 3)
+        self.assertEqual(interaction_retry["last_coop_interaction_retry_action"], 3)
+        self.assertEqual(interaction_retry["last_coop_interaction_retry_kind"], 7)
+
         corner_cutting = groups[("trace_checked_corner_cutting_signals", harness.NAV_POLICY_STATUS_MARKER)]
         self.assertEqual(corner_cutting["route_corner_cut_trace_checks"], 3)
         self.assertEqual(corner_cutting["route_corner_cut_accepted"], 1)
@@ -1164,6 +1886,10 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertIn("action_dispatch_counters<q3a_bot_action_status>", text_report)
         self.assertIn("route_target_stabilization_counters<q3a_bot_frame_command_status>", text_report)
         self.assertIn("item_timer_fairness_signals<q3a_bot_action_detail_status>", text_report)
+        self.assertIn("coop_leader_route_counters<q3a_bot_coop_command_status>", text_report)
+        self.assertIn("coop_lead_advance_counters<q3a_bot_coop_command_status>", text_report)
+        self.assertIn("coop_anti_block_counters<q3a_bot_coop_command_status>", text_report)
+        self.assertIn("coop_interaction_retry_counters<q3a_bot_coop_command_status>", text_report)
 
     def test_raw_reserved_optional_fields_report_without_new_gates(self) -> None:
         raw_text = "\n".join((

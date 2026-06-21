@@ -20,13 +20,13 @@ The port is not a blind file drop. The target is a maintained WORR bot stack wit
 
 ## Completion Snapshot
 
-Last refreshed: 2026-06-21 nuke retreat route ownership round.
+Last refreshed: 2026-06-21 coop target-sharing round.
 
-- Total checklist completion: 636 of 760 items complete, or 83.7%.
-- Phase checklist completion: 636 of 748 phase items complete, or 85.0%.
+- Total checklist completion: 648 of 763 items complete, or 84.9%.
+- Phase checklist completion: 648 of 751 phase items complete, or 86.3%.
 - Completed in the latest worker lanes: live combat aim-profile policy and brain-owned live-aim/projectile-lead consumption, live pickup/observed-respawn item timing consumers with status-friendly counters, coop and resource policy helper metadata, stricter scenario marker gates for live aim and match-policy evidence, reference-map required-feature diagnostics, long-soak source-counter completeness diagnostics, and richer first-party botfile behavior metadata. These land on top of the earlier same-day promotion, packaging, source-counter, scenario, botfile, and documentation lanes.
-- Latest implementation round: the brain now owns a short-lived nuke retreat route after a submitted safe nuke inventory request. The retreat source prefers the remembered enemy, falls back to the launch direction, overlays a temporary position route goal, and exposes `nuke_retreat_*` frame-command status counters.
-- Still pending: durable autonomous role consumption in live FFA/TDM/CTF flows, deeper coop behavior beyond policy helpers/readiness proof, richer generic timed-goal route ownership beyond the first nuke retreat owner, staging additional reference maps beyond the current available `mm-rage` set, CI/platform breadth, fresh long-soak CPU baselines with current source-counter fields, and the final imported BotLib runtime/adapter catch-all log.
+- Latest implementation round: coop monster target sharing now has a default-off blackboard adoption bridge behind `sg_bot_coop_target_share`. Server smoke mode `30` runs a two-bot coop proof with a lightweight hostile `SVF_MONSTER` target, support-policy bots can adopt a teammate's current target, compact status exposes `coop_target_share_*` evidence, and the promoted `coop_target_share` scenario hard-gates source-candidate, adoption, target-entity, and support-combat intent evidence.
+- Still pending: durable autonomous role consumption in live FFA/TDM/CTF flows, deeper coop behavior beyond leader-route/readiness/progress-wait/lead-advance/interaction-retry/resource-share/anti-blocking/target-share proofs, campaign-specific door/elevator/trigger coordination, staging additional reference maps beyond the current available `mm-rage` set, CI/platform breadth, fresh long-soak CPU baselines with current source-counter fields, and the final imported BotLib runtime/adapter catch-all log.
 
 ## Source Baseline
 
@@ -258,6 +258,14 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-escape-deployable-inventory-policy-2026-06-20.md`: placement-aware doppelganger and last-resort personal teleporter use policy with status evidence.
 - `docs-dev/q3a-botlib-safe-nuke-inventory-policy-2026-06-20.md`: safety-gated nuke inventory policy with friendly-fire, self-pressure, launch, and enemy-value checks.
 - `docs-dev/q3a-botlib-nuke-retreat-route-ownership-2026-06-21.md`: command-owned nuke retreat route goal after submitted safe inventory use.
+- `docs-dev/q3a-botlib-timed-route-goal-owner-2026-06-21.md`: generic timed route-goal owner state and status fields above the first nuke-retreat consumer.
+- `docs-dev/q3a-botlib-teleporter-escape-route-owner-2026-06-21.md`: teleporter escape timed route-goal consumer after submitted personal teleporter use.
+- `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`: coop follow/regroup/support timed route-goal consumer from leader policy.
+- `docs-dev/q3a-botlib-coop-leader-route-scenario-2026-06-21.md`: compact coop leader-route status surface and promoted `coop_leader_route` scenario gate.
+- `docs-dev/q3a-botlib-coop-lead-advance-route-owner-2026-06-21.md`: default-off no-leader coop LeadAdvance timed route-goal owner and promoted `coop_lead_advance` scenario.
+- `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`: default-off coop WaitForLeader command owner and promoted `coop_progress_wait` scenario.
+- `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`: default-off route interaction wait/use retry command owner and promoted `coop_interaction_retry` scenario.
+- `docs-dev/q3a-botlib-coop-target-share-2026-06-21.md`: default-off coop monster target-sharing blackboard adoption bridge and promoted `coop_target_share` scenario.
 - `docs-dev/q3a-botlib-live-item-timing-consumers-2026-06-18.md`: live pickup and observed respawn timing consumer frames/results plus conservative timing gates.
 - `docs-dev/q3a-botlib-special-item-utility-2026-06-18.md`: special-item utility buckets for damage boosts, protection, invisibility, mobility, utility powerups, techs, and CTF objectives.
 - `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`: deterministic team-objective role policy helpers and role-policy status output.
@@ -1161,6 +1169,10 @@ Implementation checklist:
   - [x] Add placement-aware doppelganger and last-resort teleporter escape inventory policy with status evidence.
   - [x] Add safety-gated nuke inventory policy with friendly-fire/self-pressure status evidence.
   - [x] Add command-owned nuke retreat route goals after submitted safe nuke inventory use.
+  - [x] Generalize command-owned timed route-goal state and status above the first nuke retreat owner.
+  - [x] Add personal teleporter escape as a second timed route-goal owner consumer.
+  - [x] Add coop leader follow/regroup/support policy as a timed route-goal owner consumer.
+  - [x] Add cvar-gated coop progression wait command ownership from coop WaitForLeader policy.
   - [ ] Promote dispatcher decisions into broader command ownership once perception, candidate discovery, inventory policy, aim, and route ownership inputs are available.
 
 2026-06-18 Phase 6 support slices:
@@ -1169,8 +1181,8 @@ Implementation checklist:
 - `bot_items.*` now exposes intent-only item utility scoring for existing health, armor, ammo, weapon, powerup, and generic pickup candidates, plus explicit observation hooks for future health/armor goal and pickup smoke counters. This does not scan maps, reserve route goals, mutate inventory, or claim pickup completion.
 - `bot_actions.*` and the `q3a_bot_action_status` line now carry weapon-switch request/completion/failure fields plus health/armor pickup counters for future scenario modes. `BotActions_ApplyDecisionDetailed()` distinguishes accepted button mutations from pending weapon/inventory intents and malformed decisions.
 - `bot_brain.*` now calls the detailed action-application helper after movement command construction. Accepted attack/use decisions can set `BUTTON_ATTACK` / `BUTTON_USE`; switch-weapon and inventory-use decisions remain pending intents until a later owner submits and observes those systems.
-- Follow-up proof slices closed several helper gaps before the promotion pass: `bot_combat.*` can build and merge real enemy facts plus filter bot-attributed damage records; the real `Damage()` path records qualifying bot-attributed damage; `bot_actions.*` can track validated pending weapon-switch requests through observed success/failure; and `bot_items.*` can set up deterministic health/armor proof state and record pickup counters only from successful item-touch resource deltas. Later helper lanes added opt-in aim/fairness metadata, live aim-profile/projectile-lead consumption through the brain-owned known-enemy aim path, item timer disable/fuzz policy, live pickup/observed-respawn timing consumers with conservative selection gates, special-item utility buckets, and accepted exact `use_index_only` weapon/inventory dispatch through the brain-owned frame path. The scenario-promotion and evidence-tightening slices wire these hooks into passing smoke rows for modes `20` through `26`, including live-aim firing proof, deterministic item-timer proof, trace-checked corner-cut proof, and FFA/TDM/coop readiness proof. The 2026-06-20 estimate, arsenal, and inventory-policy rounds add per-bot enemy health/armor estimates, consume those estimates in weapon scoring, let the action layer scan carried weapons after enemy-fact enrichment, select carried non-weapon powerups/power armor for clear combat or survival pressure, and now use enviro suit, rebreather, IR goggles, silencer, spheres, placement-checked doppelganger, last-resort personal teleporter, and safety-gated nuke under conservative pressure gates. The 2026-06-21 route-owner round arms a short-lived position-goal retreat after submitted safe nuke use. Richer generic timed-goal route ownership and autonomous team/coop behavior remain pending.
-- Implementation logs: `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`, `docs-dev/q3a-botlib-behavior-action-brain-telemetry-2026-06-18.md`, `docs-dev/q3a-botlib-action-item-utility-2026-06-18.md`, `docs-dev/q3a-botlib-special-item-utility-2026-06-18.md`, `docs-dev/q3a-botlib-combat-weapon-metadata-2026-06-18.md`, `docs-dev/q3a-botlib-aim-fairness-policy-2026-06-18.md`, `docs-dev/q3a-botlib-live-aim-policy-integration-2026-06-18.md`, `docs-dev/q3a-botlib-live-combat-policy-round-2026-06-18.md`, `docs-dev/q3a-botlib-item-timer-fairness-2026-06-18.md`, `docs-dev/q3a-botlib-live-item-timing-consumers-2026-06-18.md`, `docs-dev/q3a-botlib-action-application-helpers-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-inventory-command-api-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-inventory-dispatch-2026-06-18.md`, `docs-dev/q3a-botlib-engage-enemy-proof-2026-06-18.md`, `docs-dev/q3a-botlib-combat-damage-event-hook-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-switch-proof-2026-06-18.md`, `docs-dev/q3a-botlib-health-armor-pickup-proof-2026-06-18.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-health-armor-scenario-promotion-gate-2026-06-18.md`, `docs-dev/q3a-botlib-scenario-promotion-cpu-status-2026-06-18.md`, `docs-dev/q3a-botlib-enemy-health-armor-estimates-2026-06-20.md`, `docs-dev/q3a-botlib-estimate-aware-weapon-selection-2026-06-20.md`, `docs-dev/q3a-botlib-carried-arsenal-selection-2026-06-20.md`, `docs-dev/q3a-botlib-nonweapon-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-utility-deployable-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-escape-deployable-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-safe-nuke-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-nuke-retreat-route-ownership-2026-06-21.md`.
+- Follow-up proof slices closed several helper gaps before the promotion pass: `bot_combat.*` can build and merge real enemy facts plus filter bot-attributed damage records; the real `Damage()` path records qualifying bot-attributed damage; `bot_actions.*` can track validated pending weapon-switch requests through observed success/failure; and `bot_items.*` can set up deterministic health/armor proof state and record pickup counters only from successful item-touch resource deltas. Later helper lanes added opt-in aim/fairness metadata, live aim-profile/projectile-lead consumption through the brain-owned known-enemy aim path, item timer disable/fuzz policy, live pickup/observed-respawn timing consumers with conservative selection gates, special-item utility buckets, and accepted exact `use_index_only` weapon/inventory dispatch through the brain-owned frame path. The scenario-promotion and evidence-tightening slices wire these hooks into passing smoke rows for modes `20` through `26`, including live-aim firing proof, deterministic item-timer proof, trace-checked corner-cut proof, and FFA/TDM/coop readiness proof. The 2026-06-20 estimate, arsenal, and inventory-policy rounds add per-bot enemy health/armor estimates, consume those estimates in weapon scoring, let the action layer scan carried weapons after enemy-fact enrichment, select carried non-weapon powerups/power armor for clear combat or survival pressure, and now use enviro suit, rebreather, IR goggles, silencer, spheres, placement-checked doppelganger, last-resort personal teleporter, and safety-gated nuke under conservative pressure gates. The 2026-06-21 route-owner rounds arm a short-lived position-goal retreat after submitted safe nuke use, generalize that state into a timed route-goal owner surface, add personal teleporter escape as a second timed owner consumer, consume coop leader follow/regroup/support policy through the same owner, add a default-off WaitForLeader command owner for coop progression pauses, and add a default-off route interaction wait/use retry owner for coop route-detected movers/triggers. Broader autonomous team/coop behavior and campaign-specific coordination remain pending.
+- Implementation logs: `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`, `docs-dev/q3a-botlib-behavior-action-brain-telemetry-2026-06-18.md`, `docs-dev/q3a-botlib-action-item-utility-2026-06-18.md`, `docs-dev/q3a-botlib-special-item-utility-2026-06-18.md`, `docs-dev/q3a-botlib-combat-weapon-metadata-2026-06-18.md`, `docs-dev/q3a-botlib-aim-fairness-policy-2026-06-18.md`, `docs-dev/q3a-botlib-live-aim-policy-integration-2026-06-18.md`, `docs-dev/q3a-botlib-live-combat-policy-round-2026-06-18.md`, `docs-dev/q3a-botlib-item-timer-fairness-2026-06-18.md`, `docs-dev/q3a-botlib-live-item-timing-consumers-2026-06-18.md`, `docs-dev/q3a-botlib-action-application-helpers-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-inventory-command-api-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-inventory-dispatch-2026-06-18.md`, `docs-dev/q3a-botlib-engage-enemy-proof-2026-06-18.md`, `docs-dev/q3a-botlib-combat-damage-event-hook-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-switch-proof-2026-06-18.md`, `docs-dev/q3a-botlib-health-armor-pickup-proof-2026-06-18.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-health-armor-scenario-promotion-gate-2026-06-18.md`, `docs-dev/q3a-botlib-scenario-promotion-cpu-status-2026-06-18.md`, `docs-dev/q3a-botlib-enemy-health-armor-estimates-2026-06-20.md`, `docs-dev/q3a-botlib-estimate-aware-weapon-selection-2026-06-20.md`, `docs-dev/q3a-botlib-carried-arsenal-selection-2026-06-20.md`, `docs-dev/q3a-botlib-nonweapon-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-utility-deployable-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-escape-deployable-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-safe-nuke-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-nuke-retreat-route-ownership-2026-06-21.md`, `docs-dev/q3a-botlib-timed-route-goal-owner-2026-06-21.md`, `docs-dev/q3a-botlib-teleporter-escape-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`.
 
 Exit criteria:
 
@@ -1220,19 +1232,19 @@ Implementation checklist:
 - [ ] Coop later phase:
   - [x] Coop context/policy helper metadata for follow, wait, regroup, lead, and support intents.
   - [x] Resource context/policy helper metadata for self-pickup, team-share, teammate-reserve, enemy-deny, and objective-resource decisions.
-  - [ ] Follow/wait/lead commands.
+  - [x] Follow/wait/lead commands.
   - [ ] Door/elevator cooperation.
-  - [ ] Monster target sharing.
-  - [ ] Resource sharing.
-  - [ ] Anti-blocking behavior.
+  - [x] Monster target sharing.
+  - [x] Resource sharing.
+  - [x] Anti-blocking behavior.
 
 2026-06-18 team objective scaffold slice:
 
 - `bot_objectives.*` adds a WORR-native helper boundary for the reserved `sg_bot_frame_command_smoke_team_objective=1` lane. It exposes deterministic flag item/team helpers, target builders, objective assignment structs, role/type names, and counters for future CTF/team-objective policy.
 - `bot_brain.*` now surfaces compact team-objective fields on `q3a_bot_frame_command_status` and a dedicated `q3a_bot_objective_status` line with evaluation, assignment, route, reach, flag pickup/capture, role, and latest-objective facts.
 - The follow-up proof slice adds target-source facts for world flags, dropped flags, carriers, and enemy-team anchors; deterministic enemy-flag target selection; one-call objective assignment; route-goal handoff validation; and entity-aware route/pickup/capture record overloads. Later helper lanes add deterministic role-policy selection, role-policy status, and lane/depth metadata, including carrier-support, dropped-flag response, and own-base-return lanes. The generic item-touch hook deliberately does not infer CTF captures; authoritative CTF pickup, return, and capture event hooks feed objective proof counters from `g_capture.cpp`, and mode `23` now passes as a smoke-level team-objective proof. Autonomous role consumption across live CTF/TDM flows remains pending.
-- The FFA/TDM helper slice adds objective-side match-policy, item-role, and friendly-fire metadata without changing live command ownership. It gives future consumers deterministic scoring-participant, lane, item-role, and target-block recommendations while leaving actual FFA/TDM behavior integration pending. The latest coop/resource helper lane adds follow/wait/regroup/lead/support intent results and resource-sharing/denial policy results for future live consumers, but it does not implement autonomous coop commands, door/elevator cooperation, monster target sharing, or anti-blocking behavior.
-- Implementation logs: `docs-dev/q3a-botlib-team-objective-helper-scaffold-2026-06-18.md`, `docs-dev/q3a-botlib-team-objective-proof-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-depth-2026-06-18.md`, `docs-dev/q3a-botlib-ffa-tdm-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-ctf-objective-gameplay-hooks-2026-06-18.md`.
+- The FFA/TDM helper slice adds objective-side match-policy, item-role, and friendly-fire metadata without changing live command ownership. It gives later FFA/TDM consumers deterministic scoring-participant, lane, item-role, and target-block recommendations while leaving actual FFA/TDM behavior integration pending. The latest coop/resource helper lane adds follow/wait/regroup/lead/support intent results and resource-sharing/denial policy results; follow/regroup/support now feed the `coop_leader` timed route owner with a promoted compact-status `coop_leader_route` scenario gate, no-leader LeadAdvance can own a short timed route through default-off `sg_bot_coop_lead_advance`, a default-off `sg_bot_coop_progress_wait` bridge proves WaitForLeader can own a stop-and-face command, a default-off `sg_bot_coop_interaction_retry` bridge proves route-detected interactions can own wait/use retry commands, default-off `sg_bot_coop_resource_share` proves reserve-for-teammate resource policy can defer item route-goal candidates for another coop bot, default-off `sg_bot_coop_anti_blocking` proves close-to-leader anti-blocking can own a short reverse/strafe command, and default-off `sg_bot_coop_target_share` proves support-policy bots can adopt a teammate's current hostile monster target from the blackboard. Autonomous coop decision-making and campaign-specific door/elevator coordination remain pending.
+- Implementation logs: `docs-dev/q3a-botlib-team-objective-helper-scaffold-2026-06-18.md`, `docs-dev/q3a-botlib-team-objective-proof-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-depth-2026-06-18.md`, `docs-dev/q3a-botlib-ffa-tdm-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`, `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-leader-route-scenario-2026-06-21.md`, `docs-dev/q3a-botlib-coop-lead-advance-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-resource-share-route-selection-2026-06-21.md`, `docs-dev/q3a-botlib-coop-anti-blocking-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-target-share-2026-06-21.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-ctf-objective-gameplay-hooks-2026-06-18.md`.
 
 Exit criteria:
 
@@ -1402,6 +1414,10 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-escape-deployable-inventory-policy-2026-06-20.md`: escape/deployable inventory policy and status log.
 - [x] `docs-dev/q3a-botlib-safe-nuke-inventory-policy-2026-06-20.md`: safe nuke inventory policy and status log.
 - [x] `docs-dev/q3a-botlib-nuke-retreat-route-ownership-2026-06-21.md`: nuke retreat route-owner and frame-command status log.
+- [x] `docs-dev/q3a-botlib-timed-route-goal-owner-2026-06-21.md`: generic timed route-goal owner and status log.
+- [x] `docs-dev/q3a-botlib-teleporter-escape-route-owner-2026-06-21.md`: teleporter escape timed route-goal owner and status log.
+- [x] `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`: coop leader timed route-goal owner and status log.
+- [x] `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`: coop WaitForLeader command-owner status and scenario log.
 - [x] `docs-dev/q3a-botlib-live-item-timing-consumers-2026-06-18.md`: live item timing consumer and status-depth log.
 - [x] `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`: team/coop/resource policy helper log.
 - [x] `docs-dev/q2aas-reference-map-coverage-round-2026-06-18.md`: reference-map required-feature diagnostic coverage log.
@@ -1575,10 +1591,14 @@ Exit criteria:
 
 The remaining work is now concentrated in depth, breadth, and release hardening
 rather than missing core proof-helper APIs. The default installed scenario suite
-now reports 15 passed, 0 failed, 0 timed out, 0 errored, and 0 pending. Modes
-`20` through `26` are implemented smoke scenarios, `trace_checked_corner_cutting`
-reuses the route-rich mode `21` proof, and `coop_match_readiness` runs mode `3`
-under `deathmatch 0` / `coop 1`.
+now reports 22 passed, 0 failed, 0 timed out, 0 errored, and 0 pending. Modes
+`20` through `30` are implemented smoke scenarios, `trace_checked_corner_cutting`
+reuses the route-rich mode `21` proof, `coop_match_readiness`,
+`coop_leader_route`, and `coop_progress_wait` run mode `3` under coop cvars, while
+`coop_interaction_retry` reuses the route-rich elevator mode `12` under coop
+cvars, `coop_lead_advance` uses dedicated one-bot coop mode `27`, and
+`coop_resource_share`, `coop_anti_blocking`, and `coop_target_share` use
+dedicated two-bot coop modes `28`, `29`, and `30`.
 
 Those promoted rows are still deliberately smoke-level proofs: follow-up work
 should make enemy engagement and aim behavior less scripted, drive weapon and
@@ -1589,10 +1609,10 @@ coop flows.
 
 Broader outstanding plan work remains in Phase 4 fairness and blackboard state
 consumers, Phase 5 broader natural-movement/reference-map evidence, Phase 6
-generic timed-goal route ownership beyond the first nuke retreat owner, Phase 7
-live FFA/TDM/CTF role consumption plus deeper coop behavior, and Phase 9
-broader reference-map, CI, strict performance-budget, and fresh long-soak CPU
-baseline coverage.
+campaign-specific door/elevator/trigger coordination above the interaction
+retry bridge, Phase 7 live FFA/TDM/CTF role consumption plus deeper coop
+behavior, and Phase 9 broader reference-map, CI, strict performance-budget, and
+fresh long-soak CPU baseline coverage.
 
 Round-close evidence is tracked in
 `docs-dev/q3a-botlib-docs-progress-tracking-round-2026-06-18.md` and

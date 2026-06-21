@@ -932,7 +932,7 @@ Tasks: `FR-04-T03`, `FR-04-T04`, `FR-04-T13`, `FR-04-T14`, `FR-04-T15`, `FR-04-T
 
 - WORR-native server smoke modes `24`, `25`, and `26` now drive aim/fairness, item-timer, and FFA/TDM match-readiness proof lanes. The existing mode `21` route-rich smoke now gates trace-checked corner cutting, and the existing mode `3` frame-command smoke gates coop readiness under cooperative cvars.
 - WORR-native `bot_brain.*` status/proof plumbing records aim-policy, item-timer, and match-readiness proof fields through the existing action/detail/match status surfaces.
-- WORR-native `tools/bot_scenarios/` now treats `aim_fairness_policy_integration`, `item_timer_fairness_signals`, `trace_checked_corner_cutting`, `ffa_tdm_match_readiness`, and `coop_match_readiness` as implemented rows. The default implemented suite reports 15 passed, 0 failed, 0 timed out, 0 errored, and 0 pending from `.tmp/bot_scenarios/implemented-latest.json`.
+- WORR-native `tools/bot_scenarios/` now treats `aim_fairness_policy_integration`, `item_timer_fairness_signals`, `trace_checked_corner_cutting`, `ffa_tdm_match_readiness`, `coop_match_readiness`, `coop_leader_route`, `coop_lead_advance`, `coop_resource_share`, `coop_anti_blocking`, `coop_target_share`, `coop_progress_wait`, and `coop_interaction_retry` as implemented rows. The default implemented suite reports 22 passed, 0 failed, 0 timed out, 0 errored, and 0 pending from `.tmp/bot_scenarios/latest_report.json`.
 - First-party WORR botfile scripts under `assets/botfiles/scripts/*_s.c` gained additive named tactical routines. Q3A and Gladiator assets were consulted for layout/vocabulary parity, but no reference script text was copied.
 - No new upstream Q3A, Gladiator, or BSPC source files were imported for this update.
 - Validation: `python tools\bot_scenarios\test_run_bot_scenarios.py` passed 29 tests; `python -m py_compile tools\bot_scenarios\run_bot_scenarios.py tools\bot_scenarios\test_run_bot_scenarios.py` passed; `meson compile -C builddir-win` passed; `tools\refresh_install.py --build-dir builddir-win --install-dir .install --base-game basew --platform-id windows-x86_64` passed; focused promotion and full implemented scenario runs passed from the refreshed `.install` payload.
@@ -1110,9 +1110,214 @@ Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
 - Implementation log:
   `docs-dev/q3a-botlib-nuke-retreat-route-ownership-2026-06-21.md`.
 
+## Native Runtime Update: Timed Route Goal Owner
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native brain/route work now generalizes the first nuke retreat route
+  state into a reusable timed route-goal owner.
+- The owner records kind, duration, source, fallback direction, current goal,
+  route request, deferral, expiration, invalid-skip, and last-owner metadata.
+- Nuke retreat, teleporter escape, and coop leader routing now consume the
+  owner while future tactical/team/coop behaviors can attach additional timed
+  route-goal kinds without adding another bespoke per-slot route overlay.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-timed-route-goal-owner-2026-06-21.md`.
+
+## Native Runtime Update: Teleporter Escape Route Owner
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T03`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native brain/route work now attaches last-resort personal teleporter
+  escape use to the generic timed route-goal owner.
+- A submitted `IT_TELEPORTER` inventory command arms a short escape route using
+  remembered enemy pressure, then recent damage origin, then a view-direction
+  fallback source.
+- Frame-command status now reports `teleporter_escape_*` counters for
+  activations, fallback source use, damage-source use, and invalid skips.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-teleporter-escape-route-owner-2026-06-21.md`.
+
+## Native Runtime Update: Coop Leader Route Owner
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native brain/route work now attaches coop follow, regroup, and
+  support-combat leader policy to the generic timed route-goal owner.
+- Follow/regroup intents synthesize a source behind the bot on the leader vector
+  so the shared owner routes toward the selected leader.
+- Support-combat intent uses the leader as the source for a short spacing route.
+- Active nuke retreat and teleporter escape owners remain higher priority and
+  are not overwritten by coop leader routing.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`.
+
+## Native Validation Update: Coop Leader Route Scenario Gate
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native frame-command status now mirrors `coop_leader_route_*` and
+  `last_coop_leader_route_*` counters on the compact
+  `q3a_bot_coop_command_status` marker.
+- Scenario tooling now promotes `coop_leader_route` as a mode `3` coop reuse
+  row that hard-gates leader-route activation, refresh, support-spacing source
+  generation, valid coop intent evidence, and the `coop_leader` timed route
+  owner kind.
+- Optional-field discovery recognizes coop leader route counters from both the
+  verbose frame-command status marker and compact coop command marker.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-coop-leader-route-scenario-2026-06-21.md`.
+
+## Native Runtime Update: Coop LeadAdvance Route Owner
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native brain/objective work now adds a default-off
+  `sg_bot_coop_lead_advance` bridge for no-leader coop LeadAdvance policy.
+- Valid LeadAdvance policy arms a short `coop_lead_advance` timed route-goal
+  owner that routes from a source behind the bot toward the bot's current
+  advance direction.
+- Server smoke mode `27` runs a one-bot coop proof, and compact coop-command
+  status reports `coop_lead_advance_*` and `last_coop_lead_advance_*` counters
+  for policy requests, activations, route requests, deferrals, invalid skips,
+  and last intent metadata.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-coop-lead-advance-route-owner-2026-06-21.md`.
+
+## Native Runtime Update: Coop Progress Wait Command Owner
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native brain/objective work now adds a default-off
+  `sg_bot_coop_progress_wait` bridge that requests coop WaitForLeader policy
+  during frame-command evaluation.
+- Valid WaitForLeader policy owns a stop-and-face command by clearing
+  forward/side movement, jump, and crouch movement-state buttons while facing
+  the selected leader.
+- Compact coop-command status and scenario tooling now report
+  `coop_progress_wait_*` counters and a promoted `coop_progress_wait` smoke
+  row; short proof rows are emitted before verbose diagnostics so no new
+  upstream source is needed for the validation surface.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`.
+
+## Native Runtime Update: Coop Interaction Retry Command Owner
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-07-T06`
+
+- WORR-native brain/navigation work now exposes the existing route interaction
+  retry activator through a narrow `BotNav_RequestInteractionRetry(...)`
+  wrapper.
+- A default-off `sg_bot_coop_interaction_retry` bridge lets coop frame commands
+  request detected route interaction retries from the current route and records
+  only those cvar-gated requests through `coop_interaction_retry_*` counters.
+- The promoted `coop_interaction_retry` smoke row reuses the elevator route
+  proof to validate wait/use command ownership plus interaction-context
+  telemetry.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`.
+
+## Native Runtime Update: Coop Resource Share Route Selection
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native navigation/objective work now adds a default-off
+  `sg_bot_coop_resource_share` bridge for cooperative resource-sharing policy.
+- Item route-goal selection evaluates the existing resource policy before item
+  scoring and marks reserve-for-teammate candidates as reserved, allowing
+  `BotItems_Evaluate(...)` to defer them and report `item_reserved_deferrals`.
+- Server smoke mode `28` runs a two-bot coop proof, and the promoted
+  `coop_resource_share` scenario validates coop readiness, resource-share
+  policy, reserve-for-teammate policy, route cleanliness, and item-scoring
+  deferral evidence.
+- Compact and proof action status now expose `item_reserved_deferrals` so this
+  gate does not depend on oversized verbose diagnostics.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-coop-resource-share-route-selection-2026-06-21.md`.
+
+## Native Runtime Update: Coop Anti-Blocking Command Owner
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native brain/objective work now adds a default-off
+  `sg_bot_coop_anti_blocking` bridge for close-to-leader cooperative spacing.
+- Valid close-leader coop policy can own a short backpedal plus sidestep
+  command while keeping the bot facing the selected leader.
+- The bridge clears jump/crouch movement-state buttons so the proof is a clean
+  command-owner behavior rather than a side effect of route travel state.
+- Compact coop-command status exposes `coop_anti_block_*` and
+  `last_coop_anti_block_*` counters for request, close-policy, command,
+  invalid-skip, leader, intent, distance, and movement evidence.
+- Server smoke mode `29` runs a two-bot coop proof, and the promoted
+  `coop_anti_blocking` scenario validates coop readiness, non-deathmatch match
+  readiness, close-policy evidence, command ownership, and support-combat intent
+  evidence.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-coop-anti-blocking-command-2026-06-21.md`.
+
+## Native Runtime Update: Coop Target Sharing
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native brain/perception work now adds a default-off
+  `sg_bot_coop_target_share` bridge for cooperative blackboard target adoption.
+- Hostile non-client `SVF_MONSTER` entities can act as combat targets for this
+  gated path, letting a support-policy bot adopt a teammate's current hostile
+  monster target when the source bot, target memory, and coop policy are valid.
+- Compact coop-command status exposes `coop_target_share_*` and
+  `last_coop_target_share_*` counters for request, policy, source scan,
+  source-candidate, adoption, invalid-skip, source-client, target-entity,
+  target-client, target-distance, and intent evidence.
+- Server smoke mode `30` runs a two-bot coop proof with a lightweight
+  proof-only hostile monster target, and the promoted `coop_target_share`
+  scenario validates coop readiness, target-share setup, source-candidate
+  evidence, adoption evidence, valid target identity, and support-combat intent.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Implementation log:
+  `docs-dev/q3a-botlib-coop-target-share-2026-06-21.md`.
+
 ## Candidate Source Inventory
 
-These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nuke retreat route ownership, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
+These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nuke retreat route ownership, timed route-goal ownership, teleporter escape route ownership, coop leader route ownership and validation gating, coop lead-advance route ownership, coop progress-wait command ownership, coop interaction-retry command ownership, coop resource-share route selection, coop anti-blocking command ownership, coop target-sharing blackboard adoption, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
 
 | Candidate | Upstream / Local Ref | Current Use Decision | Required Before Import |
 |---|---|---|---|

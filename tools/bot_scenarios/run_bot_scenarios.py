@@ -21,6 +21,7 @@ ACTION_DETAIL_STATUS_MARKER = "q3a_bot_action_detail_status"
 BLACKBOARD_STATUS_MARKER = "q3a_bot_blackboard_status"
 OBJECTIVE_STATUS_MARKER = "q3a_bot_objective_status"
 OBJECTIVE_DETAIL_STATUS_MARKER = "q3a_bot_objective_detail_status"
+COOP_COMMAND_STATUS_MARKER = "q3a_bot_coop_command_status"
 NAV_POLICY_STATUS_MARKER = "q3a_bot_nav_policy_status"
 NAV_NATURAL_SUPPORT_STATUS_MARKER = "q3a_bot_nav_natural_support_status"
 NAV_INTERACTION_CONTEXT_STATUS_MARKER = "q3a_bot_nav_interaction_context_status"
@@ -37,6 +38,7 @@ RAW_RESERVED_METRIC_MARKERS = (
     ACTION_DETAIL_STATUS_MARKER,
     OBJECTIVE_STATUS_MARKER,
     OBJECTIVE_DETAIL_STATUS_MARKER,
+    COOP_COMMAND_STATUS_MARKER,
     NAV_POLICY_STATUS_MARKER,
     NAV_NATURAL_SUPPORT_STATUS_MARKER,
     NAV_INTERACTION_CONTEXT_STATUS_MARKER,
@@ -105,6 +107,16 @@ RAW_RESERVED_METRIC_PREFIX_SOURCE_HINTS = (
     ("last_combat_enemy_", (ACTION_STATUS_MARKER, BLACKBOARD_STATUS_MARKER, STATUS_MARKER)),
     ("last_combat_estimate_", (ACTION_STATUS_MARKER, ACTION_DETAIL_STATUS_MARKER)),
     ("last_combat_weapon_estimate_", (ACTION_STATUS_MARKER, ACTION_DETAIL_STATUS_MARKER)),
+    ("coop_leader_route_", (STATUS_MARKER, COOP_COMMAND_STATUS_MARKER)),
+    ("last_coop_leader_route_", (STATUS_MARKER, COOP_COMMAND_STATUS_MARKER)),
+    ("coop_lead_advance_", (COOP_COMMAND_STATUS_MARKER,)),
+    ("last_coop_lead_advance_", (COOP_COMMAND_STATUS_MARKER,)),
+    ("coop_progress_wait_", (COOP_COMMAND_STATUS_MARKER,)),
+    ("last_coop_progress_wait_", (COOP_COMMAND_STATUS_MARKER,)),
+    ("coop_anti_block_", (COOP_COMMAND_STATUS_MARKER,)),
+    ("last_coop_anti_block_", (COOP_COMMAND_STATUS_MARKER,)),
+    ("coop_interaction_retry_", (COOP_COMMAND_STATUS_MARKER,)),
+    ("last_coop_interaction_retry_", (COOP_COMMAND_STATUS_MARKER,)),
     ("q3a_", (SOURCE_STATUS_MARKER,)),
     ("bsp_", (SOURCE_STATUS_MARKER,)),
 )
@@ -115,6 +127,10 @@ RESERVED_MODE_SCENARIOS = {
     23: "team_objective",
     24: "aim_fairness_policy_integration",
     25: "item_timer_fairness_signals",
+    26: "ffa_tdm_match_readiness",
+    27: "coop_lead_advance",
+    28: "coop_resource_share",
+    29: "coop_anti_blocking",
 }
 ITEM_TIMING_CONSUMER_READY_OR_LIVE_METRIC = "item_timing_consumer_ready_or_live"
 PROMOTION_RELATED_METRIC_PREFIXES = {
@@ -416,6 +432,37 @@ OPTIONAL_FIELD_FAMILIES: tuple[OptionalFieldFamily, ...] = (
         ),
     ),
     OptionalFieldFamily(
+        name="timed_route_goal_counters",
+        title="Timed route goal counters",
+        description=(
+            "Generic brain-owned timed route-goal activations, route ownership, "
+            "deferrals, expiration, invalid skips, and last owner metadata."
+        ),
+        markers=(STATUS_MARKER,),
+        metric_names=(
+            "timed_route_goal_activations",
+            "timed_route_goal_route_requests",
+            "timed_route_goal_route_deferrals",
+            "timed_route_goal_expirations",
+            "timed_route_goal_invalid_skips",
+            "last_timed_route_goal_kind",
+            "last_timed_route_goal_kind_name",
+            "last_timed_route_goal_client",
+            "last_timed_route_goal_remaining_ms",
+            "last_timed_route_goal_source_x",
+            "last_timed_route_goal_source_y",
+            "last_timed_route_goal_source_z",
+            "last_timed_route_goal_goal_x",
+            "last_timed_route_goal_goal_y",
+            "last_timed_route_goal_goal_z",
+            "last_timed_route_goal_distance_sq",
+        ),
+        metric_prefixes=(
+            "timed_route_goal_",
+            "last_timed_route_goal_",
+        ),
+    ),
+    OptionalFieldFamily(
         name="nuke_retreat_route_counters",
         title="Nuke retreat route counters",
         description=(
@@ -444,6 +491,180 @@ OPTIONAL_FIELD_FAMILIES: tuple[OptionalFieldFamily, ...] = (
         metric_prefixes=(
             "nuke_retreat_",
             "last_nuke_retreat_",
+        ),
+    ),
+    OptionalFieldFamily(
+        name="teleporter_escape_route_counters",
+        title="Teleporter escape route counters",
+        description=(
+            "Timed route-goal activation and source-selection metadata after "
+            "last-resort personal teleporter escape inventory use."
+        ),
+        markers=(STATUS_MARKER,),
+        metric_names=(
+            "teleporter_escape_route_activations",
+            "teleporter_escape_fallback_sources",
+            "teleporter_escape_damage_sources",
+            "teleporter_escape_invalid_skips",
+        ),
+        metric_prefixes=(
+            "teleporter_escape_",
+        ),
+    ),
+    OptionalFieldFamily(
+        name="coop_leader_route_counters",
+        title="Coop leader route counters",
+        description=(
+            "Timed route-goal activation and leader-source metadata for "
+            "coop follow, regroup, and support-spacing policy consumption."
+        ),
+        markers=(STATUS_MARKER, COOP_COMMAND_STATUS_MARKER),
+        metric_names=(
+            "coop_leader_route_activations",
+            "coop_leader_route_refreshes",
+            "coop_leader_route_owner_deferrals",
+            "coop_leader_route_toward_sources",
+            "coop_leader_route_spacing_sources",
+            "coop_leader_route_invalid_skips",
+            "last_coop_leader_route_client",
+            "last_coop_leader_route_leader_client",
+            "last_coop_leader_route_intent",
+            "last_coop_leader_route_intent_name",
+            "last_coop_leader_route_leader_distance_sq",
+        ),
+        metric_prefixes=(
+            "coop_leader_route_",
+            "last_coop_leader_route_",
+        ),
+    ),
+    OptionalFieldFamily(
+        name="coop_progress_wait_counters",
+        title="Coop progress wait counters",
+        description=(
+            "Cvar-gated coop WaitForLeader policy requests, command-owner "
+            "applications, and last leader intent metadata."
+        ),
+        markers=(COOP_COMMAND_STATUS_MARKER,),
+        metric_names=(
+            "coop_progress_wait_requests",
+            "coop_progress_wait_policy_waits",
+            "coop_progress_wait_commands",
+            "coop_progress_wait_invalid_skips",
+            "last_coop_progress_wait_client",
+            "last_coop_progress_wait_leader_client",
+            "last_coop_progress_wait_intent",
+            "last_coop_progress_wait_intent_name",
+            "last_coop_progress_wait_leader_distance_sq",
+        ),
+        metric_prefixes=(
+            "coop_progress_wait_",
+            "last_coop_progress_wait_",
+        ),
+    ),
+    OptionalFieldFamily(
+        name="coop_lead_advance_counters",
+        title="Coop lead advance counters",
+        description=(
+            "Cvar-gated coop LeadAdvance policy requests, timed route-goal "
+            "ownership, route requests, deferrals, and last intent metadata."
+        ),
+        markers=(COOP_COMMAND_STATUS_MARKER,),
+        metric_names=(
+            "coop_lead_advance_requests",
+            "coop_lead_advance_policy_leads",
+            "coop_lead_advance_activations",
+            "coop_lead_advance_refreshes",
+            "coop_lead_advance_route_requests",
+            "coop_lead_advance_owner_deferrals",
+            "coop_lead_advance_route_deferrals",
+            "coop_lead_advance_expirations",
+            "coop_lead_advance_invalid_skips",
+            "last_coop_lead_advance_client",
+            "last_coop_lead_advance_intent",
+            "last_coop_lead_advance_intent_name",
+            "last_coop_lead_advance_remaining_ms",
+            "last_coop_lead_advance_goal_distance_sq",
+        ),
+        metric_prefixes=(
+            "coop_lead_advance_",
+            "last_coop_lead_advance_",
+        ),
+    ),
+    OptionalFieldFamily(
+        name="coop_anti_block_counters",
+        title="Coop anti-block counters",
+        description=(
+            "Cvar-gated coop close-to-leader anti-blocking requests, "
+            "command-owner applications, and last leader intent metadata."
+        ),
+        markers=(COOP_COMMAND_STATUS_MARKER,),
+        metric_names=(
+            "coop_anti_block_requests",
+            "coop_anti_block_policy_close",
+            "coop_anti_block_commands",
+            "coop_anti_block_invalid_skips",
+            "last_coop_anti_block_client",
+            "last_coop_anti_block_leader_client",
+            "last_coop_anti_block_intent",
+            "last_coop_anti_block_intent_name",
+            "last_coop_anti_block_leader_distance_sq",
+            "last_coop_anti_block_forward_move",
+            "last_coop_anti_block_side_move",
+        ),
+        metric_prefixes=(
+            "coop_anti_block_",
+            "last_coop_anti_block_",
+        ),
+    ),
+    OptionalFieldFamily(
+        name="coop_target_share_counters",
+        title="Coop target share counters",
+        description=(
+            "Cvar-gated coop target sharing requests, source scans, "
+            "blackboard adoptions, and last shared target/source metadata."
+        ),
+        markers=(COOP_COMMAND_STATUS_MARKER,),
+        metric_names=(
+            "coop_target_share_requests",
+            "coop_target_share_policy_supports",
+            "coop_target_share_source_scans",
+            "coop_target_share_source_candidates",
+            "coop_target_share_adoptions",
+            "coop_target_share_invalid_skips",
+            "last_coop_target_share_client",
+            "last_coop_target_share_source_client",
+            "last_coop_target_share_target_entity",
+            "last_coop_target_share_target_client",
+            "last_coop_target_share_target_distance_sq",
+            "last_coop_target_share_intent",
+            "last_coop_target_share_intent_name",
+        ),
+        metric_prefixes=(
+            "coop_target_share_",
+            "last_coop_target_share_",
+        ),
+    ),
+    OptionalFieldFamily(
+        name="coop_interaction_retry_counters",
+        title="Coop interaction retry counters",
+        description=(
+            "Cvar-gated coop route interaction retry requests, activations, "
+            "command-owner applications, and last detected interaction metadata."
+        ),
+        markers=(COOP_COMMAND_STATUS_MARKER,),
+        metric_names=(
+            "coop_interaction_retry_requests",
+            "coop_interaction_retry_activations",
+            "coop_interaction_retry_commands",
+            "coop_interaction_retry_invalid_skips",
+            "last_coop_interaction_retry_client",
+            "last_coop_interaction_retry_action",
+            "last_coop_interaction_retry_kind",
+            "last_coop_interaction_retry_entity",
+        ),
+        metric_prefixes=(
+            "coop_interaction_retry_",
+            "last_coop_interaction_retry_",
         ),
     ),
     OptionalFieldFamily(
@@ -1874,6 +2095,612 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
         ),
     ),
+    Scenario(
+        name="coop_leader_route",
+        title="Coop leader route",
+        smoke_mode=3,
+        description=(
+            "Runs the frame-command smoke under cooperative cvars and verifies "
+            "coop follow/regroup/support policy reaches the timed route-goal "
+            "owner and compact coop command status."
+        ),
+        task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
+        budget_seconds=30,
+        extra_cvars=(
+            ("deathmatch", "0"),
+            ("coop", "1"),
+        ),
+        selection_tags=("match", "coop", "leader"),
+        checks=(
+            MetricCheck("pass", "eq", 1, "source smoke status must pass"),
+            MetricCheck("route_commands", "ge", 1, "coop leader route smoke must emit route commands"),
+            MetricCheck("route_failures", "eq", 0, "coop leader route smoke must remain route-clean"),
+        ),
+        marker_checks=(
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "pass",
+                "eq",
+                1,
+                "coop readiness status must pass",
+            ),
+            MarkerMetricCheck(
+                MATCH_READINESS_STATUS_MARKER,
+                "deathmatch",
+                "eq",
+                0,
+                "coop leader route smoke must disable deathmatch",
+            ),
+            MarkerMetricCheck(
+                STATUS_MARKER,
+                "last_timed_route_goal_kind",
+                "eq",
+                3,
+                "coop leader route smoke must end on the coop leader route owner",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_leader_route_activations",
+                "ge",
+                1,
+                "coop leader route smoke must activate leader routing",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_leader_route_refreshes",
+                "ge",
+                1,
+                "coop leader route smoke must refresh an active leader route owner",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_leader_route_spacing_sources",
+                "ge",
+                1,
+                "coop leader route smoke must build at least one support-spacing source",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "last_coop_leader_route_intent",
+                "ge",
+                1,
+                "coop leader route smoke must record a concrete coop intent",
+            ),
+        ),
+    ),
+    Scenario(
+        name="coop_lead_advance",
+        title="Coop lead advance",
+        smoke_mode=27,
+        description=(
+            "Runs a one-bot cooperative frame-command smoke with "
+            "sg_bot_coop_lead_advance enabled and verifies no-leader "
+            "LeadAdvance policy reaches timed route-goal ownership."
+        ),
+        task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
+        budget_seconds=30,
+        extra_cvars=(
+            ("deathmatch", "0"),
+            ("coop", "1"),
+            ("sg_bot_coop_lead_advance", "1"),
+        ),
+        selection_tags=("match", "coop", "leader", "progression"),
+        checks=(
+            MetricCheck("pass", "eq", 1, "source smoke status must pass"),
+            MetricCheck("route_commands", "ge", 1, "coop lead advance smoke must emit route commands"),
+            MetricCheck("route_failures", "eq", 0, "coop lead advance smoke must remain route-clean"),
+        ),
+        marker_checks=(
+            *reserved_mode_marker_checks(
+                27,
+                combat=0,
+                weapon_switch=0,
+                item_focus=0,
+                team_objective=0,
+                target=1,
+                gametype=0,
+            ),
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "pass",
+                "eq",
+                1,
+                "coop readiness status must pass",
+            ),
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "bots",
+                "eq",
+                1,
+                "lead advance smoke must run with a single bot",
+            ),
+            MarkerMetricCheck(
+                MATCH_READINESS_STATUS_MARKER,
+                "deathmatch",
+                "eq",
+                0,
+                "coop lead advance smoke must disable deathmatch",
+            ),
+            MarkerMetricCheck(
+                STATUS_MARKER,
+                "last_timed_route_goal_kind",
+                "eq",
+                4,
+                "coop lead advance smoke must end on the lead-advance route owner",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_lead_advance_requests",
+                "ge",
+                1,
+                "lead advance smoke must request coop LeadAdvance ownership",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_lead_advance_policy_leads",
+                "ge",
+                1,
+                "lead advance smoke must observe LeadAdvance policy",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_lead_advance_activations",
+                "ge",
+                1,
+                "lead advance smoke must activate the timed route owner",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_lead_advance_route_requests",
+                "ge",
+                1,
+                "lead advance smoke must route through the timed owner",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "last_coop_lead_advance_intent",
+                "eq",
+                4,
+                "lead advance smoke must record LeadAdvance intent",
+            ),
+            MarkerMetricCheck(
+                OBJECTIVE_STATUS_MARKER,
+                "last_team_objective_coop_intent",
+                "eq",
+                4,
+                "lead advance smoke must record LeadAdvance objective intent",
+            ),
+        ),
+    ),
+    Scenario(
+        name="coop_resource_share",
+        title="Coop resource share",
+        smoke_mode=28,
+        description=(
+            "Runs a two-bot cooperative frame-command smoke with "
+            "sg_bot_coop_resource_share enabled and verifies item routing "
+            "consumes reserve-for-teammate resource policy."
+        ),
+        task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
+        budget_seconds=30,
+        extra_cvars=(
+            ("deathmatch", "0"),
+            ("coop", "1"),
+            ("sg_bot_coop_resource_share", "1"),
+        ),
+        selection_tags=("match", "coop", "resources"),
+        checks=(
+            MetricCheck("pass", "eq", 1, "source smoke status must pass"),
+            MetricCheck("route_commands", "ge", 1, "coop resource smoke must emit route commands"),
+            MetricCheck("route_failures", "eq", 0, "coop resource smoke must remain route-clean"),
+        ),
+        marker_checks=(
+            *reserved_mode_marker_checks(
+                28,
+                combat=0,
+                weapon_switch=0,
+                item_focus=0,
+                team_objective=0,
+                target=2,
+                gametype=0,
+            ),
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "pass",
+                "eq",
+                1,
+                "coop readiness status must pass",
+            ),
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "bots",
+                "ge",
+                2,
+                "resource share smoke must run with at least two bots",
+            ),
+            MarkerMetricCheck(
+                MATCH_READINESS_STATUS_MARKER,
+                "deathmatch",
+                "eq",
+                0,
+                "coop resource share smoke must disable deathmatch",
+            ),
+            MarkerMetricCheck(
+                OBJECTIVE_STATUS_MARKER,
+                "team_objective_coop_policy_resource_share",
+                "ge",
+                1,
+                "coop policy must advertise resource sharing",
+            ),
+            MarkerMetricCheck(
+                OBJECTIVE_STATUS_MARKER,
+                "team_objective_resource_policy_reserve",
+                "ge",
+                1,
+                "resource policy must reserve at least one candidate for a teammate",
+            ),
+            MarkerMetricCheck(
+                ACTION_STATUS_MARKER,
+                "item_reserved_deferrals",
+                "ge",
+                1,
+                "item scoring must defer at least one resource-reserved candidate",
+            ),
+        ),
+    ),
+    Scenario(
+        name="coop_anti_blocking",
+        title="Coop anti-blocking",
+        smoke_mode=29,
+        description=(
+            "Runs a two-bot cooperative frame-command smoke with "
+            "sg_bot_coop_anti_blocking enabled and verifies close-to-leader "
+            "coop policy can own an anti-blocking movement command."
+        ),
+        task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
+        budget_seconds=30,
+        extra_cvars=(
+            ("deathmatch", "0"),
+            ("coop", "1"),
+            ("sg_bot_coop_anti_blocking", "1"),
+        ),
+        selection_tags=("match", "coop", "movement"),
+        checks=(
+            MetricCheck("pass", "eq", 1, "source smoke status must pass"),
+            MetricCheck("route_commands", "ge", 1, "coop anti-block smoke must emit route commands"),
+            MetricCheck("route_failures", "eq", 0, "coop anti-block smoke must remain route-clean"),
+        ),
+        marker_checks=(
+            *reserved_mode_marker_checks(
+                29,
+                combat=0,
+                weapon_switch=0,
+                item_focus=0,
+                team_objective=0,
+                target=2,
+                gametype=0,
+            ),
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "pass",
+                "eq",
+                1,
+                "coop readiness status must pass",
+            ),
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "bots",
+                "ge",
+                2,
+                "anti-block smoke must run with at least two bots",
+            ),
+            MarkerMetricCheck(
+                MATCH_READINESS_STATUS_MARKER,
+                "deathmatch",
+                "eq",
+                0,
+                "coop anti-block smoke must disable deathmatch",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_anti_block_requests",
+                "ge",
+                1,
+                "anti-block cvar must request the coop command owner",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_anti_block_policy_close",
+                "ge",
+                1,
+                "coop policy must report close leader spacing for anti-blocking",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_anti_block_commands",
+                "ge",
+                1,
+                "anti-blocking must own at least one movement command",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "last_coop_anti_block_intent",
+                "eq",
+                5,
+                "anti-blocking must be driven by close support-combat coop intent",
+            ),
+        ),
+    ),
+    Scenario(
+        name="coop_target_share",
+        title="Coop target share",
+        smoke_mode=30,
+        description=(
+            "Runs a two-bot cooperative frame-command smoke with "
+            "sg_bot_coop_target_share enabled and verifies a bot can adopt "
+            "a teammate's hostile non-client target from the blackboard."
+        ),
+        task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
+        budget_seconds=30,
+        extra_cvars=(
+            ("deathmatch", "0"),
+            ("coop", "1"),
+            ("sg_bot_coop_target_share", "1"),
+        ),
+        selection_tags=("match", "coop", "combat", "targeting"),
+        checks=(
+            MetricCheck("pass", "eq", 1, "source smoke status must pass"),
+            MetricCheck("route_failures", "eq", 0, "coop target-share smoke must remain route-clean"),
+        ),
+        marker_checks=(
+            *reserved_mode_marker_checks(
+                30,
+                combat=0,
+                weapon_switch=0,
+                item_focus=0,
+                team_objective=0,
+                target=2,
+                gametype=0,
+            ),
+            MarkerMetricCheck(
+                SCENARIO_BEGIN_MARKER,
+                "target_share",
+                "eq",
+                1,
+                "reserved smoke must enable the coop target-share proof lane",
+            ),
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "pass",
+                "eq",
+                1,
+                "coop readiness status must pass",
+            ),
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "bots",
+                "ge",
+                2,
+                "target-share smoke must run with at least two bots",
+            ),
+            MarkerMetricCheck(
+                MATCH_READINESS_STATUS_MARKER,
+                "deathmatch",
+                "eq",
+                0,
+                "coop target-share smoke must disable deathmatch",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_target_share_requests",
+                "ge",
+                1,
+                "target-share cvar must request coop target sharing",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_target_share_source_candidates",
+                "ge",
+                1,
+                "target-share smoke must find at least one teammate source target",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_target_share_adoptions",
+                "ge",
+                1,
+                "target-share smoke must adopt at least one teammate target",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "last_coop_target_share_source_client",
+                "ge",
+                0,
+                "target-share smoke must record the source teammate client",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "last_coop_target_share_target_entity",
+                "gt",
+                0,
+                "target-share smoke must record the shared target entity",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "last_coop_target_share_intent",
+                "eq",
+                5,
+                "target sharing must be driven by close support-combat coop intent",
+            ),
+        ),
+    ),
+    Scenario(
+        name="coop_progress_wait",
+        title="Coop progress wait",
+        smoke_mode=3,
+        description=(
+            "Runs the frame-command smoke under cooperative cvars with "
+            "sg_bot_coop_progress_wait enabled and verifies WaitForLeader "
+            "policy consumption reaches command ownership."
+        ),
+        task_ids=("FR-04-T04", "FR-04-T15", "DV-07-T06"),
+        budget_seconds=30,
+        extra_cvars=(
+            ("deathmatch", "0"),
+            ("coop", "1"),
+            ("sg_bot_coop_progress_wait", "1"),
+        ),
+        selection_tags=("match", "coop", "progression"),
+        checks=(
+            MetricCheck("pass", "eq", 1, "source smoke status must pass"),
+            MetricCheck("route_failures", "eq", 0, "coop progress wait smoke must remain route-clean"),
+        ),
+        marker_checks=(
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "pass",
+                "eq",
+                1,
+                "coop readiness status must pass",
+            ),
+            MarkerMetricCheck(
+                MATCH_READINESS_STATUS_MARKER,
+                "deathmatch",
+                "eq",
+                0,
+                "coop progress wait smoke must disable deathmatch",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_progress_wait_requests",
+                "ge",
+                1,
+                "progress wait smoke must request coop progression waiting",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_progress_wait_policy_waits",
+                "ge",
+                1,
+                "progress wait smoke must produce WaitForLeader policy",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_progress_wait_commands",
+                "ge",
+                1,
+                "progress wait smoke must apply wait command ownership",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "last_coop_progress_wait_intent",
+                "eq",
+                2,
+                "progress wait smoke must record WaitForLeader intent",
+            ),
+            MarkerMetricCheck(
+                OBJECTIVE_STATUS_MARKER,
+                "team_objective_coop_policy_wait",
+                "ge",
+                1,
+                "progress wait smoke must evaluate WaitForLeader policy",
+            ),
+            MarkerMetricCheck(
+                OBJECTIVE_STATUS_MARKER,
+                "last_team_objective_coop_intent",
+                "eq",
+                2,
+                "progress wait smoke must record WaitForLeader objective intent",
+            ),
+        ),
+    ),
+    Scenario(
+        name="coop_interaction_retry",
+        title="Coop interaction retry",
+        smoke_mode=12,
+        description=(
+            "Runs the elevator travel-type smoke under cooperative cvars with "
+            "sg_bot_coop_interaction_retry enabled and verifies detected route "
+            "interactions can own wait/use command retry windows."
+        ),
+        task_ids=("FR-04-T04", "FR-04-T15", "DV-07-T06"),
+        budget_seconds=30,
+        extra_cvars=(
+            ("deathmatch", "0"),
+            ("coop", "1"),
+            ("sg_bot_coop_interaction_retry", "1"),
+        ),
+        selection_tags=("match", "coop", "interaction"),
+        checks=(
+            MetricCheck("pass", "eq", 1, "source smoke status must pass"),
+            MetricCheck("route_failures", "eq", 0, "coop interaction retry smoke must remain route-clean"),
+        ),
+        marker_checks=(
+            MarkerMetricCheck(
+                COOP_READINESS_STATUS_MARKER,
+                "pass",
+                "eq",
+                1,
+                "coop readiness status must pass",
+            ),
+            MarkerMetricCheck(
+                MATCH_READINESS_STATUS_MARKER,
+                "deathmatch",
+                "eq",
+                0,
+                "coop interaction retry smoke must disable deathmatch",
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_entities",
+                "ge",
+                1,
+                "interaction retry smoke must see world interaction entities",
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_triggers",
+                "ge",
+                1,
+                "interaction retry smoke must see trigger-backed interactions",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_interaction_retry_requests",
+                "ge",
+                1,
+                "interaction retry smoke must request coop route interaction retries",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_interaction_retry_activations",
+                "ge",
+                1,
+                "interaction retry smoke must activate a retry window",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_interaction_retry_commands",
+                "ge",
+                1,
+                "interaction retry smoke must apply wait/use command ownership",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "last_coop_interaction_retry_action",
+                "eq",
+                3,
+                "interaction retry smoke must record a wait/use action",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "last_coop_interaction_retry_kind",
+                "ge",
+                3,
+                "interaction retry smoke must record a mover-like interaction kind",
+            ),
+        ),
+    ),
 )
 
 
@@ -1924,11 +2751,11 @@ def utc_timestamp() -> str:
 def parse_status_line(text: str) -> tuple[str | None, dict[str, int]]:
     status_rows: list[tuple[str, dict[str, int]]] = []
     for line in text.splitlines():
-        if STATUS_TOKEN_RE.search(line):
-            status_line = line.strip()
+        stripped = line.strip()
+        for _marker, segment in marker_line_segments(stripped, {STATUS_MARKER}):
             status_rows.append((
-                status_line,
-                {match.group(1): int(match.group(2)) for match in KEY_VALUE_RE.finditer(status_line)},
+                stripped,
+                {match.group(1): int(match.group(2)) for match in KEY_VALUE_RE.finditer(segment)},
             ))
 
     if not status_rows:
@@ -2028,8 +2855,11 @@ def evaluate_marker_check(
             "note": check.note,
         }
 
-    metrics = matches[-1] if matches else {}
-    actual = metrics.get(check.metric)
+    actual = None
+    for metrics in reversed(matches):
+        if check.metric in metrics:
+            actual = metrics[check.metric]
+            break
     passed = False
     if actual is not None:
         passed = marker_value_passes(check.op, actual, check.expected)

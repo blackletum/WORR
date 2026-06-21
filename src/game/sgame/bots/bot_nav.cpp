@@ -4,6 +4,7 @@
 #include "../g_local.hpp"
 #include "bot_items.hpp"
 #include "bot_nav.hpp"
+#include "bot_objectives.hpp"
 
 #include <algorithm>
 #include <array>
@@ -198,6 +199,14 @@ bool BotNavRocketJumpAllowed() {
 	return allowRocketJump != nullptr && allowRocketJump->integer > 0;
 }
 
+bool BotNavCoopResourceShareEnabled() {
+	static cvar_t *resourceShare = nullptr;
+	if (resourceShare == nullptr && gi.cvar != nullptr) {
+		resourceShare = gi.cvar("sg_bot_coop_resource_share", "0", CVAR_NOFLAGS);
+	}
+	return resourceShare != nullptr && resourceShare->integer > 0;
+}
+
 uint64_t BotNavRouteNowNs() {
 	return static_cast<uint64_t>(
 		std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -289,6 +298,46 @@ BotItemFocus BotNavItemFocusForKind(BotNavItemFocusMode mode, BotItemUtilityKind
 		return BotItemFocus::Armor;
 	}
 	return BotItemFocus::None;
+}
+
+bool BotNavCoopResourceKindCanBeReserved(BotObjectiveItemCategory category) {
+	return category == BotObjectiveItemCategory::Health ||
+		category == BotObjectiveItemCategory::Armor ||
+		category == BotObjectiveItemCategory::Ammo ||
+		category == BotObjectiveItemCategory::Weapon ||
+		category == BotObjectiveItemCategory::Utility;
+}
+
+BotItemContext BotNavApplyCoopResourceSharePolicy(
+	const BotObjectiveMatchPolicy &matchPolicy,
+	const BotObjectiveCoopPolicy &coopPolicy,
+	BotObjectiveItemCategory category,
+	BotItemContext context) {
+	if (!BotNavCoopResourceShareEnabled() || !coopPolicy.valid || !coopPolicy.coopMode) {
+		return context;
+	}
+
+	const bool teammateNeedsItem =
+		coopPolicy.shareResources &&
+		BotNavCoopResourceKindCanBeReserved(category);
+	const BotObjectiveResourceContext resourceContext =
+		BotObjectives_BuildResourceContext(
+			matchPolicy,
+			coopPolicy,
+			category,
+			context.candidateScore,
+			context.candidateUseful,
+			teammateNeedsItem,
+			false);
+	const BotObjectiveResourcePolicy resourcePolicy =
+		BotObjectives_EvaluateResourcePolicy(resourceContext);
+	if (resourcePolicy.valid &&
+		resourcePolicy.shouldReserve &&
+		!resourcePolicy.mayPickup) {
+		context.candidateReserved = true;
+	}
+
+	return context;
 }
 
 void BotNavApplyRoutePolicy() {
@@ -1261,6 +1310,21 @@ bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame,
 	BotNavItemGoalCandidate best{};
 	int bestScore = -1;
 	const BotNavItemFocusMode focusMode = BotNavSmokeItemFocusMode();
+	const bool coopResourceShare = BotNavCoopResourceShareEnabled();
+	BotObjectiveMatchPolicy matchPolicy{};
+	BotObjectiveCoopPolicy coopPolicy{};
+	if (coopResourceShare) {
+		const BotObjectiveMatchContext matchContext =
+			BotObjectives_BuildMatchContext(bot, BotObjectiveRole::None);
+		matchPolicy = BotObjectives_EvaluateMatchPolicy(matchContext);
+		const BotObjectiveCoopContext coopContext =
+			BotObjectives_BuildCoopContext(
+				bot,
+				nullptr,
+				false,
+				BotObjectiveRole::None);
+		coopPolicy = BotObjectives_EvaluateCoopPolicy(coopContext);
+	}
 	botNavRouteStatus.itemGoalScans++;
 
 	const uint32_t start = std::min<uint32_t>(game.maxClients + 1, globals.numEntities);
@@ -1312,6 +1376,13 @@ bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame,
 		}
 
 		itemContext.focus = BotNavItemFocusForKind(focusMode, itemContext.candidateKind);
+		if (coopResourceShare) {
+			itemContext = BotNavApplyCoopResourceSharePolicy(
+				matchPolicy,
+				coopPolicy,
+				BotObjectives_ItemCategoryForItem(ent->item),
+				itemContext);
+		}
 		const BotItemDecision decision = BotItems_Evaluate(itemContext);
 		if (decision.kind != BotItemDecisionKind::SeekCandidate || decision.priority <= 0) {
 			continue;
@@ -2197,6 +2268,28 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 		route);
 }
 
+bool BotNav_RequestInteractionRetry(
+	const gentity_t *bot,
+	const BotLibAdapterRouteSteer *route,
+	bool fromStuck) {
+	const int clientIndex = BotNavClientIndex(bot);
+	if (clientIndex < 0 || route == nullptr) {
+		return false;
+	}
+
+	BotNavRouteSlot &slot = botNavRouteSlots[clientIndex];
+	const uint32_t frame = gi.ServerFrame();
+	return BotNavActivateInteractionRetry(
+		slot,
+		bot,
+		clientIndex,
+		frame,
+		*route,
+		fromStuck) ||
+		(slot.interactionAction != static_cast<int>(BotNavInteractionAction::None) &&
+		 frame < slot.interactionUntilFrame);
+}
+
 bool BotNav_GetRecoveryMove(const gentity_t *bot, BotNavRecoveryMove *move) {
 	if (move != nullptr) {
 		*move = {};
@@ -2241,6 +2334,7 @@ bool BotNav_GetRecoveryMove(const gentity_t *bot, BotNavRecoveryMove *move) {
 			move->use = use;
 			move->framesRemaining = framesRemaining;
 			move->interactionAction = slot.interactionAction;
+			move->interactionKind = slot.interactionKind;
 			move->interactionEntity = slot.interactionEntityNumber;
 		}
 		return true;
