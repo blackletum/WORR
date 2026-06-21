@@ -97,18 +97,47 @@ error. The staged smoke also preflights Quake II `IBSP` version 38 headers,
 records BSPX marker offsets when present, summarizes Q2 brush contents, parses
 spawn/item/mover/trigger entities, maps spawn/item origins to generated AAS
 area bounds, and reports first-pass high-value pickup reachability from spawn
-areas. The staged smoke now fails when BSP lump-table issues, spawn coverage
-regressions, item coverage regressions, or high-value pickup reachability
-regressions are present. The manifest also records minimum structural metrics
-and travel counts for the staged map, so `q2aas-staged-smoke` catches drops in
-AAS area count, reachability size, cluster count, walk routes, jump routes,
-ladder routes, walk-off-ledge routes, and elevator routes. The manifest declares
-schema `worr-q2aas-validation-manifest-v1`, and the validator rejects malformed
-schema/version/task metadata, wrong gate types, unknown baseline names, and
-non-integer thresholds before generation. The JSON report records the manifest
-schema, task IDs, map counts, pending reference categories, and manifest errors.
-The staged smoke also creates and removes a malformed scratch manifest to keep
-the expected-failure path covered.
+areas. The validation report also records the supported generator scope
+(`quake2_ibsp38` behind the `--require-q2-bsp` gate), the current standing and
+crouched player presence boxes from `cfg/worr_q2.cfg`, and the explicit decision
+to defer any large/NPC presence type until monster AI or non-player navigation
+uses AAS. Per-map diagnostics now include `aas_semantic_policy`, which ties Q2
+water/slime/lava brush contents to AAS area contents, records `trigger_hurt`
+counts as diagnostic-only hazard evidence, reports slick/sky/nodraw/detail and
+translucent surface/content handling, and states that trailing BSPX markers are
+tolerated as extension metadata when the standard Q2 lump table is clean.
+Per-map diagnostics also include `reachability_policy` and
+`mover_route_report`, summarizing water entry/exit, elevator/platform, teleport,
+and rocket-jump route ownership plus generated mover route counts. The
+diagnostic report now also includes `team_objective_report` for CTF team spawn
+and flag-origin reachability, plus `campaign_progression_report` for
+campaign/co-op goals, changelevels, keys, triggers, doors, and mover surfaces.
+top-level report and deterministic sidecars record `metadata_policy`: sidecars
+stay under `.tmp/q2aas/`, while packaged AAS identity is folded into package
+reports and release archive-member validation instead of shipping
+`.aas.meta.json` files. For manifest-loaded maps, each row owns its diagnostic
+gates even when the command line passes broad strictness flags; this keeps
+high-value pickup reachability strict for the canonical DM references while
+letting CTF and campaign rows validate their structural/objective evidence
+without inheriting a deathmatch-only pickup gate. The staged smoke now fails
+when required BSP lump-table checks, spawn coverage checks, item coverage
+checks, or per-map high-value pickup reachability checks regress. The manifest
+also records minimum structural metrics and travel counts for staged maps, so
+`q2aas-staged-smoke` catches drops in AAS area count, reachability size, cluster
+count, walk routes, jump routes, ladder routes, walk-off-ledge routes, swim
+routes, water-jump routes, elevator routes, and rocket-jump route candidates
+where baselined. `mm-rage` remains the required WORR smoke map; `q2dm1`,
+`q2dm2`, `q2dm8`, `q2ctf1`, `base1`, `base2`, and `train` are optional local
+reference baselines when their Quake II BSPs are staged at
+`.install/basew/maps`.
+The manifest declares schema `worr-q2aas-validation-manifest-v1`, and the
+validator rejects malformed schema/version/task metadata, wrong gate types,
+unknown baseline names, and non-integer thresholds before generation. The JSON
+report records the manifest schema, task IDs, map counts, pending reference
+categories, generator scope, presence policy, metadata policy, map semantic
+policy, reachability policy, mover route report, and manifest errors. The
+staged smoke also creates and removes a malformed scratch manifest to keep the
+expected-failure path covered.
 The stage target runs the same strict map validation gates before copying a
 generated AAS file into `.install/basew/maps/`, and records the staged path and
 hash in `.tmp/q2aas/stage-report.json`.

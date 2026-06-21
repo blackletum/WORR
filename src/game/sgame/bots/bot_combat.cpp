@@ -40,6 +40,7 @@ constexpr int BOT_COMBAT_DEFAULT_PROJECTILE_LEAD_MILLISECONDS = 1000;
 constexpr int BOT_COMBAT_MAX_PROJECTILE_LEAD_MILLISECONDS = 1500;
 constexpr float BOT_COMBAT_PROJECTILE_EPSILON = 0.001f;
 constexpr float BOT_COMBAT_PROJECTILE_MIN_LEAD_OFFSET_SQUARED = 1.0f;
+constexpr float BOT_COMBAT_MAX_SKILL_AIM_OFFSET = 12.0f;
 
 BotCombatStatus botCombatStatus;
 
@@ -85,6 +86,10 @@ BotCombatVector3 BotCombat_FromVector(const Vector3 &value) {
 		.y = value.y,
 		.z = value.z,
 	};
+}
+
+float BotCombat_DegreesToRadians(float degrees) {
+	return degrees * (M_PI / 180.0f);
 }
 
 int BotCombat_AbsInt(int value) {
@@ -149,6 +154,66 @@ float BotCombat_DirectProjectileTravelSeconds(const Vector3 &delta, float projec
 		return 0.0f;
 	}
 	return std::sqrt(distanceSquared) / projectileSpeed;
+}
+
+Vector3 BotCombat_ApplySkillAimOffset(
+	const BotCombatLiveAimDecision &decision,
+	const BotCombatLiveAimFrame &frame) {
+	if (!decision.usedAimPolicy || !decision.mayAim) {
+		return BotCombat_ToVector(decision.aimPoint);
+	}
+
+	const int totalErrorTenths =
+		std::max(0, decision.aimPolicy.aimErrorTenthsDegrees) +
+		std::max(0, decision.aimPolicy.trackingNoiseTenthsDegrees);
+	if (totalErrorTenths <= 0) {
+		return BotCombat_ToVector(decision.aimPoint);
+	}
+
+	const Vector3 shooterOrigin = BotCombat_ToVector(frame.projectileLead.shooterOrigin);
+	const Vector3 baseAimPoint = BotCombat_ToVector(decision.aimPoint);
+	const Vector3 aimDelta = baseAimPoint - shooterOrigin;
+	const float aimDistance = aimDelta.length();
+	if (aimDistance <= BOT_COMBAT_PROJECTILE_EPSILON) {
+		return baseAimPoint;
+	}
+
+	const float errorDegrees = static_cast<float>(totalErrorTenths) * 0.1f;
+	const float offsetDistance = std::min(
+		BOT_COMBAT_MAX_SKILL_AIM_OFFSET,
+		aimDistance * std::tan(BotCombat_DegreesToRadians(errorDegrees)));
+	if (offsetDistance <= BOT_COMBAT_PROJECTILE_EPSILON) {
+		return baseAimPoint;
+	}
+
+	const Vector3 forward = aimDelta * (1.0f / aimDistance);
+	Vector3 right = Vector3{ 0.0f, 0.0f, 1.0f }.cross(forward);
+	if (right.lengthSquared() <= BOT_COMBAT_PROJECTILE_EPSILON) {
+		right = Vector3{ 1.0f, 0.0f, 0.0f };
+	} else {
+		right = right.normalized();
+	}
+	const Vector3 up = forward.cross(right).normalized();
+	const int seed =
+		decision.aimPolicy.effectiveSkill * 73 +
+		decision.aimPolicy.targetVisibleMilliseconds / 33 +
+		decision.aimPolicy.targetTrackedMilliseconds / 47 +
+		decision.aimPolicy.burstShotsFired * 31 +
+		decision.weaponItem * 17;
+	float horizontal = static_cast<float>((seed % 7) - 3) / 3.0f;
+	float vertical = static_cast<float>(((seed / 7) % 7) - 3) / 3.0f;
+	if (std::fabs(horizontal) <= BOT_COMBAT_PROJECTILE_EPSILON &&
+		std::fabs(vertical) <= BOT_COMBAT_PROJECTILE_EPSILON) {
+		horizontal = 1.0f;
+	}
+
+	Vector3 offsetDirection = (right * horizontal) + (up * vertical);
+	if (offsetDirection.lengthSquared() <= BOT_COMBAT_PROJECTILE_EPSILON) {
+		offsetDirection = right;
+	} else {
+		offsetDirection = offsetDirection.normalized();
+	}
+	return baseAimPoint + (offsetDirection * offsetDistance);
 }
 
 float BotCombat_ProjectileInterceptSeconds(
@@ -1640,6 +1705,11 @@ BotCombatLiveAimDecision BotCombat_BuildLiveAimDecision(
 		decision.projectileLead = BotCombat_BuildProjectileLead(leadFrame);
 		decision.usedProjectileLead = decision.projectileLead.usedLead;
 		decision.aimPoint = decision.projectileLead.aimPoint;
+	}
+
+	if (decision.mayAim) {
+		decision.aimPoint =
+			BotCombat_FromVector(BotCombat_ApplySkillAimOffset(decision, frame));
 	}
 
 	if (decision.mayFire) {

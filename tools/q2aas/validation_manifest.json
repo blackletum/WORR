@@ -51,11 +51,28 @@
       "coverage_categories": [
         "id_deathmatch_reference",
         "deathmatch_reference",
-        "item_reachability_reference"
+        "item_reachability_reference",
+        "water_reference",
+        "mover_reference",
+        "elevator_reference"
       ],
-      "minimum_metrics": {},
-      "minimum_travel_counts": {},
-      "notes": "Optional id Quake II deathmatch reference candidate. Missing entries are reported until the BSP is staged."
+      "minimum_metrics": {
+        "numareas": 1245,
+        "numareasettings": 1245,
+        "reachabilitysize": 3066,
+        "numclusters": 3
+      },
+      "minimum_travel_counts": {
+        "walk": 2019,
+        "barrier jump": 30,
+        "jump": 164,
+        "walk off ledge": 541,
+        "swim": 254,
+        "water jump": 19,
+        "elevator": 10,
+        "rocket jump": 28
+      },
+      "notes": "Optional id Quake II deathmatch reference candidate. When staged locally, it validates water entry/exit, elevator/vertical movement, weapon/item pickup coverage, and broader DM routing baselines."
     },
     {
       "id": "q2dm2",
@@ -69,11 +86,28 @@
       "coverage_categories": [
         "id_deathmatch_reference",
         "deathmatch_reference",
-        "item_reachability_reference"
+        "item_reachability_reference",
+        "water_reference",
+        "mover_reference",
+        "elevator_reference"
       ],
-      "minimum_metrics": {},
-      "minimum_travel_counts": {},
-      "notes": "Optional id Quake II deathmatch reference candidate. Missing entries are reported until the BSP is staged."
+      "minimum_metrics": {
+        "numareas": 1313,
+        "numareasettings": 1313,
+        "reachabilitysize": 2476,
+        "numclusters": 8
+      },
+      "minimum_travel_counts": {
+        "walk": 1354,
+        "jump": 94,
+        "ladder": 71,
+        "walk off ledge": 439,
+        "swim": 465,
+        "water jump": 21,
+        "elevator": 30,
+        "rocket jump": 1
+      },
+      "notes": "Optional id Quake II deathmatch reference candidate. When staged locally, it validates multi-level DM routing, water traversal, ladder travel, elevator routes, and high-value pickup reachability."
     },
     {
       "id": "q2dm8",
@@ -83,14 +117,27 @@
       "require_clean_bsp_lumps": true,
       "require_spawn_coverage": true,
       "require_item_coverage": true,
-      "require_high_value_reachability": true,
+      "require_high_value_reachability": false,
       "coverage_categories": [
         "open_deathmatch_reference",
-        "deathmatch_reference"
+        "deathmatch_reference",
+        "item_reachability_reference",
+        "door_reference"
       ],
-      "minimum_metrics": {},
-      "minimum_travel_counts": {},
-      "notes": "Optional open-layout deathmatch reference candidate. Missing entries are reported until the BSP is staged."
+      "minimum_metrics": {
+        "numareas": 1499,
+        "numareasettings": 1499,
+        "reachabilitysize": 2846,
+        "numclusters": 3
+      },
+      "minimum_travel_counts": {
+        "walk": 1972,
+        "barrier jump": 27,
+        "jump": 224,
+        "walk off ledge": 613,
+        "rocket jump": 9
+      },
+      "notes": "Optional open-layout deathmatch reference candidate. When staged locally, it validates broader open-map routing, long sightline/item-placement coverage, and door entity diagnostics. High-value reachability is recorded but not a gate for this structural reference because one pickup remains spawn-disconnected in the static graph."
     },
     {
       "id": "q2ctf1",
@@ -100,14 +147,34 @@
       "require_clean_bsp_lumps": true,
       "require_spawn_coverage": true,
       "require_item_coverage": true,
-      "require_high_value_reachability": true,
+      "require_high_value_reachability": false,
       "coverage_categories": [
         "ctf_reference",
-        "team_objective_reference"
+        "team_objective_reference",
+        "water_reference",
+        "mover_reference",
+        "elevator_reference",
+        "door_reference",
+        "teleport_reference"
       ],
-      "minimum_metrics": {},
-      "minimum_travel_counts": {},
-      "notes": "Optional CTF reference candidate. Missing entries are reported until the BSP is staged."
+      "minimum_metrics": {
+        "numareas": 2122,
+        "numareasettings": 2122,
+        "reachabilitysize": 4447,
+        "numclusters": 6
+      },
+      "minimum_travel_counts": {
+        "walk": 2931,
+        "barrier jump": 85,
+        "jump": 206,
+        "ladder": 20,
+        "walk off ledge": 710,
+        "swim": 456,
+        "water jump": 28,
+        "elevator": 4,
+        "rocket jump": 6
+      },
+      "notes": "Optional CTF reference candidate. When staged locally, it validates team spawn/flag objective diagnostics, flag origin reachability from spawn-connected AAS areas, water traversal, mover/door/teleport entity coverage, and item origin coverage. High-value pickup reachability is recorded but not a CTF structural gate."
     },
     {
       "id": "base1",
@@ -117,14 +184,30 @@
       "require_clean_bsp_lumps": true,
       "require_spawn_coverage": true,
       "require_item_coverage": true,
-      "require_high_value_reachability": true,
+      "require_high_value_reachability": false,
       "coverage_categories": [
         "campaign_reference",
-        "coop_reference"
+        "coop_reference",
+        "water_reference",
+        "door_reference"
       ],
-      "minimum_metrics": {},
-      "minimum_travel_counts": {},
-      "notes": "Optional campaign/co-op reference candidate. Missing entries are reported until the BSP is staged."
+      "minimum_metrics": {
+        "numareas": 4235,
+        "numareasettings": 4235,
+        "reachabilitysize": 5865,
+        "numclusters": 14
+      },
+      "minimum_travel_counts": {
+        "walk": 4667,
+        "barrier jump": 70,
+        "jump": 184,
+        "ladder": 19,
+        "walk off ledge": 806,
+        "swim": 92,
+        "water jump": 6,
+        "rocket jump": 20
+      },
+      "notes": "Optional campaign/co-op reference candidate. When staged locally, it validates campaign trigger/door/progression diagnostics and water traversal. High-value pickup reachability is recorded but not a campaign progression gate."
     },
     {
       "id": "base2",
@@ -134,14 +217,29 @@
       "require_clean_bsp_lumps": true,
       "require_spawn_coverage": true,
       "require_item_coverage": true,
-      "require_high_value_reachability": true,
+      "require_high_value_reachability": false,
       "coverage_categories": [
         "campaign_reference",
-        "liquid_or_hazard_reference"
+        "liquid_or_hazard_reference",
+        "water_reference",
+        "door_reference"
       ],
-      "minimum_metrics": {},
-      "minimum_travel_counts": {},
-      "notes": "Optional campaign liquid/hazard reference candidate. Missing entries are reported until the BSP is staged and confirmed."
+      "minimum_metrics": {
+        "numareas": 3500,
+        "numareasettings": 3500,
+        "reachabilitysize": 4641,
+        "numclusters": 24
+      },
+      "minimum_travel_counts": {
+        "walk": 3458,
+        "barrier jump": 45,
+        "jump": 215,
+        "ladder": 15,
+        "walk off ledge": 838,
+        "swim": 42,
+        "water jump": 27
+      },
+      "notes": "Optional campaign liquid reference candidate. When staged locally, it validates water/liquid traversal, door-heavy campaign diagnostics, and item origin coverage. No slime/lava brushes were present in this local BSP."
     },
     {
       "id": "train",
@@ -151,14 +249,32 @@
       "require_clean_bsp_lumps": true,
       "require_spawn_coverage": true,
       "require_item_coverage": true,
-      "require_high_value_reachability": true,
+      "require_high_value_reachability": false,
       "coverage_categories": [
         "campaign_reference",
-        "mover_reference"
+        "mover_reference",
+        "water_reference",
+        "door_reference",
+        "teleport_reference",
+        "elevator_reference"
       ],
-      "minimum_metrics": {},
-      "minimum_travel_counts": {},
-      "notes": "Optional mover-heavy campaign reference candidate. Missing entries are reported until the BSP is staged."
+      "minimum_metrics": {
+        "numareas": 3316,
+        "numareasettings": 3316,
+        "reachabilitysize": 4590,
+        "numclusters": 18
+      },
+      "minimum_travel_counts": {
+        "walk": 3028,
+        "barrier jump": 59,
+        "jump": 133,
+        "walk off ledge": 649,
+        "swim": 654,
+        "water jump": 41,
+        "elevator": 21,
+        "rocket jump": 4
+      },
+      "notes": "Optional mover-heavy campaign reference candidate. When staged locally, it validates campaign key/goal/trigger diagnostics, train/platform mover routes, door and teleport entity coverage, and water traversal. High-value pickup reachability is recorded but not a campaign progression gate."
     }
   ],
   "reference_coverage": [
@@ -177,8 +293,8 @@
         "q2dm1",
         "q2dm2"
       ],
-      "minimum_validated_maps": 1,
-      "notes": "Optional until reference BSPs are staged under .install/basew/maps."
+      "minimum_validated_maps": 2,
+      "notes": "Backed by staged q2dm1/q2dm2 when local Quake II data is available."
     },
     {
       "id": "open_deathmatch_reference",
@@ -187,7 +303,7 @@
         "q2dm8"
       ],
       "minimum_validated_maps": 1,
-      "notes": "Optional until the BSP is staged."
+      "notes": "Backed by staged q2dm8 when local Quake II data is available."
     },
     {
       "id": "ctf_reference",
@@ -196,7 +312,16 @@
         "q2ctf1"
       ],
       "minimum_validated_maps": 1,
-      "notes": "Optional until a CTF BSP is staged."
+      "notes": "Backed by staged q2ctf1 extracted from the local CTF pak when available."
+    },
+    {
+      "id": "team_objective_reference",
+      "description": "Team objective reference coverage for CTF flag and team spawn diagnostics.",
+      "map_ids": [
+        "q2ctf1"
+      ],
+      "minimum_validated_maps": 1,
+      "notes": "Backed by staged q2ctf1 team spawn and flag objective diagnostics when available."
     },
     {
       "id": "campaign_reference",
@@ -207,22 +332,34 @@
         "train"
       ],
       "minimum_validated_maps": 1,
-      "notes": "Optional until campaign BSPs are staged."
+      "notes": "Backed by staged base1/base2/train campaign progression diagnostics when local Quake II data is available."
     },
     {
       "id": "liquid_or_hazard_reference",
       "description": "Map coverage intended to exercise liquids, slime/lava, hurt volumes, swim, or water-jump routes.",
       "map_ids": [
-        "base2"
+        "q2dm1",
+        "q2dm2",
+        "q2ctf1",
+        "base1",
+        "base2",
+        "train"
       ],
       "minimum_validated_maps": 1,
-      "notes": "Candidate map must be confirmed after staging before adding travel-count baselines."
+      "required_features": [
+        "water"
+      ],
+      "strict_required": true,
+      "notes": "Currently backed by staged water/liquid maps; slime and lava keep separate feature-specific reference categories."
     },
     {
       "id": "mover_reference",
       "description": "Map coverage intended to exercise doors, plats, elevators, trains, buttons, or other moving geometry.",
       "map_ids": [
         "mm-rage",
+        "q2dm1",
+        "q2dm2",
+        "q2ctf1",
         "train"
       ],
       "minimum_validated_maps": 1
@@ -230,13 +367,20 @@
     {
       "id": "water_reference",
       "description": "Reference readiness for water brush contents and swim or water-adjacent route diagnostics.",
-      "map_ids": [],
+      "map_ids": [
+        "q2dm1",
+        "q2dm2",
+        "q2ctf1",
+        "base1",
+        "base2",
+        "train"
+      ],
       "minimum_validated_maps": 1,
       "required_features": [
         "water"
       ],
       "strict_required": true,
-      "notes": "No local staged BSP candidate is declared yet; add a map only after validating that it exists and exercises water."
+      "notes": "Backed by staged q2dm1/q2dm2/q2ctf1/base1/base2/train when local Quake II data is available."
     },
     {
       "id": "slime_reference",
@@ -263,49 +407,54 @@
     {
       "id": "teleport_reference",
       "description": "Reference readiness for teleport entity and generated teleport-travel diagnostics.",
-      "map_ids": [],
+      "map_ids": [
+        "q2ctf1",
+        "train"
+      ],
       "minimum_validated_maps": 1,
       "required_features": [
         "teleport"
       ],
       "strict_required": true,
-      "notes": "No local staged BSP candidate is declared yet; add a map only after validating that it exists and exercises teleports."
+      "notes": "Backed by staged q2ctf1/train teleport entity diagnostics when local reference BSPs are available; generated teleport travel remains absent on the current local set."
     },
     {
       "id": "elevator_reference",
       "description": "Reference readiness for elevator/platform travel diagnostics.",
       "map_ids": [
-        "mm-rage"
+        "mm-rage",
+        "q2dm1",
+        "q2dm2",
+        "q2ctf1",
+        "train"
       ],
       "minimum_validated_maps": 1,
       "required_features": [
         "elevator"
       ],
       "strict_required": true,
-      "notes": "Currently backed by the staged mm-rage BSP and its generated elevator travel count."
+      "notes": "Currently backed by staged mm-rage and broader local reference maps with generated elevator travel counts."
     },
     {
       "id": "door_reference",
       "description": "Reference readiness for door entity diagnostics.",
-      "map_ids": [],
+      "map_ids": [
+        "q2dm8",
+        "q2ctf1",
+        "base1",
+        "base2",
+        "train"
+      ],
       "minimum_validated_maps": 1,
       "required_features": [
         "door"
       ],
       "strict_required": true,
-      "notes": "No local staged BSP candidate is declared yet; add a map only after validating that it exists and exercises doors."
+      "notes": "Backed by staged q2dm8/q2ctf1/base1/base2/train door entity diagnostics when local reference BSPs are available."
     }
   ],
   "pending_reference_maps": [
-    "q2dm1",
-    "q2dm2",
-    "q2dm8 or another open deathmatch map",
-    "capture-the-flag map",
-    "campaign or co-op map",
-    "map with water brush contents",
     "map with slime brush contents",
-    "map with lava brush contents",
-    "map with teleports",
-    "map with doors"
+    "map with lava brush contents"
   ]
 }

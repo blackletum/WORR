@@ -47,11 +47,21 @@ struct BotAasRuntimeStatus {
 	int32_t areaSettingsCount = 0;
 	int32_t reachabilityCount = 0;
 	int32_t clusterCount = 0;
+	int32_t entitySnapshotPlayers = 0;
+	int32_t entitySnapshotBots = 0;
+	int32_t entitySnapshotSpectators = 0;
+	int32_t entitySnapshotMonsters = 0;
+	int32_t entitySnapshotItems = 0;
+	int32_t entitySnapshotDroppedItems = 0;
+	int32_t entitySnapshotHazards = 0;
+	int32_t entitySnapshotMovers = 0;
+	int32_t entitySnapshotObjectives = 0;
 };
 
 void Bot_RuntimeRegisterCvars();
 void Bot_RuntimeBeginLevel();
 void Bot_RuntimeEndLevel();
+void Bot_RuntimeShutdown();
 void Bot_RuntimeRunFrame();
 void Bot_RuntimePrintLifecycleStatus();
 

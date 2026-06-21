@@ -86,6 +86,8 @@ Implemented:
 - `coop_door_elevator`: mode `31` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_door_elevator 1`, verifies one coop bot can own a route-detected mover/elevator wait/use interaction while a teammate holds.
 - `team_role_route`: mode `32` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_team_role_route 1`, verifies TDM match role/lane policy can own timed route-goal commands.
 - `team_item_roles`: mode `33` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_team_item_roles 1`, verifies TDM match item-role policy can shape live pickup-goal scoring.
+- `team_resource_denial`: mode `50` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_team_resource_denial 1`, verifies TDM resource policy can boost deny-enemy pickup-goal scoring for contested weapons, powerups, tech, and utility items.
+- `match_item_policy`: mode `51` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_match_item_policy 1`, verifies the umbrella match item-policy cvar can activate both TDM item-role pickup scoring and deny-enemy resource scoring without setting the individual proof cvars.
 - `team_fire_avoidance`: mode `34` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_team_fire_avoidance 1`, verifies TDM friendly-fire policy can suppress live attack input before `BUTTON_ATTACK` is applied.
 - `ctf_role_route`: mode `35` with `deathmatch 1`, `g_gametype 5`, and `sg_bot_ctf_role_route 1`, verifies CTF match role/lane policy can own timed route-goal commands.
 - `ctf_role_combat`: mode `36` with `deathmatch 1`, `g_gametype 5`, and `sg_bot_ctf_role_combat 1`, verifies CTF match role/lane policy can own live attack input from visible, shootable enemy facts.
@@ -95,9 +97,13 @@ Implemented:
 - `ctf_objective_route`: mode `40` with `deathmatch 1`, `g_gametype 5`, and `sg_bot_ctf_objective_route 1`, verifies the combined CTF objective route policy sees base-return, carrier-support, and dropped-flag candidates while recording higher-priority route selections and lower-priority deferrals.
 - `ctf_objective_route_precedence`: mode `41` with `deathmatch 1`, `g_gametype 5`, `sg_bot_ctf_role_route 1`, and `sg_bot_ctf_objective_route 1`, verifies the generic CTF role-route owner records objective-route deferrals while the objective route policy still commands the selected flag route.
 - `ffa_roam_route`: mode `42` with `deathmatch 1`, `g_gametype 1`, and `sg_bot_ffa_roam_route 1`, verifies FFA roam/collect/engage policy can own timed route-goal commands.
-- `ffa_spawn_camp_avoidance`: mode `45` with `deathmatch 1`, `g_gametype 1`, `sg_bot_ffa_roam_route 1`, and `sg_bot_ffa_spawn_camp_avoidance 1`, verifies FFA anti-camp policy can source timed route-goal commands away from a nearby live opponent.
 - `team_role_combat`: mode `43` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_team_role_combat 1`, verifies TDM match role/lane policy can own live attack input from visible, shootable enemy facts.
 - `team_role_combat_avoidance`: mode `44` with `deathmatch 1`, `g_gametype 3`, `sg_bot_team_role_combat 1`, and `sg_bot_team_fire_avoidance 1`, verifies TDM role-combat attack ownership can feed the friendly-fire avoidance veto path.
+- `ffa_spawn_camp_avoidance`: mode `45` with `deathmatch 1`, `g_gametype 1`, `sg_bot_ffa_roam_route 1`, and `sg_bot_ffa_spawn_camp_avoidance 1`, verifies FFA anti-camp policy can source timed route-goal commands away from a nearby live opponent.
+- `ffa_item_roles`: mode `46` with `deathmatch 1`, `g_gametype 1`, and `sg_bot_ffa_item_roles 1`, verifies FFA match item-role policy can shape live pickup-goal scoring.
+- `ffa_role_combat`: mode `48` with `deathmatch 1`, `g_gametype 1`, and `sg_bot_ffa_role_combat 1`, verifies FFA match role/lane policy can own live attack input from visible, shootable enemy facts.
+- `ffa_spawn_camp_combat_avoidance`: mode `49` with `deathmatch 1`, `g_gametype 1`, `sg_bot_ffa_role_combat 1`, `sg_bot_ffa_spawn_camp_avoidance 1`, and `sg_bot_ffa_spawn_camp_combat_avoidance 1`, verifies FFA anti-camp policy can veto a role-combat attack when the selected target is the nearby spawn-camp source.
+- `ctf_item_roles`: mode `47` with `deathmatch 1`, `g_gametype 5`, and `sg_bot_ctf_item_roles 1`, verifies CTF match item-role policy can shape live pickup-goal scoring.
 - `coop_progress_wait`: mode `3` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_progress_wait 1`, verifies WaitForLeader coop policy consumption reaches command ownership.
 - `coop_interaction_retry`: mode `12` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_interaction_retry 1`, verifies detected route interactions can own wait/use command retry windows.
 
@@ -146,6 +152,9 @@ Current optional discovery families:
 - `match_logging_catalog_signals`: match catalog schema/version metadata, latest-artifact pointers, indexed relative JSON paths, and scratch write/read proof from match logging schema smoke.
 - `ffa_roam_route_counters`: default-off FFA roam/collect/engage route-owner requests, activations, route requests, and latest role metadata from frame-command status.
 - `ffa_spawn_camp_avoidance_counters`: default-off FFA anti-camp route-source requests, policy/source selections, activations, fallbacks, route requests, and latest source/goal metadata from compact frame-command status.
+- `ffa_item_role_counters`: default-off FFA match item-role scoring bridge evaluations, selected pickup goals, and latest role/category metadata from nav policy status.
+- `ffa_role_combat_counters`: default-off FFA match role/lane combat-owner requests, target selections, attack decisions, and latest visible/shootable target metadata from frame-command status.
+- `ffa_spawn_camp_combat_avoidance_counters`: default-off FFA anti-camp combat-veto evaluations, blocks, clears, and latest target/source metadata from compact frame-command status.
 - `team_role_route_counters`: default-off match role/lane route-owner requests, activations, route requests, and latest role metadata from frame-command status.
 - `team_role_combat_counters`: default-off TDM match role/lane combat-owner requests, target selections, attack decisions, and latest visible/shootable target metadata from frame-command status.
 - `ctf_role_route_counters`: default-off CTF match role/lane route-owner requests, activations, objective-route deferrals, route requests, and latest role metadata from frame-command status.
@@ -154,8 +163,10 @@ Current optional discovery families:
 - `ctf_carrier_support_route_counters`: default-off CTF flag-carrier support route-owner requests, assignments, route requests, route commands, invalid skips, and latest carrier-support objective metadata from frame-command status.
 - `ctf_base_return_route_counters`: default-off CTF base-return route-owner requests, assignments, route requests, route commands, invalid skips, and latest own-flag return objective metadata from frame-command status.
 - `ctf_objective_route_counters`: default-off CTF objective-route policy requests, candidate availability, priority selections, lower-priority deferrals, route commands, invalid skips, and latest selected objective metadata from frame-command status.
+- `ctf_item_role_counters`: default-off CTF match item-role scoring bridge evaluations, selected pickup goals, and latest role/category metadata from nav policy status.
 - `team_fire_avoidance_counters`: default-off TDM friendly-fire policy evaluations, live attack suppressions, and latest blocked target/line metadata from frame-command status.
 - `team_item_role_counters`: default-off TDM match item-role scoring bridge evaluations, selected pickup goals, and latest role/category metadata from nav policy status.
+- `team_resource_denial_counters`: default-off TDM resource-denial scoring bridge evaluations, deny-enemy policy selections, selected pickup goals, and latest role/category/intent metadata from nav policy status.
 - `coop_leader_route_counters`: timed route-goal activation, refresh, source-selection, deferral, and last-leader metadata from frame-command and compact coop command status.
 - `coop_lead_advance_counters`: compact coop command-owner counters for the default-off no-leader LeadAdvance timed route-goal proof.
 - `coop_progress_wait_counters`: compact coop command-owner counters for the default-off WaitForLeader progression-wait proof.
@@ -182,7 +193,7 @@ Analyze an existing JSON report, usually `.tmp\bot_scenarios\latest_report.json`
 python tools\bot_scenarios\run_bot_scenarios.py --scenario pending --pending-gap-report .tmp\bot_scenarios\latest_report.json --format text --json-out .tmp\bot_scenarios\pending_gap_report.json
 ```
 
-This command does not launch the game. It compares pending placeholders against the report fixture and prints whether each scenario is ready for harness promotion or blocked by missing scenario rows, wrong smoke modes, pending fixture rows, absent status/marker metrics, absent policy-consumer evidence, or failed promotion metric checks. After modes `20` through `45`, `trace_checked_corner_cutting`, `coop_match_readiness`, `coop_leader_route`, `coop_progress_wait`, and `coop_interaction_retry` were promoted, the default pending set is empty.
+This command does not launch the game. It compares pending placeholders against the report fixture and prints whether each scenario is ready for harness promotion or blocked by missing scenario rows, wrong smoke modes, pending fixture rows, absent status/marker metrics, absent policy-consumer evidence, or failed promotion metric checks. After modes `20` through `51`, `trace_checked_corner_cutting`, `coop_match_readiness`, `coop_leader_route`, `coop_progress_wait`, and `coop_interaction_retry` were promoted, the default pending set is empty.
 
 Raw reserved-mode logs can be included when reserved modes have been run outside the normal scenario catalog:
 
@@ -222,6 +233,12 @@ The promoted source-backed smoke mode numbers are fixed for compatibility with s
 - `team_role_combat`: mode `43`
 - `team_role_combat_avoidance`: mode `44`
 - `ffa_spawn_camp_avoidance`: mode `45`
+- `ffa_item_roles`: mode `46`
+- `ctf_item_roles`: mode `47`
+- `ffa_role_combat`: mode `48`
+- `ffa_spawn_camp_combat_avoidance`: mode `49`
+- `team_resource_denial`: mode `50`
+- `match_item_policy`: mode `51`
 
 Additional promoted rows reuse existing smoke coverage:
 

@@ -13,6 +13,12 @@ enum BotLibAdapterEntityType {
 	BotLibAdapterEntityItem = 2,
 	BotLibAdapterEntityMissile = 3,
 	BotLibAdapterEntityMover = 4,
+	BotLibAdapterEntityBot = 5,
+	BotLibAdapterEntitySpectator = 6,
+	BotLibAdapterEntityMonster = 7,
+	BotLibAdapterEntityDroppedItem = 8,
+	BotLibAdapterEntityHazard = 9,
+	BotLibAdapterEntityObjective = 10,
 };
 
 constexpr int BOTLIB_ADAPTER_MAX_ROUTE_POINTS = 8;
@@ -406,6 +412,7 @@ struct BotLibAdapterStatus {
 };
 
 void BotLibAdapter_Init();
+void BotLibAdapter_Shutdown();
 void BotLibAdapter_SetPrintCallback(BotLibAdapterPrintCallback callback);
 void BotLibAdapter_SetBotClientCommandCallback(BotLibAdapterBotClientCommandCallback callback);
 void BotLibAdapter_SetFilesystemCallbacks(

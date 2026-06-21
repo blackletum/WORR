@@ -6,7 +6,7 @@ Related plan: `docs-dev/plans/q3a-botlib-aas-port.md`
 
 Related audit: `docs-dev/q3a-botlib-aas-source-audit-2026-06-16.md`
 
-Related tasks: `FR-04-T02`, `FR-04-T10`, `FR-04-T11`, `FR-04-T12`, `FR-04-T13`, `FR-04-T14`, `FR-04-T15`, `FR-04-T16`, `DV-07-T06`
+Related tasks: `FR-04-T01`, `FR-04-T02`, `FR-04-T10`, `FR-04-T11`, `FR-04-T12`, `FR-04-T13`, `FR-04-T14`, `FR-04-T15`, `FR-04-T16`, `DV-07-T06`
 
 ## Purpose
 
@@ -35,14 +35,14 @@ The first source import is the `TTimo/bspc` snapshot under `tools/q2aas/`. The s
 | `tools/q2aas/worr_q2aas_compat.h` | WORR-native compatibility shim | N/A | Native implementation | WORR project license | No upstream header; local compatibility file. | WORR contributors | Force-included only for the tool build; normalizes `_WIN32` to upstream `WIN32` and declares the existing BSPC `COM_Compress` function. | `meson compile -C builddir-win worr_q2aas`. |
 | `tools/q2aas/worr_q2aas_q2trace.c`, `tools/q2aas/worr_q2aas_q2trace.h` | WORR-native Q2 BSP trace bridge, informed by WORR collision behavior and existing Q2 BSP structures | N/A | Native implementation | WORR project license | Local source comments. | WORR contributors | Provides static-world Q2 point contents, box traces, inline model bounds, entity string access, and BSP checksum support for BotLib reachability generation. | `meson compile -C builddir-win worr_q2aas`; strict `mm-rage.bsp` validation. |
 | `tools/q2aas/cfg/worr_q2.cfg` | WORR-native Q2 movement/AAS preset | WORR movement constants from `src/game/sgame/player/p_move.cpp` and `src/game/bgame/game.hpp` | Native configuration | WORR project license | Local config comments. | WORR contributors | Defines first standing/crouched Q2 player hulls and WORR movement constants for AAS generation. | `meson compile -C builddir-win q2aas-config-smoke`; `python tools\q2aas\validate_worr_q2aas.py --map .install\basew\maps\mm-rage.bsp`. |
-| `tools/q2aas/validation_manifest.json` | WORR-native staged-map validation matrix | N/A | Native configuration | WORR project license | Local JSON configuration. | WORR contributors | Records the manifest schema, task IDs, current staged strict smoke map, per-map diagnostic gate requirements, per-map baseline metric/travel minima, and pending reference-map categories for future Q2 generator validation expansion. | `meson compile -C builddir-win q2aas-staged-smoke`. |
-| `tools/q2aas/validate_worr_q2aas.py` | WORR-native Q2 AAS validation helper | N/A | Native implementation | WORR project license | Local script comments/docstring. | WORR contributors | Runs cfg, map, manifest, invalid-BSP, malformed-manifest, and packaged-map smoke checks; keeps scratch output under `.tmp/q2aas/`; validates manifest schema/version/task IDs/gate types/baseline keys before conversion; supports loose map `path` entries and archive-backed `archive`/`archive_member` entries extracted under `.tmp/q2aas/packaged-maps/`; rejects path/archive conflicts, missing archive members, absolute archive members, traversal members, and drive-root-like archive member components before extraction; records `map_source` provenance in reports and metadata; parses AAS summary/travel metrics; preflights Q2 `IBSP` version 38 headers; detects BSPX markers; decodes AAS headers; parses entity and brush-content diagnostics; maps spawn/item origins to generated AAS area bounds; reports high-value pickup reachability from spawn areas; writes JSON reports and deterministic `.aas.meta.json` sidecars; records manifest provenance and manifest schema smoke results in reports; exposes the strict `--require-reachability` gate; enforces staged diagnostic gates for clean BSP lump tables, spawn/item AAS coverage, and high-value pickup reachability; enforces manifest minimum AAS metric/travel-count baselines; and can stage validated `.aas` output with staged path/hash report metadata. | `meson compile -C builddir-win q2aas-config-smoke`; `meson compile -C builddir-win q2aas-staged-smoke`; `meson compile -C builddir-win q2aas-package-map-smoke`; `meson compile -C builddir-win q2aas-stage-aas`; `python tools\q2aas\validate_worr_q2aas.py --manifest tools\q2aas\validation_manifest.json --require-q2-bsp --require-reachability --require-clean-bsp-lumps --require-spawn-coverage --require-item-coverage --require-high-value-reachability --manifest-schema-smoke`. |
+| `tools/q2aas/validation_manifest.json` | WORR-native staged-map validation matrix | N/A | Native configuration | WORR project license | Local JSON configuration. | WORR contributors | Records the manifest schema, task IDs, current staged strict smoke/reference maps, per-map diagnostic gate requirements, per-map baseline metric/travel minima for the eight-map local validation set, CTF/team-objective/campaign/water/mover/teleport/elevator/door reference coverage, and explicit pending slime/lava feature categories. | `meson compile -C builddir-win q2aas-staged-smoke`; `meson compile -C builddir-win q2aas-stage-aas`. |
+| `tools/q2aas/validate_worr_q2aas.py` | WORR-native Q2 AAS validation helper | N/A | Native implementation | WORR project license | Local script comments/docstring. | WORR contributors | Runs cfg, map, manifest, invalid-BSP, malformed-manifest, and packaged-map smoke checks; keeps scratch output under `.tmp/q2aas/`; validates manifest schema/version/task IDs/gate types/baseline keys before conversion; supports loose map `path` entries and archive-backed `archive`/`archive_member` entries extracted under `.tmp/q2aas/packaged-maps/`; rejects path/archive conflicts, missing archive members, absolute archive members, traversal members, and drive-root-like archive member components before extraction; records `map_source` provenance in reports and metadata; parses AAS summary/travel metrics; preflights Q2 `IBSP` version 38 headers; detects BSPX markers; decodes AAS headers; parses entity and brush-content diagnostics; maps spawn/item origins to generated AAS area bounds; reports high-value pickup reachability from spawn areas; records CTF team spawn/flag reachability in `team_objective_report`; records campaign goal/changelevel/key/trigger/door/mover evidence in `campaign_progression_report`; lets manifest-loaded maps own strict diagnostic gates so CTF/campaign references do not inherit deathmatch-only high-value gating; writes JSON reports and deterministic `.aas.meta.json` sidecars; records manifest provenance and manifest schema smoke results in reports; exposes the strict `--require-reachability` gate; enforces staged diagnostic gates for clean BSP lump tables, spawn/item AAS coverage, and high-value pickup reachability where required; enforces manifest minimum AAS metric/travel-count baselines; and can stage validated `.aas` output with staged path/hash report metadata. | `meson compile -C builddir-win q2aas-config-smoke`; `meson compile -C builddir-win q2aas-staged-smoke`; `meson compile -C builddir-win q2aas-package-map-smoke`; `meson compile -C builddir-win q2aas-stage-aas`; `python tools\q2aas\validate_worr_q2aas.py --manifest tools\q2aas\validation_manifest.json --require-q2-bsp --require-reachability --require-clean-bsp-lumps --require-spawn-coverage --require-item-coverage --require-high-value-reachability --manifest-schema-smoke`. |
 | `tools/q2aas/audit_worr_q2aas_stage.py` | WORR-native staged AAS audit helper | N/A | Native implementation | WORR project license | Local script comments/docstring. | WORR contributors | Reads `.tmp/q2aas/stage-report.json`, verifies staged `.aas` files live under `.install/basew/maps/`, checks extension, existence, non-zero size, staged-output hash, and generated scratch AAS hash, and writes `.tmp/q2aas/stage-audit-report.json`. | `python -m py_compile tools\q2aas\audit_worr_q2aas_stage.py`; `meson compile -C builddir-win q2aas-stage-audit`. |
 | `tools/q2aas/audit_worr_q2aas_package.py` | WORR-native q2aas package-readiness audit helper | N/A | Native implementation | WORR project license | Local script comments/docstring. | WORR contributors | Reads `.tmp/q2aas/stage-report.json`, verifies each staged AAS has a valid loose `.install/basew/` representation or a matching `pak0.pkz` archive member, supports loose-or-archive and archive-required policies, and writes package audit reports under `.tmp/q2aas/`. | `python -m py_compile tools\q2aas\audit_worr_q2aas_package.py`; `meson compile -C builddir-win q2aas-package-audit`; `meson compile -C builddir-win q2aas-package-archive-audit`. |
 | `tools/q2aas/package_worr_q2aas_archive.py` | WORR-native q2aas AAS package archive helper | N/A | Native implementation | WORR project license | Local script comments/docstring. | WORR contributors | Reads `.tmp/q2aas/stage-report.json`, verifies staged AAS hashes, injects generated `maps/<map>.aas` members into `.install/basew/pak0.pkz`, and writes `.tmp/q2aas/package-archive-report.json`. | `python -m py_compile tools\q2aas\package_worr_q2aas_archive.py`; `meson compile -C builddir-win q2aas-package-aas`; `meson compile -C builddir-win q2aas-package-archive-audit`. |
 | `tools/refresh_install.py` | WORR-native local install refresh helper with q2aas packaging integration | N/A | Native implementation | WORR project license | Local script comments/CLI help. | WORR contributors | Adds opt-in `--package-q2aas-aas` support that runs q2aas archive packaging and archive-required audit after `pak0.pkz` is rebuilt from `assets/`, preserving generated AAS members through `.install` refreshes. When platform validation is requested, it derives required packaged AAS member names and hashes from the q2aas stage report and passes them to the generic staged-release validator. | `python -m py_compile tools\refresh_install.py`; `python tools\refresh_install.py --build-dir builddir-win --install-dir .install --base-game basew --archive-name pak0.pkz --platform-id windows-x86_64 --package-q2aas-aas --q2aas-stage-report .tmp\q2aas\stage-report.json --q2aas-package-report .tmp\q2aas\refresh-package-archive-report.json --q2aas-package-audit-report .tmp\q2aas\refresh-package-archive-audit-report.json`. |
 | `tools/release/validate_stage.py` | WORR-native staged release validator with archive member checks | N/A | Native implementation | WORR project license | Local script comments/CLI help. | WORR contributors | Adds generic `--required-archive-member MEMBER[=SHA256]` validation for members inside the configured base game package archive. This supports q2aas packaged AAS release checks without making the release validator q2aas-specific. | `python -m py_compile tools\release\validate_stage.py`; `python tools\release\validate_stage.py --install-dir .install --base-game basew --archive-name pak0.pkz --platform-id windows-x86_64 --required-archive-member maps/mm-rage.aas=6459585e3c15eaa4170e23ca7465fc8255bd95b9b59d42e8615c39a67b707f9c`. |
-| `tools/q2aas/README.WORR.md` | WORR-native vendor note | N/A | Native documentation | WORR project license | Local documentation. | WORR contributors | Records snapshot, build targets, validation commands, manifest-matrix behavior, manifest schema validation, archive manifest guardrails, automated malformed-manifest smoke coverage, deterministic metadata sidecars, entity/content diagnostics, enforced diagnostic gates, manifest baseline regression gates, archive-backed map validation, packaged-map smoke, validated AAS staging, staged AAS audit, package-readiness audit, AAS archive packaging, refresh-install q2aas packaging integration, generic staged-release archive member validation, first Q2 reachability bridge status, and credit-maintenance expectations beside the vendored source. | Reviewed with this ledger update. |
+| `tools/q2aas/README.WORR.md` | WORR-native vendor note | N/A | Native documentation | WORR project license | Local documentation. | WORR contributors | Records snapshot, build targets, validation commands, manifest-matrix behavior, manifest schema validation, archive manifest guardrails, automated malformed-manifest smoke coverage, deterministic metadata sidecars, entity/content diagnostics, enforced diagnostic gates, manifest baseline regression gates, archive-backed map validation, packaged-map smoke, validated AAS staging, staged AAS audit, package-readiness audit, AAS archive packaging, refresh-install q2aas packaging integration, generic staged-release archive member validation, first Q2 reachability bridge status, manifest-row-owned strictness gates, team-objective and campaign-progression diagnostics, eight-map local reference baselines, and credit-maintenance expectations beside the vendored source. | Reviewed with this ledger update. |
 | `src/game/sgame/bots/bot_runtime.cpp`, `src/game/sgame/bots/bot_runtime.hpp`, `src/game/sgame/gameplay/g_main.cpp` | WORR-native BotLib/AAS runtime shell informed by the credited Q3A/BSPC AAS file format | N/A | Native implementation | WORR project license | Local source header. | WORR contributors | Registers the initial public `sg_bot_*` cvars, hooks server-game map/frame/shutdown lifecycle, probes `maps/<map>.aas` through WORR filesystem search paths, decodes the Q3A/BSPC AAS v5 header transform, validates the `EAAS` version 5 lump table, records runtime AAS structural status, gates map readiness on imported Q3A AAS loader, sample-query, reachability-query, clustering, route-query, and movement-helper results, validates the active `maps/<map>.bsp` as Q2 `IBSP` version 38, extracts lump 0 entity text, lump 13 model records, full static collision data, and PVS/PHS visibility data for the Q3A bridge before AAS load, feeds `level.time.milliseconds()` into the Q3A bridge each frame, calls the imported Q3A AAS start-frame path through the adapter, runs after the server entity update pass, translates WORR SOLID_BSP server model config indices to Q3A inline BSP model numbers, pushes WORR bot-facing snapshots into imported `AAS_UpdateEntity`, registers a Q3A entity trace callback backed by WORR `gi.clip`, maps Q3A debug line/cross/arrow primitives to WORR `gi.Draw_*` imports under bot debug cvars, routes Q3A `botimport.Print` warnings/errors/fatals into WORR logging with verbose message-level forwarding behind `sg_bot_debug_aas >= 3`, and prints verbose adapter/import-smoke status, including clustering, BSP leaf-link/box-query, movement-prediction, and debug-draw results, through `sg_bot_debug_aas`. | `meson compile -C builddir-win sgame_x86_64`; dedicated-server smoke with packaged `maps/mm-rage.aas` reports `areas=428`, `reachability=562`, `clusters=4`, `utility=Q3A LibVar smoke passed`, `q3a_aas=Q3A AAS file load passed`, `q3a_sample=Q3A AAS area sample passed: area=3 point_area=3 cluster=1 presence=6 reachability=1`, `q3a_sample_reachability=1`, `q3a_cluster=Q3A AAS clustering passed: clusters=4 area=3 cluster=1 cluster_areas=157 reachability_areas=156 failures=0`, `q3a_route=Q3A AAS route query passed: start=3 goal=6 travel_time=113 reachability=1 route_end=6 stop=0`, `q3a_alt_route=Q3A AAS alternative route query passed: start=3 goal=6 goals=2 first_area=10 start_time=72 goal_time=39 extra_time=65534 failures=0`, `q3a_movement=Q3A AAS movement prediction passed: start=3 end=3 stop=0 frames=8 drop=yes jump=yes`, `q3a_movement_drop=yes`, `q3a_movement_jump=yes`, `q3a_debug_draw=Q3A debug draw bridge passed: callback=yes lines=2 crosses=1 arrows=1 clears=1 failures=0`, `q3a_debug_draw_callback=yes`, `q3a_start_frame=Q3A AAS start frame passed: result=0 time_ms=25 frames=1`, `q3a_entity_sync=Q3A AAS entity sync passed: updated=18 unlinked=1006 skipped=0 failures=0 max=1024`, `q3a_entity_trace=Q3A AAS entity trace smoke passed: callback=yes attempts=1 hits=1 misses=0 failures=0`, `q3a_bsp_leaf_link=Q3A BSP leaf entity link smoke passed: active_links=96 box_entities=2 ent=18`, `q3a_bsp_leaf_link_failures=0`, `q3a_bsp_box_entities_smoke=yes`, `q3a_bsp_box_entities=2`, `q3a_bsp_entity=Q3A BSP entity lump load passed: maps/mm-rage.bsp entities=394 epairs=1704 first_classname=info_player_start`, `q3a_bsp_entity_smoke=yes`, `q3a_bsp_model=Q3A BSP model lump load passed: maps/mm-rage.bsp models=18 smoke_model=1 mins=(-328.0 -584.0 24.0) maxs=(-192.0 -440.0 256.0)`, `q3a_bsp_model_smoke=yes`, `q3a_bsp_collision=Q3A BSP collision load passed: maps/mm-rage.bsp planes=1367 nodes=1863 leafs=1882 brushes=1142 point_contents=1 trace_fraction=0.347 startsolid=0 allsolid=0`, `q3a_bsp_point_contents_smoke=yes`, `q3a_bsp_trace_smoke=yes`, `q3a_bsp_visibility=Q3A BSP visibility load passed: maps/mm-rage.bsp clusters=303 smoke_cluster=0 pvs_visible=142 phs_visible=289`, `q3a_bsp_pvs_smoke=yes`, `q3a_bsp_phs_smoke=yes`, `q3a_angle_vectors=Q3A AngleVectors smoke passed`, and `q3a_time_ms=25`. |
 | `src/game/sgame/bots/botlib_adapter.cpp`, `src/game/sgame/bots/botlib_adapter.hpp`, `src/game/sgame/bots/q3a/q3a_botlib_boundary.cpp`, `src/game/sgame/bots/q3a/q3a_botlib_boundary.hpp`, `src/game/sgame/bots/q3a/README.WORR.md` | WORR-native Q3A BotLib import boundary and adapter shell informed by the credited Q3A BotLib layout | N/A | Native implementation/documentation | WORR project license | Local source headers and local README. | WORR contributors | Reserves `src/game/sgame/bots/q3a/` for commit-pinned Q3A imports, records planned AAS/runtime source inventory for the pinned id Software baseline, documents import rules, and adds a compiled adapter shell for BotLib setup/shutdown/map/frame calls. The adapter now records Q3A print callback/counter status, the imported utility smoke result, imported AAS loader result, imported AAS sample result, imported AAS reachability sample count, imported AAS clustering status/counters, imported route query, alternative-route query, and opt-in optimization status, imported movement prediction/drop/jump status, imported debug draw callback/counter status, imported AAS start-frame status/counter, entity-sync status/counters, entity-trace callback/counter status, Q3A AAS world counts, sampled area metadata, bridge runtime milliseconds, `AngleVectors` smoke status, active-map BSP entity/epair load status, active-map BSP model bounds status, active-map BSP static collision counts/smoke status, active-map BSP PVS/PHS visibility status, active-map BSP leaf-link/box-query status, and `planned_files=48` inventory status. The local README now records the `be_aas_reach.c`, `be_aas_cluster.c`, `be_aas_route.c`, `be_aas_routealt.c`, `be_aas_optimize.c`, `be_aas_main.c`, `be_aas_entity.c`, and `be_aas_move.c` imports, active-map Q2 BSP entity/model/collision/visibility bridges, imported route-cache/travel-time, alternative-route, and opt-in optimization source status, imported start-frame/entity-cache smoke, WORR snapshot sync into imported `AAS_UpdateEntity`, Q3A `AAS_EntityCollision` to WORR `gi.clip` bridge status, active-map Q2 BSP dynamic leaf links and `AAS_BoxEntities`, imported movement-helper smoke, imported clustering smoke, callback-backed debug line/cross/arrow draw status, Q3A print callback bridge status, and debug polygon/area helper work. | `meson compile -C builddir-win sgame_x86_64`; staged dedicated smoke loads packaged `maps/mm-rage.aas` and reports `utility=Q3A LibVar smoke passed`, `q3a_aas=Q3A AAS file load passed`, `q3a_sample_area=3`, `q3a_sample_point_area=3`, `q3a_sample_reachability=1`, `q3a_cluster=Q3A AAS clustering passed: clusters=4 area=3 cluster=1 cluster_areas=157 reachability_areas=156 failures=0`, `q3a_cluster_area=3`, `q3a_cluster_cluster=1`, `q3a_cluster_count=4`, `q3a_cluster_areas=157`, `q3a_cluster_reachability_areas=156`, `q3a_cluster_failures=0`, `q3a_route=Q3A AAS route query passed: start=3 goal=6 travel_time=113 reachability=1 route_end=6 stop=0`, `q3a_alt_route=Q3A AAS alternative route query passed: start=3 goal=6 goals=2 first_area=10 start_time=72 goal_time=39 extra_time=65534 failures=0`, `q3a_movement=Q3A AAS movement prediction passed: start=3 end=3 stop=0 frames=8 drop=yes jump=yes`, `q3a_movement_drop=yes`, `q3a_movement_jump=yes`, `q3a_debug_draw=Q3A debug draw bridge passed: callback=yes lines=2 crosses=1 arrows=1 clears=1 failures=0`, `q3a_debug_draw_callback=yes`, `q3a_start_frame=Q3A AAS start frame passed: result=0 time_ms=25 frames=1`, `q3a_entity_sync=Q3A AAS entity sync passed: updated=18 unlinked=1006 skipped=0 failures=0 max=1024`, `q3a_entity_trace=Q3A AAS entity trace smoke passed: callback=yes attempts=1 hits=1 misses=0 failures=0`, `q3a_bsp_leaf_link=Q3A BSP leaf entity link smoke passed: active_links=96 box_entities=2 ent=18`, `q3a_bsp_leaf_link_failures=0`, `q3a_bsp_box_entities_smoke=yes`, `q3a_bsp_box_entities=2`, `q3a_bsp_entities=394`, `q3a_bsp_epairs=1704`, `q3a_bsp_entity_smoke=yes`, `q3a_bsp_models=18`, `q3a_bsp_model_smoke=yes`, `q3a_bsp_planes=1367`, `q3a_bsp_nodes=1863`, `q3a_bsp_leafs=1882`, `q3a_bsp_brushes=1142`, `q3a_bsp_point_contents_smoke=yes`, `q3a_bsp_trace_smoke=yes`, `q3a_bsp_vis_clusters=303`, `q3a_bsp_pvs_smoke=yes`, `q3a_bsp_phs_smoke=yes`, `q3a_angle_vectors=Q3A AngleVectors smoke passed`, `q3a_time_ms=25`, `q3a_areas=428`, `q3a_reachability=562`, and `q3a_clusters=4`. |
 | `src/game/sgame/bots/q3a/q3a_botlib_import.c`, `src/game/sgame/bots/q3a/q3a_botlib_import.h`, `meson.build` Q3A utility build group | WORR-native bridge/build wrapper for the imported Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route, AAS alternative-routing, AAS start-frame, AAS entity-cache, AAS movement, and opt-in AAS optimization subsets | N/A | Native implementation | WORR project license | Local source headers. | WORR contributors | Defines the temporary `botimport` memory callbacks, callback-backed Q3A print bridge, `Q_stricmp`, `Com_Memset`, `Com_Memcpy`, `Com_sprintf`, `VectorNormalize`, callback-backed `AAS_EntityCollision` bridge, callback-backed Q3A debug line/cross/arrow bridge, print callback registration/status counters, `Q3A_BotLibImport_RunLibVarSmoke`, `Q3A_BotLibImport_LoadAASBuffer`, `Q3A_BotLibImport_UnloadAAS`, `Q3A_BotLibImport_StartFrame`, entity-sync translation/counting wrappers for imported `AAS_UpdateEntity`, active-map BSP data load/clear functions, `Q3A_BotLibImport_SetMilliseconds`, bridge-backed `Sys_MilliSeconds`, real Q3A-style `AngleVectors`, active-map Q2 BSP entity/model/collision/visibility helpers, dynamic BSP leaf entity-link tables backed by the active-map Q2 BSP tree, `AAS_BSPLinkEntity`, `AAS_UnlinkFromBSPLeaves`, `AAS_BoxEntities`, leaf-link unload cleanup, imported route-cache initialization/freeing, route smoke, alternative-route smoke, and imported opt-in `AAS_Optimize` implementation, imported Q3A `AAS_Setup`/`AAS_SetInitialized`/`AAS_StartFrame`/`AAS_Shutdown` lifecycle calls, imported Q3A `AAS_InitClustering` smoke, WORR/Q2 movement LibVar seeding before imported `AAS_InitSettings`, imported movement prediction/drop/jump smoke, imported debug draw smoke, read-only in-memory FS callbacks, quiet log stubs, exported `vec3_origin`, imported optimization source for the Q3A `aasoptimize` path, and imported alternative-routing initialization/smoke for `be_aas_routealt.c`. The previous loaded-world `AAS_AreaReachability`, `aasworld`, `AAS_Time`, `AAS_ProjectPointOntoVector`, `AAS_Error`, `AAS_ResetEntityLinks`, `AAS_InvalidateEntities`, `AAS_UnlinkInvalidEntities`, `AAS_InitClustering`, `AAS_InitAlternativeRouting`, `AAS_ShutdownAlternativeRouting`, `AAS_Optimize`, movement prediction/drop/jump shims, and debug-line no-ops are removed in favor of imported Q3A implementations or WORR-owned callbacks. Adds `q3a_botlib_utility` with `Q3A_BOTLIB_WORR_BOUNDARY=1`, `MEMORYMANEGER=1`, Windows `WIN32` endian selection, non-Windows `ID_INLINE=inline`, and local warning policy for legacy Q3A C including scoped `-Wno-absolute-value`. | `meson compile -C builddir-win sgame_x86_64`; runtime smoke reports `utility=Q3A LibVar smoke passed`, `q3a_print_callback=yes`, `q3a_aas=Q3A AAS file load passed`, `q3a_sample=Q3A AAS area sample passed: area=3 point_area=3 cluster=1 presence=6 reachability=1`, `q3a_sample_reachability=1`, `q3a_cluster=Q3A AAS clustering passed: clusters=4 area=3 cluster=1 cluster_areas=157 reachability_areas=156 failures=0`, `q3a_route=Q3A AAS route query passed: start=3 goal=6 travel_time=113 reachability=1 route_end=6 stop=0`, `q3a_alt_route=Q3A AAS alternative route query passed: start=3 goal=6 goals=2 first_area=10 start_time=72 goal_time=39 extra_time=65534 failures=0`, `q3a_movement=Q3A AAS movement prediction passed: start=3 end=3 stop=0 frames=8 drop=yes jump=yes`, `q3a_movement_drop=yes`, `q3a_movement_jump=yes`, `q3a_debug_draw=Q3A debug draw bridge passed: callback=yes lines=2 crosses=1 arrows=1 clears=1 failures=0`, `q3a_debug_draw_callback=yes`, `q3a_start_frame=Q3A AAS start frame passed: result=0 time_ms=25 frames=1`, `q3a_entity_sync=Q3A AAS entity sync passed: updated=18 unlinked=1006 skipped=0 failures=0 max=1024`, `q3a_entity_trace=Q3A AAS entity trace smoke passed: callback=yes attempts=1 hits=1 misses=0 failures=0`, `q3a_bsp_leaf_link=Q3A BSP leaf entity link smoke passed: active_links=96 box_entities=2 ent=18`, `q3a_bsp_leaf_link_failures=0`, `q3a_bsp_box_entities_smoke=yes`, `q3a_bsp_box_entities=2`, `q3a_bsp_entity=Q3A BSP entity lump load passed: maps/mm-rage.bsp entities=394 epairs=1704 first_classname=info_player_start`, `q3a_bsp_entity_smoke=yes`, `q3a_bsp_model=Q3A BSP model lump load passed: maps/mm-rage.bsp models=18 smoke_model=1 mins=(-328.0 -584.0 24.0) maxs=(-192.0 -440.0 256.0)`, `q3a_bsp_model_smoke=yes`, `q3a_bsp_collision=Q3A BSP collision load passed: maps/mm-rage.bsp planes=1367 nodes=1863 leafs=1882 brushes=1142 point_contents=1 trace_fraction=0.347 startsolid=0 allsolid=0`, `q3a_bsp_point_contents_smoke=yes`, `q3a_bsp_trace_smoke=yes`, `q3a_bsp_visibility=Q3A BSP visibility load passed: maps/mm-rage.bsp clusters=303 smoke_cluster=0 pvs_visible=142 phs_visible=289`, `q3a_bsp_pvs_smoke=yes`, `q3a_bsp_phs_smoke=yes`, `q3a_angle_vectors=Q3A AngleVectors smoke passed`, and `q3a_time_ms=25`. |
@@ -119,6 +119,30 @@ Tasks: `FR-04-T04`, `FR-04-T16`, `DV-03-T05`, `DV-07-T06`
 - No new Q3A, BSPC, or q2proto files were imported or modified. This is WORR-owned validation and harness code layered over the existing bot team-policy and scenario surfaces.
 - Validation: `meson compile -C builddir-win`; `refresh_install.py`; focused `duel_queue_spectator`; full implemented scenario suite passed for that round.
 - Implementation log: `docs-dev/q3a-botlib-duel-queue-spectator-2026-06-21.md`.
+
+## Native Validation Update: Q2AAS Policy Semantics
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T11`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `tools/q2aas/validate_worr_q2aas.py`, `tools/q2aas/README.WORR.md`, and the q2aas planning docs now record generator scope, player presence, Q2 content/surface semantics, and BSPX tolerance as validation-report evidence. The report keeps WORR's supported q2aas path Q2 `IBSP` version 38 only, while inherited Q1/HL/Sin/Q3 BSPC loaders remain compiled compatibility code isolated by strict validation.
+- No new Q3A, BSPC, or q2proto files were imported or modified. This round edited only WORR-owned validation/documentation files, so no additional imported-file `Modified for WORR` source notes were required.
+- Validation: `python -m py_compile tools\q2aas\validate_worr_q2aas.py`; final q2aas staged smoke and install-refresh validation are recorded in the implementation log for this round.
+- Implementation log: `docs-dev/q2aas-generator-policy-semantics-closeout-2026-06-21.md`.
+
+## Native Validation Update: Q2AAS Reachability Metadata
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T11`, `FR-04-T16`, `DV-07-T06`
+
+- WORR native files `tools/q2aas/validate_worr_q2aas.py`, `tools/q2aas/validation_manifest.json`, `tools/q2aas/test_validate_worr_q2aas.py`, `tools/q2aas/README.WORR.md`, and the q2aas planning docs now record reachability policy diagnostics, mover route reports, deterministic metadata packaging policy, and optional `q2dm1` structural/travel-count baselines when a local Quake II BSP is staged.
+- WORR native q2aas validation now also records optional local baselines for `q2dm2`, `q2dm8`, `q2ctf1`, `base1`, `base2`, and `train`, plus CTF team-objective reachability, campaign progression diagnostics, water-backed liquid coverage, and explicit slime/lava feature-candidate gaps. The same round packages/audits eight generated AAS archive members and documents current Q3A AAS runtime `Trace` / `EntityTrace` ownership without importing new upstream source.
+- The local validation input `E:\Games\Quake2\baseq2\maps\q2dm1.bsp` was copied into `.install\basew\maps\q2dm1.bsp` for this round only. The BSP remains user-local validation input and is not imported into the WORR source tree.
+- No new Q3A, BSPC, or q2proto files were imported or modified. This round edited only WORR-owned validation, manifest, and documentation files, so no additional imported-file `Modified for WORR` source notes were required.
+- Validation: `python -m py_compile tools\q2aas\validate_worr_q2aas.py tools\q2aas\test_validate_worr_q2aas.py`; `python -m unittest tools.q2aas.test_validate_worr_q2aas`; `meson compile -C builddir-win q2aas-staged-smoke`; `meson compile -C builddir-win q2aas-stage-aas`; `refresh_install.py --package-q2aas-aas`.
+- Implementation log: `docs-dev/q2aas-generator-reachability-metadata-round-2026-06-21.md`.
 
 ## Native Bridge Update: AAS Debug Area Helpers
 
@@ -1398,6 +1422,127 @@ Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
 - Implementation log:
   `docs-dev/q3a-botlib-team-item-role-selection-2026-06-21.md`.
 
+## Native Runtime Update: FFA Item Role Route Selection
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native nav behavior now adds a default-off
+  `sg_bot_ffa_item_roles` bridge for live FFA item-route candidate scoring.
+- `BotNavFindPickupGoal` reuses existing match item-role policy output in FFA
+  mode, applying role-priority score boosts before normal item utility and
+  distance scoring select the pickup goal.
+- Nav policy status exposes separate `ffa_item_role_*` and
+  `last_ffa_item_role_*` counters for evaluation, selection, score boost,
+  selected pickup goal, invalid skips, mode, role, lane, category, item role,
+  entity, item id, and final score evidence. Existing TDM
+  `team_item_role_*` counters remain separate.
+- Compact nav-policy status rows now print item-role and interaction fields
+  before the full verbose diagnostic so promoted scenario gates still see the
+  required evidence when console output truncates later fields.
+- Server smoke mode `46` runs a four-bot FFA proof, and the promoted
+  `ffa_item_roles` scenario validates FFA readiness, objective item-role
+  policy selection, nav candidate scoring, selected pickup goals, and latest
+  role/category/item metadata.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 45 tests; `meson compile
+  -C builddir-win` passed after rerun; `python tools\refresh_install.py
+  --build-dir builddir-win --install-dir .install --package-q2aas-aas` passed;
+  and focused `ffa_item_roles` passed from
+  `.tmp\bot_scenarios\20260621T173656Z` with `route_commands=246`,
+  `route_failures=0`, `item_goal_assignments=24`, `pass=1`, and positive
+  `ffa_item_role_*` scoring counters; the full implemented scenario suite
+  passed 51 rows from `.tmp\bot_scenarios\20260621T173703Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-ffa-item-role-selection-2026-06-21.md`.
+
+## Native Runtime Update: CTF Item Role Route Selection
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native nav behavior now adds a default-off
+  `sg_bot_ctf_item_roles` bridge for live Capture the Flag item-route
+  candidate scoring.
+- `BotNavFindPickupGoal` reuses existing match item-role policy output in CTF
+  mode, applying role-priority score boosts before normal item utility and
+  distance scoring select the pickup goal.
+- Nav policy status exposes separate `ctf_item_role_*` and
+  `last_ctf_item_role_*` counters for evaluation, selection, score boost,
+  selected pickup goal, invalid skips, mode, role, lane, category, item role,
+  entity, item id, and final score evidence. Existing FFA and TDM
+  item-role counters remain separate.
+- Compact CTF nav-policy status rows now print selected-goal and latest-item
+  metadata before the full verbose diagnostic so promoted scenario gates still
+  see the required evidence when console output truncates later fields.
+- Server smoke mode `47` runs a four-bot CTF proof, and the promoted
+  `ctf_item_roles` scenario validates CTF readiness, objective item-role
+  policy selection, nav candidate scoring, selected pickup goals,
+  invalid-skip absence, and latest role/lane/category/item metadata.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 45 tests; `meson compile
+  -C builddir-win` passed; `meson compile -C builddir-win sgame_x86_64`
+  passed after the compact-status adjustment; `python tools\refresh_install.py
+  --build-dir builddir-win --install-dir .install --package-q2aas-aas` passed
+  after each build; focused `ctf_item_roles` passed from
+  `.tmp\bot_scenarios\20260621T175557Z` with `route_commands=246`,
+  `route_failures=0`, `item_goal_assignments=17`, `pass=1`, and positive
+  `ctf_item_role_*` scoring counters; and the full implemented scenario suite
+  passed 52 rows from `.tmp\bot_scenarios\20260621T175605Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-ctf-item-role-selection-2026-06-21.md`.
+
+## Native Runtime Update: FFA Role Combat Ownership
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native brain behavior now adds a default-off
+  `sg_bot_ffa_role_combat` bridge for live FFA attack-decision ownership.
+- `bot_brain.*` consumes existing FFA match role, lane, and engage policy
+  output, validates visible shootable enemy facts, adopts the selected target,
+  and returns a normal attack decision before attack-button application.
+- Frame-command status exposes separate `ffa_role_combat_*` and
+  `last_ffa_role_combat_*` counters for request, target selection, attack
+  decision, deferral, role, lane, target client, visible, and shootable
+  evidence. Existing TDM and CTF role-combat counters remain separate.
+- Server smoke mode `48` runs a four-bot FFA proof, and the promoted
+  `ffa_role_combat` scenario validates FFA readiness, objective role-policy
+  selection, visible/shootable target facts, attack decisions, and applied
+  attack-button metadata.
+- Compact frame-command proof rows now print FFA role-combat, item-role, and
+  nav-policy evidence before the full verbose diagnostic so promoted scenario
+  gates still see required counters when console output truncates later fields.
+- No new upstream Q3A, Gladiator, BSPC, idTech3, or q2proto source files were
+  imported or modified for this update.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py` passed; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 45 tests; `meson compile
+  -C builddir-win sgame_x86_64` passed; `meson compile -C builddir-win`
+  passed; `python tools\refresh_install.py --build-dir builddir-win
+  --install-dir .install --package-q2aas-aas` passed after the full build;
+  focused `ffa_role_combat` passed from
+  `.tmp\bot_scenarios\20260621T184033Z`; focused regression coverage for
+  role-combat, item-role, friendly-fire, and coop interaction rows passed from
+  `.tmp\bot_scenarios\20260621T184941Z`; focused
+  `trace_checked_corner_cutting` passed from
+  `.tmp\bot_scenarios\20260621T185247Z`; and the full implemented scenario
+  suite passed 53 rows from `.tmp\bot_scenarios\20260621T185255Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-ffa-role-combat-2026-06-21.md`.
+
 ## Native Runtime Update: Team Fire Avoidance
 
 Date: 2026-06-21
@@ -2354,9 +2499,289 @@ Tasks: `FR-07-T05`, `DV-07-T04`, `DV-07-T06`
 - Implementation log:
   `docs-dev/q3a-botlib-competitive-server-tools-docs-2026-06-21.md`.
 
+## Native Validation Update: FFA Spawn-Camp Combat Avoidance
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native files `src/game/sgame/bots/bot_brain.cpp`,
+  `src/server/main.c`, and `tools/bot_scenarios/*` now expose a default-off
+  FFA spawn-camp combat-avoidance proof. The bridge composes FFA role-combat
+  attack ownership with the FFA anti-camp source selector and vetoes attack
+  input when both identify the same nearby live opponent.
+- The promoted `ffa_spawn_camp_combat_avoidance` scenario uses server smoke mode
+  `49` and records compact `ffa_spawn_camp_combat_avoidance_*` plus
+  `last_ffa_spawn_camp_combat_avoidance_*` status fields for evaluation,
+  source-block, target/source identity, policy, distance, and final blocked
+  state.
+- No new Q3A, Gladiator, BSPC, idTech3, or q2proto source files were imported
+  or modified. This is WORR-owned behavior glue, status instrumentation, and
+  scenario validation layered over the existing FFA match-policy proof surface.
+- Validation: `meson compile -C builddir-win`; `meson compile -C builddir-win
+  sgame_x86_64`; `python tools\refresh_install.py --build-dir builddir-win
+  --install-dir .install --package-q2aas-aas`; focused
+  `ffa_spawn_camp_combat_avoidance`; focused objective-detail truncation
+  regression batch; full implemented suite passed with 54 short-run rows.
+- Implementation log:
+  `docs-dev/q3a-botlib-ffa-spawn-camp-combat-avoidance-2026-06-21.md`.
+
+## Native Validation Update: Team Resource Denial
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native files `src/game/sgame/bots/bot_nav.cpp`,
+  `src/game/sgame/bots/bot_nav.hpp`, `src/game/sgame/bots/bot_brain.cpp`,
+  `src/server/main.c`, and `tools/bot_scenarios/*` now expose a default-off
+  TDM resource-denial pickup-scoring proof. The bridge feeds contestable
+  weapons, powerups, tech, and utility pickups through the existing
+  `BotObjectiveResourcePolicy` helper as enemy-contested resources, then boosts
+  candidates whose resource intent is deny-enemy.
+- The promoted `team_resource_denial` scenario uses server smoke mode `50` and
+  records compact `team_resource_denial_*` plus
+  `last_team_resource_denial_*` nav-policy status fields for evaluations,
+  deny selections, boosts, selected goals, invalid skips, selected
+  role/lane/category/intent, item entity, item id, and final score.
+- No new Q3A, Gladiator, BSPC, idTech3, or q2proto source files were imported
+  or modified. This is WORR-owned behavior glue, status instrumentation, and
+  scenario validation layered over the existing resource-policy helper surface.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py`; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 45 tests; `meson compile
+  -C builddir-win sgame_x86_64`; `meson compile -C builddir-win`; `python
+  tools\refresh_install.py --build-dir builddir-win --install-dir .install
+  --package-q2aas-aas`; and focused `team_resource_denial` passed from
+  `.tmp\bot_scenarios\20260621T200539Z`; full implemented suite passed 55
+  rows from `.tmp\bot_scenarios\20260621T201034Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-team-resource-denial-2026-06-21.md`.
+
+## Native Validation Update: Match Item Policy Umbrella
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T04`, `FR-04-T15`, `DV-03-T05`, `DV-07-T06`
+
+- WORR-native files `src/game/sgame/bots/bot_nav.cpp`,
+  `src/game/sgame/bots/bot_brain.cpp`, `src/server/main.c`, and
+  `tools/bot_scenarios/*` now expose a default-off
+  `sg_bot_match_item_policy` umbrella proof. The umbrella enables the existing
+  FFA, CTF, and TDM item-role scoring bridges plus the TDM deny-enemy
+  resource-denial scoring bridge without setting the individual proof cvars.
+- The promoted `match_item_policy` scenario uses server smoke mode `51` and
+  records existing `team_item_role_*` and `team_resource_denial_*` nav-policy
+  status fields as proof that the umbrella cvar activates both score paths.
+  The begin marker also proves `sg_bot_team_item_roles` and
+  `sg_bot_team_resource_denial` remain disabled for the smoke.
+- The compact objective-detail status row now prints lane and target-source
+  proof fields before the long per-frame counters, keeping CTF target-source
+  gates readable in long 246-frame scenario rows.
+- No new Q3A, Gladiator, BSPC, idTech3, or q2proto source files were imported
+  or modified. This is WORR-owned behavior glue, status ordering, and scenario
+  validation layered over the existing match-policy helper surface.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py`; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 45 tests; `meson compile
+  -C builddir-win worr_ded_engine_x86_64`; `meson compile -C builddir-win
+  sgame_x86_64`; `python tools\refresh_install.py --build-dir builddir-win
+  --install-dir .install --package-q2aas-aas`; focused `match_item_policy`
+  passed from `.tmp\bot_scenarios\20260621T203348Z`; focused
+  `ctf_dropped_flag_route` status regression passed from
+  `.tmp\bot_scenarios\20260621T204037Z`; full implemented suite passed 56 rows
+  from `.tmp\bot_scenarios\20260621T204044Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-match-item-policy-2026-06-21.md`.
+
+## Governance Update: Phase 0 MVP Closeout
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T01`, `FR-04-T10`, `DV-03-T05`, `DV-07-T06`
+
+- The current BSPC imported-file ledger is complete for the imported files now
+  present under `tools/q2aas/`, including separate modified-file rows for
+  `bspc.c`, `be_aas_bspc.c`, and `map.c`. Future local tailoring must add a
+  fresh modified-file row before landing.
+- The current Q3A BotLib runtime ledger is complete for the imported files now
+  present under `src/game/sgame/bots/q3a/`. Remaining Q3A runtime and behavior
+  files stay reference-only until matched to a pinned source and recorded in
+  this ledger before import.
+- `FR-04-T01` MVP behavior scope is accepted against promoted scenario proof
+  rows covering spawn/leave, profile loading, AAS area lookup near spawn,
+  route-to-item/roam, visible-enemy engagement, stuck recovery, and FFA/TDM
+  match-flow participation.
+- Existing WORR-owned bot files touched by the project retain ZeniMax/WORR
+  notices. Imported Q3A/BSPC files retain upstream notices, and locally
+  modified imported files carry `Modified for WORR` notes where applicable.
+- No new Q3A, Gladiator, BSPC, idTech3, or q2proto source files were imported
+  or modified for this closeout.
+- Validation: `python -m py_compile
+  tools\bot_scenarios\run_bot_scenarios.py
+  tools\bot_scenarios\test_run_bot_scenarios.py`; `python -m unittest
+  tools.bot_scenarios.test_run_bot_scenarios` passed 45 tests; `meson compile
+  -C builddir-win sgame_x86_64 worr_ded_engine_x86_64`; `python
+  tools\refresh_install.py --build-dir builddir-win --install-dir .install
+  --package-q2aas-aas`; focused MVP closeout scenario set passed from
+  `.tmp\bot_scenarios\20260621T210213Z`; full implemented suite passed 56 rows
+  from `.tmp\bot_scenarios\20260621T210229Z`.
+- Implementation log:
+  `docs-dev/q3a-botlib-phase0-mvp-closeout-2026-06-21.md`.
+
+## Native Validation Update: Reference Map Runtime Adapter Round
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T11`, `FR-04-T12`, `FR-04-T16`, `DV-07-T06`
+
+- WORR-owned q2aas validation tooling now records per-map
+  `team_objective_report` and `campaign_progression_report` diagnostics.
+  Manifest-loaded maps own their diagnostic gates, so the strict DM
+  high-value pickup reachability check remains required for `q2dm1`/`q2dm2`
+  while CTF and campaign references validate their structural/objective
+  evidence without inheriting a deathmatch-only gate.
+- Local reference BSPs staged for validation were copied from
+  `E:\Games\Quake2\baseq2\maps\` (`q2dm2`, `q2dm8`, `base1`, `base2`,
+  `train`) and extracted from `E:\Games\Quake2\ctf\pak0.pak`
+  (`maps/q2ctf1.bsp`). These BSPs are local validation inputs under
+  `.install\basew\maps\`, not committed WORR source artifacts.
+- The Q3A AAS runtime/adapter checklist wording was promoted to reflect
+  existing compiled ownership: the imported AAS runtime C set is complete for
+  current WORR route/query use, `AAS_Trace` stays in the WORR-native active-map
+  Q2 BSP collision bridge, and `AAS_EntityCollision` crosses
+  `botlib_adapter.*` into `BotRuntimeEntityTrace` / `gi.clip` for linked
+  BBOX/BSP entities. This does not import the full Q3A arena AI/EA/goal system.
+- No new Q3A, BSPC, idTech3, Quake3e, baseq3a, Gladiator, or q2proto source
+  files were imported or modified for this round.
+- Validation: `python -m py_compile
+  tools\q2aas\validate_worr_q2aas.py
+  tools\q2aas\test_validate_worr_q2aas.py`; `python -m unittest
+  tools.q2aas.test_validate_worr_q2aas`; `meson compile -C builddir-win
+  q2aas-staged-smoke`; `meson compile -C builddir-win q2aas-stage-aas`;
+  `meson compile -C builddir-win sgame_x86_64`; and `python
+  tools\refresh_install.py --build-dir builddir-win --install-dir .install
+  --base-game basew --archive-name pak0.pkz --platform-id windows-x86_64
+  --package-q2aas-aas --q2aas-stage-report .tmp\q2aas\stage-report.json
+  --q2aas-package-report .tmp\q2aas\refresh-package-archive-report.json
+  --q2aas-package-audit-report
+  .tmp\q2aas\refresh-package-archive-audit-report.json` passed. The refresh
+  packaged and audited 8 generated AAS archive members.
+- Implementation log:
+  `docs-dev/q3a-botlib-reference-map-runtime-adapter-round-2026-06-21.md`.
+
+## Native Runtime Update: Runtime Entity and Lifecycle Closeout
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T02`, `FR-04-T12`, `FR-04-T14`, `DV-07-T06`
+
+- No new Q3A, BSPC, idTech3, Quake3e, baseq3a, Gladiator, or q2proto source
+  files were imported or modified for this round.
+- WORR-native runtime and adapter files now promote existing active-map Q2 BSP
+  point-contents and PVS/PHS bridges from interim smoke status to final adapter
+  ownership: `AAS_PointContents` stays in the static Q2 BSP collision bridge,
+  and `AAS_inPVS` / `AAS_inPHS` stay in the active-map leaf-cluster visibility
+  bridge.
+- `botlib_adapter.*`, `bot_runtime.*`, and `g_main.cpp` now treat BotLib
+  initialization as idempotent for the game-module lifetime and call the
+  imported BotLib shutdown path explicitly during `ShutdownGame()` after the
+  existing level unload/lifecycle status path.
+- `src/game/sgame/bots/q3a/README.WORR.md` records the LibVar boundary:
+  upstream Q3A `bot_*` LibVars remain internal to imported AAS behavior, public
+  WORR policy remains in `sg_bot_*`, and only Q2/WORR movement and
+  reachability-cost `phys_*` / `rs_*` values are seeded for imported
+  `be_aas_move.c`.
+- `BotRuntimeBuildEntitySnapshot()` now distinguishes player, bot, spectator,
+  and monster/NPC snapshots before handing data to imported `AAS_UpdateEntity`;
+  loaded AAS debug output reports the current counts for those categories.
+- Validation: `meson compile -C builddir-win sgame_x86_64`; `git diff --check`.
+- Implementation log:
+  `docs-dev/q3a-botlib-runtime-entity-lifecycle-closeout-2026-06-21.md`.
+
+## Native Runtime Update: Entity Scheduling and Aim Knowledge Closeout
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T02`, `FR-04-T12`, `FR-04-T14`, `FR-04-T15`, `DV-07-T06`
+
+- No new Q3A, BSPC, idTech3, Quake3e, baseq3a, Gladiator, or q2proto source
+  files were imported or modified for this round.
+- WORR-native files `src/game/sgame/bots/bot_runtime.*`,
+  `src/game/sgame/bots/botlib_adapter.hpp`,
+  `src/game/sgame/bots/bot_nav.*`, and `src/game/sgame/bots/bot_brain.cpp`
+  now close the remaining Phase 4 entity snapshot categories, item
+  desirability staggering, route recomputation rate-limit status, and
+  blackboard-visible aim-knowledge proof.
+- The existing WORR-native `bot_combat.*` and blackboard path are the fairness
+  reference for this round: live aim/fire policy depends on current enemy facts,
+  visibility, FOV, and shootability rather than imported Q3A behavior code or
+  hidden omniscient state.
+- Validation: `meson compile -C builddir-win sgame_x86_64`; `git diff --check`.
+- Implementation log:
+  `docs-dev/q3a-botlib-entity-scheduling-fairness-closeout-2026-06-21.md`.
+
+## Native Behavior Update: Movement, Recovery, and Inventory Closeout
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T02`, `FR-04-T14`, `FR-04-T15`, `DV-07-T06`
+
+- No new Q3A, BSPC, idTech3, Quake3e, baseq3a, Gladiator, or q2proto source
+  files were imported or modified for this round.
+- WORR-native `src/game/sgame/bots/bot_combat.cpp` now consumes the existing
+  skill aim-error and tracking-noise policy as a deterministic bounded aim-point
+  offset after visibility, FOV, shootability, reaction, and projectile-lead
+  gates have selected a live aim point.
+- WORR-native `src/game/sgame/bots/bot_brain.cpp` now recognizes Q3A
+  `TRAVEL_TELEPORT` as route-only traversal and exposes default-off controlled
+  inactive recovery through `sg_bot_controlled_inactive_recovery`, with compact
+  `q3a_bot_controlled_recovery_status` counters for respawn commands,
+  spectator joins, and skips.
+- Existing WORR-native `bot_nav.*`, `bot_actions.*`, and `bot_brain.*` coverage
+  closes the stale movement/retry/inventory dispatcher checklist rows: route
+  interaction retry owns door/platform/train/trigger/mover wait/use windows,
+  the action dispatcher owns exact inventory `use_index_only` requests, and
+  broader command ownership is fed by perception, item/inventory policy, live
+  aim, route goals, timed route owners, role-combat owners, coop command owners,
+  and inventory escape/retreat consumers.
+- Validation: `meson compile -C builddir-win sgame_x86_64`.
+- Implementation log:
+  `docs-dev/q3a-botlib-movement-recovery-inventory-closeout-2026-06-21.md`.
+
+## Final Checklist Closeout: Runtime, Generator, CI, and Reference Validation
+
+Date: 2026-06-21
+
+Tasks: `FR-04-T02`, `FR-04-T11`, `FR-04-T12`, `FR-04-T14`, `FR-04-T16`,
+`DV-07-T06`
+
+- No new Q3A, BSPC, idTech3, Quake3e, baseq3a, Gladiator, or q2proto source
+  files were imported or modified for this closeout.
+- `docs-dev/q3a-botlib-runtime-implementation-2026-06-21.md` records the
+  current imported Q3A AAS runtime subset, WORR adapter ownership, explicit
+  non-imported Q3A behavior boundaries, and Linux/macOS CI build coverage
+  evidence from the release workflow matrix.
+- `docs-dev/q2-aas-generator-implementation-2026-06-21.md` records the current
+  `TTimo/bspc`-derived q2aas generator tailoring, validation/staging/package
+  target surface, eight-map reference validation set, and Linux/macOS CI build
+  coverage evidence.
+- The final plan closeout leaves only the reusable checklist gate template
+  unchecked in raw markdown. The phase checklist now reports `809/809` complete
+  while the raw checkbox count reports `809/821` complete.
+- Validation evidence for this ledger update is local build/tool validation plus
+  static workflow coverage review: `meson compile -C builddir-win
+  sgame_x86_64`, `meson compile -C builddir-win worr_ded_engine_x86_64`,
+  `meson compile -C builddir-win q2aas-staged-smoke`, `meson compile -C
+  builddir-win q2aas-stage-aas`, `meson compile -C builddir-win
+  q2aas-stage-audit`, `python tools\release\targets.py --matrix-json
+  --pretty`, and `git diff --check`.
+
 ## Candidate Source Inventory
 
-These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nuke retreat route ownership, timed route-goal ownership, teleporter escape route ownership, team role route ownership, team item-role route selection, team fire-avoidance command suppression, team role-combat command ownership, FFA roam-route ownership, CTF role-route ownership, CTF role-combat command ownership, CTF dropped-flag route ownership, CTF carrier-support route ownership, CTF base-return route ownership, CTF objective route-policy ownership, CTF objective route precedence ownership, coop leader route ownership and validation gating, coop lead-advance route ownership, coop progress-wait command ownership, coop interaction-retry command ownership, coop resource-share route selection, coop anti-blocking command ownership, coop target-sharing blackboard adoption, coop door/elevator source-hold command ownership, bot warmup readiness status and smoke validation, bot vote-exclusion status and smoke validation, bot admin-audit status/attempt smoke validation, bot tournament status/veto/replay smoke validation, match logging schema status and smoke validation, match logging catalog/index status and smoke validation, bot MyMap status/queue/consume smoke validation, bot queued-nextmap transition status and smoke validation, bot map-vote status/finalize smoke validation, bot scoreboard classification status and smoke validation, bot intermission cleanup status and smoke validation, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, map-restart cleanup scenario promotion, warmup bot-start readiness scenario promotion, vote bot-exclusion scenario promotion, admin bot privilege audit scenario promotion, tournament bot veto-exclusion scenario promotion, tournament replay reset scenario promotion, match logging schema scenario promotion, match logging catalog/index scenario proof, MyMap queue scenario promotion, queued nextmap transition scenario promotion, map-vote bot-exclusion transition scenario promotion, scoreboard bot-classification scenario promotion, intermission bot-cleanup scenario promotion, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, competitive server tools operator documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
+These files were audited as likely first candidates or reference points. BSPC candidates now land through the `tools/q2aas/` snapshot; the first Q3A utility, AAS file-loader, AAS sampling, AAS reachability, AAS clustering, AAS route-query, AAS alternative-routing, AAS optimization, AAS start-frame, AAS entity-cache, AAS movement, and AAS debug helper subsets are imported and recorded above, while the WORR-owned entity-sync, entity-trace, BSP leaf-link/box-query, debug draw, route-overlay, debug-polygon, debug-area, cluster, alternative-route, memory allocator, filesystem, route-cache miss policy, lifecycle telemetry, bot frame command dispatch, route-steered frame command, nav route-cache, nav debug-overlay, nav reachability-debug, nav polyline-debug, nav debug-client-filter, nav persistent-goal, nav item-goal, nav item-reservation, nav look-ahead steering, nav velocity-aware steering, nav route-target stabilization, trace-checked corner cutting, nav stuck-repath, nav stuck recovery command, nav goal-blacklist cooldown, nav failed-goal reason, nav movement-state commands, bot brain command ownership, nuke retreat route ownership, timed route-goal ownership, teleporter escape route ownership, team role route ownership, team item-role route selection, FFA item-role route selection, CTF item-role route selection, team fire-avoidance command suppression, team role-combat command ownership, FFA roam-route ownership, FFA role-combat command ownership, FFA spawn-camp combat-avoidance command veto, team resource-denial pickup scoring, match item-policy umbrella scoring, CTF role-route ownership, CTF role-combat command ownership, CTF dropped-flag route ownership, CTF carrier-support route ownership, CTF base-return route ownership, CTF objective route-policy ownership, CTF objective route precedence ownership, coop leader route ownership and validation gating, coop lead-advance route ownership, coop progress-wait command ownership, coop interaction-retry command ownership, coop resource-share route selection, coop anti-blocking command ownership, coop target-sharing blackboard adoption, coop door/elevator source-hold command ownership, bot warmup readiness status and smoke validation, bot vote-exclusion status and smoke validation, bot admin-audit status/attempt smoke validation, bot tournament status/veto/replay smoke validation, match logging schema status and smoke validation, match logging catalog/index status and smoke validation, bot MyMap status/queue/consume smoke validation, bot queued-nextmap transition status and smoke validation, bot map-vote status/finalize smoke validation, bot scoreboard classification status and smoke validation, bot intermission cleanup status and smoke validation, nav position-goal, nav natural travel-goal including barrier-jump direct reach validation, nav rocket-jump route policy, nav four-bot frame-command smoke, nav eight-bot frame-command smoke, nav soak frame-command smoke, nav map-change repeat/restart smoke, map-restart cleanup scenario promotion, warmup bot-start readiness scenario promotion, vote bot-exclusion scenario promotion, admin bot privilege audit scenario promotion, tournament bot veto-exclusion scenario promotion, tournament replay reset scenario promotion, match logging schema scenario promotion, match logging catalog/index scenario proof, MyMap queue scenario promotion, queued nextmap transition scenario promotion, map-vote bot-exclusion transition scenario promotion, scoreboard bot-classification scenario promotion, intermission bot-cleanup scenario promotion, nav natural movement support diagnostics, behavior action dispatcher and telemetry boundary, weapon/inventory command-request API and exact dispatch, aim/fairness and live-aim/projectile-leading helper APIs, live combat policy consumption, live item timing consumers, item timer fairness helper policy, special-item utility buckets, static BSP trace CPU counters, entity-clip CPU counters, AAS memory source counters, source-counter completeness diagnostics, FFA/TDM/CTF objective-side helper policy, team-role policy and lane/depth helpers, coop/resource policy helpers, status harness/status surface expansion, bot validation tooling, scenario coverage expansion and marker hardening including the 56-row implemented short-run catalog, profile behavior validation, botfile behavior-depth metadata, botfile parity polish, public bot/user documentation, competitive server tools operator documentation, high-bot degradation policy and soak budget, q2aas reference-map coverage and available-reference validation reporting, q2aas required-feature gap diagnostics, q2aas binary/license notice policy, release packaging hardening, Q3-style WORR botfile layout correction, and legacy Q2R bot surface removal work is recorded as native adapter, tooling, asset, documentation, status, or replacement work. The remaining Q3A runtime and behavior files remain reference-only until matched to a pinned source.
 
 | Candidate | Upstream / Local Ref | Current Use Decision | Required Before Import |
 |---|---|---|---|

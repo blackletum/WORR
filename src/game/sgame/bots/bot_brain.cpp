@@ -1470,6 +1470,15 @@ struct BotFrameCommandStatus {
 	int skippedRuntime = 0;
 	int skippedInactive = 0;
 	int skippedNotBot = 0;
+	int controlledInactiveRecoveryAttempts = 0;
+	int controlledInactiveRecoveryCommands = 0;
+	int controlledInactiveRecoveryRespawnCommands = 0;
+	int controlledInactiveRecoverySpectatorJoins = 0;
+	int controlledInactiveRecoverySpectatorSkips = 0;
+	int controlledInactiveRecoveryInvalidSkips = 0;
+	int lastControlledInactiveRecoveryClient = -1;
+	int lastControlledInactiveRecoveryMode = 0;
+	int lastControlledInactiveRecoveryButtons = 0;
 	int routeCommands = 0;
 	int lookAheadAttempts = 0;
 	int lookAheadUses = 0;
@@ -1555,6 +1564,38 @@ struct BotFrameCommandStatus {
 	int lastFfaSpawnCampAvoidancePolicyAvoid = 0;
 	int lastFfaSpawnCampAvoidanceGoalDistanceSquared = 0;
 	const char *lastFfaSpawnCampAvoidanceReason = "none";
+	int ffaSpawnCampCombatAvoidanceEvaluations = 0;
+	int ffaSpawnCampCombatAvoidanceBlocks = 0;
+	int ffaSpawnCampCombatAvoidanceSourceBlocks = 0;
+	int ffaSpawnCampCombatAvoidanceClears = 0;
+	int ffaSpawnCampCombatAvoidanceInvalidSkips = 0;
+	int lastFfaSpawnCampCombatAvoidanceClient = -1;
+	int lastFfaSpawnCampCombatAvoidanceTargetClient = -1;
+	int lastFfaSpawnCampCombatAvoidanceTargetEntity = -1;
+	int lastFfaSpawnCampCombatAvoidanceSourceClient = -1;
+	int lastFfaSpawnCampCombatAvoidanceSourceEntity = -1;
+	int lastFfaSpawnCampCombatAvoidanceSourceDistanceSquared = 0;
+	int lastFfaSpawnCampCombatAvoidancePolicyAvoid = 0;
+	int lastFfaSpawnCampCombatAvoidanceBlocked = 0;
+	const char *lastFfaSpawnCampCombatAvoidanceReason = "none";
+	int ffaRoleCombatRequests = 0;
+	int ffaRoleCombatPolicySelections = 0;
+	int ffaRoleCombatTargetSelections = 0;
+	int ffaRoleCombatAttackDecisions = 0;
+	int ffaRoleCombatDecisionOverrides = 0;
+	int ffaRoleCombatTargetDeferrals = 0;
+	int ffaRoleCombatInvalidSkips = 0;
+	int lastFfaRoleCombatClient = -1;
+	int lastFfaRoleCombatMode = 0;
+	int lastFfaRoleCombatRole = 0;
+	int lastFfaRoleCombatLane = 0;
+	int lastFfaRoleCombatPriority = 0;
+	int lastFfaRoleCombatTargetClient = -1;
+	int lastFfaRoleCombatTargetEntity = -1;
+	int lastFfaRoleCombatTargetDistanceSquared = 0;
+	int lastFfaRoleCombatTargetVisible = 0;
+	int lastFfaRoleCombatTargetShootable = 0;
+	const char *lastFfaRoleCombatReason = "none";
 	int teamRoleRouteRequests = 0;
 	int teamRoleRoutePolicySelections = 0;
 	int teamRoleRouteActivations = 0;
@@ -1951,6 +1992,7 @@ struct BotCommandSmokeProofSlot {
 	bool coopTargetShareSeeded = false;
 	bool teamFireAvoidancePrepared = false;
 	bool teamRoleCombatPrepared = false;
+	bool ffaRoleCombatPrepared = false;
 	bool ffaSpawnCampAvoidancePrepared = false;
 	bool ctfRoleCombatPrepared = false;
 	bool ctfDroppedFlagRoutePrepared = false;
@@ -2054,6 +2096,7 @@ constexpr float BOT_COMMAND_COOP_TARGET_SHARE_SOURCE_DISTANCE_SQUARED =
 constexpr float BOT_COMMAND_TEAM_FIRE_LINE_RADIUS = 56.0f;
 constexpr float BOT_COMMAND_TEAM_FIRE_LINE_RADIUS_SQUARED =
 	BOT_COMMAND_TEAM_FIRE_LINE_RADIUS * BOT_COMMAND_TEAM_FIRE_LINE_RADIUS;
+constexpr int BOT_COMMAND_FFA_ROLE_COMBAT_PRIORITY_BONUS = 30;
 constexpr int BOT_COMMAND_TEAM_ROLE_COMBAT_PRIORITY_BONUS = 35;
 constexpr int BOT_COMMAND_CTF_ROLE_COMBAT_PRIORITY_BONUS = 40;
 constexpr int BOT_COMMAND_NUKE_RETREAT_MILLISECONDS = 6000;
@@ -2073,6 +2116,7 @@ constexpr int BOT_COMMAND_TRAVEL_LADDER = 6;
 constexpr int BOT_COMMAND_TRAVEL_WALK_OFF_LEDGE = 7;
 constexpr int BOT_COMMAND_TRAVEL_SWIM = 8;
 constexpr int BOT_COMMAND_TRAVEL_WATER_JUMP = 9;
+constexpr int BOT_COMMAND_TRAVEL_TELEPORT = 10;
 constexpr int BOT_COMMAND_TRAVEL_ELEVATOR = 11;
 constexpr int BOT_COMMAND_TRAVEL_ROCKET_JUMP = 12;
 constexpr int BOT_PERCEPTION_SCAN_INTERVAL_FRAMES = 4;
@@ -2087,6 +2131,15 @@ constexpr int BOT_COMMAND_AIM_BURST_RESET_MILLISECONDS = 480;
 byte Bot_CommandMsec() {
 	const int frameTimeMs = gi.frameTimeMs > 0 ? static_cast<int>(gi.frameTimeMs) : 1;
 	return static_cast<byte>(std::clamp(frameTimeMs, 1, 255));
+}
+
+int Bot_CommandControlledInactiveRecoveryMode() {
+	static cvar_t *controlledRecovery = nullptr;
+	if (controlledRecovery == nullptr && gi.cvar != nullptr) {
+		controlledRecovery =
+			gi.cvar("sg_bot_controlled_inactive_recovery", "0", CVAR_NOFLAGS);
+	}
+	return controlledRecovery != nullptr ? controlledRecovery->integer : 0;
 }
 
 int Bot_CommandSmokeForcedTravelType() {
@@ -2324,6 +2377,23 @@ bool Bot_CommandFfaSpawnCampAvoidanceEnabled() {
 	return spawnCampAvoidance != nullptr && spawnCampAvoidance->integer > 0;
 }
 
+bool Bot_CommandFfaSpawnCampCombatAvoidanceEnabled() {
+	static cvar_t *combatAvoidance = nullptr;
+	if (combatAvoidance == nullptr && gi.cvar != nullptr) {
+		combatAvoidance =
+			gi.cvar("sg_bot_ffa_spawn_camp_combat_avoidance", "0", CVAR_NOFLAGS);
+	}
+	return combatAvoidance != nullptr && combatAvoidance->integer > 0;
+}
+
+bool Bot_CommandFfaRoleCombatEnabled() {
+	static cvar_t *ffaRoleCombat = nullptr;
+	if (ffaRoleCombat == nullptr && gi.cvar != nullptr) {
+		ffaRoleCombat = gi.cvar("sg_bot_ffa_role_combat", "0", CVAR_NOFLAGS);
+	}
+	return ffaRoleCombat != nullptr && ffaRoleCombat->integer > 0;
+}
+
 bool Bot_CommandTeamRoleCombatEnabled() {
 	static cvar_t *teamRoleCombat = nullptr;
 	if (teamRoleCombat == nullptr && gi.cvar != nullptr) {
@@ -2499,8 +2569,14 @@ bool Bot_CommandSmokeMatchReadiness() {
 }
 
 int Bot_CommandSmokeScenarioMode() {
+	if (Bot_CommandFfaSpawnCampCombatAvoidanceEnabled()) {
+		return 49;
+	}
 	if (Bot_CommandFfaSpawnCampAvoidanceEnabled()) {
 		return 45;
+	}
+	if (Bot_CommandFfaRoleCombatEnabled()) {
+		return 48;
 	}
 	if (Bot_CommandFfaRoamRouteEnabled()) {
 		return 42;
@@ -4582,6 +4658,26 @@ void Bot_CommandPrepareFfaSpawnCampAvoidanceSmoke(
 	slot.ffaSpawnCampAvoidancePrepared = Bot_CommandTryPlaceSmokePeer(bot, peer);
 }
 
+void Bot_CommandPrepareFfaRoleCombatSmoke(
+	gentity_t *bot,
+	BotCommandSmokeProofSlot &slot) {
+	if (bot == nullptr || bot->client == nullptr) {
+		return;
+	}
+
+	Bot_CommandPrepareCombatSmoke(bot, slot);
+	if (slot.ffaRoleCombatPrepared) {
+		return;
+	}
+
+	gentity_t *peer = Bot_CommandFindSmokePeer(bot);
+	if (peer == nullptr) {
+		return;
+	}
+
+	slot.ffaRoleCombatPrepared = Bot_CommandTryPlaceSmokePeer(bot, peer);
+}
+
 void Bot_CommandPrepareCtfRoleCombatSmoke(
 	gentity_t *bot,
 	BotCommandSmokeProofSlot &slot) {
@@ -4793,6 +4889,13 @@ void Bot_CommandPrepareSmokeProof(gentity_t *bot, BotCommandSmokeProofSlot *slot
 		Bot_CommandPrepareTeamFireAvoidanceSmoke(bot, *slot);
 		break;
 	case 45:
+		Bot_CommandPrepareFfaSpawnCampAvoidanceSmoke(bot, *slot);
+		break;
+	case 48:
+		Bot_CommandPrepareFfaRoleCombatSmoke(bot, *slot);
+		break;
+	case 49:
+		Bot_CommandPrepareFfaRoleCombatSmoke(bot, *slot);
 		Bot_CommandPrepareFfaSpawnCampAvoidanceSmoke(bot, *slot);
 		break;
 	case 36:
@@ -5736,6 +5839,58 @@ void Bot_CommandRecordCtfRoleRouteOwnerLast(
 		botFrameCommandStatus.lastCtfRoleRouteLane = state->matchLane;
 		botFrameCommandStatus.lastCtfRoleRoutePriority = state->matchPriority;
 	}
+}
+
+void Bot_CommandRecordFfaRoleCombatLast(
+	int clientIndex,
+	const BotObjectiveMatchPolicy &policy,
+	const BotCombatEnemyFacts *facts,
+	const char *reason) {
+	botFrameCommandStatus.lastFfaRoleCombatClient = clientIndex;
+	botFrameCommandStatus.lastFfaRoleCombatMode = static_cast<int>(policy.mode);
+	botFrameCommandStatus.lastFfaRoleCombatRole = static_cast<int>(policy.role);
+	botFrameCommandStatus.lastFfaRoleCombatLane = static_cast<int>(policy.lane);
+	botFrameCommandStatus.lastFfaRoleCombatPriority =
+		std::max(policy.engagePriority, policy.priority);
+	botFrameCommandStatus.lastFfaRoleCombatTargetClient =
+		facts != nullptr ? facts->enemyClientIndex : -1;
+	botFrameCommandStatus.lastFfaRoleCombatTargetEntity =
+		facts != nullptr ? facts->enemyEntity : -1;
+	botFrameCommandStatus.lastFfaRoleCombatTargetDistanceSquared =
+		facts != nullptr ? facts->distanceSquared : 0;
+	botFrameCommandStatus.lastFfaRoleCombatTargetVisible =
+		(facts != nullptr && facts->visible) ? 1 : 0;
+	botFrameCommandStatus.lastFfaRoleCombatTargetShootable =
+		(facts != nullptr && facts->shootable) ? 1 : 0;
+	botFrameCommandStatus.lastFfaRoleCombatReason =
+		reason != nullptr ? reason : "none";
+}
+
+void Bot_CommandRecordFfaSpawnCampCombatAvoidanceLast(
+	int clientIndex,
+	const BotObjectiveMatchPolicy &policy,
+	const gentity_t *target,
+	const gentity_t *source,
+	float sourceDistanceSquared,
+	bool blocked,
+	const char *reason) {
+	botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceClient = clientIndex;
+	botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceTargetClient =
+		Bot_PerceptionEntityClientIndex(target);
+	botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceTargetEntity =
+		Bot_PerceptionEntityNumber(target);
+	botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceClient =
+		Bot_PerceptionEntityClientIndex(source);
+	botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceEntity =
+		Bot_PerceptionEntityNumber(source);
+	botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceDistanceSquared =
+		Bot_PerceptionClampDistanceSquared(sourceDistanceSquared);
+	botFrameCommandStatus.lastFfaSpawnCampCombatAvoidancePolicyAvoid =
+		policy.avoidSpawnCamping ? 1 : 0;
+	botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceBlocked =
+		blocked ? 1 : 0;
+	botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceReason =
+		reason != nullptr ? reason : "none";
 }
 
 void Bot_CommandRecordCtfRoleCombatLast(
@@ -7157,7 +7312,8 @@ bool Bot_CommandFindCtfRoleCombatFacts(gentity_t *bot, BotCombatEnemyFacts *fact
 	}
 
 	const int smokeMode = Bot_CommandSmokeScenarioMode();
-	if (smokeMode == 36 || smokeMode == 43 || smokeMode == 44) {
+	if (smokeMode == 36 || smokeMode == 43 || smokeMode == 44 ||
+		smokeMode == 48 || smokeMode == 49) {
 		return Bot_CommandFindSmokeEnemyFacts(bot, facts);
 	}
 
@@ -7197,6 +7353,81 @@ void Bot_CommandAdoptCtfRoleCombatTarget(
 	if (Bot_PerceptionEnemyFactsValid(perceptionFacts)) {
 		Bot_PerceptionSetCurrentEnemy(slot, perceptionFacts, true);
 	}
+}
+
+BotActionDecision Bot_CommandApplyFfaRoleCombat(
+	gentity_t *bot,
+	const BotObjectiveMatchPolicy &policy,
+	const BotActionDecision &decision) {
+	if (!Bot_CommandFfaRoleCombatEnabled()) {
+		return decision;
+	}
+
+	botFrameCommandStatus.ffaRoleCombatRequests++;
+
+	int clientIndex = -1;
+	BotBrainBlackboardSlot *slot = Bot_BlackboardEnsureSlot(bot, &clientIndex);
+	if (slot == nullptr ||
+		bot == nullptr ||
+		bot->client == nullptr ||
+		!policy.valid ||
+		!policy.participatesInScoring ||
+		policy.mode != BotObjectiveMatchMode::FreeForAll ||
+		policy.role == BotObjectiveRole::None ||
+		policy.lane == BotObjectiveLane::None ||
+		!policy.wantsEngage) {
+		botFrameCommandStatus.ffaRoleCombatInvalidSkips++;
+		Bot_CommandRecordFfaRoleCombatLast(
+			clientIndex,
+			policy,
+			nullptr,
+			"invalid_policy");
+		return decision;
+	}
+
+	botFrameCommandStatus.ffaRoleCombatPolicySelections++;
+
+	BotCombatEnemyFacts facts{};
+	if (!Bot_CommandFindCtfRoleCombatFacts(bot, &facts) ||
+		Bot_CommandCtfRoleCombatTargetFromFacts(facts) == nullptr) {
+		botFrameCommandStatus.ffaRoleCombatTargetDeferrals++;
+		if (botFrameCommandStatus.ffaRoleCombatTargetSelections == 0) {
+			Bot_CommandRecordFfaRoleCombatLast(
+				clientIndex,
+				policy,
+				&facts,
+				"no_shootable_target");
+		}
+		return decision;
+	}
+
+	gentity_t *target = Bot_CommandCtfRoleCombatTargetFromFacts(facts);
+	Bot_CommandAdoptCtfRoleCombatTarget(bot, *slot, target);
+	botFrameCommandStatus.ffaRoleCombatTargetSelections++;
+
+	const int priority = std::max(policy.engagePriority, policy.priority) +
+		BOT_COMMAND_FFA_ROLE_COMBAT_PRIORITY_BONUS;
+	if (decision.intent != BotActionIntent::Attack ||
+		!decision.pressAttack ||
+		priority > decision.priority) {
+		botFrameCommandStatus.ffaRoleCombatDecisionOverrides++;
+	}
+	botFrameCommandStatus.ffaRoleCombatAttackDecisions++;
+	Bot_CommandRecordFfaRoleCombatLast(
+		clientIndex,
+		policy,
+		&facts,
+		"ffa_role_combat_engage");
+
+	return {
+		.intent = BotActionIntent::Attack,
+		.clientIndex = clientIndex,
+		.priority = priority,
+		.weaponItem = decision.weaponItem > IT_NULL ?
+			decision.weaponItem : Bot_CommandCurrentWeaponItem(bot),
+		.pressAttack = true,
+		.reason = "ffa_role_combat_engage",
+	};
 }
 
 BotActionDecision Bot_CommandApplyTeamRoleCombat(
@@ -7371,6 +7602,103 @@ gentity_t *Bot_CommandTeamFireAvoidanceTarget(gentity_t *bot) {
 	return Bot_CommandKnownVisibleEnemy(bot);
 }
 
+BotActionDecision Bot_CommandApplyFfaSpawnCampCombatAvoidance(
+	gentity_t *bot,
+	const BotObjectiveMatchPolicy &policy,
+	const BotActionDecision &decision) {
+	if (!Bot_CommandFfaSpawnCampCombatAvoidanceEnabled() ||
+		!decision.pressAttack) {
+		return decision;
+	}
+
+	botFrameCommandStatus.ffaSpawnCampCombatAvoidanceEvaluations++;
+	const int clientIndex = Bot_PerceptionClientIndex(bot);
+	Bot_CommandRecordFfaSpawnCampCombatAvoidanceLast(
+		clientIndex,
+		policy,
+		nullptr,
+		nullptr,
+		0.0f,
+		false,
+		"no_target");
+
+	if (bot == nullptr ||
+		bot->client == nullptr ||
+		!policy.valid ||
+		!policy.participatesInScoring ||
+		policy.mode != BotObjectiveMatchMode::FreeForAll ||
+		!policy.avoidSpawnCamping) {
+		botFrameCommandStatus.ffaSpawnCampCombatAvoidanceInvalidSkips++;
+		Bot_CommandRecordFfaSpawnCampCombatAvoidanceLast(
+			clientIndex,
+			policy,
+			nullptr,
+			nullptr,
+			0.0f,
+			false,
+			"invalid_policy");
+		return decision;
+	}
+
+	gentity_t *target = Bot_CommandTeamFireAvoidanceTarget(bot);
+	if (target == nullptr) {
+		botFrameCommandStatus.ffaSpawnCampCombatAvoidanceInvalidSkips++;
+		return decision;
+	}
+
+	float sourceDistanceSquared = 0.0f;
+	gentity_t *source = Bot_CommandFfaSpawnCampAvoidanceSource(
+		bot,
+		&sourceDistanceSquared);
+	if (source == nullptr) {
+		botFrameCommandStatus.ffaSpawnCampCombatAvoidanceClears++;
+		Bot_CommandRecordFfaSpawnCampCombatAvoidanceLast(
+			clientIndex,
+			policy,
+			target,
+			nullptr,
+			0.0f,
+			false,
+			"no_spawn_camp_source");
+		return decision;
+	}
+
+	const int sourceEntity = Bot_PerceptionEntityNumber(source);
+	const int targetEntity = Bot_PerceptionEntityNumber(target);
+	const bool sourceIsTarget =
+		source == target ||
+		(sourceEntity >= 0 &&
+		 sourceEntity == targetEntity &&
+		 source->spawn_count == target->spawn_count);
+	if (!sourceIsTarget) {
+		botFrameCommandStatus.ffaSpawnCampCombatAvoidanceClears++;
+		Bot_CommandRecordFfaSpawnCampCombatAvoidanceLast(
+			clientIndex,
+			policy,
+			target,
+			source,
+			sourceDistanceSquared,
+			false,
+			"different_source");
+		return decision;
+	}
+
+	botFrameCommandStatus.ffaSpawnCampCombatAvoidanceBlocks++;
+	botFrameCommandStatus.ffaSpawnCampCombatAvoidanceSourceBlocks++;
+	Bot_CommandRecordFfaSpawnCampCombatAvoidanceLast(
+		clientIndex,
+		policy,
+		target,
+		source,
+		sourceDistanceSquared,
+		true,
+		"spawn_camp_source");
+	return {
+		.clientIndex = decision.clientIndex,
+		.reason = "ffa_spawn_camp_combat_avoidance",
+	};
+}
+
 BotActionDecision Bot_CommandApplyTeamFireAvoidance(
 	gentity_t *bot,
 	const BotActionDecision &decision) {
@@ -7515,6 +7843,7 @@ void Bot_CommandApplyMovementState(const gentity_t *bot, const BotLibAdapterRout
 	case 0:
 	case BOT_COMMAND_TRAVEL_WALK:
 	case BOT_COMMAND_TRAVEL_WALK_OFF_LEDGE:
+	case BOT_COMMAND_TRAVEL_TELEPORT:
 	case BOT_COMMAND_TRAVEL_ELEVATOR:
 	case BOT_COMMAND_TRAVEL_ROCKET_JUMP:
 		break;
@@ -7530,6 +7859,49 @@ void Bot_CommandApplyMovementState(const gentity_t *bot, const BotLibAdapterRout
 		}
 	}
 	botFrameCommandStatus.lastMovementStateButtons = static_cast<int>(cmd->buttons);
+}
+
+bool Bot_CommandApplyControlledInactiveRecovery(gentity_t *bot, usercmd_t *cmd) {
+	const int mode = Bot_CommandControlledInactiveRecoveryMode();
+	if (mode <= 0) {
+		return false;
+	}
+
+	botFrameCommandStatus.controlledInactiveRecoveryAttempts++;
+	const int clientIndex = Bot_PerceptionClientIndex(bot);
+	botFrameCommandStatus.lastControlledInactiveRecoveryClient = clientIndex;
+	botFrameCommandStatus.lastControlledInactiveRecoveryMode = mode;
+	botFrameCommandStatus.lastControlledInactiveRecoveryButtons = 0;
+
+	if (bot == nullptr || bot->client == nullptr || cmd == nullptr || clientIndex < 0) {
+		botFrameCommandStatus.controlledInactiveRecoveryInvalidSkips++;
+		return false;
+	}
+
+	if (!ClientIsPlaying(bot->client) && !bot->client->eliminated && mode >= 2) {
+		const Team target = Teams() ? PickTeam(clientIndex) : Team::Free;
+		if (SetTeam(bot, target, false, true, true)) {
+			botFrameCommandStatus.controlledInactiveRecoverySpectatorJoins++;
+			return false;
+		}
+	}
+
+	if (ClientIsPlaying(bot->client) && bot->deadFlag && !bot->client->eliminated) {
+		*cmd = {};
+		cmd->msec = Bot_CommandMsec();
+		cmd->serverFrame = gi.ServerFrame();
+		cmd->buttons |= BUTTON_ATTACK;
+		botFrameCommandStatus.controlledInactiveRecoveryCommands++;
+		botFrameCommandStatus.controlledInactiveRecoveryRespawnCommands++;
+		botFrameCommandStatus.lastControlledInactiveRecoveryButtons =
+			static_cast<int>(cmd->buttons);
+		return true;
+	}
+
+	if (!ClientIsPlaying(bot->client) || bot->client->eliminated) {
+		botFrameCommandStatus.controlledInactiveRecoverySpectatorSkips++;
+	}
+	return false;
 }
 
 void Bot_CommandClearCoopInteractionRetryOwner(int clientIndex) {
@@ -8599,6 +8971,11 @@ bool BotBrain_BuildFrameCommand( gentity_t * bot, usercmd_t * cmd ) {
 	}
 
 	if (!ClientIsPlaying(bot->client) || bot->client->eliminated || bot->deadFlag) {
+		if (Bot_CommandApplyControlledInactiveRecovery(bot, cmd)) {
+			botFrameCommandStatus.commands++;
+			cpuScope.success = true;
+			return true;
+		}
 		botFrameCommandStatus.skippedInactive++;
 		return false;
 	}
@@ -8608,11 +8985,21 @@ bool BotBrain_BuildFrameCommand( gentity_t * bot, usercmd_t * cmd ) {
 	const BotActionDecision actionDecision = Bot_CommandSampleActionDecision(bot);
 	const BotFrameObjectivePolicyResult objectivePolicies =
 		Bot_CommandEvaluateFrameObjectivePolicies(bot, actionDecision);
+	const BotActionDecision ffaRoleCombatDecision =
+		Bot_CommandApplyFfaRoleCombat(
+			bot,
+			objectivePolicies.matchPolicy,
+			actionDecision);
+	const BotActionDecision ffaSpawnCampCombatAvoidanceDecision =
+		Bot_CommandApplyFfaSpawnCampCombatAvoidance(
+			bot,
+			objectivePolicies.matchPolicy,
+			ffaRoleCombatDecision);
 	const BotActionDecision teamRoleCombatDecision =
 		Bot_CommandApplyTeamRoleCombat(
 			bot,
 			objectivePolicies.matchPolicy,
-			actionDecision);
+			ffaSpawnCampCombatAvoidanceDecision);
 	const BotActionDecision ctfRoleCombatDecision =
 		Bot_CommandApplyCtfRoleCombat(
 			bot,
@@ -8846,6 +9233,168 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 		travelTypeGoalPass &&
 		reservationPass) ? 1 : 0;
 
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "ffa_item_role_evaluations={} "
+			  "ffa_item_role_selections={} "
+			  "ffa_item_role_score_boosts={} "
+			  "ffa_item_role_selected_goals={} "
+			  "ffa_item_role_invalid_skips={}\n",
+			  routeStatus.ffaItemRoleEvaluations,
+			  routeStatus.ffaItemRoleSelections,
+			  routeStatus.ffaItemRoleScoreBoosts,
+			  routeStatus.ffaItemRoleSelectedGoals,
+			  routeStatus.ffaItemRoleInvalidSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ffa_item_role_mode={} "
+			  "last_ffa_item_role_role={} "
+			  "last_ffa_item_role_lane={} "
+			  "last_ffa_item_role_category={} "
+			  "last_ffa_item_role_item_role={} "
+			  "last_ffa_item_role_entity={} "
+			  "last_ffa_item_role_item={} "
+			  "last_ffa_item_role_score_boost={}\n",
+			  routeStatus.lastFfaItemRoleMode,
+			  routeStatus.lastFfaItemRoleRole,
+			  routeStatus.lastFfaItemRoleLane,
+			  routeStatus.lastFfaItemRoleCategory,
+			  routeStatus.lastFfaItemRoleItemRole,
+			  routeStatus.lastFfaItemRoleEntity,
+			  routeStatus.lastFfaItemRoleItem,
+			  routeStatus.lastFfaItemRoleScoreBoost);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "ctf_item_role_evaluations={} "
+			  "ctf_item_role_selections={} "
+			  "ctf_item_role_score_boosts={} "
+			  "ctf_item_role_selected_goals={} "
+			  "ctf_item_role_invalid_skips={}\n",
+			  routeStatus.ctfItemRoleEvaluations,
+			  routeStatus.ctfItemRoleSelections,
+			  routeStatus.ctfItemRoleScoreBoosts,
+			  routeStatus.ctfItemRoleSelectedGoals,
+			  routeStatus.ctfItemRoleInvalidSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ctf_item_role_mode={} "
+			  "last_ctf_item_role_role={} "
+			  "last_ctf_item_role_lane={} "
+			  "last_ctf_item_role_category={} "
+			  "last_ctf_item_role_item_role={} "
+			  "last_ctf_item_role_entity={} "
+			  "last_ctf_item_role_item={} "
+			  "last_ctf_item_role_score_boost={}\n",
+			  routeStatus.lastCtfItemRoleMode,
+			  routeStatus.lastCtfItemRoleRole,
+			  routeStatus.lastCtfItemRoleLane,
+			  routeStatus.lastCtfItemRoleCategory,
+			  routeStatus.lastCtfItemRoleItemRole,
+			  routeStatus.lastCtfItemRoleEntity,
+			  routeStatus.lastCtfItemRoleItem,
+			  routeStatus.lastCtfItemRoleScoreBoost);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "team_item_role_evaluations={} "
+			  "team_item_role_selections={} "
+			  "team_item_role_score_boosts={} "
+			  "team_item_role_selected_goals={} "
+			  "team_item_role_invalid_skips={}\n",
+			  routeStatus.teamItemRoleEvaluations,
+			  routeStatus.teamItemRoleSelections,
+			  routeStatus.teamItemRoleScoreBoosts,
+			  routeStatus.teamItemRoleSelectedGoals,
+			  routeStatus.teamItemRoleInvalidSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_item_role_mode={} "
+			  "last_team_item_role_role={} "
+			  "last_team_item_role_lane={} "
+			  "last_team_item_role_category={} "
+			  "last_team_item_role_item_role={} "
+			  "last_team_item_role_entity={} "
+			  "last_team_item_role_item={} "
+			  "last_team_item_role_score_boost={}\n",
+			  routeStatus.lastTeamItemRoleMode,
+			  routeStatus.lastTeamItemRoleRole,
+			  routeStatus.lastTeamItemRoleLane,
+			  routeStatus.lastTeamItemRoleCategory,
+			  routeStatus.lastTeamItemRoleItemRole,
+			  routeStatus.lastTeamItemRoleEntity,
+			  routeStatus.lastTeamItemRoleItem,
+			  routeStatus.lastTeamItemRoleScoreBoost);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "team_resource_denial_evaluations={} "
+			  "team_resource_denial_policy_denies={} "
+			  "team_resource_denial_score_boosts={} "
+			  "team_resource_denial_selected_goals={} "
+			  "team_resource_denial_invalid_skips={}\n",
+			  routeStatus.teamResourceDenialEvaluations,
+			  routeStatus.teamResourceDenialPolicyDenies,
+			  routeStatus.teamResourceDenialScoreBoosts,
+			  routeStatus.teamResourceDenialSelectedGoals,
+			  routeStatus.teamResourceDenialInvalidSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_resource_denial_mode={} "
+			  "last_team_resource_denial_role={} "
+			  "last_team_resource_denial_lane={} "
+			  "last_team_resource_denial_category={} "
+			  "last_team_resource_denial_intent={} "
+			  "last_team_resource_denial_entity={} "
+			  "last_team_resource_denial_item={} "
+			  "last_team_resource_denial_score_boost={}\n",
+			  routeStatus.lastTeamResourceDenialMode,
+			  routeStatus.lastTeamResourceDenialRole,
+			  routeStatus.lastTeamResourceDenialLane,
+			  routeStatus.lastTeamResourceDenialCategory,
+			  routeStatus.lastTeamResourceDenialIntent,
+			  routeStatus.lastTeamResourceDenialEntity,
+			  routeStatus.lastTeamResourceDenialItem,
+			  routeStatus.lastTeamResourceDenialScoreBoost);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "nav_interaction_elevator_activations={} "
+			  "nav_interaction_activations={} "
+			  "nav_interaction_candidates={} "
+			  "nav_interaction_checks={}\n",
+			  routeStatus.interactionElevatorActivations,
+			  routeStatus.interactionActivations,
+			  routeStatus.interactionCandidates,
+			  routeStatus.interactionChecks);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "route_corner_cut_candidates={} "
+			  "route_corner_cut_trace_checks={} "
+			  "route_corner_cut_trace_hits={} "
+			  "route_corner_cut_trace_misses={} "
+			  "route_corner_cut_ground_trace_checks={} "
+			  "route_corner_cut_ground_trace_misses={} "
+			  "route_corner_cut_accepted={} "
+			  "route_corner_cut_rejected={}\n",
+			  routeStatus.cornerCutChecks,
+			  routeStatus.cornerCutTraceAttempts,
+			  routeStatus.cornerCutTracePasses,
+			  routeStatus.cornerCutTraceFailures,
+			  routeStatus.cornerCutGroundTraceAttempts,
+			  routeStatus.cornerCutGroundTraceFailures,
+			  routeStatus.cornerCutApplications,
+			  routeStatus.cornerCutSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "corner_cut_candidates={} corner_cut_trace_checks={} "
+			  "corner_cut_accepted={} "
+			  "trace_checked_corner_cut_candidates={} "
+			  "trace_checked_corner_cut_trace_checks={} "
+			  "trace_checked_corner_cut_accepted={}\n",
+			  routeStatus.cornerCutChecks,
+			  routeStatus.cornerCutTraceAttempts,
+			  routeStatus.cornerCutApplications,
+			  routeStatus.cornerCutChecks,
+			  routeStatus.cornerCutTraceAttempts,
+			  routeStatus.cornerCutApplications);
+
 	BotBrain_PrintActionProofStatus(actionStatus, itemStatus, combatStatus);
 	BotBrain_PrintActionDetailProofStatus(actionStatus, itemStatus, combatStatus);
 
@@ -8859,6 +9408,41 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  "expected_min_frames={} expected_min_commands={} "
 			  "item_goal_peak_active_reservations={} "
 			  "route_debug_missing_frames={} skipped_inactive={} "
+			  "ffa_role_combat_requests={} "
+			  "ffa_role_combat_policy_selections={} "
+			  "ffa_role_combat_target_selections={} "
+			  "ffa_role_combat_attack_decisions={} "
+			  "ffa_role_combat_decision_overrides={} "
+			  "ffa_role_combat_target_deferrals={} "
+			  "ffa_role_combat_invalid_skips={} "
+			  "last_ffa_role_combat_client={} "
+			  "last_ffa_role_combat_mode={} "
+			  "last_ffa_role_combat_mode_name={} "
+			  "last_ffa_role_combat_role={} "
+			  "last_ffa_role_combat_role_name={} "
+			  "last_ffa_role_combat_lane={} "
+			  "last_ffa_role_combat_lane_name={} "
+			  "last_ffa_role_combat_priority={} "
+			  "last_ffa_role_combat_target_client={} "
+			  "last_ffa_role_combat_target_entity={} "
+			  "last_ffa_role_combat_target_distance_sq={} "
+			  "last_ffa_role_combat_target_visible={} "
+			  "last_ffa_role_combat_target_shootable={} "
+			  "last_ffa_role_combat_reason={} "
+			  "ffa_spawn_camp_combat_avoidance_evaluations={} "
+			  "ffa_spawn_camp_combat_avoidance_blocks={} "
+			  "ffa_spawn_camp_combat_avoidance_source_blocks={} "
+			  "ffa_spawn_camp_combat_avoidance_clears={} "
+			  "ffa_spawn_camp_combat_avoidance_invalid_skips={} "
+			  "last_ffa_spawn_camp_combat_avoidance_client={} "
+			  "last_ffa_spawn_camp_combat_avoidance_target_client={} "
+			  "last_ffa_spawn_camp_combat_avoidance_target_entity={} "
+			  "last_ffa_spawn_camp_combat_avoidance_source_client={} "
+			  "last_ffa_spawn_camp_combat_avoidance_source_entity={} "
+			  "last_ffa_spawn_camp_combat_avoidance_source_distance_sq={} "
+			  "last_ffa_spawn_camp_combat_avoidance_policy_avoid={} "
+			  "last_ffa_spawn_camp_combat_avoidance_blocked={} "
+			  "last_ffa_spawn_camp_combat_avoidance_reason={} "
 			  "team_role_combat_requests={} "
 			  "team_role_combat_policy_selections={} "
 			  "team_role_combat_target_selections={} "
@@ -8930,6 +9514,44 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  routeStatus.itemGoalPeakActiveReservations,
 			  routeStatus.debugOverlayMissingFrames,
 			  botFrameCommandStatus.skippedInactive,
+			  botFrameCommandStatus.ffaRoleCombatRequests,
+			  botFrameCommandStatus.ffaRoleCombatPolicySelections,
+			  botFrameCommandStatus.ffaRoleCombatTargetSelections,
+			  botFrameCommandStatus.ffaRoleCombatAttackDecisions,
+			  botFrameCommandStatus.ffaRoleCombatDecisionOverrides,
+			  botFrameCommandStatus.ffaRoleCombatTargetDeferrals,
+			  botFrameCommandStatus.ffaRoleCombatInvalidSkips,
+			  botFrameCommandStatus.lastFfaRoleCombatClient,
+			  botFrameCommandStatus.lastFfaRoleCombatMode,
+			  BotObjectives_MatchModeName(static_cast<BotObjectiveMatchMode>(
+				  botFrameCommandStatus.lastFfaRoleCombatMode)),
+			  botFrameCommandStatus.lastFfaRoleCombatRole,
+			  BotObjectives_RoleName(static_cast<BotObjectiveRole>(
+				  botFrameCommandStatus.lastFfaRoleCombatRole)),
+			  botFrameCommandStatus.lastFfaRoleCombatLane,
+			  BotObjectives_LaneName(static_cast<BotObjectiveLane>(
+				  botFrameCommandStatus.lastFfaRoleCombatLane)),
+			  botFrameCommandStatus.lastFfaRoleCombatPriority,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetClient,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetEntity,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetDistanceSquared,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetVisible,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetShootable,
+			  botFrameCommandStatus.lastFfaRoleCombatReason,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceEvaluations,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceBlocks,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceSourceBlocks,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceClears,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceInvalidSkips,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceClient,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceTargetClient,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceTargetEntity,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceClient,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceEntity,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceDistanceSquared,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidancePolicyAvoid,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceBlocked,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceReason,
 			  botFrameCommandStatus.teamRoleCombatRequests,
 			  botFrameCommandStatus.teamRoleCombatPolicySelections,
 			  botFrameCommandStatus.teamRoleCombatTargetSelections,
@@ -9189,6 +9811,56 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  botFrameCommandStatus.lastFfaSpawnCampAvoidancePolicyAvoid,
 			  botFrameCommandStatus.lastFfaSpawnCampAvoidanceGoalDistanceSquared,
 			  botFrameCommandStatus.lastFfaSpawnCampAvoidanceReason);
+
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_frame_command_status pass={} frames={} commands={} "
+			  "ffa_spawn_camp_combat_avoidance_evaluations={} "
+			  "ffa_spawn_camp_combat_avoidance_blocks={} "
+			  "ffa_spawn_camp_combat_avoidance_source_blocks={} "
+			  "ffa_spawn_camp_combat_avoidance_clears={} "
+			  "ffa_spawn_camp_combat_avoidance_invalid_skips={} "
+			  "last_ffa_spawn_camp_combat_avoidance_client={} "
+			  "last_ffa_spawn_camp_combat_avoidance_target_client={} "
+			  "last_ffa_spawn_camp_combat_avoidance_target_entity={} "
+			  "last_ffa_spawn_camp_combat_avoidance_source_client={} "
+			  "last_ffa_spawn_camp_combat_avoidance_source_entity={} "
+			  "last_ffa_spawn_camp_combat_avoidance_source_distance_sq={} "
+			  "last_ffa_spawn_camp_combat_avoidance_policy_avoid={} "
+			  "last_ffa_spawn_camp_combat_avoidance_blocked={} "
+			  "last_ffa_spawn_camp_combat_avoidance_reason={}\n",
+			  pass,
+			  botFrameCommandStatus.frames,
+			  botFrameCommandStatus.commands,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceEvaluations,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceBlocks,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceSourceBlocks,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceClears,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceInvalidSkips,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceClient,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceTargetClient,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceTargetEntity,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceClient,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceEntity,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceDistanceSquared,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidancePolicyAvoid,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceBlocked,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceReason);
+
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_route_schedule_status pass={} "
+			  "route_recompute_rate_limit_checks={} "
+			  "route_recompute_rate_limit_reuses={} "
+			  "route_recompute_rate_limit_refreshes={} "
+			  "item_goal_desirability_updates={} "
+			  "item_goal_desirability_cache_reuses={} "
+			  "item_goal_desirability_stagger_deferrals={}\n",
+			  pass,
+			  routeStatus.routeRecomputeRateLimitChecks,
+			  routeStatus.routeRecomputeRateLimitReuses,
+			  routeStatus.routeRecomputeRateLimitRefreshes,
+			  routeStatus.itemGoalDesirabilityUpdates,
+			  routeStatus.itemGoalDesirabilityCacheReuses,
+			  routeStatus.itemGoalDesirabilityStaggerDeferrals);
 
 	BotBrain_PrintStatusFmt(
 		"q3a_bot_frame_command_status pass={} frames={} commands={} "
@@ -9650,7 +10322,64 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  botFrameCommandStatus.lastRecoveryFramesRemaining);
 
 	BotBrain_PrintStatusFmt(
+		"q3a_bot_controlled_recovery_status pass={} "
+			  "controlled_inactive_recovery_attempts={} "
+			  "controlled_inactive_recovery_commands={} "
+			  "controlled_inactive_recovery_respawn_commands={} "
+			  "controlled_inactive_recovery_spectator_joins={} "
+			  "controlled_inactive_recovery_spectator_skips={} "
+			  "controlled_inactive_recovery_invalid_skips={} "
+			  "last_controlled_inactive_recovery_client={} "
+			  "last_controlled_inactive_recovery_mode={} "
+			  "last_controlled_inactive_recovery_buttons={}\n",
+			  pass,
+			  botFrameCommandStatus.controlledInactiveRecoveryAttempts,
+			  botFrameCommandStatus.controlledInactiveRecoveryCommands,
+			  botFrameCommandStatus.controlledInactiveRecoveryRespawnCommands,
+			  botFrameCommandStatus.controlledInactiveRecoverySpectatorJoins,
+			  botFrameCommandStatus.controlledInactiveRecoverySpectatorSkips,
+			  botFrameCommandStatus.controlledInactiveRecoveryInvalidSkips,
+			  botFrameCommandStatus.lastControlledInactiveRecoveryClient,
+			  botFrameCommandStatus.lastControlledInactiveRecoveryMode,
+			  botFrameCommandStatus.lastControlledInactiveRecoveryButtons);
+
+	BotBrain_PrintStatusFmt(
 		"q3a_bot_frame_command_status pass={} frames={} commands={} "
+			  "ffa_role_combat_requests={} "
+			  "ffa_role_combat_policy_selections={} "
+			  "ffa_role_combat_target_selections={} "
+			  "ffa_role_combat_attack_decisions={} "
+			  "ffa_role_combat_decision_overrides={} "
+			  "ffa_role_combat_target_deferrals={} "
+			  "ffa_role_combat_invalid_skips={} "
+			  "last_ffa_role_combat_client={} "
+			  "last_ffa_role_combat_mode={} "
+			  "last_ffa_role_combat_mode_name={} "
+			  "last_ffa_role_combat_role={} "
+			  "last_ffa_role_combat_role_name={} "
+			  "last_ffa_role_combat_lane={} "
+			  "last_ffa_role_combat_lane_name={} "
+			  "last_ffa_role_combat_priority={} "
+			  "last_ffa_role_combat_target_client={} "
+			  "last_ffa_role_combat_target_entity={} "
+			  "last_ffa_role_combat_target_distance_sq={} "
+			  "last_ffa_role_combat_target_visible={} "
+			  "last_ffa_role_combat_target_shootable={} "
+			  "last_ffa_role_combat_reason={} "
+			  "ffa_spawn_camp_combat_avoidance_evaluations={} "
+			  "ffa_spawn_camp_combat_avoidance_blocks={} "
+			  "ffa_spawn_camp_combat_avoidance_source_blocks={} "
+			  "ffa_spawn_camp_combat_avoidance_clears={} "
+			  "ffa_spawn_camp_combat_avoidance_invalid_skips={} "
+			  "last_ffa_spawn_camp_combat_avoidance_client={} "
+			  "last_ffa_spawn_camp_combat_avoidance_target_client={} "
+			  "last_ffa_spawn_camp_combat_avoidance_target_entity={} "
+			  "last_ffa_spawn_camp_combat_avoidance_source_client={} "
+			  "last_ffa_spawn_camp_combat_avoidance_source_entity={} "
+			  "last_ffa_spawn_camp_combat_avoidance_source_distance_sq={} "
+			  "last_ffa_spawn_camp_combat_avoidance_policy_avoid={} "
+			  "last_ffa_spawn_camp_combat_avoidance_blocked={} "
+			  "last_ffa_spawn_camp_combat_avoidance_reason={} "
 			  "team_role_combat_requests={} "
 			  "team_role_combat_policy_selections={} "
 			  "team_role_combat_target_selections={} "
@@ -9708,6 +10437,44 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  pass,
 			  botFrameCommandStatus.frames,
 			  botFrameCommandStatus.commands,
+			  botFrameCommandStatus.ffaRoleCombatRequests,
+			  botFrameCommandStatus.ffaRoleCombatPolicySelections,
+			  botFrameCommandStatus.ffaRoleCombatTargetSelections,
+			  botFrameCommandStatus.ffaRoleCombatAttackDecisions,
+			  botFrameCommandStatus.ffaRoleCombatDecisionOverrides,
+			  botFrameCommandStatus.ffaRoleCombatTargetDeferrals,
+			  botFrameCommandStatus.ffaRoleCombatInvalidSkips,
+			  botFrameCommandStatus.lastFfaRoleCombatClient,
+			  botFrameCommandStatus.lastFfaRoleCombatMode,
+			  BotObjectives_MatchModeName(static_cast<BotObjectiveMatchMode>(
+				  botFrameCommandStatus.lastFfaRoleCombatMode)),
+			  botFrameCommandStatus.lastFfaRoleCombatRole,
+			  BotObjectives_RoleName(static_cast<BotObjectiveRole>(
+				  botFrameCommandStatus.lastFfaRoleCombatRole)),
+			  botFrameCommandStatus.lastFfaRoleCombatLane,
+			  BotObjectives_LaneName(static_cast<BotObjectiveLane>(
+				  botFrameCommandStatus.lastFfaRoleCombatLane)),
+			  botFrameCommandStatus.lastFfaRoleCombatPriority,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetClient,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetEntity,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetDistanceSquared,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetVisible,
+			  botFrameCommandStatus.lastFfaRoleCombatTargetShootable,
+			  botFrameCommandStatus.lastFfaRoleCombatReason,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceEvaluations,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceBlocks,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceSourceBlocks,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceClears,
+			  botFrameCommandStatus.ffaSpawnCampCombatAvoidanceInvalidSkips,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceClient,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceTargetClient,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceTargetEntity,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceClient,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceEntity,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceSourceDistanceSquared,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidancePolicyAvoid,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceBlocked,
+			  botFrameCommandStatus.lastFfaSpawnCampCombatAvoidanceReason,
 			  botFrameCommandStatus.teamRoleCombatRequests,
 			  botFrameCommandStatus.teamRoleCombatPolicySelections,
 			  botFrameCommandStatus.teamRoleCombatTargetSelections,
@@ -10088,6 +10855,27 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 
 	BotBrain_PrintStatusFmt(
 		"q3a_bot_objective_detail_status "
+			  "last_team_objective_lane={} "
+			  "last_team_objective_target_source={} "
+			  "team_objective_role_policy_requested_honored={} "
+			  "team_objective_role_policy_attack_selections={} "
+			  "team_objective_role_policy_lane_midfield_selections={} "
+			  "team_objective_role_policy_carrier_support_selections={} "
+			  "team_objective_role_policy_dropped_flag_responses={} "
+			  "team_objective_role_policy_own_base_return_selections={} "
+			  "team_objective_enemy_flag_assignments={}\n",
+			  objectiveStatus.lastObjectiveLane,
+			  objectiveStatus.lastTargetSource,
+			  objectiveStatus.rolePolicyRequestedHonored,
+			  objectiveStatus.rolePolicyAttackSelections,
+			  objectiveStatus.rolePolicyLaneMidfieldSelections,
+			  objectiveStatus.rolePolicyCarrierSupportSelections,
+			  objectiveStatus.rolePolicyDroppedFlagResponses,
+			  objectiveStatus.rolePolicyOwnBaseReturnSelections,
+			  objectiveStatus.enemyFlagAssignments);
+
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_objective_detail_status "
 			  "team_objective_evaluations={} "
 			  "team_objective_disabled_evaluations={} "
 			  "team_objective_invalid_contexts={} "
@@ -10377,96 +11165,272 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 
 	BotBrain_PrintStatusFmt(
 		"q3a_bot_nav_policy_status "
-			  "travel_type_goal_support_checks={} travel_type_goal_supported={} "
-			  "travel_type_goal_unsupported={} "
-			  "last_travel_type_goal_support_type={} "
-			  "last_travel_type_goal_support_area={} "
-			  "last_travel_type_goal_support_goal_area={} "
+			  "ctf_item_role_evaluations={} "
+			  "ctf_item_role_selections={} "
+			  "ctf_item_role_score_boosts={} "
+			  "ctf_item_role_selected_goals={} "
+			  "ctf_item_role_invalid_skips={}\n",
+			  routeStatus.ctfItemRoleEvaluations,
+			  routeStatus.ctfItemRoleSelections,
+			  routeStatus.ctfItemRoleScoreBoosts,
+			  routeStatus.ctfItemRoleSelectedGoals,
+			  routeStatus.ctfItemRoleInvalidSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ctf_item_role_client={} "
+			  "last_ctf_item_role_mode={} "
+			  "last_ctf_item_role_mode_name={} "
+			  "last_ctf_item_role_role={} "
+			  "last_ctf_item_role_role_name={}\n",
+			  routeStatus.lastCtfItemRoleClient,
+			  routeStatus.lastCtfItemRoleMode,
+			  BotObjectives_MatchModeName(static_cast<BotObjectiveMatchMode>(
+				  routeStatus.lastCtfItemRoleMode)),
+			  routeStatus.lastCtfItemRoleRole,
+			  BotObjectives_RoleName(static_cast<BotObjectiveRole>(
+				  routeStatus.lastCtfItemRoleRole)));
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ctf_item_role_lane={} "
+			  "last_ctf_item_role_lane_name={} "
+			  "last_ctf_item_role_category={} "
+			  "last_ctf_item_role_category_name={}\n",
+			  routeStatus.lastCtfItemRoleLane,
+			  BotObjectives_LaneName(static_cast<BotObjectiveLane>(
+				  routeStatus.lastCtfItemRoleLane)),
+			  routeStatus.lastCtfItemRoleCategory,
+			  BotObjectives_ItemCategoryName(static_cast<BotObjectiveItemCategory>(
+				  routeStatus.lastCtfItemRoleCategory)));
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ctf_item_role_item_role={} "
+			  "last_ctf_item_role_item_role_name={} "
+			  "last_ctf_item_role_priority={} "
+			  "last_ctf_item_role_score_boost={}\n",
+			  routeStatus.lastCtfItemRoleItemRole,
+			  BotObjectives_ItemRoleName(static_cast<BotObjectiveItemRole>(
+				  routeStatus.lastCtfItemRoleItemRole)),
+			  routeStatus.lastCtfItemRolePriority,
+			  routeStatus.lastCtfItemRoleScoreBoost);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ctf_item_role_entity={} "
+			  "last_ctf_item_role_item={} "
+			  "last_ctf_item_role_score={}\n",
+			  routeStatus.lastCtfItemRoleEntity,
+			  routeStatus.lastCtfItemRoleItem,
+			  routeStatus.lastCtfItemRoleScore);
+
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "ffa_item_role_evaluations={} "
+			  "ffa_item_role_selections={} "
+			  "ffa_item_role_score_boosts={} "
+			  "ffa_item_role_selected_goals={} "
+			  "ffa_item_role_invalid_skips={}\n",
+			  routeStatus.ffaItemRoleEvaluations,
+			  routeStatus.ffaItemRoleSelections,
+			  routeStatus.ffaItemRoleScoreBoosts,
+			  routeStatus.ffaItemRoleSelectedGoals,
+			  routeStatus.ffaItemRoleInvalidSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ffa_item_role_client={} "
+			  "last_ffa_item_role_mode={} "
+			  "last_ffa_item_role_mode_name={} "
+			  "last_ffa_item_role_role={} "
+			  "last_ffa_item_role_role_name={}\n",
+			  routeStatus.lastFfaItemRoleClient,
+			  routeStatus.lastFfaItemRoleMode,
+			  BotObjectives_MatchModeName(static_cast<BotObjectiveMatchMode>(
+				  routeStatus.lastFfaItemRoleMode)),
+			  routeStatus.lastFfaItemRoleRole,
+			  BotObjectives_RoleName(static_cast<BotObjectiveRole>(
+				  routeStatus.lastFfaItemRoleRole)));
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ffa_item_role_lane={} "
+			  "last_ffa_item_role_lane_name={} "
+			  "last_ffa_item_role_category={} "
+			  "last_ffa_item_role_category_name={}\n",
+			  routeStatus.lastFfaItemRoleLane,
+			  BotObjectives_LaneName(static_cast<BotObjectiveLane>(
+				  routeStatus.lastFfaItemRoleLane)),
+			  routeStatus.lastFfaItemRoleCategory,
+			  BotObjectives_ItemCategoryName(static_cast<BotObjectiveItemCategory>(
+				  routeStatus.lastFfaItemRoleCategory)));
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ffa_item_role_item_role={} "
+			  "last_ffa_item_role_item_role_name={} "
+			  "last_ffa_item_role_priority={} "
+			  "last_ffa_item_role_score_boost={}\n",
+			  routeStatus.lastFfaItemRoleItemRole,
+			  BotObjectives_ItemRoleName(static_cast<BotObjectiveItemRole>(
+				  routeStatus.lastFfaItemRoleItemRole)),
+			  routeStatus.lastFfaItemRolePriority,
+			  routeStatus.lastFfaItemRoleScoreBoost);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_ffa_item_role_entity={} "
+			  "last_ffa_item_role_item={} "
+			  "last_ffa_item_role_score={}\n",
+			  routeStatus.lastFfaItemRoleEntity,
+			  routeStatus.lastFfaItemRoleItem,
+			  routeStatus.lastFfaItemRoleScore);
+
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
 			  "team_item_role_evaluations={} "
 			  "team_item_role_selections={} "
 			  "team_item_role_score_boosts={} "
 			  "team_item_role_selected_goals={} "
-			  "team_item_role_invalid_skips={} "
-			  "last_team_item_role_client={} "
-			  "last_team_item_role_mode={} "
-			  "last_team_item_role_mode_name={} "
-			  "last_team_item_role_role={} "
-			  "last_team_item_role_role_name={} "
-			  "last_team_item_role_lane={} "
-			  "last_team_item_role_lane_name={} "
-			  "last_team_item_role_category={} "
-			  "last_team_item_role_category_name={} "
-			  "last_team_item_role_item_role={} "
-			  "last_team_item_role_item_role_name={} "
-			  "last_team_item_role_priority={} "
-			  "last_team_item_role_score_boost={} "
-			  "last_team_item_role_entity={} "
-			  "last_team_item_role_item={} "
-			  "last_team_item_role_score={} "
-			  "nav_interaction_checks={} nav_interaction_candidates={} "
-			  "nav_interaction_activations={} "
-			  "nav_interaction_stuck_activations={} "
-			  "nav_interaction_elevator_activations={} "
-			  "nav_interaction_wait_frames={} nav_interaction_use_frames={} "
-			  "nav_interaction_misses={} "
-			  "last_nav_interaction_action={} last_nav_interaction_kind={} "
-			  "last_nav_interaction_entity={} "
-			  "last_nav_interaction_distance_sq={} "
-			  "last_nav_interaction_travel_type={} "
-			  "last_nav_interaction_move_state={} "
-			  "last_nav_interaction_frames_remaining={} "
-			  "movement_state_waterjump_commands={} "
-			  "natural_movement_state_commands={} "
-			  "natural_movement_state_crouch_commands={} "
-			  "natural_movement_state_swim_commands={} "
-			  "natural_movement_state_waterjump_commands={} "
-			  "interaction_wait_command_uses={} interaction_use_command_uses={} "
-			  "last_interaction_command_action={} "
-			  "last_interaction_command_entity={} "
-			  "route_corner_cut_candidates={} "
-			  "route_corner_cut_trace_checks={} "
-			  "route_corner_cut_trace_hits={} "
-			  "route_corner_cut_trace_misses={} "
-			  "route_corner_cut_ground_trace_checks={} "
-			  "route_corner_cut_ground_trace_misses={} "
-			  "route_corner_cut_accepted={} route_corner_cut_rejected={} "
-			  "corner_cut_candidates={} corner_cut_trace_checks={} "
-			  "corner_cut_accepted={} "
-			  "trace_checked_corner_cut_candidates={} "
-			  "trace_checked_corner_cut_trace_checks={} "
-			  "trace_checked_corner_cut_accepted={}\n",
-			  routeStatus.travelTypeGoalSupportChecks,
-			  routeStatus.travelTypeGoalSupported,
-			  routeStatus.travelTypeGoalUnsupported,
-			  routeStatus.lastTravelTypeGoalSupportType,
-			  routeStatus.lastTravelTypeGoalSupportArea,
-			  routeStatus.lastTravelTypeGoalSupportGoalArea,
+			  "team_item_role_invalid_skips={}\n",
 			  routeStatus.teamItemRoleEvaluations,
 			  routeStatus.teamItemRoleSelections,
 			  routeStatus.teamItemRoleScoreBoosts,
 			  routeStatus.teamItemRoleSelectedGoals,
-			  routeStatus.teamItemRoleInvalidSkips,
+			  routeStatus.teamItemRoleInvalidSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_item_role_client={} "
+			  "last_team_item_role_mode={} "
+			  "last_team_item_role_mode_name={} "
+			  "last_team_item_role_role={} "
+			  "last_team_item_role_role_name={}\n",
 			  routeStatus.lastTeamItemRoleClient,
 			  routeStatus.lastTeamItemRoleMode,
 			  BotObjectives_MatchModeName(static_cast<BotObjectiveMatchMode>(
 				  routeStatus.lastTeamItemRoleMode)),
 			  routeStatus.lastTeamItemRoleRole,
 			  BotObjectives_RoleName(static_cast<BotObjectiveRole>(
-				  routeStatus.lastTeamItemRoleRole)),
+				  routeStatus.lastTeamItemRoleRole)));
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_item_role_lane={} "
+			  "last_team_item_role_lane_name={} "
+			  "last_team_item_role_category={} "
+			  "last_team_item_role_category_name={}\n",
 			  routeStatus.lastTeamItemRoleLane,
 			  BotObjectives_LaneName(static_cast<BotObjectiveLane>(
 				  routeStatus.lastTeamItemRoleLane)),
 			  routeStatus.lastTeamItemRoleCategory,
 			  BotObjectives_ItemCategoryName(static_cast<BotObjectiveItemCategory>(
-				  routeStatus.lastTeamItemRoleCategory)),
+				  routeStatus.lastTeamItemRoleCategory)));
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_item_role_item_role={} "
+			  "last_team_item_role_item_role_name={} "
+			  "last_team_item_role_priority={} "
+			  "last_team_item_role_score_boost={}\n",
 			  routeStatus.lastTeamItemRoleItemRole,
 			  BotObjectives_ItemRoleName(static_cast<BotObjectiveItemRole>(
 				  routeStatus.lastTeamItemRoleItemRole)),
 			  routeStatus.lastTeamItemRolePriority,
-			  routeStatus.lastTeamItemRoleScoreBoost,
+			  routeStatus.lastTeamItemRoleScoreBoost);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_item_role_entity={} "
+			  "last_team_item_role_item={} "
+			  "last_team_item_role_score={}\n",
 			  routeStatus.lastTeamItemRoleEntity,
 			  routeStatus.lastTeamItemRoleItem,
-			  routeStatus.lastTeamItemRoleScore,
+			  routeStatus.lastTeamItemRoleScore);
+
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "team_resource_denial_evaluations={} "
+			  "team_resource_denial_policy_denies={} "
+			  "team_resource_denial_score_boosts={} "
+			  "team_resource_denial_selected_goals={} "
+			  "team_resource_denial_invalid_skips={}\n",
+			  routeStatus.teamResourceDenialEvaluations,
+			  routeStatus.teamResourceDenialPolicyDenies,
+			  routeStatus.teamResourceDenialScoreBoosts,
+			  routeStatus.teamResourceDenialSelectedGoals,
+			  routeStatus.teamResourceDenialInvalidSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_resource_denial_client={} "
+			  "last_team_resource_denial_mode={} "
+			  "last_team_resource_denial_mode_name={} "
+			  "last_team_resource_denial_role={} "
+			  "last_team_resource_denial_role_name={}\n",
+			  routeStatus.lastTeamResourceDenialClient,
+			  routeStatus.lastTeamResourceDenialMode,
+			  BotObjectives_MatchModeName(static_cast<BotObjectiveMatchMode>(
+				  routeStatus.lastTeamResourceDenialMode)),
+			  routeStatus.lastTeamResourceDenialRole,
+			  BotObjectives_RoleName(static_cast<BotObjectiveRole>(
+				  routeStatus.lastTeamResourceDenialRole)));
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_resource_denial_lane={} "
+			  "last_team_resource_denial_lane_name={} "
+			  "last_team_resource_denial_category={} "
+			  "last_team_resource_denial_category_name={}\n",
+			  routeStatus.lastTeamResourceDenialLane,
+			  BotObjectives_LaneName(static_cast<BotObjectiveLane>(
+				  routeStatus.lastTeamResourceDenialLane)),
+			  routeStatus.lastTeamResourceDenialCategory,
+			  BotObjectives_ItemCategoryName(static_cast<BotObjectiveItemCategory>(
+				  routeStatus.lastTeamResourceDenialCategory)));
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_resource_denial_intent={} "
+			  "last_team_resource_denial_intent_name={} "
+			  "last_team_resource_denial_priority={} "
+			  "last_team_resource_denial_score_boost={}\n",
+			  routeStatus.lastTeamResourceDenialIntent,
+			  BotObjectives_ResourceIntentName(static_cast<BotObjectiveResourceIntent>(
+				  routeStatus.lastTeamResourceDenialIntent)),
+			  routeStatus.lastTeamResourceDenialPriority,
+			  routeStatus.lastTeamResourceDenialScoreBoost);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_team_resource_denial_entity={} "
+			  "last_team_resource_denial_item={} "
+			  "last_team_resource_denial_score={}\n",
+			  routeStatus.lastTeamResourceDenialEntity,
+			  routeStatus.lastTeamResourceDenialItem,
+			  routeStatus.lastTeamResourceDenialScore);
+
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "nav_interaction_elevator_activations={} "
+			  "nav_interaction_activations={} "
+			  "nav_interaction_candidates={} nav_interaction_checks={} "
+			  "last_nav_interaction_kind={} "
+			  "last_nav_interaction_entity={}\n",
+			  routeStatus.interactionElevatorActivations,
+			  routeStatus.interactionActivations,
+			  routeStatus.interactionCandidates,
+			  routeStatus.interactionChecks,
+			  routeStatus.lastInteractionKind,
+			  routeStatus.lastInteractionEntity);
+
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "travel_type_goal_support_checks={} travel_type_goal_supported={} "
+			  "travel_type_goal_unsupported={} "
+			  "last_travel_type_goal_support_type={} "
+			  "last_travel_type_goal_support_area={} "
+			  "last_travel_type_goal_support_goal_area={}\n",
+			  routeStatus.travelTypeGoalSupportChecks,
+			  routeStatus.travelTypeGoalSupported,
+			  routeStatus.travelTypeGoalUnsupported,
+			  routeStatus.lastTravelTypeGoalSupportType,
+			  routeStatus.lastTravelTypeGoalSupportArea,
+			  routeStatus.lastTravelTypeGoalSupportGoalArea);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "nav_interaction_checks={} nav_interaction_candidates={} "
+			  "nav_interaction_activations={} "
+			  "nav_interaction_stuck_activations={} "
+			  "nav_interaction_elevator_activations={} "
+			  "nav_interaction_wait_frames={} "
+			  "nav_interaction_use_frames={} "
+			  "nav_interaction_misses={}\n",
 			  routeStatus.interactionChecks,
 			  routeStatus.interactionCandidates,
 			  routeStatus.interactionActivations,
@@ -10474,23 +11438,55 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  routeStatus.interactionElevatorActivations,
 			  routeStatus.interactionWaitFrames,
 			  routeStatus.interactionUseFrames,
-			  routeStatus.interactionMisses,
+			  routeStatus.interactionMisses);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "last_nav_interaction_action={} "
+			  "last_nav_interaction_kind={} "
+			  "last_nav_interaction_entity={} "
+			  "last_nav_interaction_distance_sq={} "
+			  "last_nav_interaction_travel_type={} "
+			  "last_nav_interaction_move_state={} "
+			  "last_nav_interaction_frames_remaining={}\n",
 			  routeStatus.lastInteractionAction,
 			  routeStatus.lastInteractionKind,
 			  routeStatus.lastInteractionEntity,
 			  routeStatus.lastInteractionDistanceSq,
 			  routeStatus.lastInteractionTravelType,
 			  routeStatus.lastInteractionMoveState,
-			  routeStatus.lastInteractionFramesRemaining,
+			  routeStatus.lastInteractionFramesRemaining);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "movement_state_waterjump_commands={} "
+			  "natural_movement_state_commands={} "
+			  "natural_movement_state_crouch_commands={} "
+			  "natural_movement_state_swim_commands={} "
+			  "natural_movement_state_waterjump_commands={}\n",
 			  botFrameCommandStatus.movementStateWaterJumpCommands,
 			  botFrameCommandStatus.naturalMovementStateCommands,
 			  botFrameCommandStatus.naturalMovementStateCrouchCommands,
 			  botFrameCommandStatus.naturalMovementStateSwimCommands,
-			  botFrameCommandStatus.naturalMovementStateWaterJumpCommands,
+			  botFrameCommandStatus.naturalMovementStateWaterJumpCommands);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "interaction_wait_command_uses={} "
+			  "interaction_use_command_uses={} "
+			  "last_interaction_command_action={} "
+			  "last_interaction_command_entity={}\n",
 			  botFrameCommandStatus.interactionWaitCommandUses,
 			  botFrameCommandStatus.interactionUseCommandUses,
 			  botFrameCommandStatus.lastInteractionCommandAction,
-			  botFrameCommandStatus.lastInteractionCommandEntity,
+			  botFrameCommandStatus.lastInteractionCommandEntity);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "route_corner_cut_candidates={} "
+			  "route_corner_cut_trace_checks={} "
+			  "route_corner_cut_trace_hits={} "
+			  "route_corner_cut_trace_misses={} "
+			  "route_corner_cut_ground_trace_checks={} "
+			  "route_corner_cut_ground_trace_misses={} "
+			  "route_corner_cut_accepted={} "
+			  "route_corner_cut_rejected={}\n",
 			  routeStatus.cornerCutChecks,
 			  routeStatus.cornerCutTraceAttempts,
 			  routeStatus.cornerCutTracePasses,
@@ -10498,7 +11494,14 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  routeStatus.cornerCutGroundTraceAttempts,
 			  routeStatus.cornerCutGroundTraceFailures,
 			  routeStatus.cornerCutApplications,
-			  routeStatus.cornerCutSkips,
+			  routeStatus.cornerCutSkips);
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_policy_status "
+			  "corner_cut_candidates={} corner_cut_trace_checks={} "
+			  "corner_cut_accepted={} "
+			  "trace_checked_corner_cut_candidates={} "
+			  "trace_checked_corner_cut_trace_checks={} "
+			  "trace_checked_corner_cut_accepted={}\n",
 			  routeStatus.cornerCutChecks,
 			  routeStatus.cornerCutTraceAttempts,
 			  routeStatus.cornerCutApplications,

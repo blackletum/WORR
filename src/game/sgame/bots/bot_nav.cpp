@@ -14,6 +14,7 @@
 namespace {
 
 constexpr uint32_t BOT_NAV_ROUTE_REFRESH_FRAMES = 4;
+constexpr uint32_t BOT_NAV_ITEM_DESIRABILITY_STAGGER_FRAMES = 4;
 constexpr uint32_t BOT_NAV_GOAL_BLACKLIST_FRAMES = 96;
 constexpr uint32_t BOT_NAV_STUCK_REPATH_COOLDOWN_FRAMES = 4;
 constexpr uint32_t BOT_NAV_STUCK_RECOVERY_FRAMES = 6;
@@ -120,6 +121,13 @@ enum class BotNavBlackboardGoalType {
 	RouteGoal = 4,
 };
 
+enum class BotNavItemRoleScope {
+	None,
+	FreeForAll,
+	CaptureTheFlag,
+	Team,
+};
+
 enum class BotNavCornerCutSkipReason {
 	None = 0,
 	Invalid = 1,
@@ -128,9 +136,51 @@ enum class BotNavCornerCutSkipReason {
 	NoSafeTrace = 4,
 };
 
+struct BotNavItemGoalCandidate {
+	int entityNumber = -1;
+	int spawnCount = 0;
+	item_id_t item = IT_NULL;
+	int area = 0;
+	int score = 0;
+	bool ffaItemRoleValid = false;
+	int ffaItemRoleMode = 0;
+	int ffaItemRoleRole = 0;
+	int ffaItemRoleLane = 0;
+	int ffaItemRoleCategory = 0;
+	int ffaItemRoleItemRole = 0;
+	int ffaItemRolePriority = 0;
+	int ffaItemRoleScoreBoost = 0;
+	bool ctfItemRoleValid = false;
+	int ctfItemRoleMode = 0;
+	int ctfItemRoleRole = 0;
+	int ctfItemRoleLane = 0;
+	int ctfItemRoleCategory = 0;
+	int ctfItemRoleItemRole = 0;
+	int ctfItemRolePriority = 0;
+	int ctfItemRoleScoreBoost = 0;
+	bool teamItemRoleValid = false;
+	int teamItemRoleMode = 0;
+	int teamItemRoleRole = 0;
+	int teamItemRoleLane = 0;
+	int teamItemRoleCategory = 0;
+	int teamItemRoleItemRole = 0;
+	int teamItemRolePriority = 0;
+	int teamItemRoleScoreBoost = 0;
+	bool teamResourceDenialValid = false;
+	int teamResourceDenialMode = 0;
+	int teamResourceDenialRole = 0;
+	int teamResourceDenialLane = 0;
+	int teamResourceDenialCategory = 0;
+	int teamResourceDenialIntent = 0;
+	int teamResourceDenialPriority = 0;
+	int teamResourceDenialScoreBoost = 0;
+	Vector3 origin = vec3_origin;
+};
+
 struct BotNavRouteSlot {
 	bool valid = false;
 	uint32_t nextRefreshFrame = 0;
+	uint32_t nextItemDesirabilityFrame = 0;
 	uint32_t nextStuckRepathFrame = 0;
 	uint32_t recoveryUntilFrame = 0;
 	uint32_t interactionUntilFrame = 0;
@@ -162,25 +212,10 @@ struct BotNavRouteSlot {
 	int lastFailedGoalArea = 0;
 	int lastFailedGoalEntityNumber = -1;
 	item_id_t lastFailedGoalItem = IT_NULL;
+	bool cachedItemGoalValid = false;
+	BotNavItemGoalCandidate cachedItemGoal{};
 	Vector3 origin = vec3_origin;
 	BotLibAdapterRouteSteer route{};
-};
-
-struct BotNavItemGoalCandidate {
-	int entityNumber = -1;
-	int spawnCount = 0;
-	item_id_t item = IT_NULL;
-	int area = 0;
-	int score = 0;
-	bool teamItemRoleValid = false;
-	int teamItemRoleMode = 0;
-	int teamItemRoleRole = 0;
-	int teamItemRoleLane = 0;
-	int teamItemRoleCategory = 0;
-	int teamItemRoleItemRole = 0;
-	int teamItemRolePriority = 0;
-	int teamItemRoleScoreBoost = 0;
-	Vector3 origin = vec3_origin;
 };
 
 struct BotNavPositionGoalCandidate {
@@ -215,12 +250,48 @@ bool BotNavCoopResourceShareEnabled() {
 	return resourceShare != nullptr && resourceShare->integer > 0;
 }
 
+bool BotNavMatchItemPolicyEnabled() {
+	static cvar_t *matchItemPolicy = nullptr;
+	if (matchItemPolicy == nullptr && gi.cvar != nullptr) {
+		matchItemPolicy = gi.cvar("sg_bot_match_item_policy", "0", CVAR_NOFLAGS);
+	}
+	return matchItemPolicy != nullptr && matchItemPolicy->integer > 0;
+}
+
+bool BotNavFfaItemRolesEnabled() {
+	static cvar_t *ffaItemRoles = nullptr;
+	if (ffaItemRoles == nullptr && gi.cvar != nullptr) {
+		ffaItemRoles = gi.cvar("sg_bot_ffa_item_roles", "0", CVAR_NOFLAGS);
+	}
+	return (ffaItemRoles != nullptr && ffaItemRoles->integer > 0) ||
+		BotNavMatchItemPolicyEnabled();
+}
+
+bool BotNavCtfItemRolesEnabled() {
+	static cvar_t *ctfItemRoles = nullptr;
+	if (ctfItemRoles == nullptr && gi.cvar != nullptr) {
+		ctfItemRoles = gi.cvar("sg_bot_ctf_item_roles", "0", CVAR_NOFLAGS);
+	}
+	return (ctfItemRoles != nullptr && ctfItemRoles->integer > 0) ||
+		BotNavMatchItemPolicyEnabled();
+}
+
 bool BotNavTeamItemRolesEnabled() {
 	static cvar_t *teamItemRoles = nullptr;
 	if (teamItemRoles == nullptr && gi.cvar != nullptr) {
 		teamItemRoles = gi.cvar("sg_bot_team_item_roles", "0", CVAR_NOFLAGS);
 	}
-	return teamItemRoles != nullptr && teamItemRoles->integer > 0;
+	return (teamItemRoles != nullptr && teamItemRoles->integer > 0) ||
+		BotNavMatchItemPolicyEnabled();
+}
+
+bool BotNavTeamResourceDenialEnabled() {
+	static cvar_t *teamResourceDenial = nullptr;
+	if (teamResourceDenial == nullptr && gi.cvar != nullptr) {
+		teamResourceDenial = gi.cvar("sg_bot_team_resource_denial", "0", CVAR_NOFLAGS);
+	}
+	return (teamResourceDenial != nullptr && teamResourceDenial->integer > 0) ||
+		BotNavMatchItemPolicyEnabled();
 }
 
 uint64_t BotNavRouteNowNs() {
@@ -324,6 +395,13 @@ bool BotNavCoopResourceKindCanBeReserved(BotObjectiveItemCategory category) {
 		category == BotObjectiveItemCategory::Utility;
 }
 
+bool BotNavTeamResourceKindCanDenyEnemy(BotObjectiveItemCategory category) {
+	return category == BotObjectiveItemCategory::Weapon ||
+		category == BotObjectiveItemCategory::Powerup ||
+		category == BotObjectiveItemCategory::Tech ||
+		category == BotObjectiveItemCategory::Utility;
+}
+
 BotItemContext BotNavApplyCoopResourceSharePolicy(
 	const BotObjectiveMatchPolicy &matchPolicy,
 	const BotObjectiveCoopPolicy &coopPolicy,
@@ -356,19 +434,72 @@ BotItemContext BotNavApplyCoopResourceSharePolicy(
 	return context;
 }
 
-BotItemContext BotNavApplyTeamItemRolePolicy(
+BotItemContext BotNavApplyTeamResourceDenialPolicy(
 	const BotObjectiveMatchPolicy &matchPolicy,
 	BotObjectiveItemCategory category,
 	BotItemContext context,
+	BotObjectiveResourcePolicy *selectedPolicy) {
+	if (selectedPolicy != nullptr) {
+		*selectedPolicy = {};
+	}
+	if (!BotNavTeamResourceDenialEnabled() ||
+		matchPolicy.mode != BotObjectiveMatchMode::TeamDeathmatch ||
+		!BotNavTeamResourceKindCanDenyEnemy(category)) {
+		return context;
+	}
+
+	botNavRouteStatus.teamResourceDenialEvaluations++;
+	BotObjectiveCoopPolicy coopPolicy{};
+	const BotObjectiveResourceContext resourceContext =
+		BotObjectives_BuildResourceContext(
+			matchPolicy,
+			coopPolicy,
+			category,
+			context.candidateScore,
+			context.candidateUseful,
+			false,
+			true);
+	const BotObjectiveResourcePolicy resourcePolicy =
+		BotObjectives_EvaluateResourcePolicy(resourceContext);
+	if (selectedPolicy != nullptr) {
+		*selectedPolicy = resourcePolicy;
+	}
+	if (!resourcePolicy.valid || !resourcePolicy.denyEnemyPickup) {
+		botNavRouteStatus.teamResourceDenialInvalidSkips++;
+		return context;
+	}
+
+	botNavRouteStatus.teamResourceDenialPolicyDenies++;
+	const int scoreBoost = std::max(0, resourcePolicy.priority);
+	if (scoreBoost > 0) {
+		context.candidateScore += scoreBoost;
+		botNavRouteStatus.teamResourceDenialScoreBoosts++;
+	}
+
+	return context;
+}
+
+BotItemContext BotNavApplyItemRolePolicy(
+	const BotObjectiveMatchPolicy &matchPolicy,
+	BotObjectiveItemCategory category,
+	BotItemContext context,
+	BotNavItemRoleScope scope,
 	BotObjectiveItemRolePolicy *selectedPolicy) {
 	if (selectedPolicy != nullptr) {
 		*selectedPolicy = {};
 	}
-	if (!BotNavTeamItemRolesEnabled()) {
+	if (scope == BotNavItemRoleScope::None) {
 		return context;
 	}
 
-	botNavRouteStatus.teamItemRoleEvaluations++;
+	if (scope == BotNavItemRoleScope::FreeForAll) {
+		botNavRouteStatus.ffaItemRoleEvaluations++;
+	} else if (scope == BotNavItemRoleScope::CaptureTheFlag) {
+		botNavRouteStatus.ctfItemRoleEvaluations++;
+	} else {
+		botNavRouteStatus.teamItemRoleEvaluations++;
+	}
+
 	const BotObjectiveItemRolePolicy policy =
 		BotObjectives_EvaluateItemRolePolicy(
 			matchPolicy,
@@ -378,15 +509,33 @@ BotItemContext BotNavApplyTeamItemRolePolicy(
 		*selectedPolicy = policy;
 	}
 	if (!policy.valid) {
-		botNavRouteStatus.teamItemRoleInvalidSkips++;
+		if (scope == BotNavItemRoleScope::FreeForAll) {
+			botNavRouteStatus.ffaItemRoleInvalidSkips++;
+		} else if (scope == BotNavItemRoleScope::CaptureTheFlag) {
+			botNavRouteStatus.ctfItemRoleInvalidSkips++;
+		} else {
+			botNavRouteStatus.teamItemRoleInvalidSkips++;
+		}
 		return context;
 	}
 
-	botNavRouteStatus.teamItemRoleSelections++;
+	if (scope == BotNavItemRoleScope::FreeForAll) {
+		botNavRouteStatus.ffaItemRoleSelections++;
+	} else if (scope == BotNavItemRoleScope::CaptureTheFlag) {
+		botNavRouteStatus.ctfItemRoleSelections++;
+	} else {
+		botNavRouteStatus.teamItemRoleSelections++;
+	}
 	const int scoreBoost = std::max(0, policy.priority);
 	if (scoreBoost > 0) {
 		context.candidateScore += scoreBoost;
-		botNavRouteStatus.teamItemRoleScoreBoosts++;
+		if (scope == BotNavItemRoleScope::FreeForAll) {
+			botNavRouteStatus.ffaItemRoleScoreBoosts++;
+		} else if (scope == BotNavItemRoleScope::CaptureTheFlag) {
+			botNavRouteStatus.ctfItemRoleScoreBoosts++;
+		} else {
+			botNavRouteStatus.teamItemRoleScoreBoosts++;
+		}
 	}
 
 	return context;
@@ -1354,22 +1503,99 @@ void BotNavUpdateActiveReservations() {
 		std::max(botNavRouteStatus.itemGoalPeakActiveReservations, reservations);
 }
 
+uint32_t BotNavNextItemDesirabilityFrame(int clientIndex, uint32_t frame) {
+	return frame +
+		BOT_NAV_ITEM_DESIRABILITY_STAGGER_FRAMES +
+		static_cast<uint32_t>(std::max(0, clientIndex) % BOT_NAV_ITEM_DESIRABILITY_STAGGER_FRAMES);
+}
+
+bool BotNavCachedItemGoalStillAvailable(
+	const BotNavRouteSlot &slot,
+	int clientIndex,
+	uint32_t frame,
+	BotNavItemGoalCandidate *candidate) {
+	if (!slot.cachedItemGoalValid ||
+		slot.cachedItemGoal.entityNumber < 0 ||
+		g_entities == nullptr ||
+		slot.cachedItemGoal.entityNumber >= static_cast<int>(globals.numEntities)) {
+		return false;
+	}
+
+	const gentity_t *ent = &g_entities[slot.cachedItemGoal.entityNumber];
+	if (!BotNavIsActivePickup(ent) ||
+		!BotNavItemGoalMatches(
+			slot.cachedItemGoal.entityNumber,
+			slot.cachedItemGoal.spawnCount,
+			slot.cachedItemGoal.item,
+			slot.cachedItemGoal.entityNumber,
+			ent) ||
+		BotNavItemGoalIsBlacklisted(slot, slot.cachedItemGoal.entityNumber, ent, frame) ||
+		BotNavItemReservationOwner(clientIndex, slot.cachedItemGoal.entityNumber) >= 0) {
+		return false;
+	}
+
+	if (candidate != nullptr) {
+		*candidate = slot.cachedItemGoal;
+	}
+	return true;
+}
+
+bool BotNavUseCachedItemGoalIfFresh(
+	BotNavRouteSlot &slot,
+	int clientIndex,
+	uint32_t frame,
+	BotNavItemGoalCandidate *candidate) {
+	if (frame >= slot.nextItemDesirabilityFrame) {
+		return false;
+	}
+	if (!BotNavCachedItemGoalStillAvailable(slot, clientIndex, frame, candidate)) {
+		slot.cachedItemGoalValid = false;
+		return false;
+	}
+
+	botNavRouteStatus.itemGoalDesirabilityStaggerDeferrals++;
+	botNavRouteStatus.itemGoalDesirabilityCacheReuses++;
+	botNavRouteStatus.lastItemGoalDesirabilityClient = clientIndex;
+	botNavRouteStatus.lastItemGoalDesirabilityNextFrame =
+		static_cast<int>(slot.nextItemDesirabilityFrame);
+	return true;
+}
+
 bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame, BotNavItemGoalCandidate *candidate) {
 	if (bot == nullptr || bot->client == nullptr || g_entities == nullptr) {
 		return false;
+	}
+
+	BotNavRouteSlot &routeSlot = botNavRouteSlots[clientIndex];
+	if (BotNavUseCachedItemGoalIfFresh(routeSlot, clientIndex, frame, candidate)) {
+		return true;
 	}
 
 	BotNavItemGoalCandidate best{};
 	int bestScore = -1;
 	const BotNavItemFocusMode focusMode = BotNavSmokeItemFocusMode();
 	const bool coopResourceShare = BotNavCoopResourceShareEnabled();
+	const bool ffaItemRoles = BotNavFfaItemRolesEnabled();
+	const bool ctfItemRoles = BotNavCtfItemRolesEnabled();
 	const bool teamItemRoles = BotNavTeamItemRolesEnabled();
+	const bool teamResourceDenial = BotNavTeamResourceDenialEnabled();
+	const bool itemRolePolicies = ffaItemRoles || ctfItemRoles || teamItemRoles;
 	BotObjectiveMatchPolicy matchPolicy{};
 	BotObjectiveCoopPolicy coopPolicy{};
-	if (coopResourceShare || teamItemRoles) {
+	if (coopResourceShare || itemRolePolicies || teamResourceDenial) {
 		const BotObjectiveMatchContext matchContext =
 			BotObjectives_BuildMatchContext(bot, BotObjectiveRole::None);
 		matchPolicy = BotObjectives_EvaluateMatchPolicy(matchContext);
+	}
+	BotNavItemRoleScope itemRoleScope = BotNavItemRoleScope::None;
+	if (ffaItemRoles &&
+		matchPolicy.mode == BotObjectiveMatchMode::FreeForAll) {
+		itemRoleScope = BotNavItemRoleScope::FreeForAll;
+	} else if (ctfItemRoles &&
+		matchPolicy.mode == BotObjectiveMatchMode::CaptureTheFlag) {
+		itemRoleScope = BotNavItemRoleScope::CaptureTheFlag;
+	} else if (teamItemRoles) {
+		itemRoleScope = BotNavItemRoleScope::Team;
 	}
 	if (coopResourceShare) {
 		const BotObjectiveCoopContext coopContext =
@@ -1380,6 +1606,8 @@ bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame,
 				BotObjectiveRole::None);
 		coopPolicy = BotObjectives_EvaluateCoopPolicy(coopContext);
 	}
+	botNavRouteStatus.itemGoalDesirabilityUpdates++;
+	botNavRouteStatus.lastItemGoalDesirabilityClient = clientIndex;
 	botNavRouteStatus.itemGoalScans++;
 
 	const uint32_t start = std::min<uint32_t>(game.maxClients + 1, globals.numEntities);
@@ -1441,11 +1669,20 @@ bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame,
 				itemContext);
 		}
 		BotObjectiveItemRolePolicy itemRolePolicy{};
-		if (teamItemRoles) {
-			itemContext = BotNavApplyTeamItemRolePolicy(
+		BotObjectiveResourcePolicy resourceDenialPolicy{};
+		if (teamResourceDenial) {
+			itemContext = BotNavApplyTeamResourceDenialPolicy(
 				matchPolicy,
 				itemCategory,
 				itemContext,
+				&resourceDenialPolicy);
+		}
+		if (itemRoleScope != BotNavItemRoleScope::None) {
+			itemContext = BotNavApplyItemRolePolicy(
+				matchPolicy,
+				itemCategory,
+				itemContext,
+				itemRoleScope,
 				&itemRolePolicy);
 		}
 		const BotItemDecision decision = BotItems_Evaluate(itemContext);
@@ -1468,24 +1705,92 @@ bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame,
 		best.area = area;
 		best.score = score;
 		if (itemRolePolicy.valid) {
-			best.teamItemRoleValid = true;
-			best.teamItemRoleMode = static_cast<int>(itemRolePolicy.mode);
-			best.teamItemRoleRole = static_cast<int>(itemRolePolicy.role);
-			best.teamItemRoleLane = static_cast<int>(itemRolePolicy.lane);
-			best.teamItemRoleCategory = static_cast<int>(itemRolePolicy.category);
-			best.teamItemRoleItemRole = static_cast<int>(itemRolePolicy.itemRole);
-			best.teamItemRolePriority = itemRolePolicy.priority;
-			best.teamItemRoleScoreBoost = std::max(0, itemRolePolicy.priority);
+			if (itemRoleScope == BotNavItemRoleScope::FreeForAll) {
+				best.ffaItemRoleValid = true;
+				best.ffaItemRoleMode = static_cast<int>(itemRolePolicy.mode);
+				best.ffaItemRoleRole = static_cast<int>(itemRolePolicy.role);
+				best.ffaItemRoleLane = static_cast<int>(itemRolePolicy.lane);
+				best.ffaItemRoleCategory = static_cast<int>(itemRolePolicy.category);
+				best.ffaItemRoleItemRole = static_cast<int>(itemRolePolicy.itemRole);
+				best.ffaItemRolePriority = itemRolePolicy.priority;
+				best.ffaItemRoleScoreBoost = std::max(0, itemRolePolicy.priority);
+			} else if (itemRoleScope == BotNavItemRoleScope::CaptureTheFlag) {
+				best.ctfItemRoleValid = true;
+				best.ctfItemRoleMode = static_cast<int>(itemRolePolicy.mode);
+				best.ctfItemRoleRole = static_cast<int>(itemRolePolicy.role);
+				best.ctfItemRoleLane = static_cast<int>(itemRolePolicy.lane);
+				best.ctfItemRoleCategory = static_cast<int>(itemRolePolicy.category);
+				best.ctfItemRoleItemRole = static_cast<int>(itemRolePolicy.itemRole);
+				best.ctfItemRolePriority = itemRolePolicy.priority;
+				best.ctfItemRoleScoreBoost = std::max(0, itemRolePolicy.priority);
+			} else {
+				best.teamItemRoleValid = true;
+				best.teamItemRoleMode = static_cast<int>(itemRolePolicy.mode);
+				best.teamItemRoleRole = static_cast<int>(itemRolePolicy.role);
+				best.teamItemRoleLane = static_cast<int>(itemRolePolicy.lane);
+				best.teamItemRoleCategory = static_cast<int>(itemRolePolicy.category);
+				best.teamItemRoleItemRole = static_cast<int>(itemRolePolicy.itemRole);
+				best.teamItemRolePriority = itemRolePolicy.priority;
+				best.teamItemRoleScoreBoost = std::max(0, itemRolePolicy.priority);
+			}
+		}
+		if (resourceDenialPolicy.valid && resourceDenialPolicy.denyEnemyPickup) {
+			best.teamResourceDenialValid = true;
+			best.teamResourceDenialMode = static_cast<int>(resourceDenialPolicy.mode);
+			best.teamResourceDenialRole = static_cast<int>(resourceDenialPolicy.role);
+			best.teamResourceDenialLane = static_cast<int>(resourceDenialPolicy.lane);
+			best.teamResourceDenialCategory = static_cast<int>(resourceDenialPolicy.category);
+			best.teamResourceDenialIntent = static_cast<int>(resourceDenialPolicy.intent);
+			best.teamResourceDenialPriority = resourceDenialPolicy.priority;
+			best.teamResourceDenialScoreBoost = std::max(0, resourceDenialPolicy.priority);
 		}
 		best.origin = { routeOrigin[0], routeOrigin[1], routeOrigin[2] };
 	}
 
 	if (bestScore < 0) {
+		routeSlot.cachedItemGoalValid = false;
+		routeSlot.cachedItemGoal = {};
+		routeSlot.nextItemDesirabilityFrame = BotNavNextItemDesirabilityFrame(clientIndex, frame);
+		botNavRouteStatus.lastItemGoalDesirabilityNextFrame =
+			static_cast<int>(routeSlot.nextItemDesirabilityFrame);
 		return false;
 	}
 
 	if (candidate != nullptr) {
 		*candidate = best;
+	}
+	routeSlot.cachedItemGoalValid = true;
+	routeSlot.cachedItemGoal = best;
+	routeSlot.nextItemDesirabilityFrame = BotNavNextItemDesirabilityFrame(clientIndex, frame);
+	botNavRouteStatus.lastItemGoalDesirabilityNextFrame =
+		static_cast<int>(routeSlot.nextItemDesirabilityFrame);
+	if (best.ffaItemRoleValid) {
+		botNavRouteStatus.ffaItemRoleSelectedGoals++;
+		botNavRouteStatus.lastFfaItemRoleClient = clientIndex;
+		botNavRouteStatus.lastFfaItemRoleMode = best.ffaItemRoleMode;
+		botNavRouteStatus.lastFfaItemRoleRole = best.ffaItemRoleRole;
+		botNavRouteStatus.lastFfaItemRoleLane = best.ffaItemRoleLane;
+		botNavRouteStatus.lastFfaItemRoleCategory = best.ffaItemRoleCategory;
+		botNavRouteStatus.lastFfaItemRoleItemRole = best.ffaItemRoleItemRole;
+		botNavRouteStatus.lastFfaItemRolePriority = best.ffaItemRolePriority;
+		botNavRouteStatus.lastFfaItemRoleScoreBoost = best.ffaItemRoleScoreBoost;
+		botNavRouteStatus.lastFfaItemRoleEntity = best.entityNumber;
+		botNavRouteStatus.lastFfaItemRoleItem = static_cast<int>(best.item);
+		botNavRouteStatus.lastFfaItemRoleScore = best.score;
+	}
+	if (best.ctfItemRoleValid) {
+		botNavRouteStatus.ctfItemRoleSelectedGoals++;
+		botNavRouteStatus.lastCtfItemRoleClient = clientIndex;
+		botNavRouteStatus.lastCtfItemRoleMode = best.ctfItemRoleMode;
+		botNavRouteStatus.lastCtfItemRoleRole = best.ctfItemRoleRole;
+		botNavRouteStatus.lastCtfItemRoleLane = best.ctfItemRoleLane;
+		botNavRouteStatus.lastCtfItemRoleCategory = best.ctfItemRoleCategory;
+		botNavRouteStatus.lastCtfItemRoleItemRole = best.ctfItemRoleItemRole;
+		botNavRouteStatus.lastCtfItemRolePriority = best.ctfItemRolePriority;
+		botNavRouteStatus.lastCtfItemRoleScoreBoost = best.ctfItemRoleScoreBoost;
+		botNavRouteStatus.lastCtfItemRoleEntity = best.entityNumber;
+		botNavRouteStatus.lastCtfItemRoleItem = static_cast<int>(best.item);
+		botNavRouteStatus.lastCtfItemRoleScore = best.score;
 	}
 	if (best.teamItemRoleValid) {
 		botNavRouteStatus.teamItemRoleSelectedGoals++;
@@ -1500,6 +1805,20 @@ bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame,
 		botNavRouteStatus.lastTeamItemRoleEntity = best.entityNumber;
 		botNavRouteStatus.lastTeamItemRoleItem = static_cast<int>(best.item);
 		botNavRouteStatus.lastTeamItemRoleScore = best.score;
+	}
+	if (best.teamResourceDenialValid) {
+		botNavRouteStatus.teamResourceDenialSelectedGoals++;
+		botNavRouteStatus.lastTeamResourceDenialClient = clientIndex;
+		botNavRouteStatus.lastTeamResourceDenialMode = best.teamResourceDenialMode;
+		botNavRouteStatus.lastTeamResourceDenialRole = best.teamResourceDenialRole;
+		botNavRouteStatus.lastTeamResourceDenialLane = best.teamResourceDenialLane;
+		botNavRouteStatus.lastTeamResourceDenialCategory = best.teamResourceDenialCategory;
+		botNavRouteStatus.lastTeamResourceDenialIntent = best.teamResourceDenialIntent;
+		botNavRouteStatus.lastTeamResourceDenialPriority = best.teamResourceDenialPriority;
+		botNavRouteStatus.lastTeamResourceDenialScoreBoost = best.teamResourceDenialScoreBoost;
+		botNavRouteStatus.lastTeamResourceDenialEntity = best.entityNumber;
+		botNavRouteStatus.lastTeamResourceDenialItem = static_cast<int>(best.item);
+		botNavRouteStatus.lastTeamResourceDenialScore = best.score;
 	}
 	return true;
 }
@@ -2138,6 +2457,7 @@ bool BotNavRefreshRoute(
 	};
 
 	botNavRouteStatus.queries++;
+	botNavRouteStatus.routeRecomputeRateLimitRefreshes++;
 	BotNavRecordRefresh(reason);
 
 	const uint64_t routeQueryStartNs = BotNavRouteNowNs();
@@ -2321,6 +2641,10 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 	if (reason == BotNavRefreshReason::None) {
 		const uint64_t routeReuseStartNs = BotNavRouteNowNs();
 		botNavRouteStatus.reuses++;
+		botNavRouteStatus.routeRecomputeRateLimitChecks++;
+		if (frame < slot.nextRefreshFrame) {
+			botNavRouteStatus.routeRecomputeRateLimitReuses++;
+		}
 		if (slot.persistentGoalArea > 0) {
 			botNavRouteStatus.persistentGoalCacheReuses++;
 			botNavRouteStatus.lastPersistentGoalArea = slot.persistentGoalArea;

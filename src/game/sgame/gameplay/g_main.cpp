@@ -1382,6 +1382,7 @@ static void ShutdownGame() {
   Bot_RuntimeEndLevel();
   if (sg_bot_lifecycle_smoke != nullptr && sg_bot_lifecycle_smoke->integer != 0)
     Bot_RuntimePrintLifecycleStatus();
+  Bot_RuntimeShutdown();
 
   SG_QU3EPhysics_Shutdown();
   FreeClientArray();

@@ -418,15 +418,67 @@ int BotRuntimeEntityNumber(const gentity_t *ent) {
 	return static_cast<int>(index);
 }
 
+bool BotRuntimeIsObjectiveEntity(const gentity_t *ent) {
+	if (ent == nullptr) {
+		return false;
+	}
+	if ((ent->sv.entFlags & SVFL_OBJECTIVE_DROPPED) != 0) {
+		return true;
+	}
+	if (ent->item == nullptr) {
+		return false;
+	}
+
+	switch (ent->item->id) {
+	case IT_FLAG_RED:
+	case IT_FLAG_BLUE:
+	case IT_FLAG_NEUTRAL:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool BotRuntimeIsDroppedItemEntity(const gentity_t *ent) {
+	return ent != nullptr &&
+		ent->item != nullptr &&
+		(ent->spawnFlags.has(SPAWNFLAG_ITEM_DROPPED) ||
+		 ent->spawnFlags.has(SPAWNFLAG_ITEM_DROPPED_PLAYER));
+}
+
+bool BotRuntimeIsHazardEntity(const gentity_t *ent) {
+	return ent != nullptr &&
+		((ent->sv.entFlags & SVFL_TRAP_DANGER) != 0 ||
+		 (ent->svFlags & SVF_PROJECTILE) != 0 ||
+		 ent->moveType == MoveType::FlyMissile ||
+		 ent->moveType == MoveType::Bounce);
+}
+
 int BotRuntimeEntityType(const gentity_t *ent) {
 	if (ent->client != nullptr) {
+		if (ent->client->sess.team == Team::Spectator ||
+			(ent->sv.entFlags & SVFL_IS_SPECTATOR) != 0) {
+			return BotLibAdapterEntitySpectator;
+		}
+		if ((ent->svFlags & SVF_BOT) != 0 || ent->client->sess.is_a_bot) {
+			return BotLibAdapterEntityBot;
+		}
 		return BotLibAdapterEntityPlayer;
+	}
+	if ((ent->svFlags & SVF_MONSTER) != 0) {
+		return BotLibAdapterEntityMonster;
+	}
+	if (BotRuntimeIsObjectiveEntity(ent)) {
+		return BotLibAdapterEntityObjective;
+	}
+	if (BotRuntimeIsDroppedItemEntity(ent)) {
+		return BotLibAdapterEntityDroppedItem;
 	}
 	if ((ent->sv.entFlags & SVFL_IS_ITEM) != 0) {
 		return BotLibAdapterEntityItem;
 	}
-	if ((ent->sv.entFlags & SVFL_TRAP_DANGER) != 0) {
-		return BotLibAdapterEntityMissile;
+	if (BotRuntimeIsHazardEntity(ent)) {
+		return BotLibAdapterEntityHazard;
 	}
 	if (ent->solid == SOLID_BSP || ent->moveType == MoveType::Push) {
 		return BotLibAdapterEntityMover;
@@ -470,6 +522,41 @@ bool BotRuntimeBuildEntitySnapshot(gentity_t *ent, BotLibAdapterEntitySnapshot &
 	snapshot.legsAnim = 0;
 	snapshot.torsoAnim = 0;
 	return true;
+}
+
+void CountRuntimeEntitySnapshot(int type) {
+	switch (type) {
+	case BotLibAdapterEntityPlayer:
+		++botRuntimeStatus.entitySnapshotPlayers;
+		break;
+	case BotLibAdapterEntityBot:
+		++botRuntimeStatus.entitySnapshotBots;
+		break;
+	case BotLibAdapterEntitySpectator:
+		++botRuntimeStatus.entitySnapshotSpectators;
+		break;
+	case BotLibAdapterEntityMonster:
+		++botRuntimeStatus.entitySnapshotMonsters;
+		break;
+	case BotLibAdapterEntityItem:
+		++botRuntimeStatus.entitySnapshotItems;
+		break;
+	case BotLibAdapterEntityDroppedItem:
+		++botRuntimeStatus.entitySnapshotDroppedItems;
+		break;
+	case BotLibAdapterEntityMissile:
+	case BotLibAdapterEntityHazard:
+		++botRuntimeStatus.entitySnapshotHazards;
+		break;
+	case BotLibAdapterEntityMover:
+		++botRuntimeStatus.entitySnapshotMovers;
+		break;
+	case BotLibAdapterEntityObjective:
+		++botRuntimeStatus.entitySnapshotObjectives;
+		break;
+	default:
+		break;
+	}
 }
 
 bool BotRuntimeEntityTrace(
@@ -539,10 +626,21 @@ void SyncBotLibEntities() {
 		? std::min(gameEntityCount, adapter.q3aEntitySyncMaxEntities)
 		: gameEntityCount;
 
+	botRuntimeStatus.entitySnapshotPlayers = 0;
+	botRuntimeStatus.entitySnapshotBots = 0;
+	botRuntimeStatus.entitySnapshotSpectators = 0;
+	botRuntimeStatus.entitySnapshotMonsters = 0;
+	botRuntimeStatus.entitySnapshotItems = 0;
+	botRuntimeStatus.entitySnapshotDroppedItems = 0;
+	botRuntimeStatus.entitySnapshotHazards = 0;
+	botRuntimeStatus.entitySnapshotMovers = 0;
+	botRuntimeStatus.entitySnapshotObjectives = 0;
+
 	for (int entnum = 0; entnum < botLibEntityCount; ++entnum) {
 		gentity_t *ent = &g_entities[entnum];
 		BotLibAdapterEntitySnapshot snapshot{};
 		if (BotRuntimeBuildEntitySnapshot(ent, snapshot)) {
+			CountRuntimeEntitySnapshot(snapshot.type);
 			BotLibAdapter_UpdateEntity(entnum, &snapshot);
 		} else {
 			BotLibAdapter_UpdateEntity(entnum, nullptr);
@@ -1048,6 +1146,17 @@ void PrintAasStatusIfRequested() {
 			botRuntimeStatus.reachabilityCount,
 			botRuntimeStatus.clusterCount,
 			botRuntimeStatus.fileSize);
+		gi.Com_PrintFmt(
+			"Bot AAS entity snapshots: players={}, bots={}, spectators={}, monsters={}, items={}, dropped_items={}, hazards={}, movers={}, objectives={}\n",
+			botRuntimeStatus.entitySnapshotPlayers,
+			botRuntimeStatus.entitySnapshotBots,
+			botRuntimeStatus.entitySnapshotSpectators,
+			botRuntimeStatus.entitySnapshotMonsters,
+			botRuntimeStatus.entitySnapshotItems,
+			botRuntimeStatus.entitySnapshotDroppedItems,
+			botRuntimeStatus.entitySnapshotHazards,
+			botRuntimeStatus.entitySnapshotMovers,
+			botRuntimeStatus.entitySnapshotObjectives);
 		PrintBotLibAdapterStatusIfRequested();
 		return;
 	}
@@ -1161,6 +1270,10 @@ void Bot_RuntimeEndLevel() {
 	botRuntimeStatus = {};
 	botRuntimeStatus.state = BotAasRuntimeState::Disabled;
 	lastDebugPrintTime = 0_ms;
+}
+
+void Bot_RuntimeShutdown() {
+	BotLibAdapter_Shutdown();
 }
 
 void Bot_RuntimeRunFrame() {

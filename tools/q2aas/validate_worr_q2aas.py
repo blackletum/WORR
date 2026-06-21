@@ -68,11 +68,26 @@ Q2_CONTENT_FLAGS = {
     "ladder": 0x20000000,
 }
 
+Q2_SURFACE_FLAGS = {
+    "slick": 0x00000002,
+    "sky": 0x00000004,
+    "warp": 0x00000008,
+    "trans33": 0x00000010,
+    "trans66": 0x00000020,
+    "flowing": 0x00000040,
+    "nodraw": 0x00000080,
+    "hint": 0x00000100,
+    "skip": 0x00000200,
+}
+
 ENTITY_CLASS_GROUPS = {
     "spawn_points": (
         "info_player_start",
         "info_player_deathmatch",
         "info_player_coop",
+    ),
+    "team_spawns": (
+        "info_player_team",
     ),
     "intermissions": ("info_player_intermission",),
     "items": ("item_", "weapon_", "ammo_", "key_"),
@@ -84,6 +99,17 @@ ENTITY_CLASS_GROUPS = {
         "weapon_bfg",
         "weapon_railgun",
         "weapon_rocketlauncher",
+    ),
+    "ctf_flags": (
+        "item_flag_",
+    ),
+    "campaign_progression_targets": (
+        "target_changelevel",
+        "target_goal",
+    ),
+    "campaign_keys": (
+        "key_",
+        "trigger_key",
     ),
     "movers": (
         "func_door",
@@ -127,6 +153,13 @@ AAS_LUMP_NAMES = (
 AAS_AREA_STRUCT = struct.Struct("<iii9f")
 AAS_AREA_SETTINGS_STRUCT = struct.Struct("<iiiiiii")
 AAS_REACHABILITY_STRUCT = struct.Struct("<iii6fiH2x")
+AAS_AREA_CONTENTS = {
+    "water": 0x00000001,
+    "lava": 0x00000002,
+    "slime": 0x00000004,
+}
+Q2_TEXINFO_STRUCT = struct.Struct("<8fii32si")
+Q2_BRUSHSIDE_STRUCT = struct.Struct("<Hh")
 
 INTERESTING_PREFIXES = (
     "bsp2aas:",
@@ -319,6 +352,48 @@ def count_brush_contents(data: bytes, lumps: dict[str, dict[str, int]]) -> dict[
     }
 
 
+def count_surface_flags(data: bytes, lumps: dict[str, dict[str, int]]) -> dict[str, object]:
+    texinfo_data = q2_lump_data(data, lumps, "texinfo")
+    brushside_data = q2_lump_data(data, lumps, "brushsides")
+    texinfo_count = len(texinfo_data) // Q2_TEXINFO_STRUCT.size
+    brushside_count = len(brushside_data) // Q2_BRUSHSIDE_STRUCT.size
+    texinfo_flags: list[int] = []
+    texinfo_flag_counts = {name: 0 for name in Q2_SURFACE_FLAGS}
+    brushside_flag_counts = {name: 0 for name in Q2_SURFACE_FLAGS}
+    invalid_brushside_texinfos = 0
+
+    for index in range(texinfo_count):
+        offset = index * Q2_TEXINFO_STRUCT.size
+        unpacked = Q2_TEXINFO_STRUCT.unpack_from(texinfo_data, offset)
+        flags = int(unpacked[8])
+        texinfo_flags.append(flags)
+        for name, mask in Q2_SURFACE_FLAGS.items():
+            if flags & mask:
+                texinfo_flag_counts[name] += 1
+
+    for index in range(brushside_count):
+        _, texinfo_index = Q2_BRUSHSIDE_STRUCT.unpack_from(
+            brushside_data,
+            index * Q2_BRUSHSIDE_STRUCT.size,
+        )
+        if texinfo_index < 0 or texinfo_index >= len(texinfo_flags):
+            invalid_brushside_texinfos += 1
+            continue
+        flags = texinfo_flags[texinfo_index]
+        for name, mask in Q2_SURFACE_FLAGS.items():
+            if flags & mask:
+                brushside_flag_counts[name] += 1
+
+    return {
+        "total_texinfo": texinfo_count,
+        "total_brushsides": brushside_count,
+        "texinfo_flag_counts": texinfo_flag_counts,
+        "brushside_flag_counts": brushside_flag_counts,
+        "invalid_brushside_texinfos": invalid_brushside_texinfos,
+        "method": "Q2 texinfo surface flags counted directly and through brushside texinfo references.",
+    }
+
+
 def inspect_q2_bsp(path: Path) -> dict[str, object]:
     data = path.read_bytes()
     info: dict[str, object] = {
@@ -379,6 +454,7 @@ def inspect_q2_bsp(path: Path) -> dict[str, object]:
         info["bspx_offsets"] = bspx_offsets
 
     info["brush_contents"] = count_brush_contents(data, lumps)
+    info["surface_flags"] = count_surface_flags(data, lumps)
 
     return info
 
@@ -618,6 +694,402 @@ def read_aas_navigation(path: Path, aas_header: dict[str, object]) -> dict[str, 
     }
 
 
+def parse_numeric_value(value: str) -> int | float | str:
+    try:
+        if re.fullmatch(r"[-+]?0[xX][0-9a-fA-F]+", value):
+            return int(value, 16)
+        if re.fullmatch(r"[-+]?\d+", value):
+            return int(value, 10)
+        return float(value)
+    except ValueError:
+        return value
+
+
+def parse_cfg_vector(block: str, name: str) -> list[float] | None:
+    match = re.search(rf"\b{re.escape(name)}\s*\{{([^}}]+)\}}", block)
+    if not match:
+        return None
+    values: list[float] = []
+    for part in match.group(1).replace(",", " ").split():
+        try:
+            values.append(float(part))
+        except ValueError:
+            return None
+    return values
+
+
+def parse_cfg_presence_policy(cfg: Path) -> dict[str, object]:
+    text = cfg.read_text(encoding="utf-8")
+    defines: dict[str, int] = {}
+    for match in re.finditer(r"^\s*#define\s+(\w+)\s+([^\s/]+)", text, re.MULTILINE):
+        value = parse_numeric_value(match.group(2))
+        if isinstance(value, int):
+            defines[match.group(1)] = value
+
+    bboxes: list[dict[str, object]] = []
+    for block in re.findall(r"\bbbox\s*\{(.*?)\}", text, re.DOTALL):
+        presence_match = re.search(r"\bpresencetype\s+(\w+)", block)
+        flags_match = re.search(r"\bflags\s+([^\s]+)", block)
+        presence_name = presence_match.group(1) if presence_match else "unknown"
+        presence_value = defines.get(presence_name)
+        raw_flags = flags_match.group(1) if flags_match else "0"
+        flags = parse_numeric_value(raw_flags)
+        bboxes.append({
+            "presencetype": presence_name,
+            "value": presence_value,
+            "flags": flags if isinstance(flags, int) else raw_flags,
+            "mins": parse_cfg_vector(block, "mins"),
+            "maxs": parse_cfg_vector(block, "maxs"),
+        })
+
+    settings: dict[str, object] = {}
+    settings_match = re.search(r"\bsettings\s*\{(.*?)\}", text, re.DOTALL)
+    if settings_match:
+        for raw_line in settings_match.group(1).splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("//"):
+                continue
+            vector_match = re.match(r"(\w+)\s*\{([^}]+)\}", line)
+            if vector_match:
+                settings[vector_match.group(1)] = [
+                    parse_numeric_value(part)
+                    for part in vector_match.group(2).replace(",", " ").split()
+                ]
+                continue
+            value_match = re.match(r"(\w+)\s+([^\s]+)", line)
+            if value_match:
+                settings[value_match.group(1)] = parse_numeric_value(value_match.group(2))
+
+    active_presence_names = [
+        str(bbox["presencetype"])
+        for bbox in bboxes
+        if bbox.get("presencetype") not in ("unknown", "PRESENCE_NONE")
+    ]
+
+    return {
+        "schema": "worr-q2aas-presence-policy-v1",
+        "source": str(cfg),
+        "defines": defines,
+        "bboxes": bboxes,
+        "active_player_presences": active_presence_names,
+        "movement_constants": settings,
+        "optional_large_npc_presence": {
+            "status": "deferred",
+            "defined": False,
+            "decision": (
+                "No large/NPC presence is emitted for the player-bot generator pass; "
+                "add one only after monster AI or non-player navigation consumes AAS."
+            ),
+            "checklist_resolution": "not_applicable_to_current_player_bot_scope",
+        },
+    }
+
+
+def build_generator_scope_policy() -> dict[str, object]:
+    return {
+        "schema": "worr-q2aas-generator-scope-v1",
+        "supported_map_format": "quake2_ibsp38",
+        "supported_conversion": "worr_q2aas -bsp2aas with the WORR Q2 cfg preset",
+        "strict_validation_gate": "--require-q2-bsp preflights Q2 IBSP version 38 before generation",
+        "legacy_loader_policy": "isolated_by_validation",
+        "compiled_legacy_loaders": [
+            "quake1",
+            "halflife",
+            "sin",
+            "quake3",
+        ],
+        "reason_not_removed": (
+            "The vendored BSPC shared loader code still references these inherited paths. "
+            "WORR treats them as unsupported compatibility code and keeps staged validation Q2-only."
+        ),
+        "checklist_resolution": (
+            "Unused non-Q2 loaders are isolated from WORR's supported q2aas path by strict "
+            "input validation; physical removal remains a later vendored-source cleanup only "
+            "after shared-code dependency proof."
+        ),
+    }
+
+
+def build_metadata_policy() -> dict[str, object]:
+    return {
+        "schema": "worr-q2aas-metadata-policy-v1",
+        "sidecar_policy": "scratch_validation_artifact",
+        "package_policy": "do_not_package_sidecars",
+        "package_manifest_policy": (
+            "Release packages carry validated AAS archive-member names, sizes, "
+            "and SHA-256 hashes in q2aas package/audit reports instead of "
+            "shipping .aas.meta.json sidecars."
+        ),
+        "runtime_extension_policy": (
+            "A runtime AAS metadata extension remains deferred until the loader "
+            "needs metadata that cannot be reconstructed from package manifests, "
+            "AAS headers, and validation reports."
+        ),
+        "decision": (
+            "Keep deterministic .aas.meta.json sidecars under .tmp/q2aas for "
+            "developer validation; fold packaged AAS identity into package "
+            "reports and release validation rather than adding sidecars to pak0.pkz."
+        ),
+    }
+
+
+def aas_area_content_counts(settings: list[dict[str, int]]) -> dict[str, int]:
+    return {
+        name: sum(
+            1
+            for setting in settings
+            if int(setting.get("contents", 0)) & mask
+        )
+        for name, mask in AAS_AREA_CONTENTS.items()
+    }
+
+
+def aas_presence_counts(settings: list[dict[str, int]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for setting in settings:
+        raw_presence = int(setting.get("presencetype", 0))
+        key = f"0x{raw_presence:08x}"
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def semantic_status(*counts: int) -> str:
+    return "mapped" if any(count > 0 for count in counts) else "mapped_no_reference"
+
+
+def build_bspx_policy(bsp_header: dict[str, object]) -> dict[str, object]:
+    detected = bool(bsp_header.get("bspx_detected"))
+    return {
+        "status": "tolerated_as_trailing_extension" if detected else "not_present",
+        "detected": detected,
+        "offsets": bsp_header.get("bspx_offsets", []),
+        "standard_lump_end": bsp_header.get("standard_lump_end"),
+        "clean_lump_policy": (
+            "BSPX markers after the standard Q2 lump range are recorded as extension metadata "
+            "and do not count as Q2 lump-table corruption."
+        ),
+    }
+
+
+def build_aas_semantic_policy(
+    bsp_header: dict[str, object],
+    groups: dict[str, list[dict[str, str]]],
+    navigation: dict[str, object],
+    travel_counts: dict[str, int],
+) -> dict[str, object]:
+    brush_contents = bsp_header.get("brush_contents", {})
+    if not isinstance(brush_contents, dict):
+        brush_contents = {}
+    flag_counts = brush_contents.get("flag_counts", {})
+    if not isinstance(flag_counts, dict):
+        flag_counts = {}
+    surface_flags = bsp_header.get("surface_flags", {})
+    if not isinstance(surface_flags, dict):
+        surface_flags = {}
+    brushside_surface_counts = surface_flags.get("brushside_flag_counts", {})
+    if not isinstance(brushside_surface_counts, dict):
+        brushside_surface_counts = {}
+    settings = navigation.get("settings", [])
+    if not isinstance(settings, list):
+        settings = []
+    area_content_counts = aas_area_content_counts(settings)
+
+    def brush_count(name: str) -> int:
+        value = flag_counts.get(name, 0)
+        return value if isinstance(value, int) else 0
+
+    def brushside_count(name: str) -> int:
+        value = brushside_surface_counts.get(name, 0)
+        return value if isinstance(value, int) else 0
+
+    water_brushes = brush_count("water")
+    water_area_count = area_content_counts.get("water", 0)
+    swim_count = travel_counts.get("swim", 0)
+    waterjump_count = travel_counts.get("water jump", 0)
+
+    slime_brushes = brush_count("slime")
+    slime_area_count = area_content_counts.get("slime", 0)
+    lava_brushes = brush_count("lava")
+    lava_area_count = area_content_counts.get("lava", 0)
+    hurt_entities = len(groups.get("hurt", []))
+
+    return {
+        "schema": "worr-q2aas-map-semantics-v1",
+        "area_content_counts": area_content_counts,
+        "presence_type_counts": aas_presence_counts(settings),
+        "contents": {
+            "water": {
+                "status": semantic_status(water_brushes, water_area_count, swim_count, waterjump_count),
+                "q2_content_flag": "CONTENTS_WATER",
+                "q2_brush_count": water_brushes,
+                "aas_area_content": "AREACONTENTS_WATER",
+                "aas_area_count": water_area_count,
+                "travel_types": {
+                    "TRAVEL_SWIM": swim_count,
+                    "TRAVEL_WATERJUMP": waterjump_count,
+                },
+                "runtime_travel_flags": ["TFL_SWIM", "TFL_WATERJUMP", "TFL_WATER"],
+            },
+            "slime": {
+                "status": semantic_status(slime_brushes, slime_area_count),
+                "q2_content_flag": "CONTENTS_SLIME",
+                "q2_brush_count": slime_brushes,
+                "aas_area_content": "AREACONTENTS_SLIME",
+                "aas_area_count": slime_area_count,
+                "runtime_travel_flags": ["TFL_SLIME"],
+            },
+            "lava": {
+                "status": semantic_status(lava_brushes, lava_area_count),
+                "q2_content_flag": "CONTENTS_LAVA",
+                "q2_brush_count": lava_brushes,
+                "aas_area_content": "AREACONTENTS_LAVA",
+                "aas_area_count": lava_area_count,
+                "runtime_travel_flags": ["TFL_LAVA"],
+            },
+            "hurt": {
+                "status": "diagnostic_only",
+                "q2_entity": "trigger_hurt",
+                "entity_count": hurt_entities,
+                "policy": (
+                    "Q2 trigger_hurt volumes are entity diagnostics in this phase; "
+                    "they are not converted into a new AAS travel type until a "
+                    "reference map requires route-cost or avoid-area behavior."
+                ),
+            },
+        },
+        "surfaces": {
+            "slick": {
+                "status": "diagnostic_only",
+                "q2_surface_flag": "SURF_SLICK",
+                "brushside_count": brushside_count("slick"),
+                "policy": "No dedicated AAS travel flag is emitted yet; evidence is tracked for future movement-cost tuning.",
+            },
+            "sky": {
+                "status": "non_travel_surface",
+                "q2_surface_flag": "SURF_SKY",
+                "brushside_count": brushside_count("sky"),
+                "policy": "Sky is recorded as map metadata and is not traversable navigation surface.",
+            },
+            "nodraw": {
+                "status": "non_travel_surface",
+                "q2_surface_flag": "SURF_NODRAW",
+                "brushside_count": brushside_count("nodraw"),
+                "policy": "Nodraw is recorded for BSP diagnostics; no travel flag is emitted.",
+            },
+            "detail": {
+                "status": "non_travel_content",
+                "q2_content_flag": "CONTENTS_DETAIL",
+                "q2_brush_count": brush_count("detail"),
+                "policy": "Detail brushes remain generator partitioning/collision input, not a route-cost flag.",
+            },
+            "translucent": {
+                "status": "non_travel_content_or_surface",
+                "q2_content_flag": "CONTENTS_Q2TRANSLUCENT",
+                "q2_brush_count": brush_count("translucent"),
+                "surface_flags": {
+                    "SURF_TRANS33": brushside_count("trans33"),
+                    "SURF_TRANS66": brushside_count("trans66"),
+                },
+                "policy": "Translucency is recorded for diagnostics; no travel flag is emitted by the Q2 bridge.",
+            },
+        },
+        "bspx": build_bspx_policy(bsp_header),
+    }
+
+
+def build_reachability_policy(
+    groups: dict[str, list[dict[str, str]]],
+    travel_counts: dict[str, int],
+    semantic_policy: dict[str, object],
+) -> dict[str, object]:
+    contents = semantic_policy.get("contents", {})
+    water = contents.get("water", {}) if isinstance(contents, dict) else {}
+    water_brush_count = int(water.get("q2_brush_count", 0)) if isinstance(water, dict) else 0
+    swim_count = travel_counts.get("swim", 0)
+    waterjump_count = travel_counts.get("water jump", 0)
+    elevator_count = travel_counts.get("elevator", 0)
+    teleport_count = travel_counts.get("teleport", 0)
+    rocketjump_count = travel_counts.get("rocket jump", 0)
+    door_count = len(groups.get("doors", []))
+    elevator_entity_count = len(groups.get("elevators", []))
+    teleport_entity_count = len(groups.get("teleports", []))
+
+    return {
+        "schema": "worr-q2aas-reachability-policy-v1",
+        "water_entry_exit": {
+            "status": "validated" if swim_count or waterjump_count else "supported_no_reference",
+            "generated_swim_routes": swim_count,
+            "generated_waterjump_routes": waterjump_count,
+            "water_brush_count": water_brush_count,
+            "implementation": (
+                "Inherited BotLib swim and water-jump reachability pass, fed by "
+                "Q2 CONTENTS_WATER to AAS AREACONTENTS_WATER mapping and WORR "
+                "swim movement constants."
+            ),
+        },
+        "movers": {
+            "status": "validated" if elevator_count else "reported_no_generated_routes",
+            "generated_elevator_routes": elevator_count,
+            "elevator_entity_count": elevator_entity_count,
+            "door_entity_count": door_count,
+            "policy": (
+                "func_plat/vertical mover reachability is represented by generated "
+                "TRAVEL_ELEVATOR routes. Doors are reported as conditional mover "
+                "entities for runtime interaction policy unless a validated map "
+                "requires a dedicated generated door route edge."
+            ),
+        },
+        "teleports": {
+            "status": "validated" if teleport_count else "supported_no_reference",
+            "generated_teleport_routes": teleport_count,
+            "teleport_entity_count": teleport_entity_count,
+            "implementation": (
+                "Inherited BotLib trigger_teleport/misc_teleporter_dest support is "
+                "kept active; staged validation records candidate entities and "
+                "generated TRAVEL_TELEPORT counts."
+            ),
+        },
+        "rocketjump_action": {
+            "status": "route_policy_only_action_deferred",
+            "generated_rocketjump_routes": rocketjump_count,
+            "decision": (
+                "Generator and runtime route policy can expose TRAVEL_ROCKETJUMP "
+                "behind sg_bot_allow_rocketjump, but actual weapon-fire execution "
+                "belongs to the higher-level behavior/weapon action layer."
+            ),
+        },
+    }
+
+
+def build_mover_route_report(
+    groups: dict[str, list[dict[str, str]]],
+    travel_counts: dict[str, int],
+) -> dict[str, object]:
+    elevator_routes = travel_counts.get("elevator", 0)
+    teleport_routes = travel_counts.get("teleport", 0)
+    return {
+        "schema": "worr-q2aas-mover-route-report-v1",
+        "generated_routes": {
+            "TRAVEL_ELEVATOR": elevator_routes,
+            "TRAVEL_TELEPORT": teleport_routes,
+        },
+        "entities": {
+            "doors": [entity_summary(entity) for entity in groups.get("doors", [])[:32]],
+            "elevators": [entity_summary(entity) for entity in groups.get("elevators", [])[:32]],
+            "teleports": [entity_summary(entity) for entity in groups.get("teleports", [])[:32]],
+        },
+        "status": (
+            "generated_mover_routes"
+            if elevator_routes or teleport_routes
+            else "entity_inventory_only"
+        ),
+        "method": (
+            "Pairs generated travel counts with Q2 mover/teleport entity groups so "
+            "door/elevator route readiness can be reviewed from the JSON report."
+        ),
+    }
+
+
 def point_in_bounds(
     point: tuple[float, float, float],
     mins: tuple[float, float, float],
@@ -660,6 +1132,35 @@ def reachable_areas_from(starts: set[int], graph: dict[int, list[int]]) -> set[i
                 seen.add(target)
                 queue.append(target)
     return seen
+
+
+def reachable_entity_coverage(
+    entities: list[dict[str, str]],
+    areas: list[dict[str, object]],
+    reachable_from_spawns: set[int],
+) -> dict[str, object]:
+    coverage, area_counts = origin_coverage(entities, areas)
+    unreachable: list[dict[str, object]] = []
+
+    for entity in entities:
+        origin = parse_origin(entity.get("origin"))
+        if origin is None:
+            unreachable.append(entity_summary(entity, reason="missing_origin"))
+            continue
+        area = area_for_origin(origin, areas)
+        if area is None:
+            unreachable.append(entity_summary(entity, reason="outside_aas_area_bounds"))
+            continue
+        if area not in reachable_from_spawns:
+            unreachable.append(entity_summary(entity, area=area, reason="not_reachable_from_any_spawn_area"))
+
+    return {
+        **coverage,
+        "area_count": len(area_counts),
+        "reachable_from_spawn_areas": max(int(coverage["mapped_to_aas_area"]) - len(unreachable), 0),
+        "unreachable_from_spawn_areas": len(unreachable),
+        "unreachable_entities": unreachable[:32],
+    }
 
 
 def origin_coverage(
@@ -756,6 +1257,99 @@ def build_coverage_feature_readiness(
     }
 
 
+def build_team_objective_report(
+    groups: dict[str, list[dict[str, str]]],
+    areas: list[dict[str, object]],
+    reachable_from_spawns: set[int],
+) -> dict[str, object]:
+    flags = groups.get("ctf_flags", [])
+    team_spawns = groups.get("team_spawns", [])
+    flag_coverage = reachable_entity_coverage(flags, areas, reachable_from_spawns)
+    team_spawn_counts: dict[str, int] = {}
+    for entity in team_spawns:
+        classname = entity.get("classname", "")
+        team_spawn_counts[classname] = team_spawn_counts.get(classname, 0) + 1
+
+    has_team_bases = (
+        team_spawn_counts.get("info_player_team1", 0) > 0
+        and team_spawn_counts.get("info_player_team2", 0) > 0
+    )
+    has_flags = (
+        any(entity.get("classname") == "item_flag_team1" for entity in flags)
+        and any(entity.get("classname") == "item_flag_team2" for entity in flags)
+    )
+    has_unreachable_flags = int(flag_coverage["unreachable_from_spawn_areas"]) > 0
+    if not flags and not team_spawns:
+        status = "not_applicable"
+    elif has_team_bases and has_flags and not has_unreachable_flags:
+        status = "validated"
+    else:
+        status = "needs_review"
+
+    return {
+        "schema": "worr-q2aas-team-objective-report-v1",
+        "status": status,
+        "team_spawn_counts": dict(sorted(team_spawn_counts.items())),
+        "flag_coverage": flag_coverage,
+        "flags": [entity_summary(entity) for entity in flags[:8]],
+        "policy": (
+            "CTF validation records team spawn symmetry and flag origin reachability "
+            "from generated spawn-connected AAS areas. Mode-specific capture logic "
+            "remains a behavior-layer concern."
+        ),
+    }
+
+
+def build_campaign_progression_report(
+    groups: dict[str, list[dict[str, str]]],
+    areas: list[dict[str, object]],
+    reachable_from_spawns: set[int],
+) -> dict[str, object]:
+    progression_targets = groups.get("campaign_progression_targets", [])
+    keys = groups.get("campaign_keys", [])
+    triggers = groups.get("triggers", [])
+    doors = groups.get("doors", [])
+    elevators = groups.get("elevators", [])
+    target_coverage = reachable_entity_coverage(progression_targets, areas, reachable_from_spawns)
+    key_coverage = reachable_entity_coverage(keys, areas, reachable_from_spawns)
+
+    trigger_counts: dict[str, int] = {}
+    for entity in triggers:
+        classname = entity.get("classname", "")
+        trigger_counts[classname] = trigger_counts.get(classname, 0) + 1
+
+    has_progression = bool(progression_targets or keys)
+    has_interaction_surface = bool(triggers or doors or elevators)
+    has_reachable_progression = (
+        int(target_coverage["reachable_from_spawn_areas"]) > 0
+        or int(key_coverage["reachable_from_spawn_areas"]) > 0
+    )
+    if not has_progression:
+        status = "not_applicable"
+    elif has_progression and has_interaction_surface and has_reachable_progression:
+        status = "validated"
+    else:
+        status = "needs_review"
+
+    return {
+        "schema": "worr-q2aas-campaign-progression-report-v1",
+        "status": status,
+        "progression_target_coverage": target_coverage,
+        "key_coverage": key_coverage,
+        "trigger_counts": dict(sorted(trigger_counts.items())),
+        "door_count": len(doors),
+        "elevator_entity_count": len(elevators),
+        "sample_progression_targets": [entity_summary(entity) for entity in progression_targets[:16]],
+        "sample_keys": [entity_summary(entity) for entity in keys[:16]],
+        "policy": (
+            "Campaign validation records the route-adjacent progression surface: "
+            "goals/changelevels/keys, triggers, and conditional movers. Scripted "
+            "trigger ordering is reported for behavior follow-up instead of treated "
+            "as a static AAS failure."
+        ),
+    }
+
+
 def build_map_diagnostics(
     map_path: Path,
     bsp_header: dict[str, object],
@@ -803,6 +1397,12 @@ def build_map_diagnostics(
     brush_contents = bsp_header.get("brush_contents", {})
     if not isinstance(brush_contents, dict):
         brush_contents = {}
+    semantic_policy = build_aas_semantic_policy(
+        bsp_header,
+        groups,
+        navigation,
+        travel_counts or {},
+    )
 
     return {
         "entities": {
@@ -811,10 +1411,27 @@ def build_map_diagnostics(
             "groups": summarize_entity_groups(groups),
         },
         "brush_contents": brush_contents,
+        "surface_flags": bsp_header.get("surface_flags", {}),
+        "aas_semantic_policy": semantic_policy,
+        "reachability_policy": build_reachability_policy(
+            groups,
+            travel_counts or {},
+            semantic_policy,
+        ),
         "coverage_features": build_coverage_feature_readiness(
             brush_contents,
             mover_report,
             travel_counts,
+        ),
+        "team_objective_report": build_team_objective_report(
+            groups,
+            areas,
+            reachable_from_spawns,
+        ),
+        "campaign_progression_report": build_campaign_progression_report(
+            groups,
+            areas,
+            reachable_from_spawns,
         ),
         "origin_coverage": {
             "spawn_points": spawn_coverage,
@@ -830,6 +1447,10 @@ def build_map_diagnostics(
             "method": "AAS area bounding-box assignment plus generated reachability graph.",
         },
         "mover_entity_report": mover_report,
+        "mover_route_report": build_mover_route_report(
+            groups,
+            travel_counts or {},
+        ),
     }
 
 
@@ -880,6 +1501,7 @@ def build_aas_metadata(
             "generation_time_policy": "Omitted by default. Recreate identity from tool/config/input/output hashes.",
             "sidecar_format": "deterministic_json_sorted_keys",
         },
+        "metadata_policy": build_metadata_policy(),
     }
 
 
@@ -933,7 +1555,10 @@ def print_diagnostics_summary(diagnostics: dict[str, object], map_label: str) ->
     origin_coverage = diagnostics["origin_coverage"]
     reachability = diagnostics["reachability_from_spawns"]
     movers = diagnostics["mover_entity_report"]
+    mover_routes = diagnostics["mover_route_report"]
     coverage_features = diagnostics["coverage_features"]
+    semantic_policy = diagnostics["aas_semantic_policy"]
+    reachability_policy = diagnostics["reachability_policy"]
 
     print(f"[q2aas] diagnostics for {map_label}:")
     print(
@@ -960,6 +1585,14 @@ def print_diagnostics_summary(diagnostics: dict[str, object], map_label: str) ->
         f"elevators={len(movers['elevators'])} "
         f"teleports={len(movers['teleports'])}"
     )
+    print(
+        "[q2aas]   route policy: "
+        f"water={reachability_policy['water_entry_exit']['status']} "
+        f"movers={reachability_policy['movers']['status']} "
+        f"teleports={reachability_policy['teleports']['status']} "
+        f"rocketjump={reachability_policy['rocketjump_action']['status']} "
+        f"elevator_routes={mover_routes['generated_routes']['TRAVEL_ELEVATOR']}"
+    )
     feature_status = coverage_features["features"]
     print(
         "[q2aas]   feature readiness: "
@@ -967,6 +1600,35 @@ def print_diagnostics_summary(diagnostics: dict[str, object], map_label: str) ->
             f"{feature}={feature_status[feature]['status']}"
             for feature in REFERENCE_COVERAGE_FEATURES
         )
+    )
+    team_objectives = diagnostics["team_objective_report"]
+    campaign_progression = diagnostics["campaign_progression_report"]
+    if team_objectives["status"] != "not_applicable":
+        print(
+            "[q2aas]   team objectives: "
+            f"status={team_objectives['status']} "
+            f"flags={team_objectives['flag_coverage']['total']} "
+            f"unreachable_flags={team_objectives['flag_coverage']['unreachable_from_spawn_areas']}"
+        )
+    if campaign_progression["status"] != "not_applicable":
+        print(
+            "[q2aas]   campaign progression: "
+            f"status={campaign_progression['status']} "
+            f"targets={campaign_progression['progression_target_coverage']['total']} "
+            f"keys={campaign_progression['key_coverage']['total']} "
+            f"triggers={sum(campaign_progression['trigger_counts'].values())} "
+            f"doors={campaign_progression['door_count']}"
+        )
+    semantic_contents = semantic_policy["contents"]
+    semantic_surfaces = semantic_policy["surfaces"]
+    print(
+        "[q2aas]   semantic policy: "
+        f"water={semantic_contents['water']['status']} "
+        f"slime={semantic_contents['slime']['status']} "
+        f"lava={semantic_contents['lava']['status']} "
+        f"hurt={semantic_contents['hurt']['status']} "
+        f"slick={semantic_surfaces['slick']['status']} "
+        f"bspx={semantic_policy['bspx']['status']}"
     )
 
 
@@ -1248,8 +1910,17 @@ def cleanup_log(log_path: Path, keep_log: bool) -> None:
 def resolve_path(root: Path, path: Path) -> Path:
     if path.is_absolute():
         return path
+    rooted = root / path
+    if rooted.exists():
+        return rooted
     if path.exists():
         return path.resolve()
+    return rooted
+
+
+def resolve_manifest_path(root: Path, path: Path) -> Path:
+    if path.is_absolute():
+        return path
     return root / path
 
 
@@ -2104,7 +2775,7 @@ def load_manifest(
         if has_archive:
             assert isinstance(raw_archive_value, str)
             assert isinstance(raw_archive_member_value, str)
-            archive_path = resolve_path(root, Path(raw_archive_value)).resolve()
+            archive_path = resolve_manifest_path(root, Path(raw_archive_value)).resolve()
             extracted_path, map_source, archive_errors = extract_packaged_map(
                 archive_path,
                 raw_archive_member_value,
@@ -2121,7 +2792,7 @@ def load_manifest(
         else:
             assert isinstance(raw_path_value, str)
             raw_path = Path(raw_path_value)
-            map_path = resolve_path(root, raw_path).resolve()
+            map_path = resolve_manifest_path(root, raw_path).resolve()
             map_source = {
                 "type": "file",
                 "path": str(map_path),
@@ -2443,6 +3114,12 @@ def create_package_map_smoke_spec(
     return spec, report, True
 
 
+def resolve_requirement_gate(spec: dict[str, object], field: str, global_required: bool) -> bool:
+    if spec.get("source") in ("cli", "package_map_smoke"):
+        return global_required or bool(spec.get(field))
+    return bool(spec.get(field))
+
+
 def main() -> int:
     root = repo_root()
 
@@ -2705,6 +3382,9 @@ def main() -> int:
             "generation_time": None,
             "generation_time_policy": "Omitted by default. Use hashes and metadata sidecars for deterministic identity.",
         },
+        "generator_scope": build_generator_scope_policy(),
+        "presence_policy": parse_cfg_presence_policy(cfg),
+        "metadata_policy": build_metadata_policy(),
         "manifests": manifest_reports,
         "reference_coverage": reference_coverage_summary,
         "reference_feature_readiness": build_reference_feature_readiness(
@@ -2734,18 +3414,30 @@ def main() -> int:
         failed = False
         for spec in map_specs:
             map_path = Path(spec["path"])
-            require_reachability = args.require_reachability or bool(spec["require_reachability"])
-            require_clean_bsp_lumps = (
-                args.require_clean_bsp_lumps or bool(spec["require_clean_bsp_lumps"])
+            require_reachability = resolve_requirement_gate(
+                spec,
+                "require_reachability",
+                args.require_reachability,
             )
-            require_spawn_coverage = (
-                args.require_spawn_coverage or bool(spec["require_spawn_coverage"])
+            require_clean_bsp_lumps = resolve_requirement_gate(
+                spec,
+                "require_clean_bsp_lumps",
+                args.require_clean_bsp_lumps,
             )
-            require_item_coverage = (
-                args.require_item_coverage or bool(spec["require_item_coverage"])
+            require_spawn_coverage = resolve_requirement_gate(
+                spec,
+                "require_spawn_coverage",
+                args.require_spawn_coverage,
             )
-            require_high_value_reachability = (
-                args.require_high_value_reachability or bool(spec["require_high_value_reachability"])
+            require_item_coverage = resolve_requirement_gate(
+                spec,
+                "require_item_coverage",
+                args.require_item_coverage,
+            )
+            require_high_value_reachability = resolve_requirement_gate(
+                spec,
+                "require_high_value_reachability",
+                args.require_high_value_reachability,
             )
             minimum_metrics = spec["minimum_metrics"] if isinstance(spec["minimum_metrics"], dict) else {}
             minimum_travel_counts = (
