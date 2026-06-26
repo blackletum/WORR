@@ -4692,12 +4692,14 @@ static bool SV_BotFrameCommandSmokeIsCtfObjectiveTransitions(void)
 {
     const int mode = SV_BotFrameCommandSmokeMode();
 
-    return mode == 76 || mode == 86;
+    return mode == 76 || mode == 86 || mode == 87;
 }
 
 static bool SV_BotFrameCommandSmokeIsCoopLiveLoop(void)
 {
-    return SV_BotFrameCommandSmokeMode() == 77;
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 77 || mode == 91;
 }
 
 static bool SV_BotFrameCommandSmokeIsCoopShareLoop(void)
@@ -4761,7 +4763,9 @@ static bool SV_BotFrameCommandSmokeIsTeamItemRoles(void)
 
 static bool SV_BotFrameCommandSmokeIsTeamResourceDenial(void)
 {
-    return SV_BotFrameCommandSmokeMode() == 50;
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 50 || mode == 89;
 }
 
 static bool SV_BotFrameCommandSmokeIsMatchItemPolicy(void)
@@ -4850,7 +4854,8 @@ static bool SV_BotFrameCommandSmokeIsBotChatLiveEvents(void)
     const int mode = SV_BotFrameCommandSmokeMode();
 
     return mode == 79 || mode == 80 || mode == 81 || mode == 82 ||
-        mode == 83 || mode == 84 || mode == 85 || mode == 86;
+        mode == 83 || mode == 84 || mode == 85 || mode == 86 ||
+        mode == 87 || mode == 88 || mode == 89 || mode == 90;
 }
 
 static bool SV_BotFrameCommandSmokeIsBotChatLiveEventCooldown(void)
@@ -4873,9 +4878,29 @@ static bool SV_BotFrameCommandSmokeIsBotChatLiveItemTaken(void)
     return SV_BotFrameCommandSmokeMode() == 85;
 }
 
+static bool SV_BotFrameCommandSmokeIsBotChatLiveItemDenied(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 89;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveMatchResult(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 90;
+}
+
 static bool SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged(void)
 {
     return SV_BotFrameCommandSmokeMode() == 86;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveFlagState(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 87;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveBlocked(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 88;
 }
 
 static bool SV_BotFrameCommandSmokeIsBotChatPhraseLibrary(void)
@@ -5158,6 +5183,8 @@ static bool SV_BotFrameCommandSmokeUsesTravelTypeGoal(void)
     case 15:
     case 31:
     case 77:
+    case 91:
+    case 88:
         return true;
     default:
         return false;
@@ -5246,8 +5273,13 @@ static int SV_BotFrameCommandSmokeTargetBots(void)
         return min(1, bot_public_client_limit());
     }
 
-    if (SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged()) {
+    if (SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged() ||
+        SV_BotFrameCommandSmokeIsBotChatLiveFlagState()) {
         return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsBotChatLiveBlocked()) {
+        return min(1, bot_public_client_limit());
     }
 
     if (SV_BotFrameCommandSmokeUsesBotChatPolicy()) {
@@ -5385,6 +5417,7 @@ static int SV_BotFrameCommandSmokeTravelTypeGoal(void)
         return 4; /* TRAVEL_BARRIERJUMP */
     case 14:
     case 15:
+    case 88:
         return 12; /* TRAVEL_ROCKETJUMP */
     default:
         return 0;
@@ -5398,7 +5431,8 @@ static bool SV_BotFrameCommandSmokeAllowsRocketJump(void)
 
 static bool SV_BotFrameCommandSmokeExpectsBlockedTravelTypeGoal(void)
 {
-    return SV_BotFrameCommandSmokeMode() == 15;
+    return SV_BotFrameCommandSmokeMode() == 15 ||
+        SV_BotFrameCommandSmokeIsBotChatLiveBlocked();
 }
 
 static int SV_BotFrameCommandSmokeExpectedCommands(int target_bots)
@@ -5605,6 +5639,7 @@ static void SV_BotFrameCommandSmokeFrame(void)
     static int seen_spawncount;
     static int stage;
     static int settle_frames;
+    static bool match_result_intermission_requested;
     static bool soak_active;
     static unsigned soak_start_realtime;
     static unsigned soak_last_progress_realtime;
@@ -5639,6 +5674,7 @@ static void SV_BotFrameCommandSmokeFrame(void)
         seen_spawncount = sv.spawncount;
         stage = 0;
         settle_frames = 0;
+        match_result_intermission_requested = false;
         soak_active = false;
         soak_start_realtime = 0;
         soak_last_progress_realtime = 0;
@@ -5760,6 +5796,7 @@ static void SV_BotFrameCommandSmokeFrame(void)
                  SV_BotFrameCommandSmokeIsFfaRoleCombat() ||
                  SV_BotFrameCommandSmokeIsAimFirePolicy() ||
                   SV_BotFrameCommandSmokeIsBotChatLiveItemTaken() ||
+                  SV_BotFrameCommandSmokeIsBotChatLiveBlocked() ||
                   SV_BotFrameCommandSmokeIsAmmoPressure() ||
                   SV_BotFrameCommandSmokeIsSurvivalInventory() ||
                   SV_BotFrameCommandSmokeIsSurvivalRoute() ||
@@ -5774,7 +5811,9 @@ static void SV_BotFrameCommandSmokeFrame(void)
                   SV_BotFrameCommandSmokeIsProfileItemPolicy() ||
                   SV_BotFrameCommandSmokeIsProfileMovementPolicy() ||
                   (SV_BotFrameCommandSmokeUsesBotChatPolicy() &&
-                   !SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged()) ||
+                   !SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged() &&
+                   !SV_BotFrameCommandSmokeIsBotChatLiveFlagState() &&
+                   !SV_BotFrameCommandSmokeIsBotChatLiveBlocked()) ||
                   SV_BotFrameCommandSmokeUsesBehaviorPolicy() ||
                   SV_BotFrameCommandSmokeIsProfileRolePolicy() ||
                  SV_BotFrameCommandSmokeIsTeamFireAvoidance() ||
@@ -5963,8 +6002,16 @@ static void SV_BotFrameCommandSmokeFrame(void)
                 SV_BotFrameCommandSmokeIsBotChatLiveLowHealth() ? 1 : 0;
             const int bot_chat_live_item_taken =
                 SV_BotFrameCommandSmokeIsBotChatLiveItemTaken() ? 1 : 0;
+            const int bot_chat_live_item_denied =
+                SV_BotFrameCommandSmokeIsBotChatLiveItemDenied() ? 1 : 0;
+            const int bot_chat_live_match_result =
+                SV_BotFrameCommandSmokeIsBotChatLiveMatchResult() ? 1 : 0;
             const int bot_chat_live_objective_changed =
                 SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged() ? 1 : 0;
+            const int bot_chat_live_flag_state =
+                SV_BotFrameCommandSmokeIsBotChatLiveFlagState() ? 1 : 0;
+            const int bot_chat_live_blocked =
+                SV_BotFrameCommandSmokeIsBotChatLiveBlocked() ? 1 : 0;
             const int bot_chat_phrase_library =
                 SV_BotFrameCommandSmokeIsBotChatPhraseLibrary() ? 1 : 0;
             const int bot_chat_duplicate_suppression =
@@ -6006,6 +6053,7 @@ static void SV_BotFrameCommandSmokeFrame(void)
                  SV_BotFrameCommandSmokeIsAimFirePolicy() ||
                  SV_BotFrameCommandSmokeIsCombatSurvivalRegression() ||
                  SV_BotFrameCommandSmokeIsBotChatLiveItemTaken() ||
+                 SV_BotFrameCommandSmokeIsBotChatLiveBlocked() ||
                  SV_BotFrameCommandSmokeIsAmmoPressure() ||
                  SV_BotFrameCommandSmokeIsSurvivalInventory() ||
                  SV_BotFrameCommandSmokeIsSurvivalRoute() ||
@@ -6021,7 +6069,9 @@ static void SV_BotFrameCommandSmokeFrame(void)
                  SV_BotFrameCommandSmokeIsProfileItemPolicy() ||
                  SV_BotFrameCommandSmokeIsProfileMovementPolicy() ||
                  (SV_BotFrameCommandSmokeUsesBotChatPolicy() &&
-                  !SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged()) ||
+                  !SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged() &&
+                  !SV_BotFrameCommandSmokeIsBotChatLiveFlagState() &&
+                  !SV_BotFrameCommandSmokeIsBotChatLiveBlocked()) ||
                  SV_BotFrameCommandSmokeUsesBehaviorPolicy() ||
                  SV_BotFrameCommandSmokeIsProfileRolePolicy() ||
                  SV_BotFrameCommandSmokeIsTeamFireAvoidance() ||
@@ -6162,7 +6212,11 @@ static void SV_BotFrameCommandSmokeFrame(void)
                         "bot_chat_live_enemy_sighted=%d "
                         "bot_chat_live_low_health=%d "
                         "bot_chat_live_item_taken=%d "
+                        "bot_chat_live_item_denied=%d "
+                        "bot_chat_live_match_result=%d "
                         "bot_chat_live_objective_changed=%d "
+                        "bot_chat_live_flag_state=%d "
+                        "bot_chat_live_blocked=%d "
                         "bot_chat_phrase_library=%d "
                         "bot_chat_duplicate_suppression=%d "
                         "allow_chat=%d chat_team_only=%d "
@@ -6202,7 +6256,11 @@ static void SV_BotFrameCommandSmokeFrame(void)
                         bot_chat_live_enemy_sighted,
                         bot_chat_live_low_health,
                         bot_chat_live_item_taken,
+                        bot_chat_live_item_denied,
+                        bot_chat_live_match_result,
                         bot_chat_live_objective_changed,
+                        bot_chat_live_flag_state,
+                        bot_chat_live_blocked,
                         bot_chat_phrase_library,
                         bot_chat_duplicate_suppression,
                         allow_chat,
@@ -6367,6 +6425,22 @@ static void SV_BotFrameCommandSmokeFrame(void)
         return;
     }
 
+    if (SV_BotFrameCommandSmokeIsBotChatLiveMatchResult() &&
+        !match_result_intermission_requested) {
+        const int begin_success = SV_BotIntermissionSmokeBegin();
+        const int settle_target = SV_BotFrameCommandSmokeSettleFrames();
+
+        match_result_intermission_requested = true;
+        settle_frames = settle_target > 8 ? settle_target - 8 : 0;
+        Com_Printf("q3a_bot_frame_command_smoke_match_result_intermission_requested "
+                   "count=%d success=%d\n",
+                   SV_BotCount(), begin_success);
+        SV_BotIntermissionSmokeStatus(
+            target_bots, 0, target_bots, begin_success ? 1 : -1,
+            begin_success ? target_bots : -1, 0, target_bots);
+        return;
+    }
+
     if (SV_BotFrameCommandSmokeIsMapRepeat()) {
         const char *phase = SV_BotFrameCommandSmokeMapRepeatPhase(
             map_repeat_completed_cycles);
@@ -6478,6 +6552,10 @@ static void SV_BotFrameCommandSmokeFrame(void)
     }
 
     if (SV_BotFrameCommandSmokeUsesBotChatPolicy()) {
+        if (SV_BotFrameCommandSmokeIsBotChatLiveMatchResult()) {
+            SV_BotIntermissionSmokeStatus(target_bots, 0, target_bots, 1,
+                                          target_bots, 0, target_bots);
+        }
         SV_BotChatPolicySmokeStatus(target_bots, target_bots, 1, 1);
     }
 

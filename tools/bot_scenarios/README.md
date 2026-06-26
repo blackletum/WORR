@@ -122,6 +122,11 @@ Implemented:
 - `bot_chat_live_low_health`: mode `84` with `deathmatch 1`, `g_gametype 1`, `sg_bot_allow_chat 1`, and `sg_bot_chat_live_events 1`, verifies survival-health item pressure produces a gameplay-derived `low_health` live chat event without the smoke-only event gate.
 - `bot_chat_live_item_taken`: mode `85` with `deathmatch 1`, `g_gametype 1`, `sg_bot_allow_chat 1`, and `sg_bot_chat_live_events 1`, verifies health/armor pickup observations produce a gameplay-derived `item_taken` live chat event without the smoke-only event gate.
 - `bot_chat_live_objective_changed`: mode `86` with `deathmatch 1`, `g_gametype 5`, `sg_bot_allow_chat 1`, `sg_bot_chat_live_events 1`, `sg_bot_ctf_objective_route 1`, and `sg_bot_ctf_objective_transitions 1`, verifies real CTF pickup/drop/return hooks produce a gameplay-derived `objective_changed` live chat event without the smoke-only event gate.
+- `bot_chat_live_flag_state`: mode `87` with `deathmatch 1`, `g_gametype 5`, `sg_bot_allow_chat 1`, `sg_bot_chat_live_events 1`, `sg_bot_ctf_objective_route 1`, and `sg_bot_ctf_objective_transitions 1`, verifies real CTF pickup/drop/return hooks produce a gameplay-derived `flag_state` live chat event without the smoke-only event gate.
+- `bot_chat_live_blocked`: mode `88` with `deathmatch 1`, `g_gametype 1`, `sg_bot_allow_chat 1`, and `sg_bot_chat_live_events 1`, verifies a blocked travel-type route failure produces a gameplay-derived `blocked` live chat event without the smoke-only event gate.
+- `bot_chat_live_item_denied`: mode `89` with `deathmatch 1`, `g_gametype 3`, `sg_bot_allow_chat 1`, `sg_bot_chat_live_events 1`, and `sg_bot_team_resource_denial 1`, verifies deny-enemy resource policy pressure produces a gameplay-derived `item_denied` live chat event without the smoke-only event gate.
+- `bot_chat_live_match_result`: mode `90` with `deathmatch 1`, `g_gametype 3`, `sg_bot_allow_chat 1`, and `sg_bot_chat_live_events 1`, verifies native intermission/match-result state produces a gameplay-derived `victory_defeat` live chat event without the smoke-only event gate.
+- `coop_campaign_interaction_matrix`: mode `91` on `base1` with `deathmatch 0`, `coop 1`, and `sg_bot_coop_live_loop 1`, verifies the coop live-loop interaction owners still drive route-interaction retry, campaign mover source ownership, and teammate hold behavior on a second packaged AAS map.
 - `team_fire_avoidance`: mode `34` with `deathmatch 1`, `g_gametype 3`, and `sg_bot_team_fire_avoidance 1`, verifies TDM friendly-fire policy can suppress live attack input before `BUTTON_ATTACK` is applied.
 - `ctf_role_route`: mode `35` with `deathmatch 1`, `g_gametype 5`, and `sg_bot_ctf_role_route 1`, verifies CTF match role/lane policy can own timed route-goal commands.
 - `ctf_role_combat`: mode `36` with `deathmatch 1`, `g_gametype 5`, and `sg_bot_ctf_role_combat 1`, verifies CTF match role/lane policy can own live attack input from visible, shootable enemy facts.
@@ -299,6 +304,11 @@ The promoted source-backed smoke mode numbers are fixed for compatibility with s
 - `bot_chat_live_low_health`: mode `84`
 - `bot_chat_live_item_taken`: mode `85`
 - `bot_chat_live_objective_changed`: mode `86`
+- `bot_chat_live_flag_state`: mode `87`
+- `bot_chat_live_blocked`: mode `88`
+- `bot_chat_live_item_denied`: mode `89`
+- `bot_chat_live_match_result`: mode `90`
+- `coop_campaign_interaction_matrix`: mode `91`
 - `behavior_arbitration`: mode `63`
 - `target_memory_decay`: mode `64`
 - `weapon_scoring_arsenal`: mode `65`

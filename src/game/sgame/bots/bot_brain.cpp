@@ -2780,9 +2780,13 @@ struct BotChatReplyPolicyStatus {
 	int teamReady = 0;
 	int routeReady = 0;
 	int itemTaken = 0;
+	int itemDenied = 0;
 	int objectiveChanged = 0;
+	int flagState = 0;
 	int enemySighted = 0;
 	int lowHealth = 0;
+	int blocked = 0;
+	int matchResult = 0;
 	int submitted = 0;
 	int rateLimited = 0;
 	int duplicateSuppressed = 0;
@@ -2798,9 +2802,13 @@ struct BotChatReplyPolicyStatus {
 	int liveSpawn = 0;
 	int liveRouteReady = 0;
 	int liveItemTaken = 0;
+	int liveItemDenied = 0;
 	int liveObjectiveChanged = 0;
+	int liveFlagState = 0;
 	int liveEnemySighted = 0;
 	int liveLowHealth = 0;
+	int liveBlocked = 0;
+	int liveMatchResult = 0;
 	int liveSubmitted = 0;
 	int liveRateLimited = 0;
 	int liveDuplicateSuppressed = 0;
@@ -2841,7 +2849,17 @@ std::array<int, MAX_CLIENTS> botChatPolicyLiveItemTakenSpawnCounts = [] {
 	values.fill(-1);
 	return values;
 }();
+std::array<int, MAX_CLIENTS> botChatPolicyLiveItemDeniedSpawnCounts = [] {
+	std::array<int, MAX_CLIENTS> values{};
+	values.fill(-1);
+	return values;
+}();
 std::array<int, MAX_CLIENTS> botChatPolicyLiveObjectiveChangedSpawnCounts = [] {
+	std::array<int, MAX_CLIENTS> values{};
+	values.fill(-1);
+	return values;
+}();
+std::array<int, MAX_CLIENTS> botChatPolicyLiveFlagStateSpawnCounts = [] {
 	std::array<int, MAX_CLIENTS> values{};
 	values.fill(-1);
 	return values;
@@ -2852,6 +2870,16 @@ std::array<int, MAX_CLIENTS> botChatPolicyLiveEnemySightedSpawnCounts = [] {
 	return values;
 }();
 std::array<int, MAX_CLIENTS> botChatPolicyLiveLowHealthSpawnCounts = [] {
+	std::array<int, MAX_CLIENTS> values{};
+	values.fill(-1);
+	return values;
+}();
+std::array<int, MAX_CLIENTS> botChatPolicyLiveBlockedSpawnCounts = [] {
+	std::array<int, MAX_CLIENTS> values{};
+	values.fill(-1);
+	return values;
+}();
+std::array<int, MAX_CLIENTS> botChatPolicyLiveMatchResultSpawnCounts = [] {
 	std::array<int, MAX_CLIENTS> values{};
 	values.fill(-1);
 	return values;
@@ -4221,8 +4249,16 @@ int BotChatPolicy_ItemTakenEventId() {
 	return 4;
 }
 
+int BotChatPolicy_ItemDeniedEventId() {
+	return 5;
+}
+
 int BotChatPolicy_ObjectiveChangedEventId() {
 	return 7;
+}
+
+int BotChatPolicy_FlagStateEventId() {
+	return 8;
 }
 
 int BotChatPolicy_EnemySightedEventId() {
@@ -4231,6 +4267,14 @@ int BotChatPolicy_EnemySightedEventId() {
 
 int BotChatPolicy_LowHealthEventId() {
 	return 9;
+}
+
+int BotChatPolicy_BlockedEventId() {
+	return 10;
+}
+
+int BotChatPolicy_MatchResultEventId() {
+	return 11;
 }
 
 constexpr int BOT_CHAT_POLICY_LIVE_EVENT_TAXONOMY = 11;
@@ -4396,6 +4440,65 @@ const char *BotChatPolicy_ReplyPhrase(int personality, int event, int phrase) {
 		}
 	}
 
+	if (event == BotChatPolicy_ItemDeniedEventId()) {
+		switch (personality) {
+		case 1: {
+			static constexpr const char *phrases[] = {
+				"denied item, quiet",
+				"pickup denied, staying low",
+				"resource denied, watching",
+				"item locked down, quiet",
+			};
+			return phrases[variant];
+		}
+		case 2: {
+			static constexpr const char *phrases[] = {
+				"item denied, pushing",
+				"pickup denied, moving",
+				"resource cut off, go",
+				"denial secured, taking point",
+			};
+			return phrases[variant];
+		}
+		case 3: {
+			static constexpr const char *phrases[] = {
+				"item denied, keep pressure",
+				"pickup denied, make noise",
+				"resource stolen, hit them",
+				"denial secured, fragging",
+			};
+			return phrases[variant];
+		}
+		case 4: {
+			static constexpr const char *phrases[] = {
+				"item denied, covering",
+				"pickup denied, support ready",
+				"resource denied, with you",
+				"denial secured, covering flank",
+			};
+			return phrases[variant];
+		}
+		case 5: {
+			static constexpr const char *phrases[] = {
+				"item denied, steady",
+				"pickup denied, holding",
+				"resource denied, controlled",
+				"denial secured, stay organized",
+			};
+			return phrases[variant];
+		}
+		default: {
+			static constexpr const char *phrases[] = {
+				"item denied",
+				"pickup denied",
+				"resource denied",
+				"denial secured",
+			};
+			return phrases[variant];
+		}
+		}
+	}
+
 	if (event == BotChatPolicy_ObjectiveChangedEventId()) {
 		switch (personality) {
 		case 1: {
@@ -4449,6 +4552,65 @@ const char *BotChatPolicy_ReplyPhrase(int personality, int event, int phrase) {
 				"flag state changed",
 				"objective updated",
 				"flag update",
+			};
+			return phrases[variant];
+		}
+		}
+	}
+
+	if (event == BotChatPolicy_FlagStateEventId()) {
+		switch (personality) {
+		case 1: {
+			static constexpr const char *phrases[] = {
+				"flag state, watching",
+				"flag moved, quiet",
+				"flag update, staying low",
+				"flag changed, eyes open",
+			};
+			return phrases[variant];
+		}
+		case 2: {
+			static constexpr const char *phrases[] = {
+				"flag state changed, moving",
+				"flag moved, pushing",
+				"flag update, take ground",
+				"flag changed, go",
+			};
+			return phrases[variant];
+		}
+		case 3: {
+			static constexpr const char *phrases[] = {
+				"flag moved, keep pressure",
+				"flag changed, hit them",
+				"flag update, make noise",
+				"flag state, fragging",
+			};
+			return phrases[variant];
+		}
+		case 4: {
+			static constexpr const char *phrases[] = {
+				"flag state changed, covering",
+				"flag moved, supporting",
+				"flag update, with you",
+				"flag changed, covering flank",
+			};
+			return phrases[variant];
+		}
+		case 5: {
+			static constexpr const char *phrases[] = {
+				"flag state changed, steady",
+				"flag moved, holding",
+				"flag update, controlled",
+				"flag changed, stay organized",
+			};
+			return phrases[variant];
+		}
+		default: {
+			static constexpr const char *phrases[] = {
+				"flag state changed",
+				"flag moved",
+				"flag update",
+				"flag changed",
 			};
 			return phrases[variant];
 		}
@@ -4573,6 +4735,124 @@ const char *BotChatPolicy_ReplyPhrase(int personality, int event, int phrase) {
 		}
 	}
 
+	if (event == BotChatPolicy_BlockedEventId()) {
+		switch (personality) {
+		case 1: {
+			static constexpr const char *phrases[] = {
+				"route blocked, quiet",
+				"path blocked, watching",
+				"blocked, staying low",
+				"route failed, eyes open",
+			};
+			return phrases[variant];
+		}
+		case 2: {
+			static constexpr const char *phrases[] = {
+				"route blocked, redirecting",
+				"path blocked, moving",
+				"blocked, taking another line",
+				"route failed, push around",
+			};
+			return phrases[variant];
+		}
+		case 3: {
+			static constexpr const char *phrases[] = {
+				"route blocked, force it",
+				"path blocked, keep pressure",
+				"blocked, make noise",
+				"route failed, hit harder",
+			};
+			return phrases[variant];
+		}
+		case 4: {
+			static constexpr const char *phrases[] = {
+				"route blocked, covering",
+				"path blocked, support ready",
+				"blocked, with you",
+				"route failed, covering flank",
+			};
+			return phrases[variant];
+		}
+		case 5: {
+			static constexpr const char *phrases[] = {
+				"route blocked, steady",
+				"path blocked, holding",
+				"blocked, stay organized",
+				"route failed, controlled",
+			};
+			return phrases[variant];
+		}
+		default: {
+			static constexpr const char *phrases[] = {
+				"route blocked",
+				"path blocked",
+				"blocked",
+				"route failed",
+			};
+			return phrases[variant];
+		}
+		}
+	}
+
+	if (event == BotChatPolicy_MatchResultEventId()) {
+		switch (personality) {
+		case 1: {
+			static constexpr const char *phrases[] = {
+				"match over, staying quiet",
+				"round done, watching",
+				"match result in, quiet",
+				"game ended, eyes open",
+			};
+			return phrases[variant];
+		}
+		case 2: {
+			static constexpr const char *phrases[] = {
+				"match over, reset fast",
+				"round done, ready up",
+				"match result in, moving",
+				"game ended, next push",
+			};
+			return phrases[variant];
+		}
+		case 3: {
+			static constexpr const char *phrases[] = {
+				"match over, good noise",
+				"round done, bring another",
+				"match result in, loud enough",
+				"game ended, run it back",
+			};
+			return phrases[variant];
+		}
+		case 4: {
+			static constexpr const char *phrases[] = {
+				"match over, regrouping",
+				"round done, support ready",
+				"match result in, with you",
+				"game ended, covering reset",
+			};
+			return phrases[variant];
+		}
+		case 5: {
+			static constexpr const char *phrases[] = {
+				"match over, steady",
+				"round done, holding shape",
+				"match result in, controlled",
+				"game ended, stay organized",
+			};
+			return phrases[variant];
+		}
+		default: {
+			static constexpr const char *phrases[] = {
+				"match over",
+				"round done",
+				"match result",
+				"game ended",
+			};
+			return phrases[variant];
+		}
+		}
+	}
+
 	switch (personality) {
 	case 1: {
 		static constexpr const char *phrases[] = {
@@ -4681,14 +4961,26 @@ void BotChatPolicy_RecordLiveEventSelection(int event) {
 	else if (event == BotChatPolicy_ItemTakenEventId()) {
 		botChatReplyPolicyStatus.liveItemTaken++;
 	}
+	else if (event == BotChatPolicy_ItemDeniedEventId()) {
+		botChatReplyPolicyStatus.liveItemDenied++;
+	}
 	else if (event == BotChatPolicy_ObjectiveChangedEventId()) {
 		botChatReplyPolicyStatus.liveObjectiveChanged++;
+	}
+	else if (event == BotChatPolicy_FlagStateEventId()) {
+		botChatReplyPolicyStatus.liveFlagState++;
 	}
 	else if (event == BotChatPolicy_EnemySightedEventId()) {
 		botChatReplyPolicyStatus.liveEnemySighted++;
 	}
 	else if (event == BotChatPolicy_LowHealthEventId()) {
 		botChatReplyPolicyStatus.liveLowHealth++;
+	}
+	else if (event == BotChatPolicy_BlockedEventId()) {
+		botChatReplyPolicyStatus.liveBlocked++;
+	}
+	else if (event == BotChatPolicy_MatchResultEventId()) {
+		botChatReplyPolicyStatus.liveMatchResult++;
 	}
 }
 
@@ -4715,14 +5007,26 @@ void BotChatPolicy_RecordReplySelection(
 	else if (event == BotChatPolicy_ItemTakenEventId()) {
 		botChatReplyPolicyStatus.itemTaken++;
 	}
+	else if (event == BotChatPolicy_ItemDeniedEventId()) {
+		botChatReplyPolicyStatus.itemDenied++;
+	}
 	else if (event == BotChatPolicy_ObjectiveChangedEventId()) {
 		botChatReplyPolicyStatus.objectiveChanged++;
+	}
+	else if (event == BotChatPolicy_FlagStateEventId()) {
+		botChatReplyPolicyStatus.flagState++;
 	}
 	else if (event == BotChatPolicy_EnemySightedEventId()) {
 		botChatReplyPolicyStatus.enemySighted++;
 	}
 	else if (event == BotChatPolicy_LowHealthEventId()) {
 		botChatReplyPolicyStatus.lowHealth++;
+	}
+	else if (event == BotChatPolicy_BlockedEventId()) {
+		botChatReplyPolicyStatus.blocked++;
+	}
+	else if (event == BotChatPolicy_MatchResultEventId()) {
+		botChatReplyPolicyStatus.matchResult++;
 	}
 
 	if (liveEvent) {
@@ -4973,6 +5277,23 @@ bool Bot_CommandMaybeDispatchLiveItemTakenChat(gentity_t *bot) {
 		true);
 }
 
+bool Bot_CommandMaybeDispatchLiveItemDeniedChat(gentity_t *bot) {
+	if (!BotChatPolicy_LiveEventsEnabled()) {
+		return false;
+	}
+
+	const BotNavRouteStatus &routeStatus = BotNav_GetRouteStatus();
+	if (routeStatus.teamResourceDenialPolicyDenies <= 0) {
+		return false;
+	}
+
+	return Bot_CommandMaybeDispatchChatReplyEvent(
+		bot,
+		BotChatPolicy_ItemDeniedEventId(),
+		botChatPolicyLiveItemDeniedSpawnCounts,
+		true);
+}
+
 bool Bot_CommandMaybeDispatchLiveObjectiveChangedChat(gentity_t *bot) {
 	if (!BotChatPolicy_LiveEventsEnabled()) {
 		return false;
@@ -4990,6 +5311,28 @@ bool Bot_CommandMaybeDispatchLiveObjectiveChangedChat(gentity_t *bot) {
 		bot,
 		BotChatPolicy_ObjectiveChangedEventId(),
 		botChatPolicyLiveObjectiveChangedSpawnCounts,
+		true);
+}
+
+bool Bot_CommandMaybeDispatchLiveFlagStateChat(gentity_t *bot) {
+	if (!BotChatPolicy_LiveEventsEnabled()) {
+		return false;
+	}
+
+	const BotObjectiveStatus &objectiveStatus = BotObjectives_GetStatus();
+	if (objectiveStatus.flagPickups <= 0 &&
+		objectiveStatus.flagCaptures <= 0 &&
+		objectiveStatus.flagDrops <= 0 &&
+		objectiveStatus.flagReturns <= 0 &&
+		objectiveStatus.carrierTargets <= 0 &&
+		objectiveStatus.droppedFlagTargets <= 0) {
+		return false;
+	}
+
+	return Bot_CommandMaybeDispatchChatReplyEvent(
+		bot,
+		BotChatPolicy_FlagStateEventId(),
+		botChatPolicyLiveFlagStateSpawnCounts,
 		true);
 }
 
@@ -5013,6 +5356,42 @@ bool Bot_CommandMaybeDispatchLiveLowHealthChat(gentity_t *bot) {
 		bot,
 		BotChatPolicy_LowHealthEventId(),
 		botChatPolicyLiveLowHealthSpawnCounts,
+		true);
+}
+
+bool Bot_CommandMaybeDispatchLiveBlockedChat(gentity_t *bot) {
+	if (!BotChatPolicy_LiveEventsEnabled()) {
+		return false;
+	}
+
+	const BotNavRouteStatus &routeStatus = BotNav_GetRouteStatus();
+	if (routeStatus.failures <= 0) {
+		return false;
+	}
+
+	return Bot_CommandMaybeDispatchChatReplyEvent(
+		bot,
+		BotChatPolicy_BlockedEventId(),
+		botChatPolicyLiveBlockedSpawnCounts,
+		true);
+}
+
+bool BotChatPolicy_MatchResultReady() {
+	return level.intermission.time ||
+		level.intermission.queued ||
+		level.matchState == MatchState::Ended;
+}
+
+bool Bot_CommandMaybeDispatchLiveMatchResultChat(gentity_t *bot) {
+	if (!BotChatPolicy_LiveEventsEnabled() ||
+		!BotChatPolicy_MatchResultReady()) {
+		return false;
+	}
+
+	return Bot_CommandMaybeDispatchChatReplyEvent(
+		bot,
+		BotChatPolicy_MatchResultEventId(),
+		botChatPolicyLiveMatchResultSpawnCounts,
 		true);
 }
 
@@ -8225,6 +8604,8 @@ void Bot_CommandPrepareSmokeProof(gentity_t *bot, BotCommandSmokeProofSlot *slot
 		Bot_CommandPrepareCtfObjectiveRouteSmoke(bot, *slot);
 		break;
 	case 76:
+	case 86:
+	case 87:
 		Bot_CommandPrepareCtfObjectiveTransitionsSmoke(bot, *slot);
 		break;
 	default:
@@ -12714,9 +13095,13 @@ void BotBrain_ResetChatPolicyState() {
 	botChatPolicyRouteReplySpawnCounts.fill(-1);
 	botChatPolicyLiveRouteReplySpawnCounts.fill(-1);
 	botChatPolicyLiveItemTakenSpawnCounts.fill(-1);
+	botChatPolicyLiveItemDeniedSpawnCounts.fill(-1);
 	botChatPolicyLiveObjectiveChangedSpawnCounts.fill(-1);
+	botChatPolicyLiveFlagStateSpawnCounts.fill(-1);
 	botChatPolicyLiveEnemySightedSpawnCounts.fill(-1);
 	botChatPolicyLiveLowHealthSpawnCounts.fill(-1);
+	botChatPolicyLiveBlockedSpawnCounts.fill(-1);
+	botChatPolicyLiveMatchResultSpawnCounts.fill(-1);
 	botChatPolicyLastReplyEvents.fill(-1);
 	botChatPolicyLastReplyPhrases.fill(-1);
 	botChatPolicyLastReplyTimes.fill(-1);
@@ -12819,8 +13204,16 @@ int BotChatPolicy_ReplyItemTaken() {
 	return botChatReplyPolicyStatus.itemTaken;
 }
 
+int BotChatPolicy_ReplyItemDenied() {
+	return botChatReplyPolicyStatus.itemDenied;
+}
+
 int BotChatPolicy_ReplyObjectiveChanged() {
 	return botChatReplyPolicyStatus.objectiveChanged;
+}
+
+int BotChatPolicy_ReplyFlagState() {
+	return botChatReplyPolicyStatus.flagState;
 }
 
 int BotChatPolicy_ReplyEnemySighted() {
@@ -12829,6 +13222,14 @@ int BotChatPolicy_ReplyEnemySighted() {
 
 int BotChatPolicy_ReplyLowHealth() {
 	return botChatReplyPolicyStatus.lowHealth;
+}
+
+int BotChatPolicy_ReplyBlocked() {
+	return botChatReplyPolicyStatus.blocked;
+}
+
+int BotChatPolicy_ReplyMatchResult() {
+	return botChatReplyPolicyStatus.matchResult;
 }
 
 int BotChatPolicy_ReplySubmitted() {
@@ -12895,8 +13296,16 @@ int BotChatPolicy_LiveItemTaken() {
 	return botChatReplyPolicyStatus.liveItemTaken;
 }
 
+int BotChatPolicy_LiveItemDenied() {
+	return botChatReplyPolicyStatus.liveItemDenied;
+}
+
 int BotChatPolicy_LiveObjectiveChanged() {
 	return botChatReplyPolicyStatus.liveObjectiveChanged;
+}
+
+int BotChatPolicy_LiveFlagState() {
+	return botChatReplyPolicyStatus.liveFlagState;
 }
 
 int BotChatPolicy_LiveEnemySighted() {
@@ -12905,6 +13314,14 @@ int BotChatPolicy_LiveEnemySighted() {
 
 int BotChatPolicy_LiveLowHealth() {
 	return botChatReplyPolicyStatus.liveLowHealth;
+}
+
+int BotChatPolicy_LiveBlocked() {
+	return botChatReplyPolicyStatus.liveBlocked;
+}
+
+int BotChatPolicy_LiveMatchResult() {
+	return botChatReplyPolicyStatus.liveMatchResult;
 }
 
 int BotChatPolicy_LiveSubmitted() {
@@ -13175,6 +13592,8 @@ bool BotBrain_BuildFrameCommand( gentity_t * bot, usercmd_t * cmd ) {
 	Bot_CommandMaybeWarpToTravelTypeGoalStart(bot, routeRequest);
 	if (!BotNav_GetRouteSteer(bot, &routeRequest, &route)) {
 		Bot_BlackboardRecordNavState(bot);
+		(void)Bot_CommandMaybeDispatchLiveBlockedChat(bot);
+		(void)Bot_CommandMaybeDispatchLiveMatchResultChat(bot);
 		return false;
 	}
 	if (objectiveRouteRequested) {
@@ -13302,7 +13721,11 @@ bool BotBrain_BuildFrameCommand( gentity_t * bot, usercmd_t * cmd ) {
 	(void)Bot_CommandMaybeDispatchLiveEnemySightedChat(bot);
 	(void)Bot_CommandMaybeDispatchLiveLowHealthChat(bot);
 	(void)Bot_CommandMaybeDispatchLiveItemTakenChat(bot);
+	(void)Bot_CommandMaybeDispatchLiveItemDeniedChat(bot);
 	(void)Bot_CommandMaybeDispatchLiveObjectiveChangedChat(bot);
+	(void)Bot_CommandMaybeDispatchLiveFlagStateChat(bot);
+	(void)Bot_CommandMaybeDispatchLiveBlockedChat(bot);
+	(void)Bot_CommandMaybeDispatchLiveMatchResultChat(bot);
 
 	botFrameCommandStatus.commands++;
 	botFrameCommandStatus.routeCommands++;

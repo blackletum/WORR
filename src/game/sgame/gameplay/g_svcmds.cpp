@@ -891,9 +891,13 @@ namespace
 		int replyTeamReady = 0;
 		int replyRouteReady = 0;
 		int replyItemTaken = 0;
+		int replyItemDenied = 0;
 		int replyObjectiveChanged = 0;
+		int replyFlagState = 0;
 		int replyEnemySighted = 0;
 		int replyLowHealth = 0;
+		int replyBlocked = 0;
+		int replyMatchResult = 0;
 		int replySubmitted = 0;
 		int replyRateLimited = 0;
 		int replyDuplicateSuppressed = 0;
@@ -910,9 +914,13 @@ namespace
 		int liveSpawn = 0;
 		int liveRouteReady = 0;
 		int liveItemTaken = 0;
+		int liveItemDenied = 0;
 		int liveObjectiveChanged = 0;
+		int liveFlagState = 0;
 		int liveEnemySighted = 0;
 		int liveLowHealth = 0;
+		int liveBlocked = 0;
+		int liveMatchResult = 0;
 		int liveSubmitted = 0;
 		int liveRateLimited = 0;
 		int liveDuplicateSuppressed = 0;
@@ -1223,9 +1231,13 @@ namespace
 		status.replyTeamReady = BotChatPolicy_ReplyTeamReady();
 		status.replyRouteReady = BotChatPolicy_ReplyRouteReady();
 		status.replyItemTaken = BotChatPolicy_ReplyItemTaken();
+		status.replyItemDenied = BotChatPolicy_ReplyItemDenied();
 		status.replyObjectiveChanged = BotChatPolicy_ReplyObjectiveChanged();
+		status.replyFlagState = BotChatPolicy_ReplyFlagState();
 		status.replyEnemySighted = BotChatPolicy_ReplyEnemySighted();
 		status.replyLowHealth = BotChatPolicy_ReplyLowHealth();
+		status.replyBlocked = BotChatPolicy_ReplyBlocked();
+		status.replyMatchResult = BotChatPolicy_ReplyMatchResult();
 		status.replySubmitted = BotChatPolicy_ReplySubmitted();
 		status.replyRateLimited = BotChatPolicy_ReplyRateLimited();
 		status.replyDuplicateSuppressed = BotChatPolicy_ReplyDuplicateSuppressed();
@@ -1242,9 +1254,13 @@ namespace
 		status.liveSpawn = BotChatPolicy_LiveSpawn();
 		status.liveRouteReady = BotChatPolicy_LiveRouteReady();
 		status.liveItemTaken = BotChatPolicy_LiveItemTaken();
+		status.liveItemDenied = BotChatPolicy_LiveItemDenied();
 		status.liveObjectiveChanged = BotChatPolicy_LiveObjectiveChanged();
+		status.liveFlagState = BotChatPolicy_LiveFlagState();
 		status.liveEnemySighted = BotChatPolicy_LiveEnemySighted();
 		status.liveLowHealth = BotChatPolicy_LiveLowHealth();
+		status.liveBlocked = BotChatPolicy_LiveBlocked();
+		status.liveMatchResult = BotChatPolicy_LiveMatchResult();
 		status.liveSubmitted = BotChatPolicy_LiveSubmitted();
 		status.liveRateLimited = BotChatPolicy_LiveRateLimited();
 		status.liveDuplicateSuppressed = BotChatPolicy_LiveDuplicateSuppressed();
@@ -2142,9 +2158,13 @@ void BotChatPolicy_PrintStatus(int expectedBots, int expectedProfileChat,
 		"reply_chat_unknown_personalities={} reply_chat_team_ready={} "
 		"reply_chat_route_ready={} "
 		"reply_chat_item_taken={} "
+		"reply_chat_item_denied={} "
 		"reply_chat_objective_changed={} "
+		"reply_chat_flag_state={} "
 		"reply_chat_enemy_sighted={} "
 		"reply_chat_low_health={} "
+		"reply_chat_blocked={} "
+		"reply_chat_match_result={} "
 		"reply_chat_submitted={} reply_chat_rate_limited={} "
 		"reply_chat_duplicate_suppressed={} reply_chat_failures={} "
 		"reply_chat_phrase_variants={} reply_chat_unique_variants={} "
@@ -2154,9 +2174,13 @@ void BotChatPolicy_PrintStatus(int expectedBots, int expectedProfileChat,
 		"live_chat_enabled={} live_chat_events={} "
 		"live_chat_spawn={} live_chat_route_ready={} "
 		"live_chat_item_taken={} "
+		"live_chat_item_denied={} "
 		"live_chat_objective_changed={} "
+		"live_chat_flag_state={} "
 		"live_chat_enemy_sighted={} "
 		"live_chat_low_health={} "
+		"live_chat_blocked={} "
+		"live_chat_match_result={} "
 		"live_chat_submitted={} "
 		"live_chat_rate_limited={} live_chat_duplicate_suppressed={} "
 		"live_chat_failures={} "
@@ -2186,8 +2210,12 @@ void BotChatPolicy_PrintStatus(int expectedBots, int expectedProfileChat,
 		status.replySelections, status.replyKnownPersonalities,
 		status.replyUnknownPersonalities, status.replyTeamReady,
 		status.replyRouteReady, status.replyItemTaken,
-		status.replyObjectiveChanged, status.replyEnemySighted,
+		status.replyItemDenied,
+		status.replyObjectiveChanged, status.replyFlagState,
+		status.replyEnemySighted,
 		status.replyLowHealth,
+		status.replyBlocked,
+		status.replyMatchResult,
 		status.replySubmitted, status.replyRateLimited,
 		status.replyDuplicateSuppressed, status.replyFailures,
 		status.replyPhraseVariants,
@@ -2196,8 +2224,12 @@ void BotChatPolicy_PrintStatus(int expectedBots, int expectedProfileChat,
 		status.lastReplyPhraseVariant, status.lastReplyEvent,
 		status.liveEnabled, status.liveEvents, status.liveSpawn,
 		status.liveRouteReady, status.liveItemTaken,
-		status.liveObjectiveChanged, status.liveEnemySighted,
+		status.liveItemDenied,
+		status.liveObjectiveChanged, status.liveFlagState,
+		status.liveEnemySighted,
 		status.liveLowHealth,
+		status.liveBlocked,
+		status.liveMatchResult,
 		status.liveSubmitted,
 		status.liveRateLimited, status.liveDuplicateSuppressed,
 		status.liveFailures,

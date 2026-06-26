@@ -342,6 +342,59 @@ RESERVED_MODE_BEGIN_LINES = {
         "ctf_objective_route=1 ctf_objective_transitions=1 "
         "allow_chat=1 behavior_enable=0"
     ),
+    87: (
+        f"{harness.SCENARIO_BEGIN_MARKER} mode=87 combat=0 "
+        "weapon_switch=0 item_focus=0 team_objective=0 target=4 gametype=5 "
+        "bot_chat_policy=1 bot_chat_event_policy=0 "
+        "bot_chat_live_events=1 bot_chat_live_event_cooldown=0 "
+        "bot_chat_live_enemy_sighted=0 bot_chat_live_low_health=0 "
+        "bot_chat_live_item_taken=0 bot_chat_live_objective_changed=0 "
+        "bot_chat_live_flag_state=1 bot_chat_phrase_library=0 "
+        "bot_chat_duplicate_suppression=0 "
+        "ctf_objective_route=1 ctf_objective_transitions=1 "
+        "allow_chat=1 behavior_enable=0"
+    ),
+    88: (
+        f"{harness.SCENARIO_BEGIN_MARKER} mode=88 combat=0 "
+        "weapon_switch=0 item_focus=0 team_objective=0 target=1 gametype=1 "
+        "bot_chat_policy=1 bot_chat_event_policy=0 "
+        "bot_chat_live_events=1 bot_chat_live_event_cooldown=0 "
+        "bot_chat_live_enemy_sighted=0 bot_chat_live_low_health=0 "
+        "bot_chat_live_item_taken=0 bot_chat_live_objective_changed=0 "
+        "bot_chat_live_flag_state=0 bot_chat_live_blocked=1 "
+        "bot_chat_phrase_library=0 bot_chat_duplicate_suppression=0 "
+        "allow_chat=1 behavior_enable=0"
+    ),
+    89: (
+        f"{harness.SCENARIO_BEGIN_MARKER} mode=89 combat=0 "
+        "weapon_switch=0 item_focus=0 team_objective=0 target=4 gametype=3 "
+        "bot_chat_policy=1 bot_chat_event_policy=0 "
+        "bot_chat_live_events=1 bot_chat_live_event_cooldown=0 "
+        "bot_chat_live_enemy_sighted=0 bot_chat_live_low_health=0 "
+        "bot_chat_live_item_taken=0 bot_chat_live_item_denied=1 "
+        "bot_chat_live_objective_changed=0 bot_chat_live_flag_state=0 "
+        "bot_chat_live_blocked=0 bot_chat_phrase_library=0 "
+        "bot_chat_duplicate_suppression=0 team_resource_denial=1 "
+        "allow_chat=1 behavior_enable=0"
+    ),
+    90: (
+        f"{harness.SCENARIO_BEGIN_MARKER} mode=90 combat=0 "
+        "weapon_switch=0 item_focus=0 team_objective=0 target=4 gametype=3 "
+        "bot_chat_policy=1 bot_chat_event_policy=0 "
+        "bot_chat_live_events=1 bot_chat_live_event_cooldown=0 "
+        "bot_chat_live_enemy_sighted=0 bot_chat_live_low_health=0 "
+        "bot_chat_live_item_taken=0 bot_chat_live_item_denied=0 "
+        "bot_chat_live_match_result=1 "
+        "bot_chat_live_objective_changed=0 bot_chat_live_flag_state=0 "
+        "bot_chat_live_blocked=0 bot_chat_phrase_library=0 "
+        "bot_chat_duplicate_suppression=0 "
+        "allow_chat=1 behavior_enable=0"
+    ),
+    91: (
+        f"{harness.SCENARIO_BEGIN_MARKER} mode=91 map=base1 combat=0 "
+        "weapon_switch=0 item_focus=0 team_objective=0 target=2 gametype=0 "
+        "coop_live_loop=1"
+    ),
 }
 
 
@@ -1088,6 +1141,275 @@ def passing_raw_reserved_mode_lines(mode: int) -> list[str]:
             "last_dispatch_client=3 last_dispatch_team=0 "
             "blocked_until_consumer=0 pass=1",
         ]
+    if mode == 87:
+        return [
+            *common,
+            "q3a_bot_frame_command_status pass=1 route_commands=24 "
+            "route_failures=0 ctf_objective_route_requests=16 "
+            "ctf_objective_route_assignments=16 "
+            "ctf_objective_route_base_return_candidates=16 "
+            "ctf_objective_route_dropped_flag_candidates=16 "
+            "ctf_objective_route_route_commands=16 "
+            "ctf_objective_route_invalid_skips=0",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=1 team_mode=1 gametype=5 bots=4 playing=4 "
+            "spectators=0 queued=0 free=0 red=2 blue=2",
+            "q3a_bot_objective_status team_objective_flag_pickups=2 "
+            "team_objective_flag_captures=0 team_objective_flag_drops=1 "
+            "team_objective_flag_returns=1",
+            "q3a_bot_behavior_policy_status behavior_arbitration_objective_candidates=8 "
+            "behavior_arbitration_objective_owners=8",
+            "q3a_bot_chat_policy_status bots=4 humans=0 playing=4 "
+            "bot_playing=4 profile_chat_metadata=4 allow_chat=1 "
+            "team_only=0 consumer_ready=1 dispatch_enabled=1 "
+            "dispatch_attempts=16 dispatch_submitted=16 dispatch_failures=0 "
+            "dispatch_rate_limited=0 rate_limit_ms=0 "
+            "initial_chat_selections=4 initial_chat_known_personalities=4 "
+            "initial_chat_unknown_personalities=0 "
+            "initial_chat_phrase_variants=4 initial_chat_unique_variants=4 "
+            "last_initial_chat_variant=3 "
+            "reply_chat_enabled=1 reply_chat_events=12 "
+            "reply_chat_selections=12 reply_chat_known_personalities=12 "
+            "reply_chat_unknown_personalities=0 reply_chat_team_ready=0 "
+            "reply_chat_route_ready=4 reply_chat_item_taken=0 "
+            "reply_chat_objective_changed=4 reply_chat_flag_state=4 "
+            "reply_chat_enemy_sighted=0 reply_chat_low_health=0 "
+            "reply_chat_submitted=12 reply_chat_rate_limited=0 "
+            "reply_chat_duplicate_suppressed=0 reply_chat_failures=0 "
+            "reply_chat_phrase_variants=4 reply_chat_unique_variants=4 "
+            "last_reply_chat_client=3 "
+            "last_reply_chat_personality=2 last_reply_chat_phrase=1823 "
+            "last_reply_chat_variant=3 last_reply_chat_event=8 "
+            "live_chat_enabled=1 live_chat_events=16 "
+            "live_chat_spawn=4 live_chat_route_ready=4 "
+            "live_chat_item_taken=0 live_chat_objective_changed=4 "
+            "live_chat_flag_state=4 live_chat_enemy_sighted=0 "
+            "live_chat_low_health=0 live_chat_submitted=16 "
+            "live_chat_rate_limited=0 live_chat_duplicate_suppressed=0 "
+            "live_chat_failures=0 live_chat_event_taxonomy=11 "
+            "chat_duplicate_window_ms=5000 "
+            "last_duplicate_chat_client=-1 last_duplicate_chat_event=0 "
+            "last_duplicate_chat_event_name=none "
+            "last_duplicate_chat_phrase=0 "
+            "last_duplicate_chat_elapsed_ms=-1 "
+            "last_live_chat_event=8 last_live_chat_event_name=flag_state "
+            "last_dispatch_client=3 last_dispatch_team=0 "
+            "blocked_until_consumer=0 pass=1",
+        ]
+    if mode == 88:
+        return [
+            *common,
+            "q3a_bot_frame_command_status pass=1 frames=8 commands=0 "
+            "route_commands=0 route_failures=1 travel_type_goal_requests=1 "
+            "travel_type_goal_resolved=0 travel_type_goal_assignments=0 "
+            "travel_type_goal_start_warps=0 "
+            "travel_type_goal_expect_blocked=1",
+            "q3a_bot_chat_policy_status bots=1 humans=0 playing=1 "
+            "bot_playing=1 profile_chat_metadata=1 allow_chat=1 "
+            "team_only=0 consumer_ready=1 dispatch_enabled=1 "
+            "dispatch_attempts=2 dispatch_submitted=2 dispatch_failures=0 "
+            "dispatch_rate_limited=0 rate_limit_ms=0 "
+            "initial_chat_selections=1 initial_chat_known_personalities=1 "
+            "initial_chat_unknown_personalities=0 "
+            "initial_chat_phrase_variants=4 initial_chat_unique_variants=1 "
+            "last_initial_chat_variant=0 "
+            "reply_chat_enabled=1 reply_chat_events=1 "
+            "reply_chat_selections=1 reply_chat_known_personalities=1 "
+            "reply_chat_unknown_personalities=0 reply_chat_team_ready=0 "
+            "reply_chat_route_ready=0 reply_chat_item_taken=0 "
+            "reply_chat_objective_changed=0 reply_chat_flag_state=0 "
+            "reply_chat_enemy_sighted=0 reply_chat_low_health=0 "
+            "reply_chat_blocked=1 reply_chat_submitted=1 "
+            "reply_chat_rate_limited=0 reply_chat_duplicate_suppressed=0 "
+            "reply_chat_failures=0 reply_chat_phrase_variants=4 "
+            "reply_chat_unique_variants=1 last_reply_chat_client=0 "
+            "last_reply_chat_personality=1 last_reply_chat_phrase=2001 "
+            "last_reply_chat_variant=1 last_reply_chat_event=10 "
+            "live_chat_enabled=1 live_chat_events=2 "
+            "live_chat_spawn=1 live_chat_route_ready=0 "
+            "live_chat_item_taken=0 live_chat_objective_changed=0 "
+            "live_chat_flag_state=0 live_chat_enemy_sighted=0 "
+            "live_chat_low_health=0 live_chat_blocked=1 "
+            "live_chat_submitted=2 live_chat_rate_limited=0 "
+            "live_chat_duplicate_suppressed=0 live_chat_failures=0 "
+            "live_chat_event_taxonomy=11 chat_duplicate_window_ms=5000 "
+            "last_duplicate_chat_client=-1 last_duplicate_chat_event=0 "
+            "last_duplicate_chat_event_name=none last_duplicate_chat_phrase=0 "
+            "last_duplicate_chat_elapsed_ms=-1 "
+            "last_live_chat_event=10 last_live_chat_event_name=blocked "
+            "last_dispatch_client=0 last_dispatch_team=0 "
+            "blocked_until_consumer=0 pass=1",
+        ]
+    if mode == 89:
+        return [
+            *common,
+            "q3a_bot_frame_command_status pass=1 commands=32 route_commands=24 "
+            "route_failures=0 item_goal_assignments=2 expected_min_commands=4",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=1 "
+            "deathmatch=1 team_mode=1 gametype=3 bots=4 playing=4 "
+            "spectators=0 queued=0 free=0 red=2 blue=2",
+            "q3a_bot_objective_status team_objective_match_policy_tdm=1 "
+            "team_objective_resource_policy_evaluations=4 "
+            "team_objective_resource_policy_deny_enemy=2",
+            "q3a_bot_nav_policy_status team_resource_denial_evaluations=4 "
+            "team_resource_denial_policy_denies=2 "
+            "team_resource_denial_score_boosts=2 "
+            "team_resource_denial_selected_goals=1 "
+            "team_resource_denial_invalid_skips=0 "
+            "last_team_resource_denial_mode=2 "
+            "last_team_resource_denial_role=1 "
+            "last_team_resource_denial_lane=2 "
+            "last_team_resource_denial_category=4 "
+            "last_team_resource_denial_intent=4 "
+            "last_team_resource_denial_entity=7 "
+            "last_team_resource_denial_item=5 "
+            "last_team_resource_denial_score_boost=35",
+            "q3a_bot_chat_policy_status bots=4 humans=0 playing=4 "
+            "bot_playing=4 profile_chat_metadata=4 allow_chat=1 "
+            "team_only=0 consumer_ready=1 dispatch_enabled=1 "
+            "dispatch_attempts=12 dispatch_submitted=12 dispatch_failures=0 "
+            "dispatch_rate_limited=0 rate_limit_ms=0 "
+            "initial_chat_selections=4 initial_chat_known_personalities=4 "
+            "initial_chat_unknown_personalities=0 "
+            "initial_chat_phrase_variants=4 initial_chat_unique_variants=4 "
+            "last_initial_chat_variant=3 "
+            "reply_chat_enabled=1 reply_chat_events=8 "
+            "reply_chat_selections=8 reply_chat_known_personalities=8 "
+            "reply_chat_unknown_personalities=0 reply_chat_team_ready=0 "
+            "reply_chat_route_ready=4 reply_chat_item_taken=0 "
+            "reply_chat_item_denied=4 reply_chat_objective_changed=0 "
+            "reply_chat_flag_state=0 reply_chat_enemy_sighted=0 "
+            "reply_chat_low_health=0 reply_chat_blocked=0 "
+            "reply_chat_submitted=8 reply_chat_rate_limited=0 "
+            "reply_chat_duplicate_suppressed=0 reply_chat_failures=0 "
+            "reply_chat_phrase_variants=4 reply_chat_unique_variants=4 "
+            "last_reply_chat_client=3 "
+            "last_reply_chat_personality=2 last_reply_chat_phrase=1523 "
+            "last_reply_chat_variant=3 last_reply_chat_event=5 "
+            "live_chat_enabled=1 live_chat_events=12 "
+            "live_chat_spawn=4 live_chat_route_ready=4 "
+            "live_chat_item_taken=0 live_chat_item_denied=4 "
+            "live_chat_objective_changed=0 live_chat_flag_state=0 "
+            "live_chat_enemy_sighted=0 live_chat_low_health=0 "
+            "live_chat_blocked=0 live_chat_submitted=12 "
+            "live_chat_rate_limited=0 live_chat_duplicate_suppressed=0 "
+            "live_chat_failures=0 live_chat_event_taxonomy=11 "
+            "chat_duplicate_window_ms=5000 "
+            "last_duplicate_chat_client=-1 last_duplicate_chat_event=0 "
+            "last_duplicate_chat_event_name=none "
+            "last_duplicate_chat_phrase=0 "
+            "last_duplicate_chat_elapsed_ms=-1 "
+            "last_live_chat_event=5 last_live_chat_event_name=item_denied "
+            "last_dispatch_client=3 last_dispatch_team=0 "
+            "blocked_until_consumer=0 pass=1",
+        ]
+    if mode == 90:
+        return [
+            *common,
+            "q3a_bot_frame_command_status pass=1 commands=8 "
+            "route_commands=4 route_failures=0",
+            "q3a_bot_match_readiness_status tdm_pass=1 team_mode=1",
+            "q3a_bot_intermission_begin attempted=1 bot_count=4 "
+            "success=1 reason=begun map=q2dm1 intermission=1 "
+            "change_map_current=1 intermission_bots=4 "
+            "pm_freeze_bots=4 sorted_bots=4",
+            "q3a_bot_frame_command_smoke_match_result_intermission_requested "
+            "count=4 success=1",
+            "q3a_bot_intermission_status bots=4 humans=0 playing=4 "
+            "bot_playing=4 human_playing=0 spectators=0 connected_clients=4 "
+            "sorted_clients=4 sorted_bots=4 sorted_humans=0 intermission=1 "
+            "intermission_queued=0 post_intermission=0 ready_to_exit=0 "
+            "change_map_set=1 change_map_current=1 change_map=q2dm1 "
+            "current_map=q2dm1 intermission_bots=4 pm_freeze_bots=4 "
+            "freecam_bots=4 solid_not_bots=4 last_begin_attempted=1 "
+            "last_begin_success=1 last_begin_bot_count=4 "
+            "last_begin_reason=begun last_begin_map=q2dm1 "
+            "expected_bots=4 expected_humans=0 expected_playing=4 "
+            "expected_intermission=1 expected_pm_freeze_bots=4 "
+            "expected_post_intermission=0 expected_sorted_bots=4 pass=1",
+            "q3a_bot_chat_policy_status bots=4 humans=0 playing=4 "
+            "bot_playing=4 profile_chat_metadata=4 allow_chat=1 "
+            "team_only=0 consumer_ready=1 dispatch_enabled=1 "
+            "dispatch_attempts=12 dispatch_submitted=12 dispatch_failures=0 "
+            "dispatch_rate_limited=0 rate_limit_ms=0 "
+            "initial_chat_selections=4 initial_chat_known_personalities=4 "
+            "initial_chat_unknown_personalities=0 "
+            "initial_chat_phrase_variants=4 initial_chat_unique_variants=4 "
+            "last_initial_chat_variant=3 "
+            "reply_chat_enabled=1 reply_chat_events=8 "
+            "reply_chat_selections=8 reply_chat_known_personalities=8 "
+            "reply_chat_unknown_personalities=0 reply_chat_team_ready=0 "
+            "reply_chat_route_ready=4 reply_chat_item_taken=0 "
+            "reply_chat_item_denied=0 reply_chat_objective_changed=0 "
+            "reply_chat_flag_state=0 reply_chat_enemy_sighted=0 "
+            "reply_chat_low_health=0 reply_chat_blocked=0 "
+            "reply_chat_match_result=4 "
+            "reply_chat_submitted=8 reply_chat_rate_limited=0 "
+            "reply_chat_duplicate_suppressed=0 reply_chat_failures=0 "
+            "reply_chat_phrase_variants=4 reply_chat_unique_variants=4 "
+            "last_reply_chat_client=3 "
+            "last_reply_chat_personality=2 last_reply_chat_phrase=2123 "
+            "last_reply_chat_variant=3 last_reply_chat_event=11 "
+            "live_chat_enabled=1 live_chat_events=12 "
+            "live_chat_spawn=4 live_chat_route_ready=4 "
+            "live_chat_item_taken=0 live_chat_item_denied=0 "
+            "live_chat_objective_changed=0 live_chat_flag_state=0 "
+            "live_chat_enemy_sighted=0 live_chat_low_health=0 "
+            "live_chat_blocked=0 live_chat_match_result=4 "
+            "live_chat_submitted=12 live_chat_rate_limited=0 "
+            "live_chat_duplicate_suppressed=0 live_chat_failures=0 "
+            "live_chat_event_taxonomy=11 chat_duplicate_window_ms=5000 "
+            "last_duplicate_chat_client=-1 last_duplicate_chat_event=0 "
+            "last_duplicate_chat_event_name=none "
+            "last_duplicate_chat_phrase=0 "
+            "last_duplicate_chat_elapsed_ms=-1 "
+            "last_live_chat_event=11 last_live_chat_event_name=victory_defeat "
+            "last_dispatch_client=3 last_dispatch_team=0 "
+            "blocked_until_consumer=0 pass=1",
+        ]
+    if mode == 91:
+        return [
+            *common,
+            "q3a_bot_frame_command_status pass=1 commands=16 "
+            "route_commands=12 route_failures=0 travel_type_goal_requests=2 "
+            "travel_type_goal_resolved=2 travel_type_goal_assignments=2",
+            "q3a_bot_coop_readiness_status pass=1 coop=1 bots=2 "
+            "playing=2 spectators=0 queued=0",
+            "q3a_bot_match_readiness_status ffa_pass=0 tdm_pass=0 "
+            "deathmatch=0 team_mode=0 gametype=0 bots=2 playing=2 "
+            "spectators=0 queued=0 free=2 red=0 blue=0",
+            "q3a_bot_coop_command_status "
+            "coop_leader_route_activations=4 "
+            "coop_leader_route_spacing_sources=4 "
+            "coop_progress_wait_requests=8 "
+            "coop_progress_wait_policy_waits=4 "
+            "coop_progress_wait_commands=4 "
+            "last_coop_progress_wait_intent=2 "
+            "coop_anti_block_requests=8 "
+            "coop_anti_block_policy_close=4 "
+            "coop_anti_block_commands=4 "
+            "coop_interaction_retry_requests=8 "
+            "coop_interaction_retry_activations=4 "
+            "coop_interaction_retry_commands=4 "
+            "coop_door_elevator_requests=8 "
+            "coop_door_elevator_source_activations=1 "
+            "coop_door_elevator_source_commands=4 "
+            "coop_door_elevator_hold_commands=4 "
+            "last_coop_door_elevator_client=1 "
+            "last_coop_door_elevator_source_client=0 "
+            "last_coop_door_elevator_action=3 "
+            "last_coop_door_elevator_kind=1 "
+            "last_coop_door_elevator_entity=17 "
+            "last_coop_door_elevator_intent=5 "
+            "last_coop_door_elevator_intent_name=support_combat "
+            "last_coop_interaction_retry_action=3 "
+            "last_coop_interaction_retry_kind=1",
+            "q3a_bot_nav_policy_status nav_interaction_elevator_activations=1 "
+            "nav_interaction_activations=2 nav_interaction_candidates=2 "
+            "nav_interaction_checks=4",
+            "q3a_bot_objective_status team_objective_coop_policy_wait=4 "
+            "team_objective_coop_policy_support=0",
+        ]
     raise AssertionError(f"unexpected reserved mode: {mode}")
 
 
@@ -1621,6 +1943,83 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertTrue(
             all(result["passed"] for result in live_loop_results),
             live_loop_results,
+        )
+
+    def test_coop_campaign_interaction_matrix_catalog_and_marker_checks(self) -> None:
+        scenario = harness.scenario_map()["coop_campaign_interaction_matrix"]
+        report = harness.catalog_report([scenario])
+        row = report["scenarios"][0]
+
+        self.assertEqual(row["status"], "implemented")
+        self.assertEqual(row["smoke_mode"], 91)
+        self.assertEqual(row["map_name"], "base1")
+        self.assertEqual(
+            row["selection_tags"],
+            ["match", "coop", "interaction", "movement", "maps", "campaign"],
+        )
+        self.assertEqual(
+            row["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+                {"name": "sg_bot_coop_live_loop", "value": "1"},
+            ],
+        )
+
+        required_marker_metrics = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in row["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 91),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "map", "eq", "base1"),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "coop_live_loop", "eq", 1),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_interaction_retry_commands", "ge", 1),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_door_elevator_source_commands", "ge", 1),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_door_elevator_hold_commands", "ge", 1),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_door_elevator_kind", "ge", 1),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_door_elevator_entity", "gt", 0),
+            required_marker_metrics,
+        )
+        self.assertIn(
+            (harness.NAV_POLICY_STATUS_MARKER, "nav_interaction_candidates", "ge", 1),
+            required_marker_metrics,
+        )
+
+        text = passing_raw_reserved_mode_text(91)
+        marker_metrics = harness.parse_marker_metrics(
+            text,
+            {check.marker for check in scenario.marker_checks},
+        )
+        matrix_results = [
+            harness.evaluate_marker_check(check, marker_metrics)
+            for check in scenario.marker_checks
+        ]
+
+        self.assertTrue(
+            all(result["passed"] for result in matrix_results),
+            matrix_results,
         )
 
     def test_coop_share_loop_catalog_and_marker_checks(self) -> None:
@@ -3062,6 +3461,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         target_share = scenarios["coop_target_share"]
         door_elevator = scenarios["coop_door_elevator"]
         coop_live_loop = scenarios["coop_live_loop"]
+        coop_campaign_interaction_matrix = scenarios["coop_campaign_interaction_matrix"]
         coop_share_loop = scenarios["coop_share_loop"]
         ffa_roam_route = scenarios["ffa_roam_route"]
         ffa_spawn_camp_avoidance = scenarios["ffa_spawn_camp_avoidance"]
@@ -3117,6 +3517,10 @@ class BotScenarioHarnessTests(unittest.TestCase):
         bot_chat_live_low_health = scenarios["bot_chat_live_low_health"]
         bot_chat_live_item_taken = scenarios["bot_chat_live_item_taken"]
         bot_chat_live_objective_changed = scenarios["bot_chat_live_objective_changed"]
+        bot_chat_live_flag_state = scenarios["bot_chat_live_flag_state"]
+        bot_chat_live_blocked = scenarios["bot_chat_live_blocked"]
+        bot_chat_live_item_denied = scenarios["bot_chat_live_item_denied"]
+        bot_chat_live_match_result = scenarios["bot_chat_live_match_result"]
         progress_wait = scenarios["coop_progress_wait"]
         interaction_retry = scenarios["coop_interaction_retry"]
         report = harness.catalog_report([
@@ -3134,6 +3538,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             target_share,
             door_elevator,
             coop_live_loop,
+            coop_campaign_interaction_matrix,
             coop_share_loop,
             ffa_roam_route,
             ffa_spawn_camp_avoidance,
@@ -3189,12 +3594,16 @@ class BotScenarioHarnessTests(unittest.TestCase):
             bot_chat_live_low_health,
             bot_chat_live_item_taken,
             bot_chat_live_objective_changed,
+            bot_chat_live_flag_state,
+            bot_chat_live_blocked,
+            bot_chat_live_item_denied,
+            bot_chat_live_match_result,
             progress_wait,
             interaction_retry,
         ])
         rows = {row["name"]: row for row in report["scenarios"]}
 
-        self.assertEqual(report["summary"]["implemented"], 71)
+        self.assertEqual(report["summary"]["implemented"], 76)
         self.assertEqual(report["summary"]["pending"], 0)
         self.assertEqual(rows["team_objective"]["smoke_mode"], 23)
         self.assertEqual(rows["aim_fairness_policy_integration"]["smoke_mode"], 24)
@@ -3210,6 +3619,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(rows["coop_target_share"]["smoke_mode"], 30)
         self.assertEqual(rows["coop_door_elevator"]["smoke_mode"], 31)
         self.assertEqual(rows["coop_live_loop"]["smoke_mode"], 77)
+        self.assertEqual(rows["coop_campaign_interaction_matrix"]["smoke_mode"], 91)
+        self.assertEqual(rows["coop_campaign_interaction_matrix"]["map_name"], "base1")
         self.assertEqual(rows["coop_share_loop"]["smoke_mode"], 78)
         self.assertEqual(rows["ffa_roam_route"]["smoke_mode"], 42)
         self.assertEqual(rows["ffa_spawn_camp_avoidance"]["smoke_mode"], 45)
@@ -3268,6 +3679,10 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(rows["bot_chat_live_low_health"]["smoke_mode"], 84)
         self.assertEqual(rows["bot_chat_live_item_taken"]["smoke_mode"], 85)
         self.assertEqual(rows["bot_chat_live_objective_changed"]["smoke_mode"], 86)
+        self.assertEqual(rows["bot_chat_live_flag_state"]["smoke_mode"], 87)
+        self.assertEqual(rows["bot_chat_live_blocked"]["smoke_mode"], 88)
+        self.assertEqual(rows["bot_chat_live_item_denied"]["smoke_mode"], 89)
+        self.assertEqual(rows["bot_chat_live_match_result"]["smoke_mode"], 90)
         self.assertEqual(rows["coop_progress_wait"]["smoke_mode"], 3)
         self.assertEqual(rows["coop_interaction_retry"]["smoke_mode"], 12)
         self.assertEqual(
@@ -3334,6 +3749,14 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             rows["coop_live_loop"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "0"},
+                {"name": "coop", "value": "1"},
+                {"name": "sg_bot_coop_live_loop", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["coop_campaign_interaction_matrix"]["extra_cvars"],
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
@@ -3725,6 +4148,45 @@ class BotScenarioHarnessTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            rows["bot_chat_live_flag_state"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "1"},
+                {"name": "g_gametype", "value": "5"},
+                {"name": "sg_bot_allow_chat", "value": "1"},
+                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "sg_bot_ctf_objective_route", "value": "1"},
+                {"name": "sg_bot_ctf_objective_transitions", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["bot_chat_live_blocked"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "1"},
+                {"name": "g_gametype", "value": "1"},
+                {"name": "sg_bot_allow_chat", "value": "1"},
+                {"name": "sg_bot_chat_live_events", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["bot_chat_live_item_denied"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "1"},
+                {"name": "g_gametype", "value": "3"},
+                {"name": "sg_bot_allow_chat", "value": "1"},
+                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "sg_bot_team_resource_denial", "value": "1"},
+            ],
+        )
+        self.assertEqual(
+            rows["bot_chat_live_match_result"]["extra_cvars"],
+            [
+                {"name": "deathmatch", "value": "1"},
+                {"name": "g_gametype", "value": "3"},
+                {"name": "sg_bot_allow_chat", "value": "1"},
+                {"name": "sg_bot_chat_live_events", "value": "1"},
+            ],
+        )
+        self.assertEqual(
             rows["coop_interaction_retry"]["extra_cvars"],
             [
                 {"name": "deathmatch", "value": "0"},
@@ -4069,6 +4531,43 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertIn(
             (harness.OBJECTIVE_STATUS_MARKER, "team_objective_coop_policy_support", "ge", 1),
             coop_live_loop_marker_required,
+        )
+
+        coop_campaign_matrix_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["coop_campaign_interaction_matrix"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 91),
+            coop_campaign_matrix_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "map", "eq", "base1"),
+            coop_campaign_matrix_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "coop_live_loop", "eq", 1),
+            coop_campaign_matrix_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_interaction_retry_commands", "ge", 1),
+            coop_campaign_matrix_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "coop_door_elevator_source_commands", "ge", 1),
+            coop_campaign_matrix_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_door_elevator_kind", "ge", 1),
+            coop_campaign_matrix_marker_required,
+        )
+        self.assertIn(
+            (harness.COOP_COMMAND_STATUS_MARKER, "last_coop_door_elevator_entity", "gt", 0),
+            coop_campaign_matrix_marker_required,
+        )
+        self.assertIn(
+            (harness.NAV_POLICY_STATUS_MARKER, "nav_interaction_candidates", "ge", 1),
+            coop_campaign_matrix_marker_required,
         )
 
         coop_share_loop_marker_required = {
@@ -6771,9 +7270,178 @@ class BotScenarioHarnessTests(unittest.TestCase):
             (harness.CHAT_POLICY_STATUS_MARKER, "live_chat_objective_changed", "ge", 4),
             bot_chat_objective_changed_marker_required,
         )
+
+        bot_chat_flag_state_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["bot_chat_live_flag_state"]["required_marker_metrics"]
+        }
         self.assertIn(
-            (harness.CHAT_POLICY_STATUS_MARKER, "last_live_chat_event_name", "eq", "objective_changed"),
-            bot_chat_objective_changed_marker_required,
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 87),
+            bot_chat_flag_state_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "gametype", "eq", 5),
+            bot_chat_flag_state_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target", "ge", 4),
+            bot_chat_flag_state_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "bot_chat_live_flag_state", "eq", 1),
+            bot_chat_flag_state_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "ctf_objective_transitions", "eq", 1),
+            bot_chat_flag_state_marker_required,
+        )
+        self.assertIn(
+            (harness.OBJECTIVE_STATUS_MARKER, "team_objective_flag_pickups", "ge", 1),
+            bot_chat_flag_state_marker_required,
+        )
+        self.assertIn(
+            (harness.OBJECTIVE_STATUS_MARKER, "team_objective_flag_drops", "ge", 1),
+            bot_chat_flag_state_marker_required,
+        )
+        self.assertIn(
+            (harness.OBJECTIVE_STATUS_MARKER, "team_objective_flag_returns", "ge", 1),
+            bot_chat_flag_state_marker_required,
+        )
+        self.assertIn(
+            (harness.CHAT_POLICY_STATUS_MARKER, "reply_chat_flag_state", "ge", 4),
+            bot_chat_flag_state_marker_required,
+        )
+        self.assertIn(
+            (harness.CHAT_POLICY_STATUS_MARKER, "live_chat_flag_state", "ge", 4),
+            bot_chat_flag_state_marker_required,
+        )
+
+        bot_chat_blocked_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["bot_chat_live_blocked"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 88),
+            bot_chat_blocked_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "gametype", "eq", 1),
+            bot_chat_blocked_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target", "ge", 1),
+            bot_chat_blocked_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "bot_chat_live_blocked", "eq", 1),
+            bot_chat_blocked_marker_required,
+        )
+        self.assertIn(
+            (harness.STATUS_MARKER, "route_failures", "ge", 1),
+            bot_chat_blocked_marker_required,
+        )
+        self.assertIn(
+            (harness.CHAT_POLICY_STATUS_MARKER, "reply_chat_blocked", "ge", 1),
+            bot_chat_blocked_marker_required,
+        )
+        self.assertIn(
+            (harness.CHAT_POLICY_STATUS_MARKER, "live_chat_blocked", "ge", 1),
+            bot_chat_blocked_marker_required,
+        )
+
+        bot_chat_item_denied_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["bot_chat_live_item_denied"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 89),
+            bot_chat_item_denied_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "gametype", "eq", 3),
+            bot_chat_item_denied_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target", "ge", 4),
+            bot_chat_item_denied_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "bot_chat_live_item_denied", "eq", 1),
+            bot_chat_item_denied_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "team_resource_denial", "eq", 1),
+            bot_chat_item_denied_marker_required,
+        )
+        self.assertIn(
+            (harness.NAV_POLICY_STATUS_MARKER, "team_resource_denial_policy_denies", "ge", 1),
+            bot_chat_item_denied_marker_required,
+        )
+        self.assertIn(
+            (harness.NAV_POLICY_STATUS_MARKER, "last_team_resource_denial_intent", "eq", 4),
+            bot_chat_item_denied_marker_required,
+        )
+        self.assertIn(
+            (harness.CHAT_POLICY_STATUS_MARKER, "reply_chat_item_denied", "ge", 1),
+            bot_chat_item_denied_marker_required,
+        )
+        self.assertIn(
+            (harness.CHAT_POLICY_STATUS_MARKER, "live_chat_item_denied", "ge", 1),
+            bot_chat_item_denied_marker_required,
+        )
+
+        bot_chat_match_result_marker_required = {
+            (check["source"], check["metric"], check["op"], check["expected"])
+            for check in rows["bot_chat_live_match_result"]["required_marker_metrics"]
+        }
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "mode", "eq", 90),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "gametype", "eq", 3),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "target", "ge", 4),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            (harness.SCENARIO_BEGIN_MARKER, "bot_chat_live_match_result", "eq", 1),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            (
+                "q3a_bot_frame_command_smoke_match_result_intermission_requested",
+                "success",
+                "eq",
+                1,
+            ),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            ("q3a_bot_intermission_begin", "success", "eq", 1),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            (harness.INTERMISSION_STATUS_MARKER, "intermission", "eq", 1),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            (harness.INTERMISSION_STATUS_MARKER, "intermission_bots", "eq", 4),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            (harness.CHAT_POLICY_STATUS_MARKER, "reply_chat_match_result", "ge", 1),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            (harness.CHAT_POLICY_STATUS_MARKER, "live_chat_match_result", "ge", 1),
+            bot_chat_match_result_marker_required,
+        )
+        self.assertIn(
+            (harness.CHAT_POLICY_STATUS_MARKER, "last_live_chat_event_name", "eq", "victory_defeat"),
+            bot_chat_match_result_marker_required,
         )
 
         progress_wait_marker_required = {
@@ -6973,6 +7641,29 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertLess(
             coop_live_loop_command.index("sg_bot_coop_live_loop"),
             coop_live_loop_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        coop_campaign_matrix_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            scenarios["coop_campaign_interaction_matrix"],
+            "basew",
+            "mm-rage",
+            27980,
+            "coop_campaign_interaction_matrix",
+        )
+        self.assertEqual(coop_campaign_matrix_command[coop_campaign_matrix_command.index("coop") + 1], "1")
+        self.assertEqual(
+            coop_campaign_matrix_command[coop_campaign_matrix_command.index("sg_bot_coop_live_loop") + 1],
+            "1",
+        )
+        self.assertEqual(
+            coop_campaign_matrix_command[coop_campaign_matrix_command.index("+map") + 1],
+            "base1",
+        )
+        self.assertLess(
+            coop_campaign_matrix_command.index("sg_bot_coop_live_loop"),
+            coop_campaign_matrix_command.index("sv_bot_frame_command_smoke"),
         )
 
         coop_share_loop_command = harness.build_command(
@@ -8227,6 +8918,213 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertLess(
             bot_chat_objective_changed_command.index("sg_bot_ctf_objective_transitions"),
             bot_chat_objective_changed_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        bot_chat_flag_state_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            bot_chat_live_flag_state,
+            "basew",
+            "mm-rage",
+            28009,
+            "bot_chat_live_flag_state",
+        )
+        self.assertEqual(
+            bot_chat_flag_state_command[
+                bot_chat_flag_state_command.index("deathmatch") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_flag_state_command[
+                bot_chat_flag_state_command.index("g_gametype") + 1
+            ],
+            "5",
+        )
+        self.assertEqual(
+            bot_chat_flag_state_command[
+                bot_chat_flag_state_command.index("sg_bot_allow_chat") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_flag_state_command[
+                bot_chat_flag_state_command.index("sg_bot_chat_live_events") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_flag_state_command[
+                bot_chat_flag_state_command.index("sg_bot_ctf_objective_route") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_flag_state_command[
+                bot_chat_flag_state_command.index("sg_bot_ctf_objective_transitions") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_flag_state_command[
+                bot_chat_flag_state_command.index("sv_bot_frame_command_smoke") + 1
+            ],
+            "87",
+        )
+        self.assertNotIn("sg_bot_behavior_enable", bot_chat_flag_state_command)
+        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_flag_state_command)
+        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_flag_state_command)
+        self.assertLess(
+            bot_chat_flag_state_command.index("sg_bot_ctf_objective_transitions"),
+            bot_chat_flag_state_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        bot_chat_blocked_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            bot_chat_live_blocked,
+            "basew",
+            "mm-rage",
+            28010,
+            "bot_chat_live_blocked",
+        )
+        self.assertEqual(
+            bot_chat_blocked_command[
+                bot_chat_blocked_command.index("deathmatch") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_blocked_command[
+                bot_chat_blocked_command.index("g_gametype") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_blocked_command[
+                bot_chat_blocked_command.index("sg_bot_allow_chat") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_blocked_command[
+                bot_chat_blocked_command.index("sg_bot_chat_live_events") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_blocked_command[
+                bot_chat_blocked_command.index("sv_bot_frame_command_smoke") + 1
+            ],
+            "88",
+        )
+        self.assertNotIn("sg_bot_behavior_enable", bot_chat_blocked_command)
+        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_blocked_command)
+        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_blocked_command)
+        self.assertLess(
+            bot_chat_blocked_command.index("sg_bot_chat_live_events"),
+            bot_chat_blocked_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        bot_chat_item_denied_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            bot_chat_live_item_denied,
+            "basew",
+            "mm-rage",
+            28010,
+            "bot_chat_live_item_denied",
+        )
+        self.assertEqual(
+            bot_chat_item_denied_command[
+                bot_chat_item_denied_command.index("deathmatch") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_item_denied_command[
+                bot_chat_item_denied_command.index("g_gametype") + 1
+            ],
+            "3",
+        )
+        self.assertEqual(
+            bot_chat_item_denied_command[
+                bot_chat_item_denied_command.index("sg_bot_allow_chat") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_item_denied_command[
+                bot_chat_item_denied_command.index("sg_bot_chat_live_events") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_item_denied_command[
+                bot_chat_item_denied_command.index("sg_bot_team_resource_denial") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_item_denied_command[
+                bot_chat_item_denied_command.index("sv_bot_frame_command_smoke") + 1
+            ],
+            "89",
+        )
+        self.assertNotIn("sg_bot_behavior_enable", bot_chat_item_denied_command)
+        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_item_denied_command)
+        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_item_denied_command)
+        self.assertLess(
+            bot_chat_item_denied_command.index("sg_bot_team_resource_denial"),
+            bot_chat_item_denied_command.index("sv_bot_frame_command_smoke"),
+        )
+
+        bot_chat_match_result_command = harness.build_command(
+            pathlib.Path(".install/worr_ded_x86_64.exe"),
+            pathlib.Path(".install"),
+            bot_chat_live_match_result,
+            "basew",
+            "mm-rage",
+            28011,
+            "bot_chat_live_match_result",
+        )
+        self.assertEqual(
+            bot_chat_match_result_command[
+                bot_chat_match_result_command.index("deathmatch") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_match_result_command[
+                bot_chat_match_result_command.index("g_gametype") + 1
+            ],
+            "3",
+        )
+        self.assertEqual(
+            bot_chat_match_result_command[
+                bot_chat_match_result_command.index("sg_bot_allow_chat") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_match_result_command[
+                bot_chat_match_result_command.index("sg_bot_chat_live_events") + 1
+            ],
+            "1",
+        )
+        self.assertEqual(
+            bot_chat_match_result_command[
+                bot_chat_match_result_command.index("sv_bot_frame_command_smoke") + 1
+            ],
+            "90",
+        )
+        self.assertNotIn("sg_bot_behavior_enable", bot_chat_match_result_command)
+        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_match_result_command)
+        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_match_result_command)
+        self.assertNotIn("sg_bot_team_resource_denial", bot_chat_match_result_command)
+        self.assertLess(
+            bot_chat_match_result_command.index("sg_bot_chat_live_events"),
+            bot_chat_match_result_command.index("sv_bot_frame_command_smoke"),
         )
 
         progress_wait_command = harness.build_command(
@@ -10917,6 +11815,66 @@ class BotScenarioHarnessTests(unittest.TestCase):
             if not result["passed"]
         ]
         self.assertEqual(bot_chat_objective_changed_failed, [])
+
+        bot_chat_live_flag_state = harness.scenario_map()["bot_chat_live_flag_state"]
+        bot_chat_flag_state_marker_metrics = harness.parse_marker_metrics(
+            passing_raw_reserved_mode_text(87),
+            {check.marker for check in bot_chat_live_flag_state.marker_checks},
+        )
+        bot_chat_flag_state_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, bot_chat_flag_state_marker_metrics)
+                for check in bot_chat_live_flag_state.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(bot_chat_flag_state_failed, [])
+
+        bot_chat_live_blocked = harness.scenario_map()["bot_chat_live_blocked"]
+        bot_chat_blocked_marker_metrics = harness.parse_marker_metrics(
+            passing_raw_reserved_mode_text(88),
+            {check.marker for check in bot_chat_live_blocked.marker_checks},
+        )
+        bot_chat_blocked_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, bot_chat_blocked_marker_metrics)
+                for check in bot_chat_live_blocked.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(bot_chat_blocked_failed, [])
+
+        bot_chat_live_item_denied = harness.scenario_map()["bot_chat_live_item_denied"]
+        bot_chat_item_denied_marker_metrics = harness.parse_marker_metrics(
+            passing_raw_reserved_mode_text(89),
+            {check.marker for check in bot_chat_live_item_denied.marker_checks},
+        )
+        bot_chat_item_denied_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, bot_chat_item_denied_marker_metrics)
+                for check in bot_chat_live_item_denied.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(bot_chat_item_denied_failed, [])
+
+        bot_chat_live_match_result = harness.scenario_map()["bot_chat_live_match_result"]
+        bot_chat_match_result_marker_metrics = harness.parse_marker_metrics(
+            passing_raw_reserved_mode_text(90),
+            {check.marker for check in bot_chat_live_match_result.marker_checks},
+        )
+        bot_chat_match_result_failed = [
+            result
+            for result in (
+                harness.evaluate_marker_check(check, bot_chat_match_result_marker_metrics)
+                for check in bot_chat_live_match_result.marker_checks
+            )
+            if not result["passed"]
+        ]
+        self.assertEqual(bot_chat_match_result_failed, [])
 
         team_fire_avoidance = harness.scenario_map()["team_fire_avoidance"]
         team_fire_avoidance_text = "\n".join((

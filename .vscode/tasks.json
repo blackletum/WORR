@@ -61,6 +61,40 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "bot debug: build",
+            "dependsOn": [
+                "meson: build"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
+            "label": "bot debug: coop campaign matrix smoke",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "tools/bot_scenarios/run_bot_scenarios.py",
+                "--scenario",
+                "coop_campaign_interaction_matrix",
+                "--timeout",
+                "120",
+                "--base-port",
+                "28000",
+                "--format",
+                "text",
+                "--json-out",
+                ".tmp/bot_scenarios/vscode_bot_debug_latest.json"
+            ],
+            "dependsOn": [
+                "bot debug: build"
+            ],
+            "dependsOrder": "sequence",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
         }
     ]
 }

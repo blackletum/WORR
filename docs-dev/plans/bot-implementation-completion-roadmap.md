@@ -1,6 +1,6 @@
 # Full Bot Implementation Completion Roadmap
 
-Date: 2026-06-23
+Date: 2026-06-26
 
 Status: Living roadmap for post-checklist bot completion.
 
@@ -41,17 +41,17 @@ canonical strategic roadmap.
 
 ## Current Baseline
 
-Snapshot from 2026-06-23 after the bot chat live item-taken round:
+Snapshot from 2026-06-26 after the coop campaign interaction matrix round:
 
 | Area | Current State |
 |---|---|
 | Original phase checklist | `809/809` phase items complete. |
 | Raw markdown checklist | `809/809` rows complete. |
-| Scenario catalog | `93` implemented rows, with `0` pending rows. |
+| Scenario catalog | `99` implemented rows, with `0` pending rows. |
 | Default pending rows | `0`. |
-| Highest bot frame-command smoke mode | `85`. |
-| Latest aggregate artifact | `.tmp\bot_scenarios\20260623T051133Z`, with `93/93` `implemented` rows passing. |
-| Latest focused artifact | `.tmp\bot_scenarios\20260623T051126Z` for `bot_chat_live_item_taken`; `.tmp\bot_scenarios\20260623T025752Z` remains the low-health proof; `.tmp\bot_scenarios\20260623T023211Z` remains the duplicate-suppression proof. |
+| Highest bot frame-command smoke mode | `91`. |
+| Latest aggregate artifact | `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z`, with `99/99` `implemented` rows passing. |
+| Latest focused artifact | `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z` for `coop_campaign_interaction_matrix`; `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z` remains the match-result proof. |
 | Core runtime | Q3A BotLib/AAS loads generated AAS, updates entity snapshots, routes bots, and emits source counters. |
 | Bot lifecycle | Server-owned fake clients can be added, removed, auto-filled, cleaned up, and classified in match flow. |
 | Profiles | Q3-style WORR botfiles load behavior metadata, roles, movement style, item policy, team policy, aim hints, and chat personality. |
@@ -88,9 +88,9 @@ of the following are true:
 | M1 | Live Behavior Arbitration | `FR-04-T02`, `FR-04-T15` | Done for initial live owner model | The bot brain now exposes ordered owner arbitration, cvar classification, handoff status, and mode `63` runtime proof. |
 | M2 | Combat And Inventory Depth | `FR-04-T03`, `FR-04-T15` | In progress; target-memory, weapon-scoring, aim/fire policy, ammo-pressure, survival-inventory, survival-health/armor routing, threat-retreat avoidance, compact combat regression, q2dm2/q2dm8 map regressions, and full-suite smoke contract reconciliation done | Bots fight with sensible weapons, aim, ammo, inventory, and survival decisions. |
 | M3 | Multiplayer Mode Intelligence | `FR-04-T04`, `FR-04-T06`, `FR-04-T15` | In progress; CTF objective live-loop and transition proofs, TDM role spawn-stability, FFA live-pacing, and Duel live-pacing proofs done | Bots play FFA, Duel, TDM, and CTF objectives coherently. |
-| M4 | Coop And Campaign Behavior | `FR-04-T04`, `FR-04-T05`, `FR-04-T15` | In progress; coop live-loop and target/resource share aggregate proofs done | Bots help rather than block campaign and coop progression. |
-| M5 | Chat And Personality | `FR-04-T07`, `FR-04-T15` | In progress; live spawn, route-ready, enemy-sighted, low-health, and item-taken events, global cooldown, duplicate suppression, and four-variant phrase libraries done | Profile personality influences safe live communication and behavior flavor. |
-| M6 | Map, AAS, And Movement Coverage | `FR-04-T05`, `FR-04-T11`, `FR-04-T14`, `FR-04-T16` | Planned | Bots have reliable navigation evidence across representative map families. |
+| M4 | Coop And Campaign Behavior | `FR-04-T04`, `FR-04-T05`, `FR-04-T15` | In progress; coop live-loop, target/resource share, and first campaign interaction matrix proofs done | Bots help rather than block campaign and coop progression. |
+| M5 | Chat And Personality | `FR-04-T07`, `FR-04-T15` | In progress; live spawn, route-ready, enemy-sighted, low-health, item-taken, objective-changed, flag-state, blocked, item-denied, and match-result events, global cooldown, duplicate suppression, and four-variant phrase libraries done | Profile personality influences safe live communication and behavior flavor. |
+| M6 | Map, AAS, And Movement Coverage | `FR-04-T05`, `FR-04-T11`, `FR-04-T14`, `FR-04-T16` | In progress; first coop campaign map-matrix row done on `base1` | Bots have reliable navigation evidence across representative map families. |
 | M7 | Performance, Soak, And Reliability | `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-03-T05` | Planned | Performance budgets and long-run behavior are stable enough to ship. |
 | M8 | Productization And Release Readiness | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | Planned | Operator docs, defaults, packaging, and release notes are complete. |
 
@@ -115,7 +115,7 @@ Delivered:
 - Behavior proof surfaces for combat, items, roles, CTF objectives, coop
   helpers, match flow, profile hints, behavior umbrella, and bot chat policy.
 - Scenario harness, pending-gap tooling, raw marker parsing, source-counter
-  parsing, perf analysis, manual high-bot soak policy, and 93 implemented
+  parsing, perf analysis, manual high-bot soak policy, and 99 implemented
   catalog rows.
 
 Keep this milestone stable by preserving existing smoke scenarios whenever a
@@ -144,7 +144,7 @@ Implemented slices:
 
 Validation gates:
 
-- Existing modes `20` through `84` are implemented in the catalog.
+- Existing modes `20` through `91` are implemented in the catalog.
 - `behavior_arbitration` proves route, item, and combat candidates plus combat
   ownership without setting individual proof cvars.
 - No smoke-only cvar is required for the M1 behavior arbitration proof.
@@ -225,6 +225,50 @@ Latest validation note:
   `last_live_chat_event_name=item_taken`. Focused validation passed from
   `.tmp\bot_scenarios\20260623T051126Z`, and the full 93-row implemented suite
   passed from `.tmp\bot_scenarios\20260623T051133Z`.
+- The bot chat live objective-changed implemented run added mode `86`
+  `bot_chat_live_objective_changed`, proving real CTF pickup, death-drop, and
+  dropped-flag return transitions can emit event id `7` / `objective_changed`
+  through the live chat pipeline while recording `reply_chat_objective_changed=4`,
+  `live_chat_objective_changed=4`, `live_chat_event_taxonomy=11`, and zero
+  dispatch, reply, or live failures. Focused validation passed from
+  `.tmp\bot_scenarios\20260626T140601Z`, and the full 94-row implemented suite
+  passed from `.tmp\bot_scenarios\20260626T140621Z`.
+- The bot chat live flag-state implemented run added mode `87`
+  `bot_chat_live_flag_state`, proving real CTF pickup, death-drop, and
+  dropped-flag return observations can emit event id `8` / `flag_state`
+  through the live chat pipeline while recording `reply_chat_flag_state=4`,
+  `live_chat_flag_state=4`, `live_chat_event_taxonomy=11`, and zero dispatch,
+  reply, or live failures. Focused validation passed from
+  `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`, and the full
+  95-row implemented suite passed from
+  `.tmp\bot_scenarios\20260626Timplemented-flagstate-fixed\20260626T144511Z`.
+- The bot chat live blocked implemented run added mode `88`
+  `bot_chat_live_blocked`, proving a blocked rocketjump travel-type route
+  failure can emit event id `10` / `blocked` through the live chat pipeline
+  while recording `reply_chat_blocked=1`, `live_chat_blocked=1`,
+  `live_chat_event_taxonomy=11`, and zero dispatch, reply, or live failures.
+  Focused validation passed from
+  `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`, and the full
+  96-row implemented suite passed from
+  `.tmp\bot_scenarios\20260626Timplemented-blocked\20260626T151446Z`.
+- The bot chat live item-denied implemented run added mode `89`
+  `bot_chat_live_item_denied`, proving TDM deny-enemy resource policy pressure
+  can emit event id `5` / `item_denied` through the live chat pipeline while
+  recording `reply_chat_item_denied=4`, `live_chat_item_denied=4`,
+  `team_resource_denial_policy_denies=112`, `live_chat_event_taxonomy=11`, and
+  zero dispatch, reply, or live failures. Focused validation passed from
+  `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`, and the full
+  97-row implemented suite passed from
+  `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- The bot chat live match-result implemented run added mode `90`
+  `bot_chat_live_match_result`, proving the native intermission/match-result
+  path can emit event id `11` / `victory_defeat` through the live chat pipeline
+  while recording `reply_chat_match_result=4`, `live_chat_match_result=4`,
+  `intermission_bots=4`, `pm_freeze_bots=4`, `live_chat_event_taxonomy=11`,
+  and zero dispatch, reply, or live failures. Focused validation passed from
+  `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`, and the full
+  98-row implemented suite passed from
+  `.tmp\bot_scenarios\20260626Timplemented-match-result\20260626T182111Z`.
 - The later bot chat live enemy-sighted implemented run preserved the full
   `implemented` catalog from `.tmp\bot_scenarios\20260623T013843Z`,
   reporting `89` passed rows,
@@ -350,9 +394,20 @@ Latest validation note:
   `team_objective_coop_policy_resource_share=129`,
   `team_objective_resource_policy_reserve=56`,
   `item_reserved_deferrals=62`, and `coop_target_share_adoptions=1`.
-- The follow-up bot chat live item-taken implemented run passed the full
-  93-row catalog from `.tmp\bot_scenarios\20260623T051133Z` with `0` failures,
-  timeouts, errors, or pending rows.
+- Focused coop campaign interaction matrix validation passed from
+  `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`.
+  The row recorded `mode=91`, `map=base1`, `coop_live_loop=1`, `frames=121`,
+  `commands=121`, `route_commands=61`, `route_failures=0`,
+  `coop_leader_route_activations=60`, `coop_progress_wait_commands=60`,
+  `coop_interaction_retry_commands=3`,
+  `coop_door_elevator_source_commands=3`,
+  `coop_door_elevator_hold_commands=60`,
+  `last_coop_door_elevator_entity=360`,
+  `nav_interaction_activations=3`, and `nav_interaction_candidates=21`.
+- The follow-up coop campaign interaction matrix implemented run passed the
+  full 99-row catalog from
+  `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z`
+  with `0` failures, timeouts, errors, or pending rows.
 
 Validation gates:
 
@@ -364,9 +419,10 @@ Validation gates:
 
 ## M5: Chat And Personality
 
-Status: In progress; live spawn, route-ready, enemy-sighted, low-health, and
-item-taken event coverage, global cooldown suppression, duplicate suppression,
-and four-variant phrase libraries are implemented.
+Status: In progress; live spawn, route-ready, enemy-sighted, low-health,
+item-taken, objective-changed, flag-state, blocked, item-denied, and match-result event
+coverage, global cooldown suppression, duplicate suppression, and four-variant
+phrase libraries are implemented.
 
 Goal: convert profile chat metadata from smoke proof into safe, useful live
 personality.
@@ -375,7 +431,7 @@ Implementation slices:
 
 | Order | Slice | Details | Done When |
 |---|---|---|---|
-| 1 | Event taxonomy | Define supported live chat events: spawn, team ready, route ready, item taken, item denied, enemy sighted, objective changed, flag state, low health, blocked, and victory/defeat. | Mode `79` `bot_chat_live_events` exposes an eleven-event taxonomy and proves live `spawn` plus `route_ready` triggers through `sg_bot_chat_live_events`; mode `81` `bot_chat_live_enemy_sighted` proves the first combat-derived `enemy_sighted` live event; mode `84` `bot_chat_live_low_health` proves the first survival-state `low_health` live event. |
+| 1 | Event taxonomy | Define supported live chat events: spawn, team ready, route ready, item taken, item denied, enemy sighted, objective changed, flag state, low health, blocked, and victory/defeat. | Mode `79` `bot_chat_live_events` exposes an eleven-event taxonomy and proves live `spawn` plus `route_ready` triggers through `sg_bot_chat_live_events`; mode `81` `bot_chat_live_enemy_sighted` proves the first combat-derived `enemy_sighted` live event; mode `84` `bot_chat_live_low_health` proves the first survival-state `low_health` live event; mode `85` `bot_chat_live_item_taken` proves pickup-observation `item_taken`; mode `86` `bot_chat_live_objective_changed` proves CTF transition-driven `objective_changed`; mode `87` `bot_chat_live_flag_state` proves CTF flag-state observations; mode `88` `bot_chat_live_blocked` proves blocked route-failure observations; mode `89` `bot_chat_live_item_denied` proves TDM deny-enemy resource-policy `item_denied` observations; mode `90` `bot_chat_live_match_result` proves native intermission/match-result observations drive `victory_defeat`. |
 | 2 | Phrase libraries | Expand phrase buckets for quiet, direct, taunting, helpful, steady, and future personalities. | Mode `82` `bot_chat_phrase_library` proves four initial and four reply variants are exercised by staged profile bots. |
 | 3 | Audience policy | Harden global/team/private audience selection and human-only broadcast behavior. | Bots do not send reliable-message chatter to bot clients. |
 | 4 | Conversation safety | Add global and per-bot cooldowns, event suppression, and duplicate prevention. | Mode `80` `bot_chat_live_event_cooldown` proves global cooldown rate limiting, and mode `83` `bot_chat_duplicate_suppression` proves repeated route-ready reply/live events are suppressed inside the 5000 ms duplicate window without dispatch failures. |
@@ -395,8 +451,24 @@ Validation gates:
   route-ready events while preserving telemetry for the last suppressed event.
 - Mode `84` verifies survival-health routing can drive `low_health` reply and
   live event accounting without bypassing dispatch safety.
-- Item/objective/match-result event breadth remains pending before user docs
-  should present chat as a supported public behavior.
+- Mode `85` verifies pickup observations can drive `item_taken` reply and live
+  event accounting without bypassing dispatch safety.
+- Mode `86` verifies CTF pickup, death-drop, and dropped-flag return transitions
+  can drive `objective_changed` reply and live event accounting without bypassing
+  dispatch safety.
+- Mode `87` verifies CTF pickup, death-drop, and dropped-flag return observations
+  can drive `flag_state` reply and live event accounting without bypassing
+  dispatch safety.
+- Mode `88` verifies blocked route failures can drive `blocked` reply and live
+  event accounting without bypassing dispatch safety.
+- Mode `89` verifies team resource-denial policy pressure can drive
+  `item_denied` reply and live event accounting without bypassing dispatch
+  safety.
+- Mode `90` verifies native intermission/match-result state can drive
+  `victory_defeat` reply and live event accounting without bypassing dispatch
+  safety.
+- Outcome-specific victory/defeat phrasing remains a polish follow-up before
+  user docs should present chat as a supported public behavior.
 
 ## M6: Map, AAS, And Movement Coverage
 
@@ -475,16 +547,16 @@ Each slice should be small enough to validate independently.
 
 | Order | Slice | Primary Milestone | Main Task IDs | Expected Artifact |
 |---|---|---|---|---|
-| 1 | Live chat objective/match-result event breadth follow-up | M5 | `FR-04-T07`, `FR-04-T15` | Add objective or match-result live event sources beyond spawn/route-ready/enemy-sighted/low-health/item-taken while preserving cooldown and duplicate gates. |
-| 2 | Coop campaign interaction map-matrix pass | M4/M6 | `FR-04-T04`, `FR-04-T05`, `FR-04-T15`, `DV-07-T06` | Map-backed campaign row checking key/button/trigger/elevator behavior beyond the mode `77` and `78` aggregate proofs. |
-| 3 | Movement and hazard matrix expansion | M6 | `FR-04-T05`, `FR-04-T11`, `FR-04-T14`, `FR-04-T16` | Reference-map rows for water, crouch, doors, elevators, teleporters, and hazards with explicit known gaps. |
-| 4 | Fresh source-counter eight-bot soak | M7 | `FR-04-T16`, `DV-03-T05` | New `.tmp/bot_perf/` or `.tmp/bot_scenarios/` soak artifact and budget update. |
-| 5 | Public cvar/defaults audit | M8 | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | User/operator docs aligned with supported bot controls and safe defaults. |
-| 6 | Release acceptance dry run | M8 | `FR-04-T16`, `DV-07-T06` | Refreshed `.install/` acceptance artifact tying botfiles, AAS payloads, scenario rows, and credits/docs into a release-ready pass. |
-| 7 | Fresh multiplayer playtest script | M3/M8 | `FR-04-T04`, `FR-04-T06`, `DV-07-T06` | Short operator-facing playtest checklist that exercises FFA, Duel, TDM, and CTF after the new live rows land. |
-| 8 | Duel live-server play-depth pass | M3 | `FR-04-T04`, `FR-04-T06`, `DV-07-T06` | Manual or source-counter backed play pass checking item-denial timing, spawn pressure, and queue boundaries beyond the mode `75` smoke. |
-| 9 | CTF live-server play-depth pass | M3 | `FR-04-T04`, `FR-04-T15`, `DV-07-T06` | Manual or source-counter backed play pass checking pickup/drop/return handoffs, carrier support, and base-return decisions beyond the mode `76` smoke. |
-| 10 | Bot chat user-facing docs readiness pass | M5/M8 | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | Decide which live chat controls and event families are stable enough for `docs-user/` after the next objective/match-result breadth pass. |
+| 1 | Movement and hazard matrix expansion | M6 | `FR-04-T05`, `FR-04-T11`, `FR-04-T14`, `FR-04-T16` | Reference-map rows for water, crouch, doors, elevators, teleporters, and hazards with explicit known gaps. |
+| 2 | Fresh source-counter eight-bot soak | M7 | `FR-04-T16`, `DV-03-T05` | New `.tmp/bot_perf/` or `.tmp/bot_scenarios/` soak artifact and budget update. |
+| 3 | Public cvar/defaults audit | M8 | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | User/operator docs aligned with supported bot controls and safe defaults. |
+| 4 | Release acceptance dry run | M8 | `FR-04-T16`, `DV-07-T06` | Refreshed `.install/` acceptance artifact tying botfiles, AAS payloads, scenario rows, and credits/docs into a release-ready pass. |
+| 5 | Fresh multiplayer playtest script | M3/M8 | `FR-04-T04`, `FR-04-T06`, `DV-07-T06` | Short operator-facing playtest checklist that exercises FFA, Duel, TDM, and CTF after the new live rows land. |
+| 6 | Duel live-server play-depth pass | M3 | `FR-04-T04`, `FR-04-T06`, `DV-07-T06` | Manual or source-counter backed play pass checking item-denial timing, spawn pressure, and queue boundaries beyond the mode `75` smoke. |
+| 7 | CTF live-server play-depth pass | M3 | `FR-04-T04`, `FR-04-T15`, `DV-07-T06` | Manual or source-counter backed play pass checking pickup/drop/return handoffs, carrier support, and base-return decisions beyond the mode `76` smoke. |
+| 8 | Bot chat user-facing docs readiness pass | M5/M8 | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | Decide which live chat controls and event families are stable enough for `docs-user/` after the match-result breadth pass. |
+| 9 | Outcome-aware match-result chat polish | M5 | `FR-04-T07`, `FR-04-T15` | Distinguish win/loss/tie/abort phrasing once match-result outcome metadata is ready for public behavior. |
+| 10 | Second campaign interaction map row | M4/M6 | `FR-04-T04`, `FR-04-T05`, `FR-04-T15`, `DV-07-T06` | Add another packaged campaign map row once key/button/trigger objective progression has stronger status evidence. |
 
 ## Scenario Strategy
 
@@ -534,13 +606,13 @@ for the milestone are satisfied, not merely that code exists.
 
 | Milestone | Status | Last Evidence | Next Action |
 |---|---|---|---|
-| M0 Foundation Snapshot | Done | 93-row implemented catalog, latest aggregate `.tmp\bot_scenarios\20260623T051133Z` with `93/93` rows passing. | Preserve while deepening live behavior. |
+| M0 Foundation Snapshot | Done | 99-row implemented catalog, latest aggregate `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z` with `99/99` rows passing. | Preserve while deepening live behavior. |
 | M1 Live Behavior Arbitration | Done | Mode `63` `behavior_arbitration` proof with cvar audit, candidates, owners, and handoffs. | Use the owner model while implementing M2 combat/inventory depth. |
-| M2 Combat And Inventory Depth | In progress | Mode `64` `target_memory_decay`, mode `65` `weapon_scoring_arsenal`, mode `66` `aim_fire_policy_depth`, mode `67` `ammo_pressure_pickup`, mode `68` `survival_inventory_use`, mode `69` `survival_health_route`, mode `70` `survival_armor_route`, mode `71` `combat_survival_regression`, `combat_survival_regression_q2dm2`, `combat_survival_regression_q2dm8`, mode `72` `threat_retreat_avoidance`, `threat_retreat_avoidance_q2dm8`, and the green 93-row full-suite run. | Use the green catalog as the baseline, then promote live mode behavior. |
+| M2 Combat And Inventory Depth | In progress | Mode `64` `target_memory_decay`, mode `65` `weapon_scoring_arsenal`, mode `66` `aim_fire_policy_depth`, mode `67` `ammo_pressure_pickup`, mode `68` `survival_inventory_use`, mode `69` `survival_health_route`, mode `70` `survival_armor_route`, mode `71` `combat_survival_regression`, `combat_survival_regression_q2dm2`, `combat_survival_regression_q2dm8`, mode `72` `threat_retreat_avoidance`, `threat_retreat_avoidance_q2dm8`, and the green 99-row full-suite run. | Use the green catalog as the baseline, then promote live mode behavior. |
 | M3 Multiplayer Mode Intelligence | In progress | Existing FFA/TDM/CTF role and objective proof rows, mode `40` `ctf_objective_route` live-loop validation from `.tmp\bot_scenarios\20260622T210329Z`, mode `73` `tdm_role_spawn_stability` validation from `.tmp\bot_scenarios\20260622T212431Z`, mode `74` `ffa_live_pacing` validation from `.tmp\bot_scenarios\20260622T214927Z`, mode `75` `duel_live_pacing` validation from `.tmp\bot_scenarios\20260622T222142Z`, and mode `76` `ctf_objective_transitions` validation from `.tmp\bot_scenarios\20260622T230509Z`. | Build coop/live-server mode play-depth passes. |
-| M4 Coop And Campaign Behavior | In progress | Existing coop readiness, leader, progress-wait, interaction, resource, anti-blocking, target-share, and door/elevator proof rows, mode `77` `coop_live_loop` validation from `.tmp\bot_scenarios\20260622T234315Z`, and mode `78` `coop_share_loop` validation from `.tmp\bot_scenarios\20260623T001149Z`. | Promote campaign map-matrix behavior and coop play-depth validation. |
-| M5 Chat And Personality | In progress | Modes `57` through `62` prove dispatch, audience, rate, initial, reply, and event-policy selection; mode `79` `bot_chat_live_events` proves live spawn plus route-ready accounting from `.tmp\bot_scenarios\20260623T010520Z`; mode `80` `bot_chat_live_event_cooldown` proves global cooldown suppression from `.tmp\bot_scenarios\20260623T010530Z`; mode `81` `bot_chat_live_enemy_sighted` proves blackboard-visible enemy chat from `.tmp\bot_scenarios\20260623T013832Z`; mode `82` `bot_chat_phrase_library` proves four-variant phrase selection from `.tmp\bot_scenarios\20260623T020850Z`; mode `83` `bot_chat_duplicate_suppression` proves duplicate route-ready reply/live event suppression from `.tmp\bot_scenarios\20260623T023211Z`; mode `84` `bot_chat_live_low_health` proves survival-state low-health live chat from `.tmp\bot_scenarios\20260623T025752Z`; mode `85` `bot_chat_live_item_taken` proves pickup-observation live chat from `.tmp\bot_scenarios\20260623T051126Z`. | Continue objective/match-result event breadth and user-facing chat docs. |
-| M6 Map, AAS, And Movement Coverage | Planned | Eight staged reference maps and current movement diagnostics. | Expand reference-map matrix and movement feature proof. |
+| M4 Coop And Campaign Behavior | In progress | Existing coop readiness, leader, progress-wait, interaction, resource, anti-blocking, target-share, and door/elevator proof rows, mode `77` `coop_live_loop` validation from `.tmp\bot_scenarios\20260622T234315Z`, mode `78` `coop_share_loop` validation from `.tmp\bot_scenarios\20260623T001149Z`, and mode `91` `coop_campaign_interaction_matrix` validation from `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`. | Add second campaign interaction rows and coop play-depth validation. |
+| M5 Chat And Personality | In progress | Modes `57` through `62` prove dispatch, audience, rate, initial, reply, and event-policy selection; mode `79` `bot_chat_live_events` proves live spawn plus route-ready accounting from `.tmp\bot_scenarios\20260623T010520Z`; mode `80` `bot_chat_live_event_cooldown` proves global cooldown suppression from `.tmp\bot_scenarios\20260623T010530Z`; mode `81` `bot_chat_live_enemy_sighted` proves blackboard-visible enemy chat from `.tmp\bot_scenarios\20260623T013832Z`; mode `82` `bot_chat_phrase_library` proves four-variant phrase selection from `.tmp\bot_scenarios\20260623T020850Z`; mode `83` `bot_chat_duplicate_suppression` proves duplicate route-ready reply/live event suppression from `.tmp\bot_scenarios\20260623T023211Z`; mode `84` `bot_chat_live_low_health` proves survival-state low-health live chat from `.tmp\bot_scenarios\20260623T025752Z`; mode `85` `bot_chat_live_item_taken` proves pickup-observation live chat from `.tmp\bot_scenarios\20260623T051126Z`; mode `86` `bot_chat_live_objective_changed` proves CTF transition-driven objective live chat from `.tmp\bot_scenarios\20260626T140601Z`; mode `87` `bot_chat_live_flag_state` proves CTF flag-state live chat from `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`; mode `88` `bot_chat_live_blocked` proves blocked route-failure live chat from `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`; mode `89` `bot_chat_live_item_denied` proves TDM deny-enemy resource-policy live chat from `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`; mode `90` `bot_chat_live_match_result` proves native intermission/match-result live chat from `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`. | Continue outcome-aware phrasing polish and user-facing chat docs readiness. |
+| M6 Map, AAS, And Movement Coverage | In progress | Eight staged reference maps, current movement diagnostics, and mode `91` `base1` coop campaign interaction matrix evidence. | Expand reference-map matrix and movement feature proof. |
 | M7 Performance, Soak, And Reliability | Planned | Existing manual high-bot soak row and source-counter tooling. | Run fresh source-counter soak. |
 | M8 Productization And Release Readiness | Planned | Current bot user docs, profile docs, package audits, and CI release matrix hooks. | Public cvar/defaults audit and final acceptance plan. |
 
