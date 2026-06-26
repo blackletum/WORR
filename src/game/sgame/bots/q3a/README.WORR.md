@@ -104,3 +104,32 @@ Import rules:
   unrelated `sgame` systems.
 - Build imported C files as an internal server-game object group unless a later
   implementation note records why a static library is safer.
+
+## Current AAS Runtime Closeout
+
+As of the 2026-06-21 reference-map/runtime-adapter round, the imported Q3A AAS
+runtime C set required by WORR routing is compiled into the internal
+`q3a_botlib_utility` static library: AAS file load, sampling, reachability,
+route cache/query, clustering, alternative routes, optimization, entity cache,
+movement prediction, debug helpers, LibVars, memory, and CRC support. This is
+the complete current AAS runtime surface, not the full Q3A arena AI/EA/goal
+system.
+
+`AAS_Trace`, `AAS_PointContents`, `AAS_inPVS`, `AAS_inPHS`, and
+`AAS_EntityCollision` are no longer tracked as temporary ownership gaps.
+Static-world trace and point-contents ownership stays in the WORR-native
+active-map Q2 BSP collision bridge inside `q3a_botlib_import.c`; visibility
+ownership stays in the active-map Q2 BSP leaf-cluster/PVS/PHS bridge in the
+same file; entity trace ownership crosses `botlib_adapter.*` into
+`BotRuntimeEntityTrace`, which calls the server-game `gi.clip` entity clip path
+for linked BBOX/BSP entities.
+
+The upstream `bot_*` LibVars remain internal to the imported Q3A AAS runtime.
+WORR-facing policy uses `sg_bot_*` cvars and native status fields. The only
+LibVars seeded by WORR are movement/reachability inputs consumed by imported
+`be_aas_move.c`: `phys_*` values mirror the Q2/WORR movement hull/acceleration
+profile, and `rs_*` values tune travel-time costs for waterjump, teleport,
+barrier jump, crouch, walk-off-ledge, jump, rocket/BFG/jumppad placeholders,
+elevator, and fall-height handling. Runtime gameplay toggles such as
+rocket-jump permission stay outside LibVars and enter through the WORR adapter
+route policy.

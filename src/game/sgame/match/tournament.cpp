@@ -872,6 +872,9 @@ bool CanActorVeto(gentity_t *ent) {
   if (!ent || !ent->client)
     return false;
 
+  if ((ent->svFlags & SVF_BOT) || ent->client->sess.is_a_bot)
+    return false;
+
   const char *id = ent->client->sess.socialID;
   if (!id || !id[0])
     return false;

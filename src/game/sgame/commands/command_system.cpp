@@ -333,6 +333,12 @@ bool CheatsOk(gentity_t* ent) {
 }
 
 static inline bool AdminOk(gentity_t* ent) {
+	if (!ent || !ent->client) {
+		return false;
+	}
+	if ((ent->svFlags & SVF_BOT) || ent->client->sess.is_a_bot) {
+		return false;
+	}
 	if (!g_allowAdmin->integer || !ent->client->sess.admin) {
 		gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c80b31662070");
 		return false;
@@ -358,6 +364,59 @@ static inline bool HasCommandPermission(gentity_t* ent, const Command& cmd) {
 	if (cmd.flags.has(MatchOnly) && !InAMatch()) return false;
 	if (!cmd.flags.has(AllowIntermission) && (level.intermission.time || level.intermission.postIntermissionTime)) return false;
 	return true;
+}
+
+namespace Commands {
+CommandAuditResult AuditRegisteredCommand(gentity_t* ent,
+	const CommandArgs& args, bool executeCommand) {
+	CommandAuditResult result{};
+	const std::string_view commandName = args.getString(0);
+
+	if (!ent || !ent->client) {
+		result.reason = "invalid_client";
+		return result;
+	}
+
+	result.botClient =
+		((ent->svFlags & SVF_BOT) || ent->client->sess.is_a_bot);
+	result.adminSession = ent->client->sess.admin;
+
+	if (commandName.empty()) {
+		result.reason = "empty_command";
+		return result;
+	}
+
+	auto it = s_clientCommands.find(NormalizeCommandKey(commandName));
+	if (it == s_clientCommands.end()) {
+		result.reason = "unknown_command";
+		return result;
+	}
+
+	result.commandFound = true;
+	const Command& cmd = it->second;
+	using enum CommandFlag;
+	result.adminOnly = cmd.flags.has(AdminOnly);
+	result.allowed = HasCommandPermission(ent, cmd);
+
+	if (!result.allowed) {
+		if (result.adminOnly && result.botClient)
+			result.reason = "bot_admin_blocked";
+		else if (result.adminOnly)
+			result.reason = "admin_required";
+		else if (cmd.flags.has(CheatProtect))
+			result.reason = "cheat_blocked";
+		else
+			result.reason = "permission_blocked";
+		return result;
+	}
+
+	result.reason = "allowed";
+	if (executeCommand) {
+		cmd.function(ent, args);
+		result.executed = true;
+	}
+	return result;
+}
 }
 
 /*

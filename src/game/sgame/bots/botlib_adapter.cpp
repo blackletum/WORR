@@ -450,6 +450,10 @@ void CopyRouteSteerResult(
 } // namespace
 
 void BotLibAdapter_Init() {
+	if (botLibAdapterStatus.initialized) {
+		return;
+	}
+
 	const Q3ABotLibBoundaryInfo &boundary = Q3A_BotLibBoundaryInfo();
 
 	botLibAdapterStatus.initialized = true;
@@ -477,6 +481,16 @@ void BotLibAdapter_Init() {
 	botLibAdapterStatus.importRoot = boundary.localImportRoot;
 	botLibAdapterStatus.buildStrategy = boundary.buildStrategy;
 	botLibAdapterStatus.plannedImportFileCount = Q3A_BotLibPlannedFileCount();
+}
+
+void BotLibAdapter_Shutdown() {
+	if (!botLibAdapterStatus.initialized) {
+		return;
+	}
+
+	Q3A_BotLibImport_Shutdown();
+	CopyImportStatus();
+	botLibAdapterStatus = {};
 }
 
 void BotLibAdapter_SetPrintCallback(BotLibAdapterPrintCallback callback) {

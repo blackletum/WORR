@@ -259,6 +259,16 @@ struct Command {
 	bool floodExempt = true;
 };
 
+struct CommandAuditResult {
+	bool commandFound = false;
+	bool adminOnly = false;
+	bool botClient = false;
+	bool adminSession = false;
+	bool allowed = false;
+	bool executed = false;
+	std::string reason;
+};
+
 struct VoteCommand {
 	std::string_view name;
 	std::function<bool(gentity_t*, const CommandArgs&)> validate; // Corrected signature
@@ -301,5 +311,10 @@ bool CheckFlood(gentity_t* ent);
 
 // Main registration function to be called once at game startup.
 void RegisterAllCommands();
+
+namespace Commands {
+CommandAuditResult AuditRegisteredCommand(gentity_t* ent,
+	const CommandArgs& args, bool executeCommand);
+}
 
 bool CheatsOk(gentity_t* ent);

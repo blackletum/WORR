@@ -4,6 +4,7 @@
 #include "../g_local.hpp"
 #include "bot_items.hpp"
 #include "bot_nav.hpp"
+#include "bot_objectives.hpp"
 
 #include <algorithm>
 #include <array>
@@ -13,6 +14,7 @@
 namespace {
 
 constexpr uint32_t BOT_NAV_ROUTE_REFRESH_FRAMES = 4;
+constexpr uint32_t BOT_NAV_ITEM_DESIRABILITY_STAGGER_FRAMES = 4;
 constexpr uint32_t BOT_NAV_GOAL_BLACKLIST_FRAMES = 96;
 constexpr uint32_t BOT_NAV_STUCK_REPATH_COOLDOWN_FRAMES = 4;
 constexpr uint32_t BOT_NAV_STUCK_RECOVERY_FRAMES = 6;
@@ -23,6 +25,13 @@ constexpr float BOT_NAV_TARGET_REACHED_DIST_SQUARED = 16.0f * 16.0f;
 constexpr float BOT_NAV_GOAL_REACHED_DIST_SQUARED = 48.0f * 48.0f;
 constexpr float BOT_NAV_PICKUP_RECORD_DIST_SQUARED = 96.0f * 96.0f;
 constexpr float BOT_NAV_ROUTE_DRIFT_DIST_SQUARED = 96.0f * 96.0f;
+constexpr float BOT_NAV_ROUTE_TARGET_STABILIZE_DIST_SQUARED = 24.0f * 24.0f;
+constexpr float BOT_NAV_ROUTE_TARGET_STABLE_MIN_DIST_SQUARED = 64.0f * 64.0f;
+constexpr float BOT_NAV_CORNER_CUT_MIN_DIST_SQUARED = 48.0f * 48.0f;
+constexpr float BOT_NAV_CORNER_CUT_MAX_DIST_SQUARED = 256.0f * 256.0f;
+constexpr float BOT_NAV_CORNER_CUT_GROUND_PROBE_DEPTH = STEPSIZE_BELOW + 8.0f;
+constexpr float BOT_NAV_CORNER_CUT_MIN_GROUND_NORMAL_Z = 0.7f;
+constexpr float BOT_NAV_CORNER_CUT_TRACE_FRACTION_SCALE = 1000.0f;
 constexpr float BOT_NAV_STUCK_MIN_PROGRESS_DELTA_SQUARED = 16.0f;
 constexpr float BOT_NAV_INTERACTION_NEAR_DIST_SQUARED = 192.0f * 192.0f;
 constexpr float BOT_NAV_ELEVATOR_INTERACTION_DIST_SQUARED = 384.0f * 384.0f;
@@ -30,6 +39,7 @@ constexpr float BOT_NAV_DEBUG_ROUTE_LIFETIME = 0.10f;
 constexpr float BOT_NAV_DEBUG_CROSS_SIZE = 10.0f;
 constexpr float BOT_NAV_DEBUG_LABEL_SIZE = 6.0f;
 
+constexpr int BOT_NAV_TRAVEL_WALK = 2;
 constexpr int BOT_NAV_TRAVEL_CROUCH = 3;
 constexpr int BOT_NAV_TRAVEL_SWIM = 8;
 constexpr int BOT_NAV_TRAVEL_WATER_JUMP = 9;
@@ -100,12 +110,82 @@ enum class BotNavItemFocusMode {
 	None,
 	Health,
 	Armor,
+	Ammo,
 	HealthArmor,
+};
+
+enum class BotNavBlackboardGoalType {
+	None = 0,
+	Item = 1,
+	Position = 2,
+	TravelType = 3,
+	RouteGoal = 4,
+};
+
+enum class BotNavItemRoleScope {
+	None,
+	FreeForAll,
+	CaptureTheFlag,
+	Team,
+};
+
+enum class BotNavCornerCutSkipReason {
+	None = 0,
+	Invalid = 1,
+	UnsupportedTravel = 2,
+	NoCandidate = 3,
+	NoSafeTrace = 4,
+};
+
+struct BotNavItemGoalCandidate {
+	int entityNumber = -1;
+	int spawnCount = 0;
+	item_id_t item = IT_NULL;
+	int area = 0;
+	int score = 0;
+	bool ffaItemRoleValid = false;
+	int ffaItemRoleMode = 0;
+	int ffaItemRoleRole = 0;
+	int ffaItemRoleLane = 0;
+	int ffaItemRoleCategory = 0;
+	int ffaItemRoleItemRole = 0;
+	int ffaItemRolePriority = 0;
+	int ffaItemRoleScoreBoost = 0;
+	int ffaItemRoleProfileItemBonus = 0;
+	bool ctfItemRoleValid = false;
+	int ctfItemRoleMode = 0;
+	int ctfItemRoleRole = 0;
+	int ctfItemRoleLane = 0;
+	int ctfItemRoleCategory = 0;
+	int ctfItemRoleItemRole = 0;
+	int ctfItemRolePriority = 0;
+	int ctfItemRoleScoreBoost = 0;
+	int ctfItemRoleProfileItemBonus = 0;
+	bool teamItemRoleValid = false;
+	int teamItemRoleMode = 0;
+	int teamItemRoleRole = 0;
+	int teamItemRoleLane = 0;
+	int teamItemRoleCategory = 0;
+	int teamItemRoleItemRole = 0;
+	int teamItemRolePriority = 0;
+	int teamItemRoleScoreBoost = 0;
+	int teamItemRoleProfileItemBonus = 0;
+	bool teamResourceDenialValid = false;
+	int teamResourceDenialMode = 0;
+	int teamResourceDenialRole = 0;
+	int teamResourceDenialLane = 0;
+	int teamResourceDenialCategory = 0;
+	int teamResourceDenialIntent = 0;
+	int teamResourceDenialPriority = 0;
+	int teamResourceDenialScoreBoost = 0;
+	int teamResourceDenialProfileItemBonus = 0;
+	Vector3 origin = vec3_origin;
 };
 
 struct BotNavRouteSlot {
 	bool valid = false;
 	uint32_t nextRefreshFrame = 0;
+	uint32_t nextItemDesirabilityFrame = 0;
 	uint32_t nextStuckRepathFrame = 0;
 	uint32_t recoveryUntilFrame = 0;
 	uint32_t interactionUntilFrame = 0;
@@ -130,21 +210,17 @@ struct BotNavRouteSlot {
 	int progressGoalArea = 0;
 	float lastProgressDistanceSquared = -1.0f;
 	int stagnantProgressFrames = 0;
+	int lastStuckReason = 0;
+	int lastStuckDistanceSq = 0;
+	int lastStuckProgressDelta = 0;
 	int lastFailedGoalReason = 0;
 	int lastFailedGoalArea = 0;
 	int lastFailedGoalEntityNumber = -1;
 	item_id_t lastFailedGoalItem = IT_NULL;
+	bool cachedItemGoalValid = false;
+	BotNavItemGoalCandidate cachedItemGoal{};
 	Vector3 origin = vec3_origin;
 	BotLibAdapterRouteSteer route{};
-};
-
-struct BotNavItemGoalCandidate {
-	int entityNumber = -1;
-	int spawnCount = 0;
-	item_id_t item = IT_NULL;
-	int area = 0;
-	int score = 0;
-	Vector3 origin = vec3_origin;
 };
 
 struct BotNavPositionGoalCandidate {
@@ -169,6 +245,86 @@ bool BotNavRocketJumpAllowed() {
 		allowRocketJump = gi.cvar("sg_bot_allow_rocketjump", "0", CVAR_NOFLAGS);
 	}
 	return allowRocketJump != nullptr && allowRocketJump->integer > 0;
+}
+
+bool BotNavBehaviorPolicyEnabled() {
+	static cvar_t *behaviorEnable = nullptr;
+	if (behaviorEnable == nullptr && gi.cvar != nullptr) {
+		behaviorEnable = gi.cvar("sg_bot_behavior_enable", "0", CVAR_NOFLAGS);
+	}
+	return behaviorEnable != nullptr && behaviorEnable->integer > 0;
+}
+
+bool BotNavCoopShareLoopEnabled() {
+	static cvar_t *shareLoop = nullptr;
+	if (shareLoop == nullptr && gi.cvar != nullptr) {
+		shareLoop = gi.cvar("sg_bot_coop_share_loop", "0", CVAR_NOFLAGS);
+	}
+	return shareLoop != nullptr && shareLoop->integer > 0;
+}
+
+bool BotNavCoopResourceShareEnabled() {
+	static cvar_t *resourceShare = nullptr;
+	if (resourceShare == nullptr && gi.cvar != nullptr) {
+		resourceShare = gi.cvar("sg_bot_coop_resource_share", "0", CVAR_NOFLAGS);
+	}
+	return BotNavBehaviorPolicyEnabled() ||
+		BotNavCoopShareLoopEnabled() ||
+		(resourceShare != nullptr && resourceShare->integer > 0);
+}
+
+bool BotNavMatchItemPolicyEnabled() {
+	static cvar_t *matchItemPolicy = nullptr;
+	if (matchItemPolicy == nullptr && gi.cvar != nullptr) {
+		matchItemPolicy = gi.cvar("sg_bot_match_item_policy", "0", CVAR_NOFLAGS);
+	}
+	return BotNavBehaviorPolicyEnabled() ||
+		(matchItemPolicy != nullptr && matchItemPolicy->integer > 0);
+}
+
+bool BotNavDuelLivePacingEnabled() {
+	static cvar_t *duelLivePacing = nullptr;
+	if (duelLivePacing == nullptr && gi.cvar != nullptr) {
+		duelLivePacing = gi.cvar("sg_bot_duel_live_pacing", "0", CVAR_NOFLAGS);
+	}
+	return duelLivePacing != nullptr && duelLivePacing->integer > 0;
+}
+
+bool BotNavFfaItemRolesEnabled() {
+	static cvar_t *ffaItemRoles = nullptr;
+	if (ffaItemRoles == nullptr && gi.cvar != nullptr) {
+		ffaItemRoles = gi.cvar("sg_bot_ffa_item_roles", "0", CVAR_NOFLAGS);
+	}
+	return (ffaItemRoles != nullptr && ffaItemRoles->integer > 0) ||
+		BotNavDuelLivePacingEnabled() ||
+		BotNavMatchItemPolicyEnabled();
+}
+
+bool BotNavCtfItemRolesEnabled() {
+	static cvar_t *ctfItemRoles = nullptr;
+	if (ctfItemRoles == nullptr && gi.cvar != nullptr) {
+		ctfItemRoles = gi.cvar("sg_bot_ctf_item_roles", "0", CVAR_NOFLAGS);
+	}
+	return (ctfItemRoles != nullptr && ctfItemRoles->integer > 0) ||
+		BotNavMatchItemPolicyEnabled();
+}
+
+bool BotNavTeamItemRolesEnabled() {
+	static cvar_t *teamItemRoles = nullptr;
+	if (teamItemRoles == nullptr && gi.cvar != nullptr) {
+		teamItemRoles = gi.cvar("sg_bot_team_item_roles", "0", CVAR_NOFLAGS);
+	}
+	return (teamItemRoles != nullptr && teamItemRoles->integer > 0) ||
+		BotNavMatchItemPolicyEnabled();
+}
+
+bool BotNavTeamResourceDenialEnabled() {
+	static cvar_t *teamResourceDenial = nullptr;
+	if (teamResourceDenial == nullptr && gi.cvar != nullptr) {
+		teamResourceDenial = gi.cvar("sg_bot_team_resource_denial", "0", CVAR_NOFLAGS);
+	}
+	return (teamResourceDenial != nullptr && teamResourceDenial->integer > 0) ||
+		BotNavMatchItemPolicyEnabled();
 }
 
 uint64_t BotNavRouteNowNs() {
@@ -233,6 +389,8 @@ BotNavItemFocusMode BotNavSmokeItemFocusMode() {
 		return BotNavItemFocusMode::Health;
 	case BotItemFocus::Armor:
 		return BotNavItemFocusMode::Armor;
+	case BotItemFocus::Ammo:
+		return BotNavItemFocusMode::Ammo;
 	default:
 		return BotNavItemFocusMode::None;
 	}
@@ -244,6 +402,8 @@ bool BotNavItemFocusAllowsKind(BotNavItemFocusMode mode, BotItemUtilityKind kind
 		return kind == BotItemUtilityKind::Health;
 	case BotNavItemFocusMode::Armor:
 		return kind == BotItemUtilityKind::Armor;
+	case BotNavItemFocusMode::Ammo:
+		return kind == BotItemUtilityKind::Ammo;
 	case BotNavItemFocusMode::HealthArmor:
 		return kind == BotItemUtilityKind::Health || kind == BotItemUtilityKind::Armor;
 	case BotNavItemFocusMode::None:
@@ -261,7 +421,164 @@ BotItemFocus BotNavItemFocusForKind(BotNavItemFocusMode mode, BotItemUtilityKind
 		kind == BotItemUtilityKind::Armor) {
 		return BotItemFocus::Armor;
 	}
+	if (mode == BotNavItemFocusMode::Ammo && kind == BotItemUtilityKind::Ammo) {
+		return BotItemFocus::Ammo;
+	}
 	return BotItemFocus::None;
+}
+
+bool BotNavCoopResourceKindCanBeReserved(BotObjectiveItemCategory category) {
+	return category == BotObjectiveItemCategory::Health ||
+		category == BotObjectiveItemCategory::Armor ||
+		category == BotObjectiveItemCategory::Ammo ||
+		category == BotObjectiveItemCategory::Weapon ||
+		category == BotObjectiveItemCategory::Utility;
+}
+
+bool BotNavTeamResourceKindCanDenyEnemy(BotObjectiveItemCategory category) {
+	return category == BotObjectiveItemCategory::Weapon ||
+		category == BotObjectiveItemCategory::Powerup ||
+		category == BotObjectiveItemCategory::Tech ||
+		category == BotObjectiveItemCategory::Utility;
+}
+
+BotItemContext BotNavApplyCoopResourceSharePolicy(
+	const BotObjectiveMatchPolicy &matchPolicy,
+	const BotObjectiveCoopPolicy &coopPolicy,
+	BotObjectiveItemCategory category,
+	BotItemContext context) {
+	if (!BotNavCoopResourceShareEnabled() || !coopPolicy.valid || !coopPolicy.coopMode) {
+		return context;
+	}
+
+	const bool teammateNeedsItem =
+		coopPolicy.shareResources &&
+		BotNavCoopResourceKindCanBeReserved(category);
+	const BotObjectiveResourceContext resourceContext =
+		BotObjectives_BuildResourceContext(
+			matchPolicy,
+			coopPolicy,
+			category,
+			context.candidateScore,
+			context.candidateUseful,
+			teammateNeedsItem,
+			false);
+	const BotObjectiveResourcePolicy resourcePolicy =
+		BotObjectives_EvaluateResourcePolicy(resourceContext);
+	if (resourcePolicy.valid &&
+		resourcePolicy.shouldReserve &&
+		!resourcePolicy.mayPickup) {
+		context.candidateReserved = true;
+	}
+
+	return context;
+}
+
+BotItemContext BotNavApplyTeamResourceDenialPolicy(
+	const BotObjectiveMatchPolicy &matchPolicy,
+	BotObjectiveItemCategory category,
+	BotItemContext context,
+	BotObjectiveResourcePolicy *selectedPolicy) {
+	if (selectedPolicy != nullptr) {
+		*selectedPolicy = {};
+	}
+	if (!BotNavTeamResourceDenialEnabled() ||
+		matchPolicy.mode != BotObjectiveMatchMode::TeamDeathmatch ||
+		!BotNavTeamResourceKindCanDenyEnemy(category)) {
+		return context;
+	}
+
+	botNavRouteStatus.teamResourceDenialEvaluations++;
+	BotObjectiveCoopPolicy coopPolicy{};
+	const BotObjectiveResourceContext resourceContext =
+		BotObjectives_BuildResourceContext(
+			matchPolicy,
+			coopPolicy,
+			category,
+			context.candidateScore,
+			context.candidateUseful,
+			false,
+			true);
+	const BotObjectiveResourcePolicy resourcePolicy =
+		BotObjectives_EvaluateResourcePolicy(resourceContext);
+	if (selectedPolicy != nullptr) {
+		*selectedPolicy = resourcePolicy;
+	}
+	if (!resourcePolicy.valid || !resourcePolicy.denyEnemyPickup) {
+		botNavRouteStatus.teamResourceDenialInvalidSkips++;
+		return context;
+	}
+
+	botNavRouteStatus.teamResourceDenialPolicyDenies++;
+	const int scoreBoost = std::max(0, resourcePolicy.priority);
+	if (scoreBoost > 0) {
+		context.candidateScore += scoreBoost;
+		botNavRouteStatus.teamResourceDenialScoreBoosts++;
+	}
+
+	return context;
+}
+
+BotItemContext BotNavApplyItemRolePolicy(
+	const BotObjectiveMatchPolicy &matchPolicy,
+	BotObjectiveItemCategory category,
+	BotItemContext context,
+	BotNavItemRoleScope scope,
+	BotObjectiveItemRolePolicy *selectedPolicy) {
+	if (selectedPolicy != nullptr) {
+		*selectedPolicy = {};
+	}
+	if (scope == BotNavItemRoleScope::None) {
+		return context;
+	}
+
+	if (scope == BotNavItemRoleScope::FreeForAll) {
+		botNavRouteStatus.ffaItemRoleEvaluations++;
+	} else if (scope == BotNavItemRoleScope::CaptureTheFlag) {
+		botNavRouteStatus.ctfItemRoleEvaluations++;
+	} else {
+		botNavRouteStatus.teamItemRoleEvaluations++;
+	}
+
+	const BotObjectiveItemRolePolicy policy =
+		BotObjectives_EvaluateItemRolePolicy(
+			matchPolicy,
+			category,
+			context.candidateScore);
+	if (selectedPolicy != nullptr) {
+		*selectedPolicy = policy;
+	}
+	if (!policy.valid) {
+		if (scope == BotNavItemRoleScope::FreeForAll) {
+			botNavRouteStatus.ffaItemRoleInvalidSkips++;
+		} else if (scope == BotNavItemRoleScope::CaptureTheFlag) {
+			botNavRouteStatus.ctfItemRoleInvalidSkips++;
+		} else {
+			botNavRouteStatus.teamItemRoleInvalidSkips++;
+		}
+		return context;
+	}
+
+	if (scope == BotNavItemRoleScope::FreeForAll) {
+		botNavRouteStatus.ffaItemRoleSelections++;
+	} else if (scope == BotNavItemRoleScope::CaptureTheFlag) {
+		botNavRouteStatus.ctfItemRoleSelections++;
+	} else {
+		botNavRouteStatus.teamItemRoleSelections++;
+	}
+	const int scoreBoost = std::max(0, policy.priority);
+	if (scoreBoost > 0) {
+		context.candidateScore += scoreBoost;
+		if (scope == BotNavItemRoleScope::FreeForAll) {
+			botNavRouteStatus.ffaItemRoleScoreBoosts++;
+		} else if (scope == BotNavItemRoleScope::CaptureTheFlag) {
+			botNavRouteStatus.ctfItemRoleScoreBoosts++;
+		} else {
+			botNavRouteStatus.teamItemRoleScoreBoosts++;
+		}
+	}
+
+	return context;
 }
 
 void BotNavApplyRoutePolicy() {
@@ -317,10 +634,119 @@ int BotNavStatusDistance(float distanceSquared) {
 	return static_cast<int>(std::max(distanceSquared, 0.0f));
 }
 
+int BotNavStatusTraceFraction(float fraction) {
+	const float scaledFraction =
+		std::clamp(fraction, 0.0f, 1.0f) * BOT_NAV_CORNER_CUT_TRACE_FRACTION_SCALE;
+	return static_cast<int>(std::round(scaledFraction));
+}
+
+void BotNavSetRouteMoveTarget(BotLibAdapterRouteSteer *route, const Vector3 &target) {
+	if (route == nullptr) {
+		return;
+	}
+
+	route->moveTarget[0] = target.x;
+	route->moveTarget[1] = target.y;
+	route->moveTarget[2] = target.z;
+}
+
+bool BotNavCornerCutTravelTypeSupported(int travelType) {
+	return travelType == BOT_NAV_TRAVEL_WALK ||
+		travelType == BOT_NAV_TRAVEL_CROUCH ||
+		travelType == BOT_NAV_TRAVEL_SWIM;
+}
+
+bool BotNavCornerCutNeedsGroundTrace(int travelType) {
+	return travelType == BOT_NAV_TRAVEL_WALK ||
+		travelType == BOT_NAV_TRAVEL_CROUCH;
+}
+
+bool BotNavGroundTraceSupportsPoint(
+	const gentity_t *bot,
+	const Vector3 &point,
+	const Vector3 &mins,
+	const Vector3 &maxs,
+	bool recordCornerCutStatus) {
+	const Vector3 end = point - Vector3{ 0.0f, 0.0f, BOT_NAV_CORNER_CUT_GROUND_PROBE_DEPTH };
+	if (recordCornerCutStatus) {
+		botNavRouteStatus.cornerCutGroundTraceAttempts++;
+	}
+	const trace_t trace = gi.trace(point, mins, maxs, end, bot, MASK_NAV_SOLID);
+	if (trace.startSolid ||
+		trace.allSolid ||
+		trace.fraction >= 1.0f ||
+		trace.plane.normal.z < BOT_NAV_CORNER_CUT_MIN_GROUND_NORMAL_Z) {
+		if (recordCornerCutStatus) {
+			botNavRouteStatus.cornerCutGroundTraceFailures++;
+		}
+		return false;
+	}
+	return true;
+}
+
+bool BotNavShortcutGroundSupported(
+	const gentity_t *bot,
+	const Vector3 &target,
+	const Vector3 &mins,
+	const Vector3 &maxs,
+	bool recordCornerCutStatus) {
+	if (bot == nullptr) {
+		return false;
+	}
+
+	const Vector3 origin = bot->s.origin;
+	const Vector3 delta = target - origin;
+	constexpr std::array<float, 3> sampleFractions = { 0.35f, 0.70f, 1.0f };
+	for (const float sampleFraction : sampleFractions) {
+		const Vector3 sample = origin + (delta * sampleFraction);
+		if (!BotNavGroundTraceSupportsPoint(bot, sample, mins, maxs, recordCornerCutStatus)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool BotNavRouteShortcutTraceClear(
+	const gentity_t *bot,
+	const Vector3 &target,
+	int travelType,
+	bool recordCornerCutStatus) {
+	if (bot == nullptr) {
+		return false;
+	}
+
+	const Vector3 mins = bot->mins;
+	const Vector3 maxs = bot->maxs;
+	const trace_t trace = gi.trace(bot->s.origin, mins, maxs, target, bot, MASK_PLAYERSOLID);
+	if (recordCornerCutStatus) {
+		botNavRouteStatus.cornerCutTraceAttempts++;
+		botNavRouteStatus.lastCornerCutTraceFraction =
+			BotNavStatusTraceFraction(trace.fraction);
+	}
+
+	const bool clear = !trace.startSolid && !trace.allSolid && trace.fraction >= 1.0f;
+	const bool supported = clear &&
+		(!BotNavCornerCutNeedsGroundTrace(travelType) ||
+		 BotNavShortcutGroundSupported(bot, target, mins, maxs, recordCornerCutStatus));
+	if (!supported) {
+		if (recordCornerCutStatus) {
+			botNavRouteStatus.cornerCutTraceFailures++;
+		}
+		return false;
+	}
+
+	if (recordCornerCutStatus) {
+		botNavRouteStatus.cornerCutTracePasses++;
+	}
+	return true;
+}
+
 void BotNavResetProgress(BotNavRouteSlot &slot) {
 	slot.progressGoalArea = 0;
 	slot.lastProgressDistanceSquared = -1.0f;
 	slot.stagnantProgressFrames = 0;
+	slot.lastStuckDistanceSq = 0;
+	slot.lastStuckProgressDelta = 0;
 }
 
 void BotNavClearRecovery(BotNavRouteSlot &slot) {
@@ -917,25 +1343,29 @@ bool BotNavCheckStuckProgress(BotNavRouteSlot &slot, const gentity_t *bot, int c
 	}
 
 	const float distanceSquared = BotNavHorizontalDistanceSquared(bot->s.origin, BotNavRouteGoal(slot.route));
+	slot.lastStuckDistanceSq = BotNavStatusDistance(distanceSquared);
 	botNavRouteStatus.stuckChecks++;
 	botNavRouteStatus.lastStuckClient = clientIndex;
-	botNavRouteStatus.lastStuckDistanceSq = BotNavStatusDistance(distanceSquared);
+	botNavRouteStatus.lastStuckDistanceSq = slot.lastStuckDistanceSq;
 
 	if (slot.progressGoalArea != slot.route.goalArea || slot.lastProgressDistanceSquared < 0.0f) {
 		slot.progressGoalArea = slot.route.goalArea;
 		slot.lastProgressDistanceSquared = distanceSquared;
 		slot.stagnantProgressFrames = 0;
+		slot.lastStuckProgressDelta = 0;
 		botNavRouteStatus.lastStuckProgressDelta = 0;
 		botNavRouteStatus.lastStuckFrames = 0;
 		return false;
 	}
 
 	const float progressDelta = slot.lastProgressDistanceSquared - distanceSquared;
-	botNavRouteStatus.lastStuckProgressDelta = static_cast<int>(progressDelta);
+	slot.lastStuckProgressDelta = static_cast<int>(progressDelta);
+	botNavRouteStatus.lastStuckProgressDelta = slot.lastStuckProgressDelta;
 	if (progressDelta >= BOT_NAV_STUCK_MIN_PROGRESS_DELTA_SQUARED ||
 		distanceSquared <= BOT_NAV_GOAL_REACHED_DIST_SQUARED) {
 		slot.lastProgressDistanceSquared = distanceSquared;
 		slot.stagnantProgressFrames = 0;
+		slot.lastStuckProgressDelta = 0;
 		botNavRouteStatus.lastStuckFrames = 0;
 		return false;
 	}
@@ -952,7 +1382,8 @@ bool BotNavCheckStuckProgress(BotNavRouteSlot &slot, const gentity_t *bot, int c
 	slot.stagnantProgressFrames = 0;
 	slot.lastProgressDistanceSquared = distanceSquared;
 	botNavRouteStatus.stuckDetections++;
-	botNavRouteStatus.lastStuckReason = static_cast<int>(BotNavStuckReason::NoGoalProgress);
+	slot.lastStuckReason = static_cast<int>(BotNavStuckReason::NoGoalProgress);
+	botNavRouteStatus.lastStuckReason = slot.lastStuckReason;
 	if (!BotNavActivateInteractionRetry(slot, bot, clientIndex, frame, slot.route, true)) {
 		BotNavActivateRecovery(slot, clientIndex, frame);
 		BotNavActivateGoalBlacklist(slot, clientIndex, frame);
@@ -1112,14 +1543,112 @@ void BotNavUpdateActiveReservations() {
 		std::max(botNavRouteStatus.itemGoalPeakActiveReservations, reservations);
 }
 
+uint32_t BotNavNextItemDesirabilityFrame(int clientIndex, uint32_t frame) {
+	return frame +
+		BOT_NAV_ITEM_DESIRABILITY_STAGGER_FRAMES +
+		static_cast<uint32_t>(std::max(0, clientIndex) % BOT_NAV_ITEM_DESIRABILITY_STAGGER_FRAMES);
+}
+
+bool BotNavCachedItemGoalStillAvailable(
+	const BotNavRouteSlot &slot,
+	int clientIndex,
+	uint32_t frame,
+	BotNavItemGoalCandidate *candidate) {
+	if (!slot.cachedItemGoalValid ||
+		slot.cachedItemGoal.entityNumber < 0 ||
+		g_entities == nullptr ||
+		slot.cachedItemGoal.entityNumber >= static_cast<int>(globals.numEntities)) {
+		return false;
+	}
+
+	const gentity_t *ent = &g_entities[slot.cachedItemGoal.entityNumber];
+	if (!BotNavIsActivePickup(ent) ||
+		!BotNavItemGoalMatches(
+			slot.cachedItemGoal.entityNumber,
+			slot.cachedItemGoal.spawnCount,
+			slot.cachedItemGoal.item,
+			slot.cachedItemGoal.entityNumber,
+			ent) ||
+		BotNavItemGoalIsBlacklisted(slot, slot.cachedItemGoal.entityNumber, ent, frame) ||
+		BotNavItemReservationOwner(clientIndex, slot.cachedItemGoal.entityNumber) >= 0) {
+		return false;
+	}
+
+	if (candidate != nullptr) {
+		*candidate = slot.cachedItemGoal;
+	}
+	return true;
+}
+
+bool BotNavUseCachedItemGoalIfFresh(
+	BotNavRouteSlot &slot,
+	int clientIndex,
+	uint32_t frame,
+	BotNavItemGoalCandidate *candidate) {
+	if (frame >= slot.nextItemDesirabilityFrame) {
+		return false;
+	}
+	if (!BotNavCachedItemGoalStillAvailable(slot, clientIndex, frame, candidate)) {
+		slot.cachedItemGoalValid = false;
+		return false;
+	}
+
+	botNavRouteStatus.itemGoalDesirabilityStaggerDeferrals++;
+	botNavRouteStatus.itemGoalDesirabilityCacheReuses++;
+	botNavRouteStatus.lastItemGoalDesirabilityClient = clientIndex;
+	botNavRouteStatus.lastItemGoalDesirabilityNextFrame =
+		static_cast<int>(slot.nextItemDesirabilityFrame);
+	return true;
+}
+
 bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame, BotNavItemGoalCandidate *candidate) {
 	if (bot == nullptr || bot->client == nullptr || g_entities == nullptr) {
 		return false;
 	}
 
+	BotNavRouteSlot &routeSlot = botNavRouteSlots[clientIndex];
+	if (BotNavUseCachedItemGoalIfFresh(routeSlot, clientIndex, frame, candidate)) {
+		return true;
+	}
+
 	BotNavItemGoalCandidate best{};
 	int bestScore = -1;
 	const BotNavItemFocusMode focusMode = BotNavSmokeItemFocusMode();
+	const bool coopResourceShare = BotNavCoopResourceShareEnabled();
+	const bool ffaItemRoles = BotNavFfaItemRolesEnabled();
+	const bool ctfItemRoles = BotNavCtfItemRolesEnabled();
+	const bool teamItemRoles = BotNavTeamItemRolesEnabled();
+	const bool teamResourceDenial = BotNavTeamResourceDenialEnabled();
+	const bool itemRolePolicies = ffaItemRoles || ctfItemRoles || teamItemRoles;
+	BotObjectiveMatchPolicy matchPolicy{};
+	BotObjectiveCoopPolicy coopPolicy{};
+	if (coopResourceShare || itemRolePolicies || teamResourceDenial) {
+		const BotObjectiveMatchContext matchContext =
+			BotObjectives_BuildMatchContext(bot, BotObjectiveRole::None);
+		matchPolicy = BotObjectives_EvaluateMatchPolicy(matchContext);
+	}
+	BotNavItemRoleScope itemRoleScope = BotNavItemRoleScope::None;
+	if (ffaItemRoles &&
+		(matchPolicy.mode == BotObjectiveMatchMode::FreeForAll ||
+		 matchPolicy.mode == BotObjectiveMatchMode::Duel)) {
+		itemRoleScope = BotNavItemRoleScope::FreeForAll;
+	} else if (ctfItemRoles &&
+		matchPolicy.mode == BotObjectiveMatchMode::CaptureTheFlag) {
+		itemRoleScope = BotNavItemRoleScope::CaptureTheFlag;
+	} else if (teamItemRoles) {
+		itemRoleScope = BotNavItemRoleScope::Team;
+	}
+	if (coopResourceShare) {
+		const BotObjectiveCoopContext coopContext =
+			BotObjectives_BuildCoopContext(
+				bot,
+				nullptr,
+				false,
+				BotObjectiveRole::None);
+		coopPolicy = BotObjectives_EvaluateCoopPolicy(coopContext);
+	}
+	botNavRouteStatus.itemGoalDesirabilityUpdates++;
+	botNavRouteStatus.lastItemGoalDesirabilityClient = clientIndex;
 	botNavRouteStatus.itemGoalScans++;
 
 	const uint32_t start = std::min<uint32_t>(game.maxClients + 1, globals.numEntities);
@@ -1171,6 +1700,32 @@ bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame,
 		}
 
 		itemContext.focus = BotNavItemFocusForKind(focusMode, itemContext.candidateKind);
+		const BotObjectiveItemCategory itemCategory =
+			BotObjectives_ItemCategoryForItem(ent->item);
+		if (coopResourceShare) {
+			itemContext = BotNavApplyCoopResourceSharePolicy(
+				matchPolicy,
+				coopPolicy,
+				itemCategory,
+				itemContext);
+		}
+		BotObjectiveItemRolePolicy itemRolePolicy{};
+		BotObjectiveResourcePolicy resourceDenialPolicy{};
+		if (teamResourceDenial) {
+			itemContext = BotNavApplyTeamResourceDenialPolicy(
+				matchPolicy,
+				itemCategory,
+				itemContext,
+				&resourceDenialPolicy);
+		}
+		if (itemRoleScope != BotNavItemRoleScope::None) {
+			itemContext = BotNavApplyItemRolePolicy(
+				matchPolicy,
+				itemCategory,
+				itemContext,
+				itemRoleScope,
+				&itemRolePolicy);
+		}
 		const BotItemDecision decision = BotItems_Evaluate(itemContext);
 		if (decision.kind != BotItemDecisionKind::SeekCandidate || decision.priority <= 0) {
 			continue;
@@ -1190,15 +1745,133 @@ bool BotNavFindPickupGoal(const gentity_t *bot, int clientIndex, uint32_t frame,
 		best.item = static_cast<item_id_t>(decision.item);
 		best.area = area;
 		best.score = score;
+		if (itemRolePolicy.valid) {
+			if (itemRoleScope == BotNavItemRoleScope::FreeForAll) {
+				best.ffaItemRoleValid = true;
+				best.ffaItemRoleMode = static_cast<int>(itemRolePolicy.mode);
+				best.ffaItemRoleRole = static_cast<int>(itemRolePolicy.role);
+				best.ffaItemRoleLane = static_cast<int>(itemRolePolicy.lane);
+				best.ffaItemRoleCategory = static_cast<int>(itemRolePolicy.category);
+				best.ffaItemRoleItemRole = static_cast<int>(itemRolePolicy.itemRole);
+				best.ffaItemRolePriority = itemRolePolicy.priority;
+				best.ffaItemRoleScoreBoost = std::max(0, itemRolePolicy.priority);
+				best.ffaItemRoleProfileItemBonus = itemRolePolicy.profileItemPolicyBonus;
+			} else if (itemRoleScope == BotNavItemRoleScope::CaptureTheFlag) {
+				best.ctfItemRoleValid = true;
+				best.ctfItemRoleMode = static_cast<int>(itemRolePolicy.mode);
+				best.ctfItemRoleRole = static_cast<int>(itemRolePolicy.role);
+				best.ctfItemRoleLane = static_cast<int>(itemRolePolicy.lane);
+				best.ctfItemRoleCategory = static_cast<int>(itemRolePolicy.category);
+				best.ctfItemRoleItemRole = static_cast<int>(itemRolePolicy.itemRole);
+				best.ctfItemRolePriority = itemRolePolicy.priority;
+				best.ctfItemRoleScoreBoost = std::max(0, itemRolePolicy.priority);
+				best.ctfItemRoleProfileItemBonus = itemRolePolicy.profileItemPolicyBonus;
+			} else {
+				best.teamItemRoleValid = true;
+				best.teamItemRoleMode = static_cast<int>(itemRolePolicy.mode);
+				best.teamItemRoleRole = static_cast<int>(itemRolePolicy.role);
+				best.teamItemRoleLane = static_cast<int>(itemRolePolicy.lane);
+				best.teamItemRoleCategory = static_cast<int>(itemRolePolicy.category);
+				best.teamItemRoleItemRole = static_cast<int>(itemRolePolicy.itemRole);
+				best.teamItemRolePriority = itemRolePolicy.priority;
+				best.teamItemRoleScoreBoost = std::max(0, itemRolePolicy.priority);
+				best.teamItemRoleProfileItemBonus = itemRolePolicy.profileItemPolicyBonus;
+			}
+		}
+		if (resourceDenialPolicy.valid && resourceDenialPolicy.denyEnemyPickup) {
+			best.teamResourceDenialValid = true;
+			best.teamResourceDenialMode = static_cast<int>(resourceDenialPolicy.mode);
+			best.teamResourceDenialRole = static_cast<int>(resourceDenialPolicy.role);
+			best.teamResourceDenialLane = static_cast<int>(resourceDenialPolicy.lane);
+			best.teamResourceDenialCategory = static_cast<int>(resourceDenialPolicy.category);
+			best.teamResourceDenialIntent = static_cast<int>(resourceDenialPolicy.intent);
+			best.teamResourceDenialPriority = resourceDenialPolicy.priority;
+			best.teamResourceDenialScoreBoost = std::max(0, resourceDenialPolicy.priority);
+			best.teamResourceDenialProfileItemBonus = resourceDenialPolicy.profileItemPolicyBonus;
+		}
 		best.origin = { routeOrigin[0], routeOrigin[1], routeOrigin[2] };
 	}
 
 	if (bestScore < 0) {
+		routeSlot.cachedItemGoalValid = false;
+		routeSlot.cachedItemGoal = {};
+		routeSlot.nextItemDesirabilityFrame = BotNavNextItemDesirabilityFrame(clientIndex, frame);
+		botNavRouteStatus.lastItemGoalDesirabilityNextFrame =
+			static_cast<int>(routeSlot.nextItemDesirabilityFrame);
 		return false;
 	}
 
 	if (candidate != nullptr) {
 		*candidate = best;
+	}
+	routeSlot.cachedItemGoalValid = true;
+	routeSlot.cachedItemGoal = best;
+	routeSlot.nextItemDesirabilityFrame = BotNavNextItemDesirabilityFrame(clientIndex, frame);
+	botNavRouteStatus.lastItemGoalDesirabilityNextFrame =
+		static_cast<int>(routeSlot.nextItemDesirabilityFrame);
+	if (best.ffaItemRoleValid) {
+		botNavRouteStatus.ffaItemRoleSelectedGoals++;
+		botNavRouteStatus.lastFfaItemRoleClient = clientIndex;
+		botNavRouteStatus.lastFfaItemRoleMode = best.ffaItemRoleMode;
+		botNavRouteStatus.lastFfaItemRoleRole = best.ffaItemRoleRole;
+		botNavRouteStatus.lastFfaItemRoleLane = best.ffaItemRoleLane;
+		botNavRouteStatus.lastFfaItemRoleCategory = best.ffaItemRoleCategory;
+		botNavRouteStatus.lastFfaItemRoleItemRole = best.ffaItemRoleItemRole;
+		botNavRouteStatus.lastFfaItemRolePriority = best.ffaItemRolePriority;
+		botNavRouteStatus.lastFfaItemRoleScoreBoost = best.ffaItemRoleScoreBoost;
+		botNavRouteStatus.lastFfaItemRoleProfileItemBonus =
+			best.ffaItemRoleProfileItemBonus;
+		botNavRouteStatus.lastFfaItemRoleEntity = best.entityNumber;
+		botNavRouteStatus.lastFfaItemRoleItem = static_cast<int>(best.item);
+		botNavRouteStatus.lastFfaItemRoleScore = best.score;
+	}
+	if (best.ctfItemRoleValid) {
+		botNavRouteStatus.ctfItemRoleSelectedGoals++;
+		botNavRouteStatus.lastCtfItemRoleClient = clientIndex;
+		botNavRouteStatus.lastCtfItemRoleMode = best.ctfItemRoleMode;
+		botNavRouteStatus.lastCtfItemRoleRole = best.ctfItemRoleRole;
+		botNavRouteStatus.lastCtfItemRoleLane = best.ctfItemRoleLane;
+		botNavRouteStatus.lastCtfItemRoleCategory = best.ctfItemRoleCategory;
+		botNavRouteStatus.lastCtfItemRoleItemRole = best.ctfItemRoleItemRole;
+		botNavRouteStatus.lastCtfItemRolePriority = best.ctfItemRolePriority;
+		botNavRouteStatus.lastCtfItemRoleScoreBoost = best.ctfItemRoleScoreBoost;
+		botNavRouteStatus.lastCtfItemRoleProfileItemBonus =
+			best.ctfItemRoleProfileItemBonus;
+		botNavRouteStatus.lastCtfItemRoleEntity = best.entityNumber;
+		botNavRouteStatus.lastCtfItemRoleItem = static_cast<int>(best.item);
+		botNavRouteStatus.lastCtfItemRoleScore = best.score;
+	}
+	if (best.teamItemRoleValid) {
+		botNavRouteStatus.teamItemRoleSelectedGoals++;
+		botNavRouteStatus.lastTeamItemRoleClient = clientIndex;
+		botNavRouteStatus.lastTeamItemRoleMode = best.teamItemRoleMode;
+		botNavRouteStatus.lastTeamItemRoleRole = best.teamItemRoleRole;
+		botNavRouteStatus.lastTeamItemRoleLane = best.teamItemRoleLane;
+		botNavRouteStatus.lastTeamItemRoleCategory = best.teamItemRoleCategory;
+		botNavRouteStatus.lastTeamItemRoleItemRole = best.teamItemRoleItemRole;
+		botNavRouteStatus.lastTeamItemRolePriority = best.teamItemRolePriority;
+		botNavRouteStatus.lastTeamItemRoleScoreBoost = best.teamItemRoleScoreBoost;
+		botNavRouteStatus.lastTeamItemRoleProfileItemBonus =
+			best.teamItemRoleProfileItemBonus;
+		botNavRouteStatus.lastTeamItemRoleEntity = best.entityNumber;
+		botNavRouteStatus.lastTeamItemRoleItem = static_cast<int>(best.item);
+		botNavRouteStatus.lastTeamItemRoleScore = best.score;
+	}
+	if (best.teamResourceDenialValid) {
+		botNavRouteStatus.teamResourceDenialSelectedGoals++;
+		botNavRouteStatus.lastTeamResourceDenialClient = clientIndex;
+		botNavRouteStatus.lastTeamResourceDenialMode = best.teamResourceDenialMode;
+		botNavRouteStatus.lastTeamResourceDenialRole = best.teamResourceDenialRole;
+		botNavRouteStatus.lastTeamResourceDenialLane = best.teamResourceDenialLane;
+		botNavRouteStatus.lastTeamResourceDenialCategory = best.teamResourceDenialCategory;
+		botNavRouteStatus.lastTeamResourceDenialIntent = best.teamResourceDenialIntent;
+		botNavRouteStatus.lastTeamResourceDenialPriority = best.teamResourceDenialPriority;
+		botNavRouteStatus.lastTeamResourceDenialScoreBoost = best.teamResourceDenialScoreBoost;
+		botNavRouteStatus.lastTeamResourceDenialProfileItemBonus =
+			best.teamResourceDenialProfileItemBonus;
+		botNavRouteStatus.lastTeamResourceDenialEntity = best.entityNumber;
+		botNavRouteStatus.lastTeamResourceDenialItem = static_cast<int>(best.item);
+		botNavRouteStatus.lastTeamResourceDenialScore = best.score;
 	}
 	return true;
 }
@@ -1396,6 +2069,129 @@ void BotNavRecordRoute(int clientIndex, const BotLibAdapterRouteSteer &route) {
 	botNavRouteStatus.lastReachabilityTravelFlags = route.reachabilityTravelFlags;
 	botNavRouteStatus.lastReachabilityEndArea = route.reachabilityEndArea;
 	botNavRouteStatus.lastStopEvent = route.stopEvent;
+}
+
+void BotNavRecordCornerCutSkip(BotNavCornerCutSkipReason reason) {
+	botNavRouteStatus.cornerCutSkips++;
+	botNavRouteStatus.lastCornerCutSkipReason = static_cast<int>(reason);
+}
+
+void BotNavPromoteCornerCutPoint(BotLibAdapterRouteSteer *route, int pointIndex) {
+	if (route == nullptr || pointIndex < 0) {
+		return;
+	}
+
+	const Vector3 target = BotNavRoutePoint(*route, pointIndex);
+	BotNavSetRouteMoveTarget(route, target);
+	route->routePoints[0][0] = target.x;
+	route->routePoints[0][1] = target.y;
+	route->routePoints[0][2] = target.z;
+	route->routePointCount = 1;
+}
+
+void BotNavApplyTraceCheckedCornerCut(const gentity_t *bot, BotLibAdapterRouteSteer *route) {
+	botNavRouteStatus.cornerCutChecks++;
+	botNavRouteStatus.lastCornerCutPointIndex = -1;
+	botNavRouteStatus.lastCornerCutOriginalPointCount = 0;
+	botNavRouteStatus.lastCornerCutResultPointCount = 0;
+	botNavRouteStatus.lastCornerCutDistanceSq = 0;
+	botNavRouteStatus.lastCornerCutTraceFraction = 0;
+	botNavRouteStatus.lastCornerCutTravelType = route != nullptr ? route->reachabilityTravelType : 0;
+	botNavRouteStatus.lastCornerCutSkipReason = static_cast<int>(BotNavCornerCutSkipReason::None);
+
+	if (bot == nullptr || route == nullptr || !route->success) {
+		BotNavRecordCornerCutSkip(BotNavCornerCutSkipReason::Invalid);
+		return;
+	}
+
+	if (!BotNavCornerCutTravelTypeSupported(route->reachabilityTravelType)) {
+		BotNavRecordCornerCutSkip(BotNavCornerCutSkipReason::UnsupportedTravel);
+		return;
+	}
+
+	const int pointCount = BotNavRoutePointCount(*route);
+	botNavRouteStatus.lastCornerCutOriginalPointCount = pointCount;
+	if (pointCount <= 1) {
+		BotNavRecordCornerCutSkip(BotNavCornerCutSkipReason::NoCandidate);
+		return;
+	}
+
+	int bestPointIndex = -1;
+	float bestDistanceSquared = 0.0f;
+	bool consideredCandidate = false;
+	for (int pointIndex = 1; pointIndex < pointCount; ++pointIndex) {
+		const Vector3 routePoint = BotNavRoutePoint(*route, pointIndex);
+		const float distanceSquared = BotNavHorizontalDistanceSquared(bot->s.origin, routePoint);
+		if (distanceSquared < BOT_NAV_CORNER_CUT_MIN_DIST_SQUARED) {
+			continue;
+		}
+		if (distanceSquared > BOT_NAV_CORNER_CUT_MAX_DIST_SQUARED) {
+			break;
+		}
+
+		consideredCandidate = true;
+		if (BotNavRouteShortcutTraceClear(bot, routePoint, route->reachabilityTravelType, true)) {
+			bestPointIndex = pointIndex;
+			bestDistanceSquared = distanceSquared;
+		}
+	}
+
+	if (bestPointIndex <= 0) {
+		BotNavRecordCornerCutSkip(
+			consideredCandidate ?
+				BotNavCornerCutSkipReason::NoSafeTrace :
+				BotNavCornerCutSkipReason::NoCandidate);
+		return;
+	}
+
+	BotNavPromoteCornerCutPoint(route, bestPointIndex);
+	botNavRouteStatus.cornerCutApplications++;
+	botNavRouteStatus.lastCornerCutPointIndex = bestPointIndex;
+	botNavRouteStatus.lastCornerCutResultPointCount = BotNavRoutePointCount(*route);
+	botNavRouteStatus.lastCornerCutDistanceSq = BotNavStatusDistance(bestDistanceSquared);
+}
+
+void BotNavStabilizeRouteTarget(const gentity_t *bot, BotLibAdapterRouteSteer *route) {
+	if (bot == nullptr || route == nullptr || !route->success) {
+		return;
+	}
+
+	botNavRouteStatus.routeTargetStabilizationChecks++;
+	botNavRouteStatus.lastRouteTargetStablePointIndex = -1;
+
+	const Vector3 originalTarget = BotNavRouteTarget(*route);
+	const float originalDistanceSquared =
+		BotNavHorizontalDistanceSquared(bot->s.origin, originalTarget);
+	botNavRouteStatus.lastRouteTargetOriginalDistanceSq =
+		BotNavStatusDistance(originalDistanceSquared);
+	botNavRouteStatus.lastRouteTargetStableDistanceSq = 0;
+
+	if (originalDistanceSquared > BOT_NAV_ROUTE_TARGET_STABILIZE_DIST_SQUARED) {
+		botNavRouteStatus.routeTargetStabilizationSkips++;
+		return;
+	}
+
+	const int pointCount = BotNavRoutePointCount(*route);
+	for (int pointIndex = 0; pointIndex < pointCount; ++pointIndex) {
+		const Vector3 routePoint = BotNavRoutePoint(*route, pointIndex);
+		const float stableDistanceSquared =
+			BotNavHorizontalDistanceSquared(bot->s.origin, routePoint);
+		if (stableDistanceSquared < BOT_NAV_ROUTE_TARGET_STABLE_MIN_DIST_SQUARED) {
+			continue;
+		}
+		if (!BotNavRouteShortcutTraceClear(bot, routePoint, route->reachabilityTravelType, false)) {
+			continue;
+		}
+
+		BotNavSetRouteMoveTarget(route, routePoint);
+		botNavRouteStatus.routeTargetStabilizations++;
+		botNavRouteStatus.lastRouteTargetStableDistanceSq =
+			BotNavStatusDistance(stableDistanceSquared);
+		botNavRouteStatus.lastRouteTargetStablePointIndex = pointIndex;
+		return;
+	}
+
+	botNavRouteStatus.routeTargetStabilizationSkips++;
 }
 
 bool BotNavBuildRouteWithFallback(
@@ -1714,6 +2510,7 @@ bool BotNavRefreshRoute(
 	};
 
 	botNavRouteStatus.queries++;
+	botNavRouteStatus.routeRecomputeRateLimitRefreshes++;
 	BotNavRecordRefresh(reason);
 
 	const uint64_t routeQueryStartNs = BotNavRouteNowNs();
@@ -1735,6 +2532,9 @@ bool BotNavRefreshRoute(
 		}
 		return false;
 	}
+
+	BotNavStabilizeRouteTarget(bot, &refreshedRoute);
+	BotNavApplyTraceCheckedCornerCut(bot, &refreshedRoute);
 
 	BotNavRouteSlot &slot = botNavRouteSlots[clientIndex];
 	const int previousProgressGoalArea = slot.progressGoalArea;
@@ -1772,6 +2572,22 @@ bool BotNavRefreshRoute(
 	return true;
 }
 
+int BotNavBlackboardGoalTypeForSlot(const BotNavRouteSlot &slot) {
+	if (slot.persistentGoalEntityNumber >= 0) {
+		return static_cast<int>(BotNavBlackboardGoalType::Item);
+	}
+	if (slot.persistentGoalIsPosition) {
+		return static_cast<int>(BotNavBlackboardGoalType::Position);
+	}
+	if (slot.persistentGoalTravelType > 0) {
+		return static_cast<int>(BotNavBlackboardGoalType::TravelType);
+	}
+	if (slot.persistentGoalArea > 0) {
+		return static_cast<int>(BotNavBlackboardGoalType::RouteGoal);
+	}
+	return static_cast<int>(BotNavBlackboardGoalType::None);
+}
+
 } // namespace
 
 void BotNav_ResetAll() {
@@ -1787,6 +2603,20 @@ void BotNav_ResetClient(int clientIndex) {
 
 	botNavRouteSlots[clientIndex] = {};
 	BotNavUpdateActiveReservations();
+}
+
+bool BotNav_ProbePickupGoal(const gentity_t *bot) {
+	const int clientIndex = BotNavClientIndex(bot);
+	if (clientIndex < 0) {
+		return false;
+	}
+
+	BotNavItemGoalCandidate selectedItemGoal{};
+	return BotNavFindPickupGoal(
+		bot,
+		clientIndex,
+		gi.ServerFrame(),
+		&selectedItemGoal);
 }
 
 bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *request, BotLibAdapterRouteSteer *route) {
@@ -1878,6 +2708,10 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 	if (reason == BotNavRefreshReason::None) {
 		const uint64_t routeReuseStartNs = BotNavRouteNowNs();
 		botNavRouteStatus.reuses++;
+		botNavRouteStatus.routeRecomputeRateLimitChecks++;
+		if (frame < slot.nextRefreshFrame) {
+			botNavRouteStatus.routeRecomputeRateLimitReuses++;
+		}
 		if (slot.persistentGoalArea > 0) {
 			botNavRouteStatus.persistentGoalCacheReuses++;
 			botNavRouteStatus.lastPersistentGoalArea = slot.persistentGoalArea;
@@ -1912,6 +2746,28 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 		hasSelectedTravelTypeGoal ? requestedTravelTypeGoal : 0,
 		reason,
 		route);
+}
+
+bool BotNav_RequestInteractionRetry(
+	const gentity_t *bot,
+	const BotLibAdapterRouteSteer *route,
+	bool fromStuck) {
+	const int clientIndex = BotNavClientIndex(bot);
+	if (clientIndex < 0 || route == nullptr) {
+		return false;
+	}
+
+	BotNavRouteSlot &slot = botNavRouteSlots[clientIndex];
+	const uint32_t frame = gi.ServerFrame();
+	return BotNavActivateInteractionRetry(
+		slot,
+		bot,
+		clientIndex,
+		frame,
+		*route,
+		fromStuck) ||
+		(slot.interactionAction != static_cast<int>(BotNavInteractionAction::None) &&
+		 frame < slot.interactionUntilFrame);
 }
 
 bool BotNav_GetRecoveryMove(const gentity_t *bot, BotNavRecoveryMove *move) {
@@ -1958,6 +2814,7 @@ bool BotNav_GetRecoveryMove(const gentity_t *bot, BotNavRecoveryMove *move) {
 			move->use = use;
 			move->framesRemaining = framesRemaining;
 			move->interactionAction = slot.interactionAction;
+			move->interactionKind = slot.interactionKind;
 			move->interactionEntity = slot.interactionEntityNumber;
 		}
 		return true;
@@ -2027,4 +2884,59 @@ const BotNavRouteStatus &BotNav_GetRouteStatus() {
 	BotNavUpdateActiveReservations();
 	BotNavUpdateActiveGoalBlacklists();
 	return botNavRouteStatus;
+}
+
+bool BotNav_GetBlackboardSnapshot(int clientIndex, BotNavBlackboardSnapshot *snapshot) {
+	if (snapshot == nullptr) {
+		return false;
+	}
+
+	*snapshot = {};
+	if (clientIndex < 0 || clientIndex >= static_cast<int>(botNavRouteSlots.size())) {
+		return false;
+	}
+
+	const BotNavRouteSlot &slot = botNavRouteSlots[clientIndex];
+	const uint32_t frame = gi.ServerFrame();
+
+	snapshot->routeSlotValid = slot.valid;
+	snapshot->clientIndex = clientIndex;
+	snapshot->goalType = BotNavBlackboardGoalTypeForSlot(slot);
+	snapshot->goalArea = slot.persistentGoalArea;
+	snapshot->goalEntity = slot.persistentGoalEntityNumber;
+	snapshot->goalSpawnCount = slot.persistentGoalEntitySpawnCount;
+	snapshot->goalItem = static_cast<int>(slot.persistentGoalItem);
+	snapshot->goalPositionX = static_cast<int>(slot.persistentPositionGoal.x);
+	snapshot->goalPositionY = static_cast<int>(slot.persistentPositionGoal.y);
+	snapshot->goalPositionZ = static_cast<int>(slot.persistentPositionGoal.z);
+	snapshot->goalTravelType = slot.persistentGoalTravelType;
+	if (slot.valid) {
+		snapshot->routeStartArea = slot.route.startArea;
+		snapshot->routeGoalArea = slot.route.goalArea;
+		snapshot->routeEndArea = slot.route.routeEndArea;
+		snapshot->routePointCount = BotNavRoutePointCount(slot.route);
+		snapshot->routeTravelTime = slot.route.travelTime;
+		snapshot->routeReachability = slot.route.reachability;
+		snapshot->routeReachabilityTravelType = slot.route.reachabilityTravelType;
+		snapshot->routeReachabilityTravelFlags = slot.route.reachabilityTravelFlags;
+		snapshot->routeReachabilityEndArea = slot.route.reachabilityEndArea;
+		snapshot->routeStopEvent = slot.route.stopEvent;
+	}
+	snapshot->stuckReason = slot.lastStuckReason;
+	snapshot->stuckFrames = slot.stagnantProgressFrames;
+	snapshot->stuckDistanceSq = slot.lastStuckDistanceSq;
+	snapshot->stuckProgressDelta = slot.lastStuckProgressDelta;
+	if (slot.recoverySideSign != 0 && frame < slot.recoveryUntilFrame) {
+		snapshot->stuckRecoverySide = slot.recoverySideSign;
+		snapshot->stuckRecoveryFramesRemaining =
+			static_cast<int>(slot.recoveryUntilFrame - frame);
+	}
+	if (slot.persistentGoalEntityNumber >= 0 && slot.persistentGoalItem > IT_NULL) {
+		snapshot->itemReservationActive = 1;
+		snapshot->itemReservationEntity = slot.persistentGoalEntityNumber;
+		snapshot->itemReservationOwnerClient = clientIndex;
+		snapshot->itemReservationItem = static_cast<int>(slot.persistentGoalItem);
+		snapshot->itemReservationArea = slot.persistentGoalArea;
+	}
+	return true;
 }

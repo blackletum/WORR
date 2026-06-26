@@ -39,6 +39,27 @@ statistical counters.*/
 
 using json = Json::Value;
 
+static constexpr int MATCH_STATS_SCHEMA_VERSION = 1;
+static constexpr int MATCH_STATS_ARTIFACT_VERSION = 1;
+static constexpr const char* MATCH_STATS_SCHEMA_NAME = "worr.match_stats";
+static constexpr const char* MATCH_STATS_ARTIFACT_TYPE = "match_stats";
+static constexpr int TOURNAMENT_SERIES_SCHEMA_VERSION = 1;
+static constexpr int TOURNAMENT_SERIES_ARTIFACT_VERSION = 1;
+static constexpr const char* TOURNAMENT_SERIES_SCHEMA_NAME = "worr.tournament_series";
+static constexpr const char* TOURNAMENT_SERIES_ARTIFACT_TYPE = "tournament_series";
+static constexpr int MATCH_CATALOG_SCHEMA_VERSION = 1;
+static constexpr int MATCH_CATALOG_ARTIFACT_VERSION = 1;
+static constexpr const char* MATCH_CATALOG_SCHEMA_NAME = "worr.match_catalog";
+static constexpr const char* MATCH_CATALOG_ARTIFACT_TYPE = "match_catalog";
+static constexpr const char* MATCH_CATALOG_FILE_NAME = "catalog.json";
+
+static void JsonAddArtifactMetadata(json& artifact, const char* schemaName, int schemaVersion, const char* artifactType, int artifactVersion) {
+	artifact["schemaName"] = schemaName;
+	artifact["schemaVersion"] = schemaVersion;
+	artifact["artifactType"] = artifactType;
+	artifact["artifactVersion"] = artifactVersion;
+}
+
 /*
 =============
 JsonHasData
@@ -454,6 +475,7 @@ struct MatchStats {
 	json toJson() const {
 		const bool hadTeams = wasTeamMode && teams.size() >= 2;
 		json matchJson;
+		JsonAddArtifactMetadata(matchJson, MATCH_STATS_SCHEMA_NAME, MATCH_STATS_SCHEMA_VERSION, MATCH_STATS_ARTIFACT_TYPE, MATCH_STATS_ARTIFACT_VERSION);
 		matchJson["matchID"] = matchID;
 		matchJson["serverName"] = serverName;
 		if (!serverHostName.empty()) {
@@ -560,10 +582,204 @@ static std::mutex			g_matchStatsWorkerMutex;
 static std::condition_variable	g_matchStatsWorkerCondition;
 static std::queue<MatchStatsWorkerJob>	g_matchStatsWorkerQueue;
 static std::once_flag		g_matchStatsWorkerOnceFlag;
+static std::mutex			g_matchLoggingCatalogMutex;
 
 static void MatchStatsWorker_ThreadMain();
 static void MatchStatsWorker_EnsureStarted();
 static uint64_t MatchStatsWorker_Enqueue(MatchStats&& stats, std::string baseFilePath);
+static bool JsonStringEquals(const json& object, const char* key, const char* expected);
+static bool JsonIntEquals(const json& object, const char* key, int expected);
+
+static int64_t MatchLogging_NowUnixMS() {
+	const auto now = std::chrono::system_clock::now();
+	return std::chrono::duration_cast<std::chrono::milliseconds>(
+		now.time_since_epoch()).count();
+}
+
+static std::string MatchLogging_RelativeArtifactPath(
+	const std::filesystem::path& directory,
+	const std::filesystem::path& artifactPath) {
+	std::error_code ec;
+	const auto relative = std::filesystem::relative(artifactPath, directory, ec);
+	if (!ec && !relative.empty()) {
+		return relative.generic_string();
+	}
+
+	return artifactPath.filename().generic_string();
+}
+
+static void MatchLogging_InitializeCatalog(json& catalog) {
+	catalog = json(Json::objectValue);
+	JsonAddArtifactMetadata(catalog, MATCH_CATALOG_SCHEMA_NAME,
+		MATCH_CATALOG_SCHEMA_VERSION, MATCH_CATALOG_ARTIFACT_TYPE,
+		MATCH_CATALOG_ARTIFACT_VERSION);
+	catalog["generatedAtMS"] = Json::Int64(MatchLogging_NowUnixMS());
+	catalog["artifacts"] = json(Json::arrayValue);
+	catalog["latest"] = json(Json::objectValue);
+	catalog["artifactCount"] = 0;
+}
+
+static bool MatchLogging_CatalogMetadataValid(const json& catalog) {
+	return JsonStringEquals(catalog, "schemaName", MATCH_CATALOG_SCHEMA_NAME) &&
+		JsonIntEquals(catalog, "schemaVersion", MATCH_CATALOG_SCHEMA_VERSION) &&
+		JsonStringEquals(catalog, "artifactType", MATCH_CATALOG_ARTIFACT_TYPE) &&
+		JsonIntEquals(catalog, "artifactVersion", MATCH_CATALOG_ARTIFACT_VERSION);
+}
+
+static json MatchLogging_BuildCatalogFromEntries(const json& artifacts) {
+	json catalog;
+	MatchLogging_InitializeCatalog(catalog);
+
+	if (artifacts.isArray()) {
+		for (const auto& artifact : artifacts) {
+			catalog["artifacts"].append(artifact);
+
+			const json& artifactType = artifact["artifactType"];
+			const json& artifactId = artifact["id"];
+			if (artifactType.isString() && artifactId.isString()) {
+				catalog["latest"][artifactType.asString()] = artifactId.asString();
+			}
+		}
+	}
+
+	catalog["artifactCount"] = static_cast<int>(catalog["artifacts"].size());
+	return catalog;
+}
+
+static json MatchStats_BuildCatalogEntry(
+	const MatchStats& stats,
+	const std::filesystem::path& directory,
+	const std::filesystem::path& basePath,
+	bool htmlWritten) {
+	json entry;
+	entry["artifactType"] = MATCH_STATS_ARTIFACT_TYPE;
+	entry["schemaName"] = MATCH_STATS_SCHEMA_NAME;
+	entry["schemaVersion"] = MATCH_STATS_SCHEMA_VERSION;
+	entry["artifactVersion"] = MATCH_STATS_ARTIFACT_VERSION;
+	entry["id"] = stats.matchID;
+	entry["gameType"] = stats.gameType;
+	entry["ruleSet"] = stats.ruleSet;
+	entry["mapName"] = stats.mapName;
+	entry["matchStartMS"] = Json::Int64(stats.matchStartMS);
+	entry["matchEndMS"] = Json::Int64(stats.matchEndMS);
+	entry["durationMS"] = Json::Int64(stats.durationMS);
+	entry["playerCount"] = static_cast<int>(stats.players.size());
+	entry["teamCount"] = static_cast<int>(stats.teams.size());
+	entry["jsonPath"] = MatchLogging_RelativeArtifactPath(
+		directory, basePath.string() + ".json");
+	if (htmlWritten) {
+		entry["htmlPath"] = MatchLogging_RelativeArtifactPath(
+			directory, basePath.string() + ".html");
+	}
+	return entry;
+}
+
+static json TournamentSeries_BuildCatalogEntry(
+	const TournamentSeriesSnapshot& series,
+	const std::filesystem::path& directory,
+	const std::filesystem::path& basePath,
+	bool htmlWritten) {
+	json entry;
+	entry["artifactType"] = TOURNAMENT_SERIES_ARTIFACT_TYPE;
+	entry["schemaName"] = TOURNAMENT_SERIES_SCHEMA_NAME;
+	entry["schemaVersion"] = TOURNAMENT_SERIES_SCHEMA_VERSION;
+	entry["artifactVersion"] = TOURNAMENT_SERIES_ARTIFACT_VERSION;
+	entry["id"] = series.seriesId;
+	if (!series.name.empty()) {
+		entry["name"] = series.name;
+	}
+	entry["bestOf"] = series.bestOf;
+	entry["winTarget"] = series.winTarget;
+	entry["gametype"] = std::string(Game::GetInfo(series.gametype).short_name_upper);
+	entry["matchCount"] = static_cast<int>(series.matches.size());
+	entry["jsonPath"] = MatchLogging_RelativeArtifactPath(
+		directory, basePath.string() + ".json");
+	if (htmlWritten) {
+		entry["htmlPath"] = MatchLogging_RelativeArtifactPath(
+			directory, basePath.string() + ".html");
+	}
+	return entry;
+}
+
+static bool MatchLogging_ReadCatalog(
+	const std::filesystem::path& catalogPath,
+	json& catalog) {
+	std::ifstream file(catalogPath, std::ifstream::binary);
+	if (!file.is_open()) {
+		MatchLogging_InitializeCatalog(catalog);
+		return true;
+	}
+
+	Json::CharReaderBuilder builder;
+	std::string errors;
+	if (!Json::parseFromStream(builder, file, &catalog, &errors) ||
+		!catalog.isObject() || !MatchLogging_CatalogMetadataValid(catalog)) {
+		gi.Com_PrintFmt("{}: Rebuilding invalid match catalog '{}'.\n",
+			__FUNCTION__, catalogPath.string().c_str());
+		MatchLogging_InitializeCatalog(catalog);
+		return true;
+	}
+
+	if (!catalog["artifacts"].isArray()) {
+		catalog["artifacts"] = json(Json::arrayValue);
+	}
+	if (!catalog["latest"].isObject()) {
+		catalog["latest"] = json(Json::objectValue);
+	}
+	return true;
+}
+
+static bool MatchLogging_SameCatalogArtifact(const json& lhs, const json& rhs) {
+	return lhs["artifactType"].isString() && rhs["artifactType"].isString() &&
+		lhs["id"].isString() && rhs["id"].isString() &&
+		lhs["artifactType"].asString() == rhs["artifactType"].asString() &&
+		lhs["id"].asString() == rhs["id"].asString();
+}
+
+static bool MatchLogging_UpdateCatalog(
+	const std::filesystem::path& directory,
+	const json& artifactEntry) {
+	if (directory.empty()) {
+		return false;
+	}
+
+	std::lock_guard<std::mutex> lock(g_matchLoggingCatalogMutex);
+	const std::filesystem::path catalogPath = directory / MATCH_CATALOG_FILE_NAME;
+	json catalog;
+	if (!MatchLogging_ReadCatalog(catalogPath, catalog)) {
+		return false;
+	}
+
+	json artifacts = json(Json::arrayValue);
+	for (const auto& existing : catalog["artifacts"]) {
+		if (!MatchLogging_SameCatalogArtifact(existing, artifactEntry)) {
+			artifacts.append(existing);
+		}
+	}
+	artifacts.append(artifactEntry);
+	catalog = MatchLogging_BuildCatalogFromEntries(artifacts);
+
+	try {
+		WriteFileAtomically(catalogPath, [&](std::ofstream& file) {
+			Json::StreamWriterBuilder writer;
+			writer["indentation"] = "    ";
+			file << Json::writeString(writer, catalog);
+		});
+		gi.Com_PrintFmt("Match catalog updated at {}\n",
+			catalogPath.string().c_str());
+		return true;
+	}
+	catch (const std::exception& e) {
+		gi.Com_PrintFmt("Exception while writing match catalog ({}): {}\n",
+			catalogPath.string().c_str(), e.what());
+	}
+	catch (...) {
+		gi.Com_PrintFmt("Unknown error while writing match catalog ({})\n",
+			catalogPath.string().c_str());
+	}
+
+	return false;
+}
 
 /*
 =============
@@ -658,6 +874,7 @@ static int TournamentPlayerWinsForId(std::string_view id) {
 
 static json TournamentSeries_BuildJson(const TournamentSeriesSnapshot& series) {
 	json seriesJson;
+	JsonAddArtifactMetadata(seriesJson, TOURNAMENT_SERIES_SCHEMA_NAME, TOURNAMENT_SERIES_SCHEMA_VERSION, TOURNAMENT_SERIES_ARTIFACT_TYPE, TOURNAMENT_SERIES_ARTIFACT_VERSION);
 	seriesJson["seriesId"] = series.seriesId;
 	if (!series.name.empty())
 		seriesJson["name"] = series.name;
@@ -715,6 +932,164 @@ static json TournamentSeries_BuildJson(const TournamentSeriesSnapshot& series) {
 	}
 
 	return seriesJson;
+}
+
+static bool JsonStringEquals(const json& object, const char* key, const char* expected) {
+	const json& value = object[key];
+	return value.isString() && value.asString() == expected;
+}
+
+static bool JsonIntEquals(const json& object, const char* key, int expected) {
+	const json& value = object[key];
+	return value.isInt() && value.asInt() == expected;
+}
+
+int MatchLogging_PrintSchemaStatus() {
+	MatchStats sampleMatch;
+	sampleMatch.matchID = "schema-smoke-match";
+	sampleMatch.serverName = "schema-smoke-server";
+	sampleMatch.serverHostName = "schema-smoke-host";
+	sampleMatch.gameType = "FFA";
+	sampleMatch.ruleSet = "standard";
+	sampleMatch.mapName = "schema-smoke-map";
+	sampleMatch.matchStartMS = 1000;
+	sampleMatch.matchEndMS = 16000;
+	sampleMatch.timeLimitSeconds = 600;
+	sampleMatch.scoreLimit = 30;
+	sampleMatch.eventLog.push_back({ 1_sec, "SCHEMA_SMOKE" });
+	sampleMatch.calculateDuration();
+
+	json matchJson = sampleMatch.toJson();
+
+	TournamentSeriesSnapshot sampleSeries;
+	sampleSeries.seriesId = "schema-smoke-series";
+	sampleSeries.name = "Schema Smoke";
+	sampleSeries.bestOf = 3;
+	sampleSeries.winTarget = 2;
+	sampleSeries.gametype = GameType::FreeForAll;
+	sampleSeries.matches.push_back(matchJson);
+	json seriesJson = TournamentSeries_BuildJson(sampleSeries);
+	const std::filesystem::path sampleDirectory(MATCH_STATS_PATH);
+	const std::filesystem::path sampleMatchBase =
+		sampleDirectory / sampleMatch.matchID;
+	const std::filesystem::path sampleSeriesBase =
+		sampleDirectory / ("series_" + TournamentSeriesFileId(sampleSeries.seriesId));
+	json catalogEntries = json(Json::arrayValue);
+	catalogEntries.append(MatchStats_BuildCatalogEntry(
+		sampleMatch, sampleDirectory, sampleMatchBase, false));
+	catalogEntries.append(TournamentSeries_BuildCatalogEntry(
+		sampleSeries, sampleDirectory, sampleSeriesBase, false));
+	json catalogJson = MatchLogging_BuildCatalogFromEntries(catalogEntries);
+
+	const bool matchSchemaOk =
+		JsonStringEquals(matchJson, "schemaName", MATCH_STATS_SCHEMA_NAME) &&
+		JsonIntEquals(matchJson, "schemaVersion", MATCH_STATS_SCHEMA_VERSION) &&
+		JsonStringEquals(matchJson, "artifactType", MATCH_STATS_ARTIFACT_TYPE) &&
+		JsonIntEquals(matchJson, "artifactVersion", MATCH_STATS_ARTIFACT_VERSION);
+	const bool seriesSchemaOk =
+		JsonStringEquals(seriesJson, "schemaName", TOURNAMENT_SERIES_SCHEMA_NAME) &&
+		JsonIntEquals(seriesJson, "schemaVersion", TOURNAMENT_SERIES_SCHEMA_VERSION) &&
+		JsonStringEquals(seriesJson, "artifactType", TOURNAMENT_SERIES_ARTIFACT_TYPE) &&
+		JsonIntEquals(seriesJson, "artifactVersion", TOURNAMENT_SERIES_ARTIFACT_VERSION);
+	const bool shapeOk =
+		matchJson["players"].isArray() &&
+		matchJson["eventLog"].isArray() &&
+		seriesJson["matches"].isArray() &&
+		seriesJson["matches"].size() == 1 &&
+		JsonIntEquals(seriesJson["matches"][0], "schemaVersion", MATCH_STATS_SCHEMA_VERSION);
+	const bool catalogSchemaOk = MatchLogging_CatalogMetadataValid(catalogJson);
+	const bool catalogShapeOk =
+		catalogJson["artifacts"].isArray() &&
+		catalogJson["artifacts"].size() == 2 &&
+		JsonIntEquals(catalogJson, "artifactCount", 2) &&
+		JsonStringEquals(catalogJson["latest"], MATCH_STATS_ARTIFACT_TYPE,
+			sampleMatch.matchID.c_str()) &&
+		JsonStringEquals(catalogJson["latest"], TOURNAMENT_SERIES_ARTIFACT_TYPE,
+			sampleSeries.seriesId.c_str()) &&
+		JsonStringEquals(catalogJson["artifacts"][0], "jsonPath",
+			"schema-smoke-match.json") &&
+		JsonStringEquals(catalogJson["artifacts"][1], "jsonPath",
+			"series_schema-smoke-series.json") &&
+		JsonStringEquals(catalogJson["artifacts"][0], "schemaName",
+			MATCH_STATS_SCHEMA_NAME) &&
+		JsonStringEquals(catalogJson["artifacts"][1], "schemaName",
+			TOURNAMENT_SERIES_SCHEMA_NAME);
+	int catalogWritePass = 0;
+	int catalogWriteArtifactCount = 0;
+	{
+		const std::filesystem::path smokeDirectory(".tmp/match_logging_catalog_smoke");
+		std::error_code dirError;
+		std::filesystem::create_directories(smokeDirectory, dirError);
+		if (!dirError) {
+			const std::filesystem::path smokeMatchBase =
+				smokeDirectory / sampleMatch.matchID;
+			const std::filesystem::path smokeSeriesBase =
+				smokeDirectory / ("series_" + TournamentSeriesFileId(sampleSeries.seriesId));
+			const bool writeOk =
+				MatchLogging_UpdateCatalog(smokeDirectory,
+					MatchStats_BuildCatalogEntry(sampleMatch, smokeDirectory,
+						smokeMatchBase, false)) &&
+				MatchLogging_UpdateCatalog(smokeDirectory,
+					TournamentSeries_BuildCatalogEntry(sampleSeries,
+						smokeDirectory, smokeSeriesBase, false));
+
+			json writtenCatalog;
+			const bool readOk = writeOk &&
+				MatchLogging_ReadCatalog(
+					smokeDirectory / MATCH_CATALOG_FILE_NAME, writtenCatalog);
+			if (readOk && writtenCatalog["artifacts"].isArray()) {
+				catalogWriteArtifactCount =
+					static_cast<int>(writtenCatalog["artifacts"].size());
+			}
+			catalogWritePass =
+				readOk &&
+				MatchLogging_CatalogMetadataValid(writtenCatalog) &&
+				catalogWriteArtifactCount >= 2 &&
+				JsonStringEquals(writtenCatalog["latest"],
+					MATCH_STATS_ARTIFACT_TYPE, sampleMatch.matchID.c_str()) &&
+				JsonStringEquals(writtenCatalog["latest"],
+					TOURNAMENT_SERIES_ARTIFACT_TYPE,
+					sampleSeries.seriesId.c_str())
+				? 1 : 0;
+		}
+	}
+	const int pass = (matchSchemaOk && seriesSchemaOk && shapeOk) ? 1 : 0;
+	const int catalogPass = (catalogSchemaOk && catalogShapeOk && catalogWritePass) ? 1 : 0;
+
+	base_import.Com_Print(G_Fmt(
+		"q3a_match_logging_schema attempted=1 match_schema_name={} match_schema_version={} match_artifact_type={} match_artifact_version={} match_has_players_array={} match_has_event_log_array={} series_schema_name={} series_schema_version={} series_artifact_type={} series_artifact_version={} series_has_matches_array={} series_match_schema_version={} pass={}\n",
+		matchJson["schemaName"].asString(),
+		matchJson["schemaVersion"].asInt(),
+		matchJson["artifactType"].asString(),
+		matchJson["artifactVersion"].asInt(),
+		matchJson["players"].isArray() ? 1 : 0,
+		matchJson["eventLog"].isArray() ? 1 : 0,
+		seriesJson["schemaName"].asString(),
+		seriesJson["schemaVersion"].asInt(),
+		seriesJson["artifactType"].asString(),
+		seriesJson["artifactVersion"].asInt(),
+		seriesJson["matches"].isArray() ? 1 : 0,
+		(seriesJson["matches"].isArray() && seriesJson["matches"].size() > 0) ? seriesJson["matches"][0]["schemaVersion"].asInt() : 0,
+		pass).data());
+
+	base_import.Com_Print(G_Fmt(
+		"q3a_match_logging_catalog attempted=1 catalog_schema_name={} catalog_schema_version={} catalog_artifact_type={} catalog_artifact_version={} catalog_artifact_count={} latest_match_stats={} latest_tournament_series={} first_artifact_type={} first_json_path={} second_artifact_type={} second_json_path={} catalog_write_pass={} catalog_write_artifact_count={} pass={}\n",
+		catalogJson["schemaName"].asString(),
+		catalogJson["schemaVersion"].asInt(),
+		catalogJson["artifactType"].asString(),
+		catalogJson["artifactVersion"].asInt(),
+		catalogJson["artifactCount"].asInt(),
+		catalogJson["latest"][MATCH_STATS_ARTIFACT_TYPE].asString(),
+		catalogJson["latest"][TOURNAMENT_SERIES_ARTIFACT_TYPE].asString(),
+		catalogJson["artifacts"][0]["artifactType"].asString(),
+		catalogJson["artifacts"][0]["jsonPath"].asString(),
+		catalogJson["artifacts"][1]["artifactType"].asString(),
+		catalogJson["artifacts"][1]["jsonPath"].asString(),
+		catalogWritePass,
+		catalogWriteArtifactCount,
+		catalogPass).data());
+
+	return pass && catalogPass;
 }
 
 static bool TournamentSeries_WriteJson(const TournamentSeriesSnapshot& series, const std::string& fileName) {
@@ -817,19 +1192,27 @@ static bool TournamentSeries_WriteAll(const TournamentSeriesSnapshot& series, co
 	}
 
 	const bool jsonWritten = TournamentSeries_WriteJson(series, baseFilePath + ".json");
+	const bool htmlExportRequested = g_statex_export_html->integer != 0;
 	bool htmlWritten = true;
-	if (g_statex_export_html->integer) {
+	if (htmlExportRequested) {
 		htmlWritten = TournamentSeries_WriteHtml(series, baseFilePath + ".html");
 	}
 	else {
 		gi.Com_PrintFmt("{}: HTML export disabled via g_statex_export_html.\n", __FUNCTION__);
 	}
 
-	if (!jsonWritten || !htmlWritten) {
-		gi.Com_PrintFmt("{}: Series export completed with errors (JSON: {}, HTML: {})\n", __FUNCTION__, jsonWritten ? "ok" : "failed", htmlWritten ? "ok" : "failed");
+	bool catalogWritten = true;
+	if (jsonWritten && htmlWritten) {
+		catalogWritten = MatchLogging_UpdateCatalog(directory,
+			TournamentSeries_BuildCatalogEntry(series, directory, basePath,
+				htmlExportRequested && htmlWritten));
 	}
 
-	return jsonWritten && htmlWritten;
+	if (!jsonWritten || !htmlWritten || !catalogWritten) {
+		gi.Com_PrintFmt("{}: Series export completed with errors (JSON: {}, HTML: {}, catalog: {})\n", __FUNCTION__, jsonWritten ? "ok" : "failed", htmlWritten ? "ok" : "failed", catalogWritten ? "ok" : "failed");
+	}
+
+	return jsonWritten && htmlWritten && catalogWritten;
 }
 
 
@@ -2290,18 +2673,27 @@ static bool MatchStats_WriteAll(const MatchStats& matchStats, const std::string&
 	}
 
 	const bool jsonWritten = MatchStats_WriteJson(matchStats, baseFilePath + ".json");
+	const bool htmlExportRequested = g_statex_export_html->integer != 0;
 	bool htmlWritten = true;
-	if (g_statex_export_html->integer) {
+	if (htmlExportRequested) {
 		htmlWritten = MatchStats_WriteHtml(matchStats, baseFilePath + ".html");
 	}
 	else {
 		gi.Com_PrintFmt("{}: HTML export disabled via g_statex_export_html.\n", __FUNCTION__);
 	}
-	if (!jsonWritten || !htmlWritten) {
-		gi.Com_PrintFmt("{}: Export completed with errors (JSON: {}, HTML: {})\n", __FUNCTION__, jsonWritten ? "ok" : "failed", htmlWritten ? "ok" : "failed");
+
+	bool catalogWritten = true;
+	if (jsonWritten && htmlWritten) {
+		catalogWritten = MatchLogging_UpdateCatalog(directory,
+			MatchStats_BuildCatalogEntry(matchStats, directory, basePath,
+				htmlExportRequested && htmlWritten));
 	}
 
-	return jsonWritten && htmlWritten;
+	if (!jsonWritten || !htmlWritten || !catalogWritten) {
+		gi.Com_PrintFmt("{}: Export completed with errors (JSON: {}, HTML: {}, catalog: {})\n", __FUNCTION__, jsonWritten ? "ok" : "failed", htmlWritten ? "ok" : "failed", catalogWritten ? "ok" : "failed");
+	}
+
+	return jsonWritten && htmlWritten && catalogWritten;
 }
 
 /*

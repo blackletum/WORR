@@ -6,6 +6,13 @@ Vote
 	=============
 	*/
 	inline void Vote(gentity_t* ent, const CommandArgs& args) {
+		if (!ent || !ent->client) {
+			return;
+		}
+		if (IsBotVoteClient(ent)) {
+			gi.LocClient_Print(ent, PRINT_HIGH, "Bots cannot cast votes.\n");
+			return;
+		}
 	if (!level.vote.time) {
 	gi.LocClient_Print(ent, PRINT_HIGH, "$g_sgame_auto_c8822d062f68");
 	return;

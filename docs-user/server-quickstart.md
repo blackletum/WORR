@@ -21,6 +21,8 @@ From `.install/`:
 
 Published release server packages keep their runtime data and configs under `basew/`.
 Local `.install/` builds stage that data under `basew/`.
+Keep the package's `licenses/` directory beside the server binaries when copying
+or mirroring a release install.
 
 ## Recommended Baseline Cvars
 
@@ -62,6 +64,11 @@ sg_bot_add vanguard
 Use [Bot Profiles](bot-profiles.md) for the full operator guide, including
 where installed botfiles live, what can be overridden, profile fields, and safe
 examples.
+
+## Competitive Match Tools
+
+For voting, MyMap, queued nextmap, map selector, tournament, admin, and match
+logging setup, use [Competitive Server Tools](competitive-server-tools.md).
 
 ## Troubleshooting
 

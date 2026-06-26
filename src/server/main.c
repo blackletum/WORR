@@ -101,6 +101,16 @@ static cvar_t  *sv_bot_min_players_smoke;
 static cvar_t  *sv_bot_profile_smoke;
 static cvar_t  *sv_bot_profile_smoke_target;
 static cvar_t  *sv_bot_team_policy_smoke;
+static cvar_t  *sv_bot_warmup_smoke;
+static cvar_t  *sv_bot_vote_smoke;
+static cvar_t  *sv_bot_admin_audit_smoke;
+static cvar_t  *sv_bot_tournament_smoke;
+static cvar_t  *sv_bot_mapvote_smoke;
+static cvar_t  *sv_bot_mymap_smoke;
+static cvar_t  *sv_bot_intermission_smoke;
+static cvar_t  *sv_bot_nextmap_smoke;
+static cvar_t  *sv_bot_scoreboard_smoke;
+static cvar_t  *sv_bot_matchlog_smoke;
 static cvar_t  *sv_bot_frame_command_smoke;
 static cvar_t  *sv_bot_frame_command_smoke_soak_ms;
 static cvar_t  *sv_bot_frame_command_smoke_map_repeat_cycles;
@@ -1012,6 +1022,13 @@ typedef struct {
     char chat_personality[MAX_INFO_VALUE];
     char role[MAX_INFO_VALUE];
     char movement_style[MAX_INFO_VALUE];
+    char teamplay_bias[MAX_INFO_VALUE];
+    char objective_bias[MAX_INFO_VALUE];
+    char friendly_fire_care[MAX_INFO_VALUE];
+    char item_greed[MAX_INFO_VALUE];
+    char item_denial[MAX_INFO_VALUE];
+    char powerup_timing[MAX_INFO_VALUE];
+    char retreat_health[MAX_INFO_VALUE];
 } bot_profile_t;
 
 typedef struct {
@@ -1215,6 +1232,49 @@ static bool bot_profile_set(bot_profile_t *profile, const char *key,
         !Q_stricmp(key, "move_style") ||
         !Q_stricmp(key, "worr_movement_style")) {
         Q_strlcpy(profile->movement_style, clean_value, sizeof(profile->movement_style));
+        return true;
+    }
+    if (!Q_stricmp(key, "teamplay_bias") ||
+        !Q_stricmp(key, "team_bias") ||
+        !Q_stricmp(key, "support_bias") ||
+        !Q_stricmp(key, "worr_teamplay_bias")) {
+        Q_strlcpy(profile->teamplay_bias, clean_value, sizeof(profile->teamplay_bias));
+        return true;
+    }
+    if (!Q_stricmp(key, "objective_bias") ||
+        !Q_stricmp(key, "goal_bias") ||
+        !Q_stricmp(key, "worr_objective_bias")) {
+        Q_strlcpy(profile->objective_bias, clean_value, sizeof(profile->objective_bias));
+        return true;
+    }
+    if (!Q_stricmp(key, "friendly_fire_care") ||
+        !Q_stricmp(key, "ff_care") ||
+        !Q_stricmp(key, "worr_friendly_fire_care")) {
+        Q_strlcpy(profile->friendly_fire_care, clean_value, sizeof(profile->friendly_fire_care));
+        return true;
+    }
+    if (!Q_stricmp(key, "item_greed") ||
+        !Q_stricmp(key, "pickup_greed") ||
+        !Q_stricmp(key, "worr_item_greed")) {
+        Q_strlcpy(profile->item_greed, clean_value, sizeof(profile->item_greed));
+        return true;
+    }
+    if (!Q_stricmp(key, "item_denial") ||
+        !Q_stricmp(key, "denial_bias") ||
+        !Q_stricmp(key, "worr_item_denial")) {
+        Q_strlcpy(profile->item_denial, clean_value, sizeof(profile->item_denial));
+        return true;
+    }
+    if (!Q_stricmp(key, "powerup_timing") ||
+        !Q_stricmp(key, "powerup_timing_bias") ||
+        !Q_stricmp(key, "worr_powerup_timing")) {
+        Q_strlcpy(profile->powerup_timing, clean_value, sizeof(profile->powerup_timing));
+        return true;
+    }
+    if (!Q_stricmp(key, "retreat_health") ||
+        !Q_stricmp(key, "retreat_health_threshold") ||
+        !Q_stricmp(key, "worr_retreat_health")) {
+        Q_strlcpy(profile->retreat_health, clean_value, sizeof(profile->retreat_health));
         return true;
     }
     if (!Q_stricmp(key, "characteristic_name")) {
@@ -1624,7 +1684,14 @@ static bool bot_build_userinfo(char *userinfo, const char *name,
          !bot_set_optional_userinfo(userinfo, "bot_preferred_weapon", profile->preferred_weapon) ||
          !bot_set_optional_userinfo(userinfo, "bot_chat_personality", profile->chat_personality) ||
          !bot_set_optional_userinfo(userinfo, "bot_role", profile->role) ||
-         !bot_set_optional_userinfo(userinfo, "bot_movement_style", profile->movement_style))) {
+         !bot_set_optional_userinfo(userinfo, "bot_movement_style", profile->movement_style) ||
+         !bot_set_optional_userinfo(userinfo, "bot_teamplay_bias", profile->teamplay_bias) ||
+         !bot_set_optional_userinfo(userinfo, "bot_objective_bias", profile->objective_bias) ||
+         !bot_set_optional_userinfo(userinfo, "bot_friendly_fire_care", profile->friendly_fire_care) ||
+         !bot_set_optional_userinfo(userinfo, "bot_item_greed", profile->item_greed) ||
+         !bot_set_optional_userinfo(userinfo, "bot_item_denial", profile->item_denial) ||
+         !bot_set_optional_userinfo(userinfo, "bot_powerup_timing", profile->powerup_timing) ||
+         !bot_set_optional_userinfo(userinfo, "bot_retreat_health", profile->retreat_health))) {
         return false;
     }
 
@@ -2220,6 +2287,13 @@ static void SV_BotProfileSmokeFrame(void)
     char chat_personality[MAX_INFO_VALUE];
     char role[MAX_INFO_VALUE];
     char movement_style[MAX_INFO_VALUE];
+    char teamplay_bias[MAX_INFO_VALUE];
+    char objective_bias[MAX_INFO_VALUE];
+    char friendly_fire_care[MAX_INFO_VALUE];
+    char item_greed[MAX_INFO_VALUE];
+    char item_denial[MAX_INFO_VALUE];
+    char powerup_timing[MAX_INFO_VALUE];
+    char retreat_health[MAX_INFO_VALUE];
 
     if (!sv_bot_profile_smoke || sv_bot_profile_smoke->integer <= 0) {
         return;
@@ -2291,14 +2365,37 @@ static void SV_BotProfileSmokeFrame(void)
     Q_strlcpy(movement_style,
               Info_ValueForKey(bot->userinfo, "bot_movement_style"),
               sizeof(movement_style));
+    Q_strlcpy(teamplay_bias,
+              Info_ValueForKey(bot->userinfo, "bot_teamplay_bias"),
+              sizeof(teamplay_bias));
+    Q_strlcpy(objective_bias,
+              Info_ValueForKey(bot->userinfo, "bot_objective_bias"),
+              sizeof(objective_bias));
+    Q_strlcpy(friendly_fire_care,
+              Info_ValueForKey(bot->userinfo, "bot_friendly_fire_care"),
+              sizeof(friendly_fire_care));
+    Q_strlcpy(item_greed, Info_ValueForKey(bot->userinfo, "bot_item_greed"),
+              sizeof(item_greed));
+    Q_strlcpy(item_denial, Info_ValueForKey(bot->userinfo, "bot_item_denial"),
+              sizeof(item_denial));
+    Q_strlcpy(powerup_timing,
+              Info_ValueForKey(bot->userinfo, "bot_powerup_timing"),
+              sizeof(powerup_timing));
+    Q_strlcpy(retreat_health,
+              Info_ValueForKey(bot->userinfo, "bot_retreat_health"),
+              sizeof(retreat_health));
 
     Com_Printf("q3a_bot_profile_smoke_after_add count=%d name=%s "
                "profile=%s skin=%s skill=%s reaction=%s aggression=%s "
                "aim_error=%s preferred_weapon=%s chat=%s role=%s "
-               "movement=%s\n",
+               "movement=%s teamplay_bias=%s objective_bias=%s "
+               "friendly_fire_care=%s item_greed=%s item_denial=%s "
+               "powerup_timing=%s retreat_health=%s\n",
                SV_BotCount(), bot->name, profile_id, skin, skill, reaction,
                aggression, aim_error, preferred_weapon, chat_personality, role,
-               movement_style);
+               movement_style, teamplay_bias, objective_bias,
+               friendly_fire_care, item_greed, item_denial, powerup_timing,
+               retreat_health);
     SV_BotRemoveAll();
     Com_Printf("q3a_bot_profile_smoke_after_remove_all count=%d\n",
                SV_BotCount());
@@ -2312,7 +2409,8 @@ static void SV_BotProfileSmokeFrame(void)
 
 static void SV_BotTeamPolicySmokeStatus(int expected_playing,
                                         int expected_spectators,
-                                        int expected_bots)
+                                        int expected_bots,
+                                        int expected_queued)
 {
     const bot_team_policy_status_api_v1_t *api = NULL;
 
@@ -2323,18 +2421,21 @@ static void SV_BotTeamPolicySmokeStatus(int expected_playing,
     if (!api || api->api_version != 1 || !api->PrintStatus) {
         Com_Printf("q3a_bot_team_policy_status unavailable=1 "
                    "expected_playing=%d expected_spectators=%d "
-                   "expected_bots=%d pass=0\n",
-                   expected_playing, expected_spectators, expected_bots);
+                   "expected_bots=%d expected_queued=%d pass=0\n",
+                   expected_playing, expected_spectators, expected_bots,
+                   expected_queued);
         return;
     }
 
-    api->PrintStatus(expected_playing, expected_spectators, expected_bots);
+    api->PrintStatus(expected_playing, expected_spectators, expected_bots,
+                     expected_queued);
 }
 
 static void SV_BotTeamPolicySmokeFrame(void)
 {
     static int seen_spawncount;
     static int stage;
+    bool queue_enabled;
     bool added_alpha;
     bool added_bravo;
     bool added_charlie;
@@ -2354,16 +2455,19 @@ static void SV_BotTeamPolicySmokeFrame(void)
         return;
     }
 
+    queue_enabled = sv_bot_team_policy_smoke->integer >= 3;
+
     if (stage == 0) {
         SV_BotRemoveAll();
         Cvar_Set("g_gametype", "2");
         Cvar_Set("minplayers", "2");
         Cvar_Set("maxplayers", "2");
-        Cvar_Set("g_allow_duel_queue", "0");
+        Cvar_Set("g_allow_duel_queue", queue_enabled ? "1" : "0");
         Cvar_Set("match_lock", "0");
         Cvar_Set("sg_bot_enable", "1");
         Cvar_Set("sg_bot_min_players", "0");
-        Com_Printf("q3a_bot_team_policy_smoke=begin\n");
+        Com_Printf("q3a_bot_team_policy_smoke=begin queue_enabled=%d\n",
+                   queue_enabled ? 1 : 0);
         stage = 1;
         return;
     }
@@ -2392,12 +2496,12 @@ static void SV_BotTeamPolicySmokeFrame(void)
 
         Com_Printf("q3a_bot_team_policy_smoke_status_requested count=%d\n",
                    SV_BotCount());
-        SV_BotTeamPolicySmokeStatus(2, 1, 3);
+        SV_BotTeamPolicySmokeStatus(2, 1, 3, queue_enabled ? 1 : 0);
 
         SV_BotRemoveAll();
         Com_Printf("q3a_bot_team_policy_smoke_removed_all count=%d\n",
                    SV_BotCount());
-        SV_BotTeamPolicySmokeStatus(0, 0, 0);
+        SV_BotTeamPolicySmokeStatus(0, 0, 0, 0);
 
         Cvar_Set("sg_bot_enable", "0");
         Cvar_Set("sg_bot_min_players", "0");
@@ -2408,6 +2512,1840 @@ static void SV_BotTeamPolicySmokeFrame(void)
         if (sv_bot_team_policy_smoke->integer >= 2) {
             Com_Quit(NULL, ERR_DISCONNECT);
         }
+    }
+}
+
+static void SV_BotWarmupSmokeStatus(int expected_bots,
+                                    int expected_humans,
+                                    int expected_playing,
+                                    int expected_can_start)
+{
+    const bot_warmup_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_WARMUP_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1 || !api->PrintStatus) {
+        Com_Printf("q3a_bot_warmup_status unavailable=1 "
+                   "expected_bots=%d expected_humans=%d "
+                   "expected_playing=%d expected_can_start=%d pass=0\n",
+                   expected_bots, expected_humans, expected_playing,
+                   expected_can_start);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_humans, expected_playing,
+                     expected_can_start);
+}
+
+static void SV_BotWarmupSmokeFrame(void)
+{
+    static int seen_spawncount;
+    static int stage;
+    bool added_alpha;
+    bool added_bravo;
+
+    if (!sv_bot_warmup_smoke || sv_bot_warmup_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        seen_spawncount = sv.spawncount;
+        stage = 0;
+    } else if (stage > 2) {
+        return;
+    }
+
+    if (stage == 0) {
+        SV_BotRemoveAll();
+        Cvar_Set("deathmatch", "1");
+        Cvar_Set("coop", "0");
+        Cvar_Set("g_gametype", "0");
+        Cvar_Set("minplayers", "2");
+        Cvar_Set("maxplayers", "16");
+        Cvar_Set("warmup_enabled", "1");
+        Cvar_Set("warmup_do_ready_up", "1");
+        Cvar_Set("match_start_no_humans", "1");
+        Cvar_Set("sg_bot_enable", "1");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_warmup_smoke=begin target=2 "
+                   "minplayers=2 ready_up=1 start_no_humans=1\n");
+        stage = 1;
+        return;
+    }
+
+    if (stage == 1) {
+        if (SV_BotCount() != 0) {
+            SV_BotRemoveAll();
+            return;
+        }
+
+        added_alpha = SV_BotAdd("WarmupOne", NULL);
+        added_bravo = SV_BotAdd("WarmupTwo", NULL);
+        Com_Printf("q3a_bot_warmup_smoke_after_add_requests "
+                   "added_alpha=%d added_bravo=%d count=%d\n",
+                   added_alpha, added_bravo, SV_BotCount());
+        stage = 2;
+        return;
+    }
+
+    if (stage == 2) {
+        if (SV_BotCount() < 2) {
+            return;
+        }
+
+        Com_Printf("q3a_bot_warmup_smoke_status_requested count=%d\n",
+                   SV_BotCount());
+        SV_BotWarmupSmokeStatus(2, 0, 2, 1);
+
+        SV_BotRemoveAll();
+        Com_Printf("q3a_bot_warmup_smoke_removed_all count=%d\n",
+                   SV_BotCount());
+        SV_BotWarmupSmokeStatus(0, 0, 0, 1);
+
+        Cvar_Set("sg_bot_enable", "0");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_warmup_smoke=end final_count=%d\n",
+                   SV_BotCount());
+        stage = 3;
+
+        if (sv_bot_warmup_smoke->integer >= 2) {
+            Com_Quit(NULL, ERR_DISCONNECT);
+        }
+    }
+}
+
+static const bot_vote_status_api_v1_t *SV_BotVoteStatusApi(void)
+{
+    const bot_vote_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_VOTE_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static void SV_BotVoteSmokeResetStatus(void)
+{
+    const bot_vote_status_api_v1_t *api = SV_BotVoteStatusApi();
+
+    if (api && api->ResetStatus) {
+        api->ResetStatus();
+    }
+}
+
+static void SV_BotVoteSmokeStatus(int expected_bots,
+                                  int expected_humans,
+                                  int expected_playing,
+                                  int expected_voting_clients,
+                                  int expected_active_vote,
+                                  int expected_last_launch_blocked)
+{
+    const bot_vote_status_api_v1_t *api = SV_BotVoteStatusApi();
+
+    if (!api || !api->PrintStatus) {
+        Com_Printf("q3a_bot_vote_status unavailable=1 "
+                   "expected_bots=%d expected_humans=%d "
+                   "expected_playing=%d expected_voting_clients=%d "
+                   "expected_active_vote=%d "
+                   "expected_last_launch_blocked=%d pass=0\n",
+                   expected_bots, expected_humans, expected_playing,
+                   expected_voting_clients, expected_active_vote,
+                   expected_last_launch_blocked);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_humans, expected_playing,
+                     expected_voting_clients, expected_active_vote,
+                     expected_last_launch_blocked);
+}
+
+static int SV_BotVoteSmokeTryLaunch(void)
+{
+    const bot_vote_status_api_v1_t *api = SV_BotVoteStatusApi();
+
+    if (!api || !api->TryLaunchFirstBotVote) {
+        Com_Printf("q3a_bot_vote_launch attempted=1 bot_found=0 client=-1 "
+                   "vote=random arg=2 success=0 blocked=0 "
+                   "reason=unavailable active_vote=0 voting_clients=0\n");
+        return 0;
+    }
+
+    return api->TryLaunchFirstBotVote("random", "2");
+}
+
+static void SV_BotVoteSmokeFrame(void)
+{
+    static int seen_spawncount;
+    static int stage;
+    bool added_alpha;
+    bool added_bravo;
+    int launch_success;
+
+    if (!sv_bot_vote_smoke || sv_bot_vote_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        seen_spawncount = sv.spawncount;
+        stage = 0;
+    } else if (stage > 2) {
+        return;
+    }
+
+    if (stage == 0) {
+        SV_BotRemoveAll();
+        SV_BotVoteSmokeResetStatus();
+        Cvar_Set("deathmatch", "1");
+        Cvar_Set("coop", "0");
+        Cvar_Set("g_gametype", "0");
+        Cvar_Set("g_allow_voting", "1");
+        Cvar_Set("g_allow_spec_vote", "0");
+        Cvar_Set("g_vote_limit", "0");
+        Cvar_Set("minplayers", "0");
+        Cvar_Set("maxplayers", "16");
+        Cvar_Set("warmup_enabled", "0");
+        Cvar_Set("match_start_no_humans", "1");
+        Cvar_Set("sg_bot_enable", "1");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_vote_smoke=begin target=2 allow_voting=1 "
+                   "allow_spec_vote=0 bot_vote_block=1\n");
+        stage = 1;
+        return;
+    }
+
+    if (stage == 1) {
+        if (SV_BotCount() != 0) {
+            SV_BotRemoveAll();
+            return;
+        }
+
+        added_alpha = SV_BotAdd("VoteOne", NULL);
+        added_bravo = SV_BotAdd("VoteTwo", NULL);
+        Com_Printf("q3a_bot_vote_smoke_after_add_requests "
+                   "added_alpha=%d added_bravo=%d count=%d\n",
+                   added_alpha, added_bravo, SV_BotCount());
+        stage = 2;
+        return;
+    }
+
+    if (stage == 2) {
+        if (SV_BotCount() < 2) {
+            return;
+        }
+
+        Com_Printf("q3a_bot_vote_smoke_status_requested count=%d\n",
+                   SV_BotCount());
+        SV_BotVoteSmokeStatus(2, 0, 2, 0, 0, 0);
+
+        launch_success = SV_BotVoteSmokeTryLaunch();
+        Com_Printf("q3a_bot_vote_smoke_launch_requested count=%d "
+                   "success=%d\n",
+                   SV_BotCount(), launch_success);
+        SV_BotVoteSmokeStatus(2, 0, 2, 0, 0, 1);
+
+        SV_BotRemoveAll();
+        Com_Printf("q3a_bot_vote_smoke_removed_all count=%d\n",
+                   SV_BotCount());
+        SV_BotVoteSmokeStatus(0, 0, 0, 0, 0, 1);
+
+        Cvar_Set("sg_bot_enable", "0");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_vote_smoke=end final_count=%d\n",
+                   SV_BotCount());
+        stage = 3;
+
+        if (sv_bot_vote_smoke->integer >= 2) {
+            Com_Quit(NULL, ERR_DISCONNECT);
+        }
+    }
+}
+
+static const bot_admin_audit_status_api_v1_t *SV_BotAdminAuditStatusApi(void)
+{
+    const bot_admin_audit_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_ADMIN_AUDIT_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static void SV_BotAdminAuditSmokeResetStatus(void)
+{
+    const bot_admin_audit_status_api_v1_t *api =
+        SV_BotAdminAuditStatusApi();
+
+    if (api && api->ResetStatus) {
+        api->ResetStatus();
+    }
+}
+
+static void SV_BotAdminAuditSmokeStatus(int expected_bots,
+                                        int expected_admin_bots,
+                                        int expected_last_blocked,
+                                        int expected_red_locked)
+{
+    const bot_admin_audit_status_api_v1_t *api =
+        SV_BotAdminAuditStatusApi();
+
+    if (!api || !api->PrintStatus) {
+        Com_Printf("q3a_bot_admin_audit_status unavailable=1 "
+                   "expected_bots=%d expected_admin_bots=%d "
+                   "expected_last_blocked=%d expected_red_locked=%d "
+                   "pass=0\n",
+                   expected_bots, expected_admin_bots,
+                   expected_last_blocked, expected_red_locked);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_admin_bots,
+                     expected_last_blocked, expected_red_locked);
+}
+
+static int SV_BotAdminAuditSmokeTryCommand(void)
+{
+    const bot_admin_audit_status_api_v1_t *api =
+        SV_BotAdminAuditStatusApi();
+
+    if (!api || !api->TryFirstBotAdminCommand) {
+        Com_Printf("q3a_bot_admin_audit_attempt attempted=1 bot_found=0 "
+                   "client=-1 forced_admin=0 admin_session=0 "
+                   "command=lock_team command_found=0 admin_only=0 "
+                   "allowed=0 executed=0 blocked=0 reason=unavailable "
+                   "red_locked_before=0 red_locked_after=0 admin_bots=0\n");
+        return 0;
+    }
+
+    return api->TryFirstBotAdminCommand();
+}
+
+static void SV_BotAdminAuditSmokeFrame(void)
+{
+    static int seen_spawncount;
+    static int stage;
+    bool added;
+    int blocked;
+
+    if (!sv_bot_admin_audit_smoke ||
+        sv_bot_admin_audit_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        seen_spawncount = sv.spawncount;
+        stage = 0;
+    } else if (stage > 2) {
+        return;
+    }
+
+    if (stage == 0) {
+        SV_BotRemoveAll();
+        SV_BotAdminAuditSmokeResetStatus();
+        Cvar_Set("deathmatch", "1");
+        Cvar_Set("coop", "0");
+        Cvar_Set("g_gametype", "0");
+        Cvar_Set("g_allow_admin", "1");
+        Cvar_Set("minplayers", "0");
+        Cvar_Set("maxplayers", "16");
+        Cvar_Set("warmup_enabled", "0");
+        Cvar_Set("match_start_no_humans", "1");
+        Cvar_Set("sg_bot_enable", "1");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_admin_audit_smoke=begin target=1 "
+                   "admin_command=lock_team bot_admin_block=1\n");
+        stage = 1;
+        return;
+    }
+
+    if (stage == 1) {
+        if (SV_BotCount() != 0) {
+            SV_BotRemoveAll();
+            return;
+        }
+
+        added = SV_BotAdd("AdminAuditOne", NULL);
+        Com_Printf("q3a_bot_admin_audit_smoke_after_add_requests "
+                   "added=%d count=%d\n",
+                   added, SV_BotCount());
+        stage = 2;
+        return;
+    }
+
+    if (stage == 2) {
+        if (SV_BotCount() < 1) {
+            return;
+        }
+
+        Com_Printf("q3a_bot_admin_audit_smoke_status_requested "
+                   "count=%d\n",
+                   SV_BotCount());
+        SV_BotAdminAuditSmokeStatus(1, 0, 0, 0);
+
+        blocked = SV_BotAdminAuditSmokeTryCommand();
+        Com_Printf("q3a_bot_admin_audit_smoke_command_requested "
+                   "count=%d blocked=%d\n",
+                   SV_BotCount(), blocked);
+        SV_BotAdminAuditSmokeStatus(1, 0, 1, 0);
+
+        SV_BotRemoveAll();
+        Com_Printf("q3a_bot_admin_audit_smoke_removed_all count=%d\n",
+                   SV_BotCount());
+        SV_BotAdminAuditSmokeStatus(0, 0, 1, 0);
+
+        Cvar_Set("sg_bot_enable", "0");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_admin_audit_smoke=end final_count=%d pass=1\n",
+                   SV_BotCount());
+        stage = 3;
+
+        if (sv_bot_admin_audit_smoke->integer >= 2) {
+            Com_Quit(NULL, ERR_DISCONNECT);
+        }
+    }
+}
+
+static const bot_tournament_status_api_v1_t *SV_BotTournamentStatusApi(void)
+{
+    const bot_tournament_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_TOURNAMENT_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static void SV_BotTournamentSmokeResetStatus(void)
+{
+    const bot_tournament_status_api_v1_t *api =
+        SV_BotTournamentStatusApi();
+
+    if (api && api->ResetStatus) {
+        api->ResetStatus();
+    }
+}
+
+static void SV_BotTournamentSmokeStatus(int expected_bots,
+                                        int expected_active,
+                                        int expected_veto_started,
+                                        int expected_picks,
+                                        int expected_bans,
+                                        int expected_last_veto_blocked)
+{
+    const bot_tournament_status_api_v1_t *api =
+        SV_BotTournamentStatusApi();
+
+    if (!api || !api->PrintStatus) {
+        Com_Printf("q3a_bot_tournament_status unavailable=1 "
+                   "expected_bots=%d expected_active=%d "
+                   "expected_veto_started=%d expected_picks=%d "
+                   "expected_bans=%d expected_last_veto_blocked=%d "
+                   "pass=0\n",
+                   expected_bots, expected_active,
+                   expected_veto_started, expected_picks, expected_bans,
+                   expected_last_veto_blocked);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_active, expected_veto_started,
+                     expected_picks, expected_bans,
+                     expected_last_veto_blocked);
+}
+
+static int SV_BotTournamentSmokeSetup(void)
+{
+    const bot_tournament_status_api_v1_t *api =
+        SV_BotTournamentStatusApi();
+
+    if (!api || !api->SetupBotVetoState) {
+        Com_Printf("q3a_bot_tournament_setup attempted=1 bot_found=0 "
+                   "client=-1 configured=0 active=0 veto_started=0 "
+                   "bot_is_home=0 bot_social=none map0=none pool=0 "
+                   "best_of=0 picks_needed=0\n");
+        return 0;
+    }
+
+    return api->SetupBotVetoState();
+}
+
+static int SV_BotTournamentSmokeTryVeto(void)
+{
+    const bot_tournament_status_api_v1_t *api =
+        SV_BotTournamentStatusApi();
+
+    if (!api || !api->TryFirstBotVetoPick) {
+        Com_Printf("q3a_bot_tournament_veto attempted=1 bot_found=0 "
+                   "client=-1 map=none active_before=0 "
+                   "veto_started_before=0 veto_complete_before=0 "
+                   "picks_before=0 bans_before=0 allowed=0 blocked=0 "
+                   "reason=unavailable picks_after=0 bans_after=0 "
+                   "veto_complete_after=0\n");
+        return 0;
+    }
+
+    return api->TryFirstBotVetoPick(NULL);
+}
+
+static int SV_BotTournamentSmokeSetupReplay(void)
+{
+    const bot_tournament_status_api_v1_t *api =
+        SV_BotTournamentStatusApi();
+
+    if (!api || !api->SetupReplayState) {
+        Com_Printf("q3a_bot_tournament_replay_setup attempted=1 "
+                   "configured=0 active=0 order=0 history=0 "
+                   "games_played=0 player0_wins=0 player1_wins=0 "
+                   "series_complete=0 replay_map=none best_of=0 "
+                   "win_target=0\n");
+        return 0;
+    }
+
+    return api->SetupReplayState();
+}
+
+static int SV_BotTournamentSmokeTryReplay(int game_number)
+{
+    const bot_tournament_status_api_v1_t *api =
+        SV_BotTournamentStatusApi();
+
+    if (!api || !api->TryReplayGame) {
+        Com_Printf("q3a_bot_tournament_replay attempted=1 game=%d "
+                   "active_before=0 success=0 rejected=1 "
+                   "reason=unavailable target_map=none games_before=0 "
+                   "games_after=0 winners_before=0 winners_after=0 "
+                   "ids_before=0 ids_after=0 maps_before=0 maps_after=0 "
+                   "player0_wins_before=0 player0_wins_after=0 "
+                   "player1_wins_before=0 player1_wins_after=0 "
+                   "series_complete_before=0 series_complete_after=0 "
+                   "change_map_before=0 change_map_after=0 preserved=0 "
+                   "reset_applied=0\n",
+                   game_number);
+        return 0;
+    }
+
+    return api->TryReplayGame(game_number);
+}
+
+static void SV_BotTournamentSmokeFrame(void)
+{
+    static int seen_spawncount;
+    static int stage;
+    bool replay_mode;
+    bool added;
+    int configured;
+    int blocked;
+    int invalid_preserved;
+    int replay_reset;
+
+    if (!sv_bot_tournament_smoke ||
+        sv_bot_tournament_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        seen_spawncount = sv.spawncount;
+        stage = 0;
+    } else if (stage > 2) {
+        return;
+    }
+
+    replay_mode = sv_bot_tournament_smoke->integer == 3;
+
+    if (stage == 0) {
+        SV_BotRemoveAll();
+        SV_BotTournamentSmokeResetStatus();
+        Cvar_Set("deathmatch", "1");
+        Cvar_Set("coop", "0");
+        Cvar_Set("g_gametype", "0");
+        Cvar_Set("match_setup_type", "tournament");
+        Cvar_Set("minplayers", "0");
+        Cvar_Set("maxplayers", "16");
+        Cvar_Set("warmup_enabled", "0");
+        Cvar_Set("match_start_no_humans", "1");
+        Cvar_Set("sg_bot_enable", "1");
+        Cvar_Set("sg_bot_min_players", "0");
+
+        if (replay_mode) {
+            Com_Printf("q3a_bot_tournament_smoke=begin target=0 "
+                       "replay_reset=1 invalid_game=99 replay_game=2\n");
+        } else {
+            Com_Printf("q3a_bot_tournament_smoke=begin target=1 "
+                       "bot_veto_block=1 action=pick\n");
+        }
+
+        stage = 1;
+        return;
+    }
+
+    if (replay_mode) {
+        if (stage == 1) {
+            configured = SV_BotTournamentSmokeSetupReplay();
+            Com_Printf("q3a_bot_tournament_smoke_replay_setup_requested "
+                       "configured=%d\n",
+                       configured);
+            SV_BotTournamentSmokeStatus(0, 1, 1, 2, 0, 0);
+
+            invalid_preserved = SV_BotTournamentSmokeTryReplay(99);
+            Com_Printf("q3a_bot_tournament_smoke_replay_invalid_requested "
+                       "game=99 preserved=%d\n",
+                       invalid_preserved);
+            SV_BotTournamentSmokeStatus(0, 1, 1, 2, 0, 0);
+
+            replay_reset = SV_BotTournamentSmokeTryReplay(2);
+            Com_Printf("q3a_bot_tournament_smoke_replay_valid_requested "
+                       "game=2 reset=%d\n",
+                       replay_reset);
+            SV_BotTournamentSmokeStatus(0, 1, 1, 2, 0, 0);
+
+            SV_BotRemoveAll();
+            Com_Printf("q3a_bot_tournament_smoke_removed_all count=%d\n",
+                       SV_BotCount());
+
+            Cvar_Set("sg_bot_enable", "0");
+            Cvar_Set("sg_bot_min_players", "0");
+            Cvar_Set("match_setup_type", "standard");
+            Com_Printf("q3a_bot_tournament_smoke=end final_count=%d "
+                       "pass=%d\n",
+                       SV_BotCount(),
+                       configured && invalid_preserved && replay_reset);
+            stage = 3;
+
+            if (sv_bot_tournament_smoke->integer >= 2) {
+                Com_Quit(NULL, ERR_DISCONNECT);
+            }
+        }
+
+        return;
+    }
+
+    if (stage == 1) {
+        if (SV_BotCount() != 0) {
+            SV_BotRemoveAll();
+            return;
+        }
+
+        added = SV_BotAdd("TourneyVetoBot", NULL);
+        Com_Printf("q3a_bot_tournament_smoke_after_add_requests "
+                   "added=%d count=%d\n",
+                   added, SV_BotCount());
+        stage = 2;
+        return;
+    }
+
+    if (stage == 2) {
+        if (SV_BotCount() < 1) {
+            return;
+        }
+
+        configured = SV_BotTournamentSmokeSetup();
+        Com_Printf("q3a_bot_tournament_smoke_setup_requested "
+                   "count=%d configured=%d\n",
+                   SV_BotCount(), configured);
+        SV_BotTournamentSmokeStatus(1, 1, 1, 0, 0, 0);
+
+        blocked = SV_BotTournamentSmokeTryVeto();
+        Com_Printf("q3a_bot_tournament_smoke_veto_requested "
+                   "count=%d blocked=%d\n",
+                   SV_BotCount(), blocked);
+        SV_BotTournamentSmokeStatus(1, 1, 1, 0, 0, 1);
+
+        SV_BotRemoveAll();
+        Com_Printf("q3a_bot_tournament_smoke_removed_all count=%d\n",
+                   SV_BotCount());
+        SV_BotTournamentSmokeStatus(0, 1, 1, 0, 0, 1);
+
+        Cvar_Set("sg_bot_enable", "0");
+        Cvar_Set("sg_bot_min_players", "0");
+        Cvar_Set("match_setup_type", "standard");
+        Com_Printf("q3a_bot_tournament_smoke=end final_count=%d pass=1\n",
+                   SV_BotCount());
+        stage = 3;
+
+        if (sv_bot_tournament_smoke->integer >= 2) {
+            Com_Quit(NULL, ERR_DISCONNECT);
+        }
+    }
+}
+
+static const bot_mapvote_status_api_v1_t *SV_BotMapVoteStatusApi(void)
+{
+    const bot_mapvote_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_MAPVOTE_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static void SV_BotMapVoteSmokeResetStatus(void)
+{
+    const bot_mapvote_status_api_v1_t *api = SV_BotMapVoteStatusApi();
+
+    if (api && api->ResetStatus) {
+        api->ResetStatus();
+    }
+}
+
+static void SV_BotMapVoteSmokeStatus(int expected_bots,
+                                     int expected_active,
+                                     int expected_candidates,
+                                     int expected_last_bot_vote_blocked,
+                                     int expected_last_finalize_success,
+                                     int expected_change_map_set)
+{
+    const bot_mapvote_status_api_v1_t *api = SV_BotMapVoteStatusApi();
+
+    if (!api || !api->PrintStatus) {
+        Com_Printf("q3a_bot_mapvote_status unavailable=1 "
+                   "expected_bots=%d expected_active=%d "
+                   "expected_candidates=%d "
+                   "expected_last_bot_vote_blocked=%d "
+                   "expected_last_finalize_success=%d "
+                   "expected_change_map_set=%d pass=0\n",
+                   expected_bots, expected_active, expected_candidates,
+                   expected_last_bot_vote_blocked,
+                   expected_last_finalize_success,
+                   expected_change_map_set);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_active, expected_candidates,
+                     expected_last_bot_vote_blocked,
+                     expected_last_finalize_success,
+                     expected_change_map_set);
+}
+
+static int SV_BotMapVoteSmokeBegin(void)
+{
+    const bot_mapvote_status_api_v1_t *api = SV_BotMapVoteStatusApi();
+
+    if (!api || !api->BeginCurrentMapVote) {
+        Com_Printf("q3a_bot_mapvote_begin attempted=1 success=0 "
+                   "reason=unavailable map=- map_seeded=0 active=0 "
+                   "candidates=0 candidate0=- vote_count0=0 "
+                   "vote_count1=0 vote_count2=0\n");
+        return 0;
+    }
+
+    return api->BeginCurrentMapVote();
+}
+
+static int SV_BotMapVoteSmokeTryBotVote(int vote_index)
+{
+    const bot_mapvote_status_api_v1_t *api = SV_BotMapVoteStatusApi();
+
+    if (!api || !api->TryCastFirstBotVote) {
+        Com_Printf("q3a_bot_mapvote_bot_vote attempted=1 bot_found=0 "
+                   "client=-1 requested_index=%d active=0 blocked=0 "
+                   "counted=0 stored_vote=-1 reason=unavailable "
+                   "vote_count0=0 vote_count1=0 vote_count2=0 "
+                   "bot_votes=0 human_votes=0\n",
+                   vote_index);
+        return 0;
+    }
+
+    return api->TryCastFirstBotVote(vote_index);
+}
+
+static int SV_BotMapVoteSmokeFinalize(void)
+{
+    const bot_mapvote_status_api_v1_t *api = SV_BotMapVoteStatusApi();
+
+    if (!api || !api->FinalizeAndExit) {
+        Com_Printf("q3a_bot_mapvote_finalize attempted=1 success=0 "
+                   "reason=unavailable target_map=- current_map=- "
+                   "selected_index=-1 selected_votes=0 candidates=0 "
+                   "exit_requested=0 change_map_set=0 active=0 "
+                   "vote_count0=0 vote_count1=0 vote_count2=0\n");
+        return 0;
+    }
+
+    return api->FinalizeAndExit();
+}
+
+static unsigned SV_BotMapVoteSmokeElapsedMilliseconds(
+    unsigned start_realtime,
+    int *realtime_reset)
+{
+    if (realtime_reset) {
+        *realtime_reset = 0;
+    }
+
+    if (svs.realtime < start_realtime) {
+        if (realtime_reset) {
+            *realtime_reset = 1;
+        }
+        return 0;
+    }
+
+    return svs.realtime - start_realtime;
+}
+
+static void SV_BotMapVoteSmokeFrame(void)
+{
+    enum {
+        MAPVOTE_RELOAD_TIMEOUT_MS = 10000
+    };
+    static int seen_spawncount;
+    static int stage;
+    static int added_alpha;
+    static int added_bravo;
+    static bool reload_pending;
+    static int reload_spawncount;
+    static unsigned reload_request_realtime;
+    static char target_map[MAX_QPATH];
+    bool observed_reload = false;
+    int realtime_reset = 0;
+    unsigned elapsed_ms = 0;
+    int begin_success;
+    int bot_vote_blocked;
+    int finalize_success;
+
+    if (!sv_bot_mapvote_smoke || sv_bot_mapvote_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        const int old_spawncount = seen_spawncount;
+
+        seen_spawncount = sv.spawncount;
+        if (reload_pending) {
+            elapsed_ms = SV_BotMapVoteSmokeElapsedMilliseconds(
+                reload_request_realtime, &realtime_reset);
+            reload_pending = false;
+            observed_reload = true;
+            stage = 3;
+            Com_Printf("q3a_bot_mapvote_smoke_reload=observed "
+                       "old_spawncount=%d reload_spawncount=%d "
+                       "new_spawncount=%d elapsed_ms=%u "
+                       "realtime_reset=%d target_map=%s current_map=%s\n",
+                       old_spawncount, reload_spawncount, sv.spawncount,
+                       elapsed_ms, realtime_reset,
+                       target_map[0] ? target_map : "-",
+                       sv.name[0] ? sv.name : "-");
+        } else {
+            stage = 0;
+            added_alpha = 0;
+            added_bravo = 0;
+            reload_spawncount = 0;
+            reload_request_realtime = 0;
+            target_map[0] = 0;
+        }
+    } else if (reload_pending) {
+        elapsed_ms = SV_BotMapVoteSmokeElapsedMilliseconds(
+            reload_request_realtime, &realtime_reset);
+        if (!realtime_reset &&
+            elapsed_ms >= (unsigned)MAPVOTE_RELOAD_TIMEOUT_MS) {
+            const int removed = SV_BotRemoveAll();
+
+            Cvar_Set("sg_bot_enable", "0");
+            Cvar_Set("sg_bot_min_players", "0");
+            reload_pending = false;
+            stage = 4;
+            Com_Printf("q3a_bot_mapvote_smoke_reload=timeout "
+                       "from_spawncount=%d current_spawncount=%d "
+                       "elapsed_ms=%u timeout_ms=%d target_map=%s "
+                       "current_map=%s removed=%d pass=0\n",
+                       reload_spawncount, sv.spawncount, elapsed_ms,
+                       MAPVOTE_RELOAD_TIMEOUT_MS,
+                       target_map[0] ? target_map : "-",
+                       sv.name[0] ? sv.name : "-", removed);
+            Com_Printf("q3a_bot_mapvote_smoke=end final_count=%d pass=0\n",
+                       SV_BotCount());
+            if (sv_bot_mapvote_smoke->integer >= 2) {
+                Com_Quit(NULL, ERR_DISCONNECT);
+            }
+        }
+        return;
+    } else if (stage > 3) {
+        return;
+    }
+
+    if (stage == 0) {
+        SV_BotRemoveAll();
+        SV_BotMapVoteSmokeResetStatus();
+        Cvar_Set("deathmatch", "1");
+        Cvar_Set("coop", "0");
+        Cvar_Set("g_gametype", "0");
+        Cvar_Set("g_maps_selector", "1");
+        Cvar_Set("g_allow_voting", "1");
+        Cvar_Set("g_allow_spec_vote", "0");
+        Cvar_Set("minplayers", "0");
+        Cvar_Set("maxplayers", "16");
+        Cvar_Set("warmup_enabled", "0");
+        Cvar_Set("match_start_no_humans", "1");
+        Cvar_Set("sg_bot_enable", "1");
+        Cvar_Set("sg_bot_min_players", "0");
+        Q_strlcpy(target_map, sv.name, sizeof(target_map));
+        added_alpha = 0;
+        added_bravo = 0;
+        Com_Printf("q3a_bot_mapvote_smoke=begin target=2 map=%s "
+                   "selector=1 bot_vote_block=1\n",
+                   target_map[0] ? target_map : "-");
+        stage = 1;
+        return;
+    }
+
+    if (stage == 1) {
+        if (SV_BotCount() != 0) {
+            SV_BotRemoveAll();
+            return;
+        }
+
+        added_alpha = SV_BotAdd("MapVoteOne", NULL) ? 1 : 0;
+        added_bravo = SV_BotAdd("MapVoteTwo", NULL) ? 1 : 0;
+        Com_Printf("q3a_bot_mapvote_smoke_after_add_requests "
+                   "added_alpha=%d added_bravo=%d count=%d\n",
+                   added_alpha, added_bravo, SV_BotCount());
+        stage = 2;
+        return;
+    }
+
+    if (stage == 2) {
+        if (SV_BotCount() < 2) {
+            return;
+        }
+
+        Com_Printf("q3a_bot_mapvote_smoke_status_requested count=%d\n",
+                   SV_BotCount());
+        SV_BotMapVoteSmokeStatus(2, 0, 0, 0, 0, 0);
+
+        begin_success = SV_BotMapVoteSmokeBegin();
+        Com_Printf("q3a_bot_mapvote_smoke_begin_requested count=%d "
+                   "map=%s success=%d\n",
+                   SV_BotCount(), target_map[0] ? target_map : "-",
+                   begin_success);
+        SV_BotMapVoteSmokeStatus(2, 1, 1, 0, 0, 0);
+
+        bot_vote_blocked = SV_BotMapVoteSmokeTryBotVote(0);
+        Com_Printf("q3a_bot_mapvote_smoke_bot_vote_requested count=%d "
+                   "blocked=%d\n",
+                   SV_BotCount(), bot_vote_blocked);
+        SV_BotMapVoteSmokeStatus(2, 1, 1, 1, 0, 0);
+
+        finalize_success = SV_BotMapVoteSmokeFinalize();
+        Com_Printf("q3a_bot_mapvote_smoke_finalize_requested count=%d "
+                   "map=%s success=%d\n",
+                   SV_BotCount(), target_map[0] ? target_map : "-",
+                   finalize_success);
+        SV_BotMapVoteSmokeStatus(2, 0, 1, 1, 1, 0);
+
+        reload_pending = true;
+        reload_spawncount = sv.spawncount;
+        reload_request_realtime = svs.realtime;
+        stage = 4;
+        Com_Printf("q3a_bot_mapvote_smoke_reload=queued "
+                   "from_spawncount=%d target_map=%s timeout_ms=%d\n",
+                   reload_spawncount, target_map[0] ? target_map : "-",
+                   MAPVOTE_RELOAD_TIMEOUT_MS);
+        return;
+    }
+
+    if (stage == 3) {
+        int removed;
+
+        Com_Printf("q3a_bot_mapvote_smoke_post_reload_status_requested "
+                   "count=%d observed_reload=%d\n",
+                   SV_BotCount(), observed_reload ? 1 : 0);
+        SV_BotMapVoteSmokeStatus(-1, 0, 0, 1, 1, 0);
+
+        removed = SV_BotRemoveAll();
+        Com_Printf("q3a_bot_mapvote_smoke_removed_all count=%d removed=%d\n",
+                   SV_BotCount(), removed);
+        SV_BotMapVoteSmokeStatus(0, 0, 0, 1, 1, 0);
+
+        Cvar_Set("sg_bot_enable", "0");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_mapvote_smoke=end final_count=%d "
+                   "target_map=%s current_map=%s pass=1\n",
+                   SV_BotCount(), target_map[0] ? target_map : "-",
+                   sv.name[0] ? sv.name : "-");
+        stage = 4;
+
+        if (sv_bot_mapvote_smoke->integer >= 2) {
+            Com_Quit(NULL, ERR_DISCONNECT);
+        }
+    }
+}
+
+static const bot_mymap_status_api_v1_t *SV_BotMyMapStatusApi(void)
+{
+    const bot_mymap_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_MYMAP_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static void SV_BotMyMapSmokeReset(void)
+{
+    const bot_mymap_status_api_v1_t *api = SV_BotMyMapStatusApi();
+
+    if (api && api->ResetStatus) {
+        api->ResetStatus();
+    }
+    if (api && api->ClearQueues) {
+        api->ClearQueues();
+    }
+}
+
+static void SV_BotMyMapSmokeStatus(int expected_bots,
+                                   int expected_play_queue,
+                                   int expected_mymap_queue,
+                                   int expected_last_queue_success,
+                                   int expected_last_consume_success)
+{
+    const bot_mymap_status_api_v1_t *api = SV_BotMyMapStatusApi();
+
+    if (!api || !api->PrintStatus) {
+        Com_Printf("q3a_bot_mymap_status unavailable=1 "
+                   "expected_bots=%d expected_play_queue=%d "
+                   "expected_mymap_queue=%d "
+                   "expected_last_queue_success=%d "
+                   "expected_last_consume_success=%d pass=0\n",
+                   expected_bots, expected_play_queue, expected_mymap_queue,
+                   expected_last_queue_success,
+                   expected_last_consume_success);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_play_queue,
+                     expected_mymap_queue, expected_last_queue_success,
+                     expected_last_consume_success);
+}
+
+static int SV_BotMyMapSmokeTryQueue(const char *map_name)
+{
+    const bot_mymap_status_api_v1_t *api = SV_BotMyMapStatusApi();
+
+    if (!api || !api->TryQueueFirstBotMyMap) {
+        Com_Printf("q3a_bot_mymap_queue attempted=1 bot_found=0 client=-1 "
+                   "map=%s social=- social_assigned=0 success=0 rejected=1 "
+                   "reason=unavailable play_queue=0 mymap_queue=0\n",
+                   map_name && map_name[0] ? map_name : "-");
+        return 0;
+    }
+
+    return api->TryQueueFirstBotMyMap(map_name);
+}
+
+static int SV_BotMyMapSmokeConsume(void)
+{
+    const bot_mymap_status_api_v1_t *api = SV_BotMyMapStatusApi();
+
+    if (!api || !api->ConsumeQueuedMap) {
+        Com_Printf("q3a_bot_mymap_consume attempted=1 success=0 "
+                   "reason=unavailable map=- social=- "
+                   "play_queue=0 mymap_queue=0\n");
+        return 0;
+    }
+
+    return api->ConsumeQueuedMap();
+}
+
+static void SV_BotMyMapSmokeFrame(void)
+{
+    static int seen_spawncount;
+    static int stage;
+    bool added;
+    int queue_success;
+    int consume_success;
+
+    if (!sv_bot_mymap_smoke || sv_bot_mymap_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        seen_spawncount = sv.spawncount;
+        stage = 0;
+    } else if (stage > 2) {
+        return;
+    }
+
+    if (stage == 0) {
+        SV_BotRemoveAll();
+        SV_BotMyMapSmokeReset();
+        Cvar_Set("deathmatch", "1");
+        Cvar_Set("coop", "0");
+        Cvar_Set("g_gametype", "0");
+        Cvar_Set("g_maps_mymap", "1");
+        Cvar_Set("g_allow_mymap", "1");
+        Cvar_Set("g_maps_mymap_queue_limit", "2");
+        Cvar_Set("minplayers", "0");
+        Cvar_Set("maxplayers", "16");
+        Cvar_Set("warmup_enabled", "0");
+        Cvar_Set("match_start_no_humans", "1");
+        Cvar_Set("sg_bot_enable", "1");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_mymap_smoke=begin target=1 map=%s "
+                   "maps_mymap=1 allow_mymap=1 queue_limit=2\n",
+                   sv.name[0] ? sv.name : "-");
+        stage = 1;
+        return;
+    }
+
+    if (stage == 1) {
+        if (SV_BotCount() != 0) {
+            SV_BotRemoveAll();
+            return;
+        }
+
+        added = SV_BotAdd("MyMapOne", NULL);
+        Com_Printf("q3a_bot_mymap_smoke_after_add_request "
+                   "added=%d count=%d\n",
+                   added, SV_BotCount());
+        stage = 2;
+        return;
+    }
+
+    if (stage == 2) {
+        if (SV_BotCount() < 1) {
+            return;
+        }
+
+        Com_Printf("q3a_bot_mymap_smoke_status_requested count=%d\n",
+                   SV_BotCount());
+        SV_BotMyMapSmokeStatus(1, 0, 0, 0, 0);
+
+        queue_success = SV_BotMyMapSmokeTryQueue(sv.name);
+        Com_Printf("q3a_bot_mymap_smoke_queue_requested count=%d "
+                   "map=%s success=%d\n",
+                   SV_BotCount(), sv.name[0] ? sv.name : "-",
+                   queue_success);
+        SV_BotMyMapSmokeStatus(1, 1, 1, 1, 0);
+
+        consume_success = SV_BotMyMapSmokeConsume();
+        Com_Printf("q3a_bot_mymap_smoke_consume_requested count=%d "
+                   "success=%d\n",
+                   SV_BotCount(), consume_success);
+        SV_BotMyMapSmokeStatus(1, 0, 0, 1, 1);
+
+        SV_BotRemoveAll();
+        Com_Printf("q3a_bot_mymap_smoke_removed_all count=%d\n",
+                   SV_BotCount());
+        SV_BotMyMapSmokeStatus(0, 0, 0, 1, 1);
+
+        Cvar_Set("sg_bot_enable", "0");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_mymap_smoke=end final_count=%d map=%s\n",
+                   SV_BotCount(), sv.name[0] ? sv.name : "-");
+        stage = 3;
+
+        if (sv_bot_mymap_smoke->integer >= 2) {
+            Com_Quit(NULL, ERR_DISCONNECT);
+        }
+    }
+}
+
+static const bot_intermission_status_api_v1_t *SV_BotIntermissionStatusApi(void)
+{
+    const bot_intermission_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_INTERMISSION_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static void SV_BotIntermissionSmokeResetStatus(void)
+{
+    const bot_intermission_status_api_v1_t *api =
+        SV_BotIntermissionStatusApi();
+
+    if (api && api->ResetStatus) {
+        api->ResetStatus();
+    }
+}
+
+static void SV_BotIntermissionSmokeStatus(int expected_bots,
+                                          int expected_humans,
+                                          int expected_playing,
+                                          int expected_intermission,
+                                          int expected_pm_freeze_bots,
+                                          int expected_post_intermission,
+                                          int expected_sorted_bots)
+{
+    const bot_intermission_status_api_v1_t *api =
+        SV_BotIntermissionStatusApi();
+
+    if (!api || !api->PrintStatus) {
+        Com_Printf("q3a_bot_intermission_status unavailable=1 "
+                   "expected_bots=%d expected_humans=%d "
+                   "expected_playing=%d expected_intermission=%d "
+                   "expected_pm_freeze_bots=%d "
+                   "expected_post_intermission=%d "
+                   "expected_sorted_bots=%d pass=0\n",
+                   expected_bots, expected_humans, expected_playing,
+                   expected_intermission, expected_pm_freeze_bots,
+                   expected_post_intermission, expected_sorted_bots);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_humans, expected_playing,
+                     expected_intermission, expected_pm_freeze_bots,
+                     expected_post_intermission, expected_sorted_bots);
+}
+
+static int SV_BotIntermissionSmokeBegin(void)
+{
+    const bot_intermission_status_api_v1_t *api =
+        SV_BotIntermissionStatusApi();
+
+    if (!api || !api->BeginIntermission) {
+        Com_Printf("q3a_bot_intermission_begin attempted=1 bot_count=0 "
+                   "success=0 reason=unavailable map=- intermission=0 "
+                   "change_map_current=0 intermission_bots=0 "
+                   "pm_freeze_bots=0 sorted_bots=0\n");
+        return 0;
+    }
+
+    return api->BeginIntermission();
+}
+
+static void SV_BotIntermissionSmokeFrame(void)
+{
+    static int seen_spawncount;
+    static int stage;
+    static int added_alpha;
+    static int added_bravo;
+    int begin_success;
+
+    if (!sv_bot_intermission_smoke ||
+        sv_bot_intermission_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        seen_spawncount = sv.spawncount;
+        stage = 0;
+        added_alpha = 0;
+        added_bravo = 0;
+    } else if (stage > 2) {
+        return;
+    }
+
+    if (stage == 0) {
+        SV_BotRemoveAll();
+        SV_BotIntermissionSmokeResetStatus();
+        Cvar_Set("deathmatch", "1");
+        Cvar_Set("coop", "0");
+        Cvar_Set("g_gametype", "0");
+        Cvar_Set("minplayers", "0");
+        Cvar_Set("maxplayers", "16");
+        Cvar_Set("warmup_enabled", "0");
+        Cvar_Set("match_start_no_humans", "1");
+        Cvar_Set("sg_bot_enable", "1");
+        Cvar_Set("sg_bot_min_players", "0");
+        added_alpha = 0;
+        added_bravo = 0;
+        Com_Printf("q3a_bot_intermission_smoke=begin target=2\n");
+        stage = 1;
+        return;
+    }
+
+    if (stage == 1) {
+        if (SV_BotCount() != 0) {
+            SV_BotRemoveAll();
+            return;
+        }
+
+        added_alpha = SV_BotAdd("InterOne", NULL) ? 1 : 0;
+        added_bravo = SV_BotAdd("InterTwo", NULL) ? 1 : 0;
+        stage = 2;
+        return;
+    }
+
+    if (stage == 2) {
+        if (SV_BotCount() < 2) {
+            return;
+        }
+
+        Com_Printf("q3a_bot_intermission_smoke_after_add_requests "
+                   "added_alpha=%d added_bravo=%d count=%d\n",
+                   added_alpha, added_bravo, SV_BotCount());
+        Com_Printf("q3a_bot_intermission_smoke_status_requested count=%d\n",
+                   SV_BotCount());
+        SV_BotIntermissionSmokeStatus(2, 0, 2, 0, 0, 0, 2);
+
+        begin_success = SV_BotIntermissionSmokeBegin();
+        Com_Printf("q3a_bot_intermission_smoke_begin_requested count=%d "
+                   "success=%d\n",
+                   SV_BotCount(), begin_success);
+        SV_BotIntermissionSmokeStatus(2, 0, 2, 1, 2, 0, 2);
+
+        SV_BotRemoveAll();
+        Com_Printf("q3a_bot_intermission_smoke_removed_all count=%d\n",
+                   SV_BotCount());
+        SV_BotIntermissionSmokeStatus(0, 0, 0, 1, 0, 0, 0);
+
+        Cvar_Set("sg_bot_enable", "0");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_intermission_smoke=end final_count=%d\n",
+                   SV_BotCount());
+        stage = 3;
+
+        if (sv_bot_intermission_smoke->integer >= 2) {
+            Com_Quit(NULL, ERR_DISCONNECT);
+        }
+    }
+}
+
+static const bot_nextmap_status_api_v1_t *SV_BotNextMapStatusApi(void)
+{
+    const bot_nextmap_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_NEXTMAP_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static void SV_BotNextMapSmokeResetStatus(void)
+{
+    const bot_nextmap_status_api_v1_t *api = SV_BotNextMapStatusApi();
+
+    if (api && api->ResetStatus) {
+        api->ResetStatus();
+    }
+}
+
+static void SV_BotNextMapSmokeStatus(int expected_bots,
+                                     int expected_play_queue,
+                                     int expected_mymap_queue,
+                                     int expected_last_transition_success,
+                                     int expected_last_transition_consumed,
+                                     int expected_change_map_set)
+{
+    const bot_nextmap_status_api_v1_t *api = SV_BotNextMapStatusApi();
+
+    if (!api || !api->PrintStatus) {
+        Com_Printf("q3a_bot_nextmap_status unavailable=1 "
+                   "expected_bots=%d expected_play_queue=%d "
+                   "expected_mymap_queue=%d "
+                   "expected_last_transition_success=%d "
+                   "expected_last_transition_consumed=%d "
+                   "expected_change_map_set=%d pass=0\n",
+                   expected_bots, expected_play_queue, expected_mymap_queue,
+                   expected_last_transition_success,
+                   expected_last_transition_consumed,
+                   expected_change_map_set);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_play_queue, expected_mymap_queue,
+                     expected_last_transition_success,
+                     expected_last_transition_consumed,
+                     expected_change_map_set);
+}
+
+static int SV_BotNextMapSmokeTransitionQueuedMap(void)
+{
+    const bot_nextmap_status_api_v1_t *api = SV_BotNextMapStatusApi();
+
+    if (!api || !api->TransitionQueuedMap) {
+        Com_Printf("q3a_bot_nextmap_transition attempted=1 success=0 "
+                   "consumed=0 reason=unavailable target_map=- "
+                   "current_map=- play_queue_before=0 "
+                   "mymap_queue_before=0 play_queue_after=0 "
+                   "mymap_queue_after=0 override_enable_flags=0 "
+                   "override_disable_flags=0 change_map_set=0\n");
+        return 0;
+    }
+
+    return api->TransitionQueuedMap();
+}
+
+static unsigned SV_BotNextMapSmokeElapsedMilliseconds(
+    unsigned start_realtime,
+    int *realtime_reset)
+{
+    if (realtime_reset) {
+        *realtime_reset = 0;
+    }
+
+    if (svs.realtime < start_realtime) {
+        if (realtime_reset) {
+            *realtime_reset = 1;
+        }
+        return 0;
+    }
+
+    return svs.realtime - start_realtime;
+}
+
+static void SV_BotNextMapSmokeFrame(void)
+{
+    enum {
+        NEXTMAP_RELOAD_TIMEOUT_MS = 10000
+    };
+    static int seen_spawncount;
+    static int stage;
+    static int added;
+    static bool reload_pending;
+    static int reload_spawncount;
+    static unsigned reload_request_realtime;
+    static char target_map[MAX_QPATH];
+    bool observed_reload = false;
+    int realtime_reset = 0;
+    unsigned elapsed_ms = 0;
+    int queue_success;
+    int transition_success;
+
+    if (!sv_bot_nextmap_smoke || sv_bot_nextmap_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        const int old_spawncount = seen_spawncount;
+
+        seen_spawncount = sv.spawncount;
+        if (reload_pending) {
+            elapsed_ms = SV_BotNextMapSmokeElapsedMilliseconds(
+                reload_request_realtime, &realtime_reset);
+            reload_pending = false;
+            observed_reload = true;
+            stage = 3;
+            Com_Printf("q3a_bot_nextmap_smoke_reload=observed "
+                       "old_spawncount=%d reload_spawncount=%d "
+                       "new_spawncount=%d elapsed_ms=%u "
+                       "realtime_reset=%d target_map=%s current_map=%s\n",
+                       old_spawncount, reload_spawncount, sv.spawncount,
+                       elapsed_ms, realtime_reset, target_map[0] ? target_map : "-",
+                       sv.name[0] ? sv.name : "-");
+        } else {
+            stage = 0;
+            added = 0;
+            reload_spawncount = 0;
+            reload_request_realtime = 0;
+            target_map[0] = 0;
+        }
+    } else if (reload_pending) {
+        elapsed_ms = SV_BotNextMapSmokeElapsedMilliseconds(
+            reload_request_realtime, &realtime_reset);
+        if (!realtime_reset &&
+            elapsed_ms >= (unsigned)NEXTMAP_RELOAD_TIMEOUT_MS) {
+            const int removed = SV_BotRemoveAll();
+
+            Cvar_Set("sg_bot_enable", "0");
+            Cvar_Set("sg_bot_min_players", "0");
+            reload_pending = false;
+            stage = 4;
+            Com_Printf("q3a_bot_nextmap_smoke_reload=timeout "
+                       "from_spawncount=%d current_spawncount=%d "
+                       "elapsed_ms=%u timeout_ms=%d target_map=%s "
+                       "current_map=%s removed=%d pass=0\n",
+                       reload_spawncount, sv.spawncount, elapsed_ms,
+                       NEXTMAP_RELOAD_TIMEOUT_MS,
+                       target_map[0] ? target_map : "-",
+                       sv.name[0] ? sv.name : "-", removed);
+            Com_Printf("q3a_bot_nextmap_smoke=end final_count=%d pass=0\n",
+                       SV_BotCount());
+            if (sv_bot_nextmap_smoke->integer >= 2) {
+                Com_Quit(NULL, ERR_DISCONNECT);
+            }
+        }
+        return;
+    } else if (stage > 3) {
+        return;
+    }
+
+    if (stage == 0) {
+        SV_BotRemoveAll();
+        SV_BotMyMapSmokeReset();
+        SV_BotNextMapSmokeResetStatus();
+        Cvar_Set("deathmatch", "1");
+        Cvar_Set("coop", "0");
+        Cvar_Set("g_gametype", "0");
+        Cvar_Set("g_maps_mymap", "1");
+        Cvar_Set("g_allow_mymap", "1");
+        Cvar_Set("g_maps_mymap_queue_limit", "2");
+        Cvar_Set("minplayers", "0");
+        Cvar_Set("maxplayers", "16");
+        Cvar_Set("warmup_enabled", "0");
+        Cvar_Set("match_start_no_humans", "1");
+        Cvar_Set("sg_bot_enable", "1");
+        Cvar_Set("sg_bot_min_players", "0");
+        Q_strlcpy(target_map, sv.name, sizeof(target_map));
+        added = 0;
+        Com_Printf("q3a_bot_nextmap_smoke=begin target=1 map=%s "
+                   "maps_mymap=1 allow_mymap=1 queue_limit=2\n",
+                   target_map[0] ? target_map : "-");
+        stage = 1;
+        return;
+    }
+
+    if (stage == 1) {
+        if (SV_BotCount() != 0) {
+            SV_BotRemoveAll();
+            return;
+        }
+
+        added = SV_BotAdd("NextMapOne", NULL) ? 1 : 0;
+        Com_Printf("q3a_bot_nextmap_smoke_after_add_request "
+                   "added=%d count=%d\n",
+                   added, SV_BotCount());
+        stage = 2;
+        return;
+    }
+
+    if (stage == 2) {
+        if (SV_BotCount() < 1) {
+            return;
+        }
+
+        Com_Printf("q3a_bot_nextmap_smoke_status_requested count=%d\n",
+                   SV_BotCount());
+        SV_BotMyMapSmokeStatus(1, 0, 0, 0, 0);
+        SV_BotNextMapSmokeStatus(1, 0, 0, 0, 0, 0);
+
+        queue_success = SV_BotMyMapSmokeTryQueue(target_map);
+        Com_Printf("q3a_bot_nextmap_smoke_queue_requested count=%d "
+                   "map=%s success=%d\n",
+                   SV_BotCount(), target_map[0] ? target_map : "-",
+                   queue_success);
+        SV_BotMyMapSmokeStatus(1, 1, 1, 1, 0);
+        SV_BotNextMapSmokeStatus(1, 1, 1, 0, 0, 0);
+
+        transition_success = SV_BotNextMapSmokeTransitionQueuedMap();
+        Com_Printf("q3a_bot_nextmap_smoke_transition_requested count=%d "
+                   "map=%s success=%d\n",
+                   SV_BotCount(), target_map[0] ? target_map : "-",
+                   transition_success);
+        SV_BotNextMapSmokeStatus(1, 0, 0, 1, 1, 0);
+
+        reload_pending = true;
+        reload_spawncount = sv.spawncount;
+        reload_request_realtime = svs.realtime;
+        stage = 4;
+        Com_Printf("q3a_bot_nextmap_smoke_reload=queued "
+                   "from_spawncount=%d target_map=%s timeout_ms=%d\n",
+                   reload_spawncount, target_map[0] ? target_map : "-",
+                   NEXTMAP_RELOAD_TIMEOUT_MS);
+        return;
+    }
+
+    if (stage == 3) {
+        int removed;
+
+        Com_Printf("q3a_bot_nextmap_smoke_post_reload_status_requested "
+                   "count=%d observed_reload=%d\n",
+                   SV_BotCount(), observed_reload ? 1 : 0);
+        SV_BotNextMapSmokeStatus(-1, 0, 0, 1, 1, 0);
+
+        removed = SV_BotRemoveAll();
+        Com_Printf("q3a_bot_nextmap_smoke_removed_all count=%d removed=%d\n",
+                   SV_BotCount(), removed);
+        SV_BotNextMapSmokeStatus(0, 0, 0, 1, 1, 0);
+
+        Cvar_Set("sg_bot_enable", "0");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_nextmap_smoke=end final_count=%d "
+                   "target_map=%s current_map=%s pass=1\n",
+                   SV_BotCount(), target_map[0] ? target_map : "-",
+                   sv.name[0] ? sv.name : "-");
+        stage = 4;
+
+        if (sv_bot_nextmap_smoke->integer >= 2) {
+            Com_Quit(NULL, ERR_DISCONNECT);
+        }
+    }
+}
+
+static const bot_scoreboard_status_api_v1_t *SV_BotScoreboardStatusApi(void)
+{
+    const bot_scoreboard_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_SCOREBOARD_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static void SV_BotScoreboardSmokeResetStatus(void)
+{
+    const bot_scoreboard_status_api_v1_t *api = SV_BotScoreboardStatusApi();
+
+    if (api && api->ResetStatus) {
+        api->ResetStatus();
+    }
+}
+
+static void SV_BotScoreboardSmokeStatus(int expected_bots,
+                                        int expected_humans,
+                                        int expected_playing,
+                                        int expected_sorted_bots,
+                                        int expected_leader_bot,
+                                        int expected_top_score,
+                                        int expected_second_score)
+{
+    const bot_scoreboard_status_api_v1_t *api = SV_BotScoreboardStatusApi();
+
+    if (!api || !api->PrintStatus) {
+        Com_Printf("q3a_bot_scoreboard_status unavailable=1 "
+                   "expected_bots=%d expected_humans=%d "
+                   "expected_playing=%d expected_sorted_bots=%d "
+                   "expected_leader_bot=%d expected_top_score=%d "
+                   "expected_second_score=%d pass=0\n",
+                   expected_bots, expected_humans, expected_playing,
+                   expected_sorted_bots, expected_leader_bot,
+                   expected_top_score, expected_second_score);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_humans, expected_playing,
+                     expected_sorted_bots, expected_leader_bot,
+                     expected_top_score, expected_second_score);
+}
+
+static int SV_BotScoreboardSmokeApplyScores(int leader_score,
+                                            int runner_score)
+{
+    const bot_scoreboard_status_api_v1_t *api = SV_BotScoreboardStatusApi();
+
+    if (!api || !api->ApplyTestScores) {
+        Com_Printf("q3a_bot_scoreboard_scores attempted=1 bot_count=0 "
+                   "applied=0 leader_client=-1 runner_client=-1 "
+                   "leader_score=%d runner_score=%d reason=unavailable "
+                   "top_client=-1 top_score=0 sorted_bots=0\n",
+                   leader_score, runner_score);
+        return 0;
+    }
+
+    return api->ApplyTestScores(leader_score, runner_score);
+}
+
+static void SV_BotScoreboardSmokeFrame(void)
+{
+    static int seen_spawncount;
+    static int stage;
+    static int added_alpha;
+    static int added_bravo;
+    int score_success;
+
+    if (!sv_bot_scoreboard_smoke ||
+        sv_bot_scoreboard_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        seen_spawncount = sv.spawncount;
+        stage = 0;
+        added_alpha = 0;
+        added_bravo = 0;
+    } else if (stage > 2) {
+        return;
+    }
+
+    if (stage == 0) {
+        SV_BotRemoveAll();
+        SV_BotScoreboardSmokeResetStatus();
+        Cvar_Set("deathmatch", "1");
+        Cvar_Set("coop", "0");
+        Cvar_Set("g_gametype", "0");
+        Cvar_Set("minplayers", "0");
+        Cvar_Set("maxplayers", "16");
+        Cvar_Set("warmup_enabled", "0");
+        Cvar_Set("match_start_no_humans", "1");
+        Cvar_Set("sg_bot_enable", "1");
+        Cvar_Set("sg_bot_min_players", "0");
+        added_alpha = 0;
+        added_bravo = 0;
+        Com_Printf("q3a_bot_scoreboard_smoke=begin target=2 "
+                   "leader_score=7 runner_score=3\n");
+        stage = 1;
+        return;
+    }
+
+    if (stage == 1) {
+        if (SV_BotCount() != 0) {
+            SV_BotRemoveAll();
+            return;
+        }
+
+        added_alpha = SV_BotAdd("ScoreOne", NULL) ? 1 : 0;
+        added_bravo = SV_BotAdd("ScoreTwo", NULL) ? 1 : 0;
+        stage = 2;
+        return;
+    }
+
+    if (stage == 2) {
+        if (SV_BotCount() < 2) {
+            return;
+        }
+
+        Com_Printf("q3a_bot_scoreboard_smoke_after_add_requests "
+                   "added_alpha=%d added_bravo=%d count=%d\n",
+                   added_alpha, added_bravo, SV_BotCount());
+        Com_Printf("q3a_bot_scoreboard_smoke_status_requested count=%d\n",
+                   SV_BotCount());
+        SV_BotScoreboardSmokeStatus(2, 0, 2, 2, 1, 0, 0);
+
+        score_success = SV_BotScoreboardSmokeApplyScores(7, 3);
+        Com_Printf("q3a_bot_scoreboard_smoke_scores_requested count=%d "
+                   "success=%d\n",
+                   SV_BotCount(), score_success);
+        SV_BotScoreboardSmokeStatus(2, 0, 2, 2, 1, 7, 3);
+
+        SV_BotRemoveAll();
+        Com_Printf("q3a_bot_scoreboard_smoke_removed_all count=%d\n",
+                   SV_BotCount());
+        SV_BotScoreboardSmokeStatus(0, 0, 0, 0, 0, -1, -1);
+
+        Cvar_Set("sg_bot_enable", "0");
+        Cvar_Set("sg_bot_min_players", "0");
+        Com_Printf("q3a_bot_scoreboard_smoke=end final_count=%d\n",
+                   SV_BotCount());
+        stage = 3;
+
+        if (sv_bot_scoreboard_smoke->integer >= 2) {
+            Com_Quit(NULL, ERR_DISCONNECT);
+        }
+    }
+}
+
+static const match_logging_status_api_v1_t *SV_MatchLoggingStatusApi(void)
+{
+    const match_logging_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(MATCH_LOGGING_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1 || !api->PrintSchemaStatus) {
+        return NULL;
+    }
+
+    return api;
+}
+
+static int SV_BotMatchLogSmokePrintSchema(void)
+{
+    const match_logging_status_api_v1_t *api = SV_MatchLoggingStatusApi();
+
+    if (!api) {
+        Com_Printf("q3a_match_logging_schema attempted=1 pass=0 "
+                   "reason=unavailable\n");
+        return 0;
+    }
+
+    return api->PrintSchemaStatus();
+}
+
+static void SV_BotMatchLogSmokeFrame(void)
+{
+    static int seen_spawncount;
+    static int stage;
+    int pass;
+
+    if (!sv_bot_matchlog_smoke ||
+        sv_bot_matchlog_smoke->integer <= 0) {
+        return;
+    }
+
+    if (!svs.initialized || sv.state != ss_game || !ge) {
+        return;
+    }
+
+    if (seen_spawncount != sv.spawncount) {
+        seen_spawncount = sv.spawncount;
+        stage = 0;
+    } else if (stage > 0) {
+        return;
+    }
+
+    SV_BotRemoveAll();
+    Cvar_Set("deathmatch", "1");
+    Cvar_Set("coop", "0");
+    Cvar_Set("g_gametype", "0");
+    Cvar_Set("g_statex_export_html", "0");
+    Com_Printf("q3a_bot_matchlog_smoke=begin target=0 schema=1\n");
+
+    pass = SV_BotMatchLogSmokePrintSchema();
+    Com_Printf("q3a_bot_matchlog_smoke_schema_requested pass=%d\n", pass);
+    Com_Printf("q3a_bot_matchlog_smoke=end final_count=%d pass=%d\n",
+               SV_BotCount(), pass);
+    stage = 1;
+
+    if (sv_bot_matchlog_smoke->integer >= 2) {
+        Com_Quit(NULL, ERR_DISCONNECT);
     }
 }
 
@@ -2439,6 +4377,31 @@ static void SV_BotFrameCommandStatus(int expected_min_frames,
     }
 
     api->PrintStatus(expected_min_frames, expected_min_commands);
+}
+
+static void SV_BotChatPolicySmokeStatus(int expected_bots,
+                                        int expected_profile_chat,
+                                        int expected_allow_chat,
+                                        int expected_dispatch_enabled)
+{
+    const bot_chat_policy_status_api_v1_t *api = NULL;
+
+    if (ge && ge->GetExtension) {
+        api = ge->GetExtension(BOT_CHAT_POLICY_STATUS_API_V1);
+    }
+
+    if (!api || api->api_version != 1 || !api->PrintStatus) {
+        Com_Printf("q3a_bot_chat_policy_status unavailable=1 "
+                   "expected_bots=%d expected_profile_chat=%d "
+                   "expected_allow_chat=%d expected_dispatch_enabled=%d "
+                   "pass=0\n",
+                   expected_bots, expected_profile_chat, expected_allow_chat,
+                   expected_dispatch_enabled);
+        return;
+    }
+
+    api->PrintStatus(expected_bots, expected_profile_chat,
+                     expected_allow_chat, expected_dispatch_enabled);
 }
 
 #define SV_BOT_FRAME_COMMAND_STATUS_CAPTURE_TARGET 19
@@ -2510,7 +4473,17 @@ static bool SV_BotFrameCommandStatusReadInt(const char *status,
         return false;
     }
 
-    cursor = strstr(status, pattern);
+    cursor = status;
+    while ((cursor = strstr(cursor, pattern)) != NULL) {
+        if (cursor == status ||
+            cursor[-1] == ' ' ||
+            cursor[-1] == '\n' ||
+            cursor[-1] == '\r' ||
+            cursor[-1] == '\t') {
+            break;
+        }
+        cursor++;
+    }
     if (!cursor) {
         return false;
     }
@@ -2530,6 +4503,7 @@ static int SV_BotFrameCommandStatusCapturedPass(const char *status,
                                                 int expected_min_commands,
                                                 bool *official_pass)
 {
+    const char *frame_status;
     int pass;
     int frames;
     int commands;
@@ -2540,6 +4514,11 @@ static int SV_BotFrameCommandStatusCapturedPass(const char *status,
 
     if (official_pass) {
         *official_pass = false;
+    }
+
+    frame_status = strstr(status ? status : "", "q3a_bot_frame_command_status");
+    if (frame_status) {
+        status = frame_status;
     }
 
     if (SV_BotFrameCommandStatusReadInt(status, "pass", &pass) &&
@@ -2581,10 +4560,16 @@ static int SV_BotFrameCommandStatusCapturedCleanupPass(
     int bot_count,
     int *active_reservations)
 {
+    const char *frame_status;
     int reservations;
 
     if (active_reservations) {
         *active_reservations = -1;
+    }
+
+    frame_status = strstr(status ? status : "", "q3a_bot_frame_command_status");
+    if (frame_status) {
+        status = frame_status;
     }
 
     if (!SV_BotFrameCommandStatusReadInt(status,
@@ -2617,12 +4602,16 @@ static bool SV_BotFrameCommandSmokeIsSoak(void)
 
 static bool SV_BotFrameCommandSmokeIsMapRepeat(void)
 {
-    return SV_BotFrameCommandSmokeMode() == 19;
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 19 || mode == 73;
 }
 
 static bool SV_BotFrameCommandSmokeIsEngageEnemy(void)
 {
-    return SV_BotFrameCommandSmokeMode() == 20;
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 20 || mode == 81;
 }
 
 static bool SV_BotFrameCommandSmokeIsSwitchWeapons(void)
@@ -2632,7 +4621,9 @@ static bool SV_BotFrameCommandSmokeIsSwitchWeapons(void)
 
 static bool SV_BotFrameCommandSmokeIsHealthArmorPickup(void)
 {
-    return SV_BotFrameCommandSmokeMode() == 22;
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 22 || mode == 85;
 }
 
 static bool SV_BotFrameCommandSmokeIsTeamObjective(void)
@@ -2640,12 +4631,441 @@ static bool SV_BotFrameCommandSmokeIsTeamObjective(void)
     return SV_BotFrameCommandSmokeMode() == 23;
 }
 
+static bool SV_BotFrameCommandSmokeIsAimFairness(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 24;
+}
+
+static bool SV_BotFrameCommandSmokeIsAimFirePolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 66;
+}
+
+static bool SV_BotFrameCommandSmokeIsAmmoPressure(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 67;
+}
+
+static bool SV_BotFrameCommandSmokeIsSurvivalInventory(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 68;
+}
+
+static bool SV_BotFrameCommandSmokeIsSurvivalHealthRoute(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 69 || mode == 84;
+}
+
+static bool SV_BotFrameCommandSmokeIsSurvivalArmorRoute(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 70;
+}
+
+static bool SV_BotFrameCommandSmokeIsCombatSurvivalRegression(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 71;
+}
+
+static bool SV_BotFrameCommandSmokeIsThreatRetreat(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 72;
+}
+
+static bool SV_BotFrameCommandSmokeIsTdmRoleSpawnStability(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 73;
+}
+
+static bool SV_BotFrameCommandSmokeIsFfaLivePacing(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 74;
+}
+
+static bool SV_BotFrameCommandSmokeIsDuelLivePacing(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 75;
+}
+
+static bool SV_BotFrameCommandSmokeIsCtfObjectiveTransitions(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 76 || mode == 86 || mode == 87;
+}
+
+static bool SV_BotFrameCommandSmokeIsCoopLiveLoop(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 77 || mode == 91;
+}
+
+static bool SV_BotFrameCommandSmokeIsCoopShareLoop(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 78;
+}
+
+static bool SV_BotFrameCommandSmokeIsSurvivalRoute(void)
+{
+    return SV_BotFrameCommandSmokeIsSurvivalHealthRoute() ||
+        SV_BotFrameCommandSmokeIsSurvivalArmorRoute() ||
+        SV_BotFrameCommandSmokeIsCombatSurvivalRegression();
+}
+
+static bool SV_BotFrameCommandSmokeIsItemTimer(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 25;
+}
+
+static bool SV_BotFrameCommandSmokeIsMatchReadiness(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 26;
+}
+
+static bool SV_BotFrameCommandSmokeIsCoopLeadAdvance(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 27;
+}
+
+static bool SV_BotFrameCommandSmokeIsCoopResourceShare(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 28;
+}
+
+static bool SV_BotFrameCommandSmokeIsCoopAntiBlocking(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 29;
+}
+
+static bool SV_BotFrameCommandSmokeIsCoopTargetShare(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 30;
+}
+
+static bool SV_BotFrameCommandSmokeIsCoopDoorElevator(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 31;
+}
+
+static bool SV_BotFrameCommandSmokeIsTeamRoleRoute(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 32 || mode == 73;
+}
+
+static bool SV_BotFrameCommandSmokeIsTeamItemRoles(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 33;
+}
+
+static bool SV_BotFrameCommandSmokeIsTeamResourceDenial(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 50 || mode == 89;
+}
+
+static bool SV_BotFrameCommandSmokeIsMatchItemPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 51;
+}
+
+static bool SV_BotFrameCommandSmokeIsBehaviorPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 52;
+}
+
+static bool SV_BotFrameCommandSmokeIsBehaviorArbitration(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 63;
+}
+
+static bool SV_BotFrameCommandSmokeIsTargetMemory(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 64;
+}
+
+static bool SV_BotFrameCommandSmokeIsWeaponScoring(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 65;
+}
+
+static bool SV_BotFrameCommandSmokeUsesBehaviorPolicy(void)
+{
+    return SV_BotFrameCommandSmokeIsBehaviorPolicy() ||
+        SV_BotFrameCommandSmokeIsBehaviorArbitration();
+}
+
+static bool SV_BotFrameCommandSmokeIsProfileRolePolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 53;
+}
+
+static bool SV_BotFrameCommandSmokeIsProfileTeamPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 54;
+}
+
+static bool SV_BotFrameCommandSmokeIsProfileItemPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 55;
+}
+
+static bool SV_BotFrameCommandSmokeIsProfileMovementPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 56;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 57;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatTeamPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 58;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatRatePolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 59;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatInitialPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 60;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatReplyPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 61;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatEventPolicy(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 62;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveEvents(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 79 || mode == 80 || mode == 81 || mode == 82 ||
+        mode == 83 || mode == 84 || mode == 85 || mode == 86 ||
+        mode == 87 || mode == 88 || mode == 89 || mode == 90;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveEventCooldown(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 80;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveEnemySighted(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 81;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveLowHealth(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 84;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveItemTaken(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 85;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveItemDenied(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 89;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveMatchResult(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 90;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 86;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveFlagState(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 87;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatLiveBlocked(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 88;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatPhraseLibrary(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 82;
+}
+
+static bool SV_BotFrameCommandSmokeIsBotChatDuplicateSuppression(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 83;
+}
+
+static bool SV_BotFrameCommandSmokeUsesBotChatPolicy(void)
+{
+    return SV_BotFrameCommandSmokeIsBotChatPolicy() ||
+        SV_BotFrameCommandSmokeIsBotChatTeamPolicy() ||
+        SV_BotFrameCommandSmokeIsBotChatRatePolicy() ||
+        SV_BotFrameCommandSmokeIsBotChatInitialPolicy() ||
+        SV_BotFrameCommandSmokeIsBotChatReplyPolicy() ||
+        SV_BotFrameCommandSmokeIsBotChatEventPolicy() ||
+        SV_BotFrameCommandSmokeIsBotChatLiveEvents();
+}
+
+static bool SV_BotFrameCommandSmokeIsFfaItemRoles(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 46 || mode == 74;
+}
+
+static bool SV_BotFrameCommandSmokeIsCtfItemRoles(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 47;
+}
+
+static bool SV_BotFrameCommandSmokeIsFfaRoleCombat(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 48 || mode == 49 || mode == 74;
+}
+
+static bool SV_BotFrameCommandSmokeIsTeamFireAvoidance(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 34 || mode == 44;
+}
+
+static bool SV_BotFrameCommandSmokeIsTeamRoleCombat(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 43 || mode == 44 || mode == 73;
+}
+
+static bool SV_BotFrameCommandSmokeIsTeamRoleCombatAvoidance(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 44;
+}
+
+static bool SV_BotFrameCommandSmokeIsFfaRoamRoute(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 42 || mode == 45 || mode == 74;
+}
+
+static bool SV_BotFrameCommandSmokeIsFfaSpawnCampAvoidance(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 45 || mode == 49 || mode == 74;
+}
+
+static bool SV_BotFrameCommandSmokeIsFfaSpawnCampCombatAvoidance(void)
+{
+    const int mode = SV_BotFrameCommandSmokeMode();
+
+    return mode == 49 || mode == 74;
+}
+
+static bool SV_BotFrameCommandSmokeIsCtfRoleRoute(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 35;
+}
+
+static bool SV_BotFrameCommandSmokeIsCtfRoleCombat(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 36;
+}
+
+static bool SV_BotFrameCommandSmokeIsCtfDroppedFlagRoute(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 37;
+}
+
+static bool SV_BotFrameCommandSmokeIsCtfCarrierSupportRoute(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 38;
+}
+
+static bool SV_BotFrameCommandSmokeIsCtfBaseReturnRoute(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 39;
+}
+
+static bool SV_BotFrameCommandSmokeIsCtfObjectiveRoute(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 40;
+}
+
+static bool SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 41;
+}
+
 static bool SV_BotFrameCommandSmokeUsesScenarioCvars(void)
 {
     return SV_BotFrameCommandSmokeIsEngageEnemy() ||
         SV_BotFrameCommandSmokeIsSwitchWeapons() ||
         SV_BotFrameCommandSmokeIsHealthArmorPickup() ||
-        SV_BotFrameCommandSmokeIsTeamObjective();
+        SV_BotFrameCommandSmokeIsAmmoPressure() ||
+        SV_BotFrameCommandSmokeIsSurvivalInventory() ||
+        SV_BotFrameCommandSmokeIsSurvivalRoute() ||
+        SV_BotFrameCommandSmokeIsThreatRetreat() ||
+        SV_BotFrameCommandSmokeIsTeamObjective() ||
+        SV_BotFrameCommandSmokeIsAimFairness() ||
+        SV_BotFrameCommandSmokeIsAimFirePolicy() ||
+        SV_BotFrameCommandSmokeIsItemTimer() ||
+        SV_BotFrameCommandSmokeIsMatchReadiness() ||
+        SV_BotFrameCommandSmokeIsCoopLeadAdvance() ||
+        SV_BotFrameCommandSmokeIsCoopResourceShare() ||
+        SV_BotFrameCommandSmokeIsCoopAntiBlocking() ||
+        SV_BotFrameCommandSmokeIsCoopTargetShare() ||
+        SV_BotFrameCommandSmokeIsCoopDoorElevator() ||
+        SV_BotFrameCommandSmokeIsCoopLiveLoop() ||
+        SV_BotFrameCommandSmokeIsCoopShareLoop() ||
+        SV_BotFrameCommandSmokeIsDuelLivePacing() ||
+        SV_BotFrameCommandSmokeIsFfaRoamRoute() ||
+        SV_BotFrameCommandSmokeIsFfaRoleCombat() ||
+        SV_BotFrameCommandSmokeIsFfaItemRoles() ||
+        SV_BotFrameCommandSmokeIsTeamRoleRoute() ||
+        SV_BotFrameCommandSmokeIsTeamItemRoles() ||
+        SV_BotFrameCommandSmokeIsTeamResourceDenial() ||
+        SV_BotFrameCommandSmokeIsMatchItemPolicy() ||
+        SV_BotFrameCommandSmokeUsesBehaviorPolicy() ||
+        SV_BotFrameCommandSmokeIsProfileRolePolicy() ||
+        SV_BotFrameCommandSmokeIsProfileTeamPolicy() ||
+        SV_BotFrameCommandSmokeIsProfileItemPolicy() ||
+        SV_BotFrameCommandSmokeIsProfileMovementPolicy() ||
+        SV_BotFrameCommandSmokeUsesBotChatPolicy() ||
+        SV_BotFrameCommandSmokeIsTargetMemory() ||
+        SV_BotFrameCommandSmokeIsWeaponScoring() ||
+        SV_BotFrameCommandSmokeIsTeamFireAvoidance() ||
+        SV_BotFrameCommandSmokeIsTeamRoleCombat() ||
+        SV_BotFrameCommandSmokeIsCtfRoleRoute() ||
+        SV_BotFrameCommandSmokeIsCtfRoleCombat() ||
+        SV_BotFrameCommandSmokeIsCtfDroppedFlagRoute() ||
+        SV_BotFrameCommandSmokeIsCtfCarrierSupportRoute() ||
+        SV_BotFrameCommandSmokeIsCtfBaseReturnRoute() ||
+        SV_BotFrameCommandSmokeIsCtfObjectiveRoute() ||
+        SV_BotFrameCommandSmokeIsCtfObjectiveTransitions() ||
+        SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence() ||
+        SV_BotFrameCommandSmokeIsCtfItemRoles();
 }
 
 static int SV_BotFrameCommandSmokeSoakMilliseconds(void)
@@ -2761,6 +5181,10 @@ static bool SV_BotFrameCommandSmokeUsesTravelTypeGoal(void)
     case 13:
     case 14:
     case 15:
+    case 31:
+    case 77:
+    case 91:
+    case 88:
         return true;
     default:
         return false;
@@ -2769,17 +5193,141 @@ static bool SV_BotFrameCommandSmokeUsesTravelTypeGoal(void)
 
 static int SV_BotFrameCommandSmokeTargetBots(void)
 {
+    if (SV_BotFrameCommandSmokeIsMatchReadiness()) {
+        return min(4, bot_public_client_limit());
+    }
+
     if (SV_BotFrameCommandSmokeIsTeamObjective()) {
         return min(4, bot_public_client_limit());
     }
 
-    if (SV_BotFrameCommandSmokeIsEngageEnemy() ||
+    if (SV_BotFrameCommandSmokeIsDuelLivePacing()) {
+        return min(2, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsFfaRoamRoute()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsFfaItemRoles()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsFfaRoleCombat()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsTargetMemory() ||
+        SV_BotFrameCommandSmokeIsAimFirePolicy() ||
+        SV_BotFrameCommandSmokeIsWeaponScoring() ||
+        SV_BotFrameCommandSmokeIsCombatSurvivalRegression() ||
+        SV_BotFrameCommandSmokeIsThreatRetreat()) {
+        return min(2, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsTeamRoleRoute()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsTeamItemRoles()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsTeamResourceDenial()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsMatchItemPolicy()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeUsesBehaviorPolicy()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsProfileRolePolicy()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsProfileTeamPolicy()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsProfileItemPolicy()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsProfileMovementPolicy()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsBotChatLiveEnemySighted()) {
+        return min(2, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsBotChatLiveLowHealth()) {
+        return min(1, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsBotChatLiveItemTaken()) {
+        return min(1, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged() ||
+        SV_BotFrameCommandSmokeIsBotChatLiveFlagState()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsBotChatLiveBlocked()) {
+        return min(1, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeUsesBotChatPolicy()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsTeamFireAvoidance()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsTeamRoleCombat()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsCtfRoleRoute() ||
+        SV_BotFrameCommandSmokeIsCtfRoleCombat() ||
+        SV_BotFrameCommandSmokeIsCtfDroppedFlagRoute() ||
+        SV_BotFrameCommandSmokeIsCtfCarrierSupportRoute() ||
+        SV_BotFrameCommandSmokeIsCtfBaseReturnRoute() ||
+        SV_BotFrameCommandSmokeIsCtfObjectiveRoute() ||
+        SV_BotFrameCommandSmokeIsCtfObjectiveTransitions() ||
+        SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence() ||
+        SV_BotFrameCommandSmokeIsCtfItemRoles()) {
+        return min(4, bot_public_client_limit());
+    }
+
+    if (SV_BotFrameCommandSmokeIsAimFairness() ||
+        SV_BotFrameCommandSmokeIsEngageEnemy() ||
         SV_BotFrameCommandSmokeIsSwitchWeapons()) {
         return min(2, bot_public_client_limit());
     }
 
-    if (SV_BotFrameCommandSmokeIsHealthArmorPickup()) {
+    if (SV_BotFrameCommandSmokeIsHealthArmorPickup() ||
+        SV_BotFrameCommandSmokeIsAmmoPressure() ||
+        SV_BotFrameCommandSmokeIsSurvivalInventory() ||
+        SV_BotFrameCommandSmokeIsSurvivalRoute() ||
+        SV_BotFrameCommandSmokeIsItemTimer() ||
+        SV_BotFrameCommandSmokeIsCoopLeadAdvance()) {
         return 1;
+    }
+
+    if (SV_BotFrameCommandSmokeIsCoopResourceShare() ||
+        SV_BotFrameCommandSmokeIsCoopTargetShare() ||
+        SV_BotFrameCommandSmokeIsCoopAntiBlocking() ||
+        SV_BotFrameCommandSmokeIsCoopDoorElevator() ||
+        SV_BotFrameCommandSmokeIsCoopLiveLoop() ||
+        SV_BotFrameCommandSmokeIsCoopShareLoop()) {
+        return min(2, bot_public_client_limit());
     }
 
     if (SV_BotFrameCommandSmokeUsesPositionGoal() ||
@@ -2803,6 +5351,12 @@ static int SV_BotFrameCommandSmokeTargetBots(void)
 
 static const char *SV_BotFrameCommandSmokeBotName(int index)
 {
+    static const char *profile_names[] = {
+        "smoke",
+        "bulwark",
+        "relay",
+        "vanguard"
+    };
     static const char *names[] = {
         "Mover",
         "MoverTwo",
@@ -2813,6 +5367,17 @@ static const char *SV_BotFrameCommandSmokeBotName(int index)
         "MoverSeven",
         "MoverEight"
     };
+
+    if (SV_BotFrameCommandSmokeIsProfileRolePolicy() ||
+        SV_BotFrameCommandSmokeIsProfileTeamPolicy() ||
+        SV_BotFrameCommandSmokeIsProfileItemPolicy() ||
+        SV_BotFrameCommandSmokeIsProfileMovementPolicy() ||
+        SV_BotFrameCommandSmokeUsesBotChatPolicy()) {
+        if (index >= 0 && index < q_countof(profile_names)) {
+            return profile_names[index];
+        }
+        return NULL;
+    }
 
     if (index >= 0 && index < q_countof(names)) {
         return names[index];
@@ -2845,11 +5410,14 @@ static int SV_BotFrameCommandSmokeTravelTypeGoal(void)
     case 11:
         return 7; /* TRAVEL_WALKOFFLEDGE */
     case 12:
+    case 31:
+    case 77:
         return 11; /* TRAVEL_ELEVATOR */
     case 13:
         return 4; /* TRAVEL_BARRIERJUMP */
     case 14:
     case 15:
+    case 88:
         return 12; /* TRAVEL_ROCKETJUMP */
     default:
         return 0;
@@ -2863,7 +5431,8 @@ static bool SV_BotFrameCommandSmokeAllowsRocketJump(void)
 
 static bool SV_BotFrameCommandSmokeExpectsBlockedTravelTypeGoal(void)
 {
-    return SV_BotFrameCommandSmokeMode() == 15;
+    return SV_BotFrameCommandSmokeMode() == 15 ||
+        SV_BotFrameCommandSmokeIsBotChatLiveBlocked();
 }
 
 static int SV_BotFrameCommandSmokeExpectedCommands(int target_bots)
@@ -2987,12 +5556,55 @@ static void SV_BotFrameCommandSmokeResetRuntimeCvars(void)
     Cvar_Set("sg_bot_frame_command_smoke_weapon_switch", "0");
     Cvar_Set("sg_bot_frame_command_smoke_item_focus", "0");
     Cvar_Set("sg_bot_frame_command_smoke_team_objective", "0");
+    Cvar_Set("sg_bot_frame_command_smoke_aim_fairness", "0");
+    Cvar_Set("sg_bot_frame_command_smoke_item_timer", "0");
+    Cvar_Set("sg_bot_frame_command_smoke_match_readiness", "0");
+    Cvar_Set("sg_bot_frame_command_smoke_survival_inventory", "0");
+    Cvar_Set("sg_bot_frame_command_smoke_survival_route", "0");
+    Cvar_Set("sg_bot_threat_retreat", "0");
     Cvar_Set("sg_bot_nav_position_goal_enable", "0");
     Cvar_Set("sg_bot_nav_travel_type_goal", "0");
     Cvar_Set("sg_bot_nav_travel_type_goal_warp", "0");
     Cvar_Set("sg_bot_nav_travel_type_goal_expect_blocked", "0");
     Cvar_Set("sg_bot_frame_command_smoke_soak", "0");
     Cvar_Set("sg_bot_allow_rocketjump", "0");
+    Cvar_Set("sg_bot_behavior_enable", "0");
+    Cvar_Set("sg_bot_frame_command_smoke_target_memory", "0");
+    Cvar_Set("sg_bot_coop_progress_wait", "0");
+    Cvar_Set("sg_bot_coop_interaction_retry", "0");
+    Cvar_Set("sg_bot_coop_lead_advance", "0");
+    Cvar_Set("sg_bot_coop_resource_share", "0");
+    Cvar_Set("sg_bot_coop_anti_blocking", "0");
+    Cvar_Set("sg_bot_coop_target_share", "0");
+    Cvar_Set("sg_bot_coop_door_elevator", "0");
+    Cvar_Set("sg_bot_coop_live_loop", "0");
+    Cvar_Set("sg_bot_coop_share_loop", "0");
+    Cvar_Set("sg_bot_ffa_roam_route", "0");
+    Cvar_Set("sg_bot_ffa_spawn_camp_avoidance", "0");
+    Cvar_Set("sg_bot_ffa_spawn_camp_combat_avoidance", "0");
+    Cvar_Set("sg_bot_ffa_item_roles", "0");
+    Cvar_Set("sg_bot_ffa_role_combat", "0");
+    Cvar_Set("sg_bot_duel_live_pacing", "0");
+    Cvar_Set("sg_bot_match_item_policy", "0");
+    Cvar_Set("sg_bot_allow_chat", "0");
+    Cvar_Set("sg_bot_chat_team_only", "0");
+    Cvar_Set("sg_bot_chat_min_interval_ms", "0");
+    Cvar_Set("sg_bot_chat_reply_policy_smoke", "0");
+    Cvar_Set("sg_bot_chat_event_policy_smoke", "0");
+    Cvar_Set("sg_bot_chat_live_events", "0");
+    Cvar_Set("sg_bot_team_role_route", "0");
+    Cvar_Set("sg_bot_team_item_roles", "0");
+    Cvar_Set("sg_bot_team_resource_denial", "0");
+    Cvar_Set("sg_bot_team_fire_avoidance", "0");
+    Cvar_Set("sg_bot_team_role_combat", "0");
+    Cvar_Set("sg_bot_ctf_role_route", "0");
+    Cvar_Set("sg_bot_ctf_role_combat", "0");
+    Cvar_Set("sg_bot_ctf_dropped_flag_route", "0");
+    Cvar_Set("sg_bot_ctf_carrier_support_route", "0");
+    Cvar_Set("sg_bot_ctf_base_return_route", "0");
+    Cvar_Set("sg_bot_ctf_objective_route", "0");
+    Cvar_Set("sg_bot_ctf_objective_transitions", "0");
+    Cvar_Set("sg_bot_ctf_item_roles", "0");
 }
 
 static int SV_BotFrameCommandSmokeMapRepeatCleanupStatus(int cycle,
@@ -3027,6 +5639,7 @@ static void SV_BotFrameCommandSmokeFrame(void)
     static int seen_spawncount;
     static int stage;
     static int settle_frames;
+    static bool match_result_intermission_requested;
     static bool soak_active;
     static unsigned soak_start_realtime;
     static unsigned soak_last_progress_realtime;
@@ -3061,6 +5674,7 @@ static void SV_BotFrameCommandSmokeFrame(void)
         seen_spawncount = sv.spawncount;
         stage = 0;
         settle_frames = 0;
+        match_result_intermission_requested = false;
         soak_active = false;
         soak_start_realtime = 0;
         soak_last_progress_realtime = 0;
@@ -3177,9 +5791,62 @@ static void SV_BotFrameCommandSmokeFrame(void)
         Cvar_Set("sg_bot_enable", "1");
         Cvar_Set("sg_bot_min_players", "0");
         Cvar_Set("g_gametype",
-                 SV_BotFrameCommandSmokeIsTeamObjective() ? "1" : "0");
+                 SV_BotFrameCommandSmokeIsDuelLivePacing() ? "2" :
+                 (SV_BotFrameCommandSmokeIsFfaRoamRoute() ||
+                 SV_BotFrameCommandSmokeIsFfaRoleCombat() ||
+                 SV_BotFrameCommandSmokeIsAimFirePolicy() ||
+                  SV_BotFrameCommandSmokeIsBotChatLiveItemTaken() ||
+                  SV_BotFrameCommandSmokeIsBotChatLiveBlocked() ||
+                  SV_BotFrameCommandSmokeIsAmmoPressure() ||
+                  SV_BotFrameCommandSmokeIsSurvivalInventory() ||
+                  SV_BotFrameCommandSmokeIsSurvivalRoute() ||
+                  SV_BotFrameCommandSmokeIsThreatRetreat() ||
+                  SV_BotFrameCommandSmokeIsTargetMemory() ||
+                  SV_BotFrameCommandSmokeIsFfaItemRoles()) ? "1" :
+                 ((SV_BotFrameCommandSmokeIsMatchReadiness() ||
+                 SV_BotFrameCommandSmokeIsTeamRoleRoute() ||
+                 SV_BotFrameCommandSmokeIsTeamItemRoles() ||
+                  SV_BotFrameCommandSmokeIsTeamResourceDenial() ||
+                  SV_BotFrameCommandSmokeIsMatchItemPolicy() ||
+                  SV_BotFrameCommandSmokeIsProfileItemPolicy() ||
+                  SV_BotFrameCommandSmokeIsProfileMovementPolicy() ||
+                  (SV_BotFrameCommandSmokeUsesBotChatPolicy() &&
+                   !SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged() &&
+                   !SV_BotFrameCommandSmokeIsBotChatLiveFlagState() &&
+                   !SV_BotFrameCommandSmokeIsBotChatLiveBlocked()) ||
+                  SV_BotFrameCommandSmokeUsesBehaviorPolicy() ||
+                  SV_BotFrameCommandSmokeIsProfileRolePolicy() ||
+                 SV_BotFrameCommandSmokeIsTeamFireAvoidance() ||
+                 SV_BotFrameCommandSmokeIsTeamRoleCombat()) ? "3" :
+                 ((SV_BotFrameCommandSmokeIsCtfRoleRoute() ||
+                   SV_BotFrameCommandSmokeIsCtfRoleCombat() ||
+                   SV_BotFrameCommandSmokeIsCtfDroppedFlagRoute() ||
+                   SV_BotFrameCommandSmokeIsCtfCarrierSupportRoute() ||
+                   SV_BotFrameCommandSmokeIsCtfBaseReturnRoute() ||
+                   SV_BotFrameCommandSmokeIsCtfObjectiveRoute() ||
+                   SV_BotFrameCommandSmokeIsCtfObjectiveTransitions() ||
+                   SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence() ||
+                   SV_BotFrameCommandSmokeIsProfileTeamPolicy() ||
+                   SV_BotFrameCommandSmokeIsCtfItemRoles()) ? "5" :
+                  (SV_BotFrameCommandSmokeIsTeamObjective() ? "1" : "0"))));
         Cvar_Set("sg_bot_allow_rocketjump",
                  SV_BotFrameCommandSmokeAllowsRocketJump() ? "1" : "0");
+        Cvar_Set("sg_bot_allow_chat",
+                 SV_BotFrameCommandSmokeUsesBotChatPolicy() ? "1" : "0");
+        Cvar_Set("sg_bot_chat_team_only",
+                 SV_BotFrameCommandSmokeIsBotChatTeamPolicy() ? "1" : "0");
+        Cvar_Set("sg_bot_chat_min_interval_ms",
+                 (SV_BotFrameCommandSmokeIsBotChatRatePolicy() ||
+                  SV_BotFrameCommandSmokeIsBotChatLiveEventCooldown()) ?
+                     "60000" : "0");
+        Cvar_Set("sg_bot_chat_reply_policy_smoke",
+                 SV_BotFrameCommandSmokeIsBotChatReplyPolicy() ? "1" : "0");
+        Cvar_Set("sg_bot_chat_event_policy_smoke",
+                 (SV_BotFrameCommandSmokeIsBotChatEventPolicy() ||
+                  SV_BotFrameCommandSmokeIsBotChatDuplicateSuppression()) ?
+                     "1" : "0");
+        Cvar_Set("sg_bot_chat_live_events",
+                 SV_BotFrameCommandSmokeIsBotChatLiveEvents() ? "1" : "0");
         Cvar_Set("sg_bot_nav_travel_type_goal_expect_blocked",
                  SV_BotFrameCommandSmokeExpectsBlockedTravelTypeGoal() ? "1" : "0");
         Cvar_Set("sg_bot_frame_command_smoke_soak",
@@ -3220,16 +5887,206 @@ static void SV_BotFrameCommandSmokeFrame(void)
         }
         if (SV_BotFrameCommandSmokeUsesScenarioCvars()) {
             const char *combat_mode =
-                SV_BotFrameCommandSmokeIsEngageEnemy() ? "engage_enemy" :
+                SV_BotFrameCommandSmokeIsAimFirePolicy() ?
+                    "aim_fire_policy" :
+                SV_BotFrameCommandSmokeIsWeaponScoring() ?
+                    "weapon_scoring" :
+                (SV_BotFrameCommandSmokeIsEngageEnemy() ||
+                 SV_BotFrameCommandSmokeIsCombatSurvivalRegression() ||
+                 SV_BotFrameCommandSmokeIsAimFairness() ||
+                 (SV_BotFrameCommandSmokeIsTeamFireAvoidance() &&
+                  !SV_BotFrameCommandSmokeIsTeamRoleCombatAvoidance())) ?
+                    "engage_enemy" :
                 (SV_BotFrameCommandSmokeIsSwitchWeapons() ?
                     "switch_weapons" : "0");
             const char *item_focus =
+                SV_BotFrameCommandSmokeIsAmmoPressure() ?
+                    "ammo" :
                 SV_BotFrameCommandSmokeIsHealthArmorPickup() ?
                     "health_armor" : "0";
             const int weapon_switch =
-                SV_BotFrameCommandSmokeIsSwitchWeapons() ? 1 : 0;
+                (SV_BotFrameCommandSmokeIsSwitchWeapons() ||
+                 SV_BotFrameCommandSmokeIsWeaponScoring()) ? 1 : 0;
             const int team_objective =
                 SV_BotFrameCommandSmokeIsTeamObjective() ? 1 : 0;
+            const int aim_fairness =
+                (SV_BotFrameCommandSmokeIsAimFairness() ||
+                 SV_BotFrameCommandSmokeIsAimFirePolicy()) ? 1 : 0;
+            const int aim_fire_policy =
+                SV_BotFrameCommandSmokeIsAimFirePolicy() ? 1 : 0;
+            const int item_timer =
+                SV_BotFrameCommandSmokeIsItemTimer() ? 1 : 0;
+            const int match_readiness =
+                SV_BotFrameCommandSmokeIsMatchReadiness() ? 1 : 0;
+            const int target_share =
+                SV_BotFrameCommandSmokeIsCoopTargetShare() ? 1 : 0;
+            const int door_elevator =
+                SV_BotFrameCommandSmokeIsCoopDoorElevator() ? 1 : 0;
+            const int coop_live_loop =
+                SV_BotFrameCommandSmokeIsCoopLiveLoop() ? 1 : 0;
+            const int coop_share_loop =
+                SV_BotFrameCommandSmokeIsCoopShareLoop() ? 1 : 0;
+            const int ffa_roam_route =
+                SV_BotFrameCommandSmokeIsFfaRoamRoute() ? 1 : 0;
+            const int ffa_spawn_camp_avoidance =
+                SV_BotFrameCommandSmokeIsFfaSpawnCampAvoidance() ? 1 : 0;
+            const int ffa_spawn_camp_combat_avoidance =
+                SV_BotFrameCommandSmokeIsFfaSpawnCampCombatAvoidance() ? 1 : 0;
+            const int ffa_item_roles =
+                SV_BotFrameCommandSmokeIsFfaItemRoles() ? 1 : 0;
+            const int ffa_role_combat =
+                SV_BotFrameCommandSmokeIsFfaRoleCombat() ? 1 : 0;
+            const int ffa_live_pacing =
+                SV_BotFrameCommandSmokeIsFfaLivePacing() ? 1 : 0;
+            const int duel_live_pacing =
+                SV_BotFrameCommandSmokeIsDuelLivePacing() ? 1 : 0;
+            const int team_role_route =
+                SV_BotFrameCommandSmokeIsTeamRoleRoute() ? 1 : 0;
+            const int team_item_roles =
+                SV_BotFrameCommandSmokeIsTeamItemRoles() ? 1 : 0;
+            const int team_resource_denial =
+                SV_BotFrameCommandSmokeIsTeamResourceDenial() ? 1 : 0;
+            const int match_item_policy =
+                (SV_BotFrameCommandSmokeIsMatchItemPolicy() ||
+                 SV_BotFrameCommandSmokeIsProfileItemPolicy()) ? 1 : 0;
+            const int behavior_policy =
+                SV_BotFrameCommandSmokeUsesBehaviorPolicy() ? 1 : 0;
+            const int behavior_arbitration =
+                SV_BotFrameCommandSmokeIsBehaviorArbitration() ? 1 : 0;
+            const int target_memory =
+                SV_BotFrameCommandSmokeIsTargetMemory() ? 1 : 0;
+            const int weapon_scoring =
+                SV_BotFrameCommandSmokeIsWeaponScoring() ? 1 : 0;
+            const int ammo_pressure =
+                SV_BotFrameCommandSmokeIsAmmoPressure() ? 1 : 0;
+            const int survival_inventory =
+                SV_BotFrameCommandSmokeIsSurvivalInventory() ? 1 : 0;
+            const int survival_route =
+                SV_BotFrameCommandSmokeIsSurvivalRoute() ? 1 : 0;
+            const char *survival_route_kind =
+                SV_BotFrameCommandSmokeIsCombatSurvivalRegression() ? "combat_health" :
+                SV_BotFrameCommandSmokeIsSurvivalArmorRoute() ? "armor" :
+                (SV_BotFrameCommandSmokeIsSurvivalHealthRoute() ? "health" : "0");
+            const int threat_retreat =
+                SV_BotFrameCommandSmokeIsThreatRetreat() ? 1 : 0;
+            const int tdm_role_spawn_stability =
+                SV_BotFrameCommandSmokeIsTdmRoleSpawnStability() ? 1 : 0;
+            const int profile_role_policy =
+                SV_BotFrameCommandSmokeIsProfileRolePolicy() ? 1 : 0;
+            const int profile_team_policy =
+                SV_BotFrameCommandSmokeIsProfileTeamPolicy() ? 1 : 0;
+            const int profile_item_policy =
+                SV_BotFrameCommandSmokeIsProfileItemPolicy() ? 1 : 0;
+            const int profile_movement_policy =
+                SV_BotFrameCommandSmokeIsProfileMovementPolicy() ? 1 : 0;
+            const int bot_chat_policy =
+                SV_BotFrameCommandSmokeUsesBotChatPolicy() ? 1 : 0;
+            const int bot_chat_team_policy =
+                SV_BotFrameCommandSmokeIsBotChatTeamPolicy() ? 1 : 0;
+            const int bot_chat_rate_policy =
+                SV_BotFrameCommandSmokeIsBotChatRatePolicy() ? 1 : 0;
+            const int bot_chat_initial_policy =
+                SV_BotFrameCommandSmokeIsBotChatInitialPolicy() ? 1 : 0;
+            const int bot_chat_reply_policy =
+                SV_BotFrameCommandSmokeIsBotChatReplyPolicy() ? 1 : 0;
+            const int bot_chat_event_policy =
+                (SV_BotFrameCommandSmokeIsBotChatEventPolicy() ||
+                 SV_BotFrameCommandSmokeIsBotChatDuplicateSuppression()) ? 1 : 0;
+            const int bot_chat_live_events =
+                SV_BotFrameCommandSmokeIsBotChatLiveEvents() ? 1 : 0;
+            const int bot_chat_live_event_cooldown =
+                SV_BotFrameCommandSmokeIsBotChatLiveEventCooldown() ? 1 : 0;
+            const int bot_chat_live_enemy_sighted =
+                SV_BotFrameCommandSmokeIsBotChatLiveEnemySighted() ? 1 : 0;
+            const int bot_chat_live_low_health =
+                SV_BotFrameCommandSmokeIsBotChatLiveLowHealth() ? 1 : 0;
+            const int bot_chat_live_item_taken =
+                SV_BotFrameCommandSmokeIsBotChatLiveItemTaken() ? 1 : 0;
+            const int bot_chat_live_item_denied =
+                SV_BotFrameCommandSmokeIsBotChatLiveItemDenied() ? 1 : 0;
+            const int bot_chat_live_match_result =
+                SV_BotFrameCommandSmokeIsBotChatLiveMatchResult() ? 1 : 0;
+            const int bot_chat_live_objective_changed =
+                SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged() ? 1 : 0;
+            const int bot_chat_live_flag_state =
+                SV_BotFrameCommandSmokeIsBotChatLiveFlagState() ? 1 : 0;
+            const int bot_chat_live_blocked =
+                SV_BotFrameCommandSmokeIsBotChatLiveBlocked() ? 1 : 0;
+            const int bot_chat_phrase_library =
+                SV_BotFrameCommandSmokeIsBotChatPhraseLibrary() ? 1 : 0;
+            const int bot_chat_duplicate_suppression =
+                SV_BotFrameCommandSmokeIsBotChatDuplicateSuppression() ? 1 : 0;
+            const int allow_chat = bot_chat_policy ? 1 : 0;
+            const int chat_team_only = bot_chat_team_policy ? 1 : 0;
+            const int chat_min_interval_ms =
+                (bot_chat_rate_policy || bot_chat_live_event_cooldown) ?
+                    60000 : 0;
+            const int team_fire_avoidance =
+                SV_BotFrameCommandSmokeIsTeamFireAvoidance() ? 1 : 0;
+            const int team_role_combat =
+                SV_BotFrameCommandSmokeIsTeamRoleCombat() ? 1 : 0;
+            const int ctf_role_route =
+                (SV_BotFrameCommandSmokeIsCtfRoleRoute() ||
+                 SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence()) ? 1 : 0;
+            const int ctf_role_combat =
+                SV_BotFrameCommandSmokeIsCtfRoleCombat() ? 1 : 0;
+            const int ctf_dropped_flag_route =
+                SV_BotFrameCommandSmokeIsCtfDroppedFlagRoute() ? 1 : 0;
+            const int ctf_carrier_support_route =
+                SV_BotFrameCommandSmokeIsCtfCarrierSupportRoute() ? 1 : 0;
+            const int ctf_base_return_route =
+                SV_BotFrameCommandSmokeIsCtfBaseReturnRoute() ? 1 : 0;
+            const int ctf_objective_route =
+                (SV_BotFrameCommandSmokeIsCtfObjectiveRoute() ||
+                 SV_BotFrameCommandSmokeIsCtfObjectiveTransitions() ||
+                 SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence()) ? 1 : 0;
+            const int ctf_objective_transitions =
+                SV_BotFrameCommandSmokeIsCtfObjectiveTransitions() ? 1 : 0;
+            const int ctf_objective_route_precedence =
+                SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence() ? 1 : 0;
+            const int ctf_item_roles =
+                SV_BotFrameCommandSmokeIsCtfItemRoles() ? 1 : 0;
+            const char *gametype =
+                SV_BotFrameCommandSmokeIsDuelLivePacing() ? "2" :
+                (SV_BotFrameCommandSmokeIsFfaRoamRoute() ||
+                 SV_BotFrameCommandSmokeIsFfaRoleCombat() ||
+                 SV_BotFrameCommandSmokeIsAimFirePolicy() ||
+                 SV_BotFrameCommandSmokeIsCombatSurvivalRegression() ||
+                 SV_BotFrameCommandSmokeIsBotChatLiveItemTaken() ||
+                 SV_BotFrameCommandSmokeIsBotChatLiveBlocked() ||
+                 SV_BotFrameCommandSmokeIsAmmoPressure() ||
+                 SV_BotFrameCommandSmokeIsSurvivalInventory() ||
+                 SV_BotFrameCommandSmokeIsSurvivalRoute() ||
+                 SV_BotFrameCommandSmokeIsThreatRetreat() ||
+                 SV_BotFrameCommandSmokeIsTargetMemory() ||
+                 SV_BotFrameCommandSmokeIsWeaponScoring() ||
+                 SV_BotFrameCommandSmokeIsFfaItemRoles()) ? "1" :
+                ((SV_BotFrameCommandSmokeIsMatchReadiness() ||
+                 SV_BotFrameCommandSmokeIsTeamRoleRoute() ||
+                 SV_BotFrameCommandSmokeIsTeamItemRoles() ||
+                 SV_BotFrameCommandSmokeIsTeamResourceDenial() ||
+                 SV_BotFrameCommandSmokeIsMatchItemPolicy() ||
+                 SV_BotFrameCommandSmokeIsProfileItemPolicy() ||
+                 SV_BotFrameCommandSmokeIsProfileMovementPolicy() ||
+                 (SV_BotFrameCommandSmokeUsesBotChatPolicy() &&
+                  !SV_BotFrameCommandSmokeIsBotChatLiveObjectiveChanged() &&
+                  !SV_BotFrameCommandSmokeIsBotChatLiveFlagState() &&
+                  !SV_BotFrameCommandSmokeIsBotChatLiveBlocked()) ||
+                 SV_BotFrameCommandSmokeUsesBehaviorPolicy() ||
+                 SV_BotFrameCommandSmokeIsProfileRolePolicy() ||
+                 SV_BotFrameCommandSmokeIsTeamFireAvoidance() ||
+                 SV_BotFrameCommandSmokeIsTeamRoleCombat()) ? "3" :
+                ((SV_BotFrameCommandSmokeIsCtfRoleRoute() ||
+                  SV_BotFrameCommandSmokeIsCtfRoleCombat() ||
+                  SV_BotFrameCommandSmokeIsCtfDroppedFlagRoute() ||
+                  SV_BotFrameCommandSmokeIsCtfCarrierSupportRoute() ||
+                  SV_BotFrameCommandSmokeIsCtfBaseReturnRoute() ||
+                  SV_BotFrameCommandSmokeIsCtfObjectiveRoute() ||
+                  SV_BotFrameCommandSmokeIsCtfObjectiveTransitions() ||
+                  SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence() ||
+                  SV_BotFrameCommandSmokeIsProfileTeamPolicy() ||
+                  SV_BotFrameCommandSmokeIsCtfItemRoles()) ? "5" :
+                (SV_BotFrameCommandSmokeIsTeamObjective() ? "1" : "0")));
 
             Cvar_Set("sg_bot_frame_command_smoke_combat", combat_mode);
             Cvar_Set("sg_bot_frame_command_smoke_weapon_switch",
@@ -3237,18 +6094,231 @@ static void SV_BotFrameCommandSmokeFrame(void)
             Cvar_Set("sg_bot_frame_command_smoke_item_focus", item_focus);
             Cvar_Set("sg_bot_frame_command_smoke_team_objective",
                      team_objective ? "1" : "0");
+            Cvar_Set("sg_bot_frame_command_smoke_aim_fairness",
+                     aim_fairness ? "1" : "0");
+            Cvar_Set("sg_bot_frame_command_smoke_item_timer",
+                     item_timer ? "1" : "0");
+            Cvar_Set("sg_bot_frame_command_smoke_match_readiness",
+                     match_readiness ? "1" : "0");
+            Cvar_Set("sg_bot_coop_target_share",
+                     target_share ? "1" : "0");
+            Cvar_Set("sg_bot_coop_door_elevator",
+                     door_elevator ? "1" : "0");
+            Cvar_Set("sg_bot_coop_live_loop",
+                     coop_live_loop ? "1" : "0");
+            Cvar_Set("sg_bot_coop_share_loop",
+                     coop_share_loop ? "1" : "0");
+            Cvar_Set("sg_bot_ffa_roam_route",
+                     ffa_roam_route ? "1" : "0");
+            Cvar_Set("sg_bot_ffa_spawn_camp_avoidance",
+                     ffa_spawn_camp_avoidance ? "1" : "0");
+            Cvar_Set("sg_bot_ffa_spawn_camp_combat_avoidance",
+                     ffa_spawn_camp_combat_avoidance ? "1" : "0");
+            Cvar_Set("sg_bot_ffa_item_roles",
+                     ffa_item_roles ? "1" : "0");
+            Cvar_Set("sg_bot_ffa_role_combat",
+                     ffa_role_combat ? "1" : "0");
+            Cvar_Set("sg_bot_duel_live_pacing",
+                     duel_live_pacing ? "1" : "0");
+            Cvar_Set("sg_bot_match_item_policy",
+                     match_item_policy ? "1" : "0");
+            Cvar_Set("sg_bot_profile_item_policy_smoke",
+                     profile_item_policy ? "1" : "0");
+            Cvar_Set("sg_bot_profile_movement_policy_smoke",
+                     profile_movement_policy ? "1" : "0");
+            Cvar_Set("sg_bot_allow_chat",
+                     allow_chat ? "1" : "0");
+            Cvar_Set("sg_bot_chat_team_only",
+                     chat_team_only ? "1" : "0");
+            Cvar_Set("sg_bot_chat_min_interval_ms",
+                     chat_min_interval_ms ? "60000" : "0");
+            Cvar_Set("sg_bot_chat_reply_policy_smoke",
+                     bot_chat_reply_policy ? "1" : "0");
+            Cvar_Set("sg_bot_chat_event_policy_smoke",
+                     bot_chat_event_policy ? "1" : "0");
+            Cvar_Set("sg_bot_chat_live_events",
+                     bot_chat_live_events ? "1" : "0");
+            Cvar_Set("sg_bot_behavior_enable",
+                     behavior_policy ? "1" : "0");
+            Cvar_Set("sg_bot_frame_command_smoke_target_memory",
+                     target_memory ? "1" : "0");
+            Cvar_Set("sg_bot_frame_command_smoke_survival_inventory",
+                     survival_inventory ? "1" : "0");
+            Cvar_Set("sg_bot_frame_command_smoke_survival_route",
+                     SV_BotFrameCommandSmokeIsCombatSurvivalRegression() ?
+                         "combat_health" :
+                     SV_BotFrameCommandSmokeIsSurvivalArmorRoute() ? "armor" :
+                     (survival_route ? "1" : "0"));
+            Cvar_Set("sg_bot_threat_retreat",
+                     threat_retreat ? "1" : "0");
+            Cvar_Set("sg_bot_team_role_route",
+                     team_role_route ? "1" : "0");
+            Cvar_Set("sg_bot_team_item_roles",
+                     team_item_roles ? "1" : "0");
+            Cvar_Set("sg_bot_team_resource_denial",
+                     team_resource_denial ? "1" : "0");
+            Cvar_Set("sg_bot_team_fire_avoidance",
+                     team_fire_avoidance ? "1" : "0");
+            Cvar_Set("sg_bot_team_role_combat",
+                     team_role_combat ? "1" : "0");
+            Cvar_Set("sg_bot_ctf_role_route",
+                     ctf_role_route ? "1" : "0");
+            Cvar_Set("sg_bot_ctf_role_combat",
+                     ctf_role_combat ? "1" : "0");
+            Cvar_Set("sg_bot_ctf_dropped_flag_route",
+                     ctf_dropped_flag_route ? "1" : "0");
+            Cvar_Set("sg_bot_ctf_carrier_support_route",
+                     ctf_carrier_support_route ? "1" : "0");
+            Cvar_Set("sg_bot_ctf_base_return_route",
+                     ctf_base_return_route ? "1" : "0");
+            Cvar_Set("sg_bot_ctf_objective_route",
+                     ctf_objective_route ? "1" : "0");
+            Cvar_Set("sg_bot_ctf_objective_transitions",
+                     ctf_objective_transitions ? "1" : "0");
+            Cvar_Set("sg_bot_ctf_item_roles",
+                     ctf_item_roles ? "1" : "0");
             Com_Printf("q3a_bot_frame_command_smoke_scenario=begin "
-                       "mode=%d combat=%s weapon_switch=%d item_focus=%s "
-                       "team_objective=%d target=%d gametype=%s\n",
-                       SV_BotFrameCommandSmokeMode(), combat_mode,
+                       "mode=%d map=%s combat=%s weapon_switch=%d item_focus=%s "
+                       "team_objective=%d target=%d gametype=%s "
+                       "aim_fairness=%d aim_fire_policy=%d "
+                       "item_timer=%d match_readiness=%d "
+                       "target_share=%d door_elevator=%d "
+                       "coop_live_loop=%d coop_share_loop=%d "
+                       "ffa_roam_route=%d "
+                       "ffa_spawn_camp_avoidance=%d "
+                       "ffa_spawn_camp_combat_avoidance=%d "
+                       "ffa_item_roles=%d "
+                       "ffa_role_combat=%d "
+                       "ffa_live_pacing=%d "
+                       "duel_live_pacing=%d "
+                       "match_item_policy=%d behavior_enable=%d "
+                       "behavior_arbitration=%d "
+                       "target_memory=%d weapon_scoring=%d "
+                       "ammo_pressure=%d survival_inventory=%d "
+                       "survival_route=%d survival_route_kind=%s "
+                       "threat_retreat=%d "
+                       "tdm_role_spawn_stability=%d "
+                       "profile_role_policy=%d "
+                        "profile_team_policy=%d "
+                        "profile_item_policy=%d "
+                        "profile_movement_policy=%d "
+                        "bot_chat_policy=%d bot_chat_team_policy=%d "
+                        "bot_chat_rate_policy=%d "
+                        "bot_chat_initial_policy=%d "
+                        "bot_chat_reply_policy=%d "
+                        "bot_chat_event_policy=%d "
+                        "bot_chat_live_events=%d "
+                        "bot_chat_live_event_cooldown=%d "
+                        "bot_chat_live_enemy_sighted=%d "
+                        "bot_chat_live_low_health=%d "
+                        "bot_chat_live_item_taken=%d "
+                        "bot_chat_live_item_denied=%d "
+                        "bot_chat_live_match_result=%d "
+                        "bot_chat_live_objective_changed=%d "
+                        "bot_chat_live_flag_state=%d "
+                        "bot_chat_live_blocked=%d "
+                        "bot_chat_phrase_library=%d "
+                        "bot_chat_duplicate_suppression=%d "
+                        "allow_chat=%d chat_team_only=%d "
+                        "chat_min_interval_ms=%d "
+                        "team_role_route=%d team_item_roles=%d "
+                       "team_resource_denial=%d "
+                       "team_fire_avoidance=%d team_role_combat=%d "
+                       "ctf_role_route=%d "
+                       "ctf_role_combat=%d ctf_dropped_flag_route=%d "
+                       "ctf_carrier_support_route=%d "
+                       "ctf_base_return_route=%d "
+                       "ctf_objective_route=%d "
+                       "ctf_objective_transitions=%d "
+                       "ctf_objective_route_precedence=%d "
+                       "ctf_item_roles=%d\n",
+                       SV_BotFrameCommandSmokeMode(), sv.name, combat_mode,
                        weapon_switch, item_focus, team_objective,
-                       target_bots,
-                       SV_BotFrameCommandSmokeIsTeamObjective() ? "1" : "0");
+                       target_bots, gametype, aim_fairness, aim_fire_policy,
+                       item_timer, match_readiness, target_share, door_elevator,
+                       coop_live_loop, coop_share_loop,
+                       ffa_roam_route, ffa_spawn_camp_avoidance,
+                       ffa_spawn_camp_combat_avoidance,
+                       ffa_item_roles, ffa_role_combat, ffa_live_pacing,
+                       duel_live_pacing,
+                       match_item_policy, behavior_policy,
+                        behavior_arbitration, target_memory, weapon_scoring,
+                        ammo_pressure, survival_inventory, survival_route,
+                        survival_route_kind, threat_retreat,
+                        tdm_role_spawn_stability,
+                        profile_role_policy, profile_team_policy,
+                        profile_item_policy, profile_movement_policy,
+                        bot_chat_policy, bot_chat_team_policy,
+                        bot_chat_rate_policy, bot_chat_initial_policy,
+                        bot_chat_reply_policy, bot_chat_event_policy,
+                        bot_chat_live_events,
+                        bot_chat_live_event_cooldown,
+                        bot_chat_live_enemy_sighted,
+                        bot_chat_live_low_health,
+                        bot_chat_live_item_taken,
+                        bot_chat_live_item_denied,
+                        bot_chat_live_match_result,
+                        bot_chat_live_objective_changed,
+                        bot_chat_live_flag_state,
+                        bot_chat_live_blocked,
+                        bot_chat_phrase_library,
+                        bot_chat_duplicate_suppression,
+                        allow_chat,
+                        chat_team_only, chat_min_interval_ms,
+                        team_role_route, team_item_roles,
+                       team_resource_denial,
+                       team_fire_avoidance, team_role_combat,
+                       ctf_role_route,
+                       ctf_role_combat, ctf_dropped_flag_route,
+                       ctf_carrier_support_route,
+                       ctf_base_return_route, ctf_objective_route,
+                       ctf_objective_transitions,
+                       ctf_objective_route_precedence, ctf_item_roles);
         } else {
             Cvar_Set("sg_bot_frame_command_smoke_combat", "0");
             Cvar_Set("sg_bot_frame_command_smoke_weapon_switch", "0");
             Cvar_Set("sg_bot_frame_command_smoke_item_focus", "0");
             Cvar_Set("sg_bot_frame_command_smoke_team_objective", "0");
+            Cvar_Set("sg_bot_frame_command_smoke_aim_fairness", "0");
+            Cvar_Set("sg_bot_frame_command_smoke_item_timer", "0");
+            Cvar_Set("sg_bot_frame_command_smoke_match_readiness", "0");
+            Cvar_Set("sg_bot_coop_target_share", "0");
+            Cvar_Set("sg_bot_coop_door_elevator", "0");
+            Cvar_Set("sg_bot_coop_live_loop", "0");
+            Cvar_Set("sg_bot_coop_share_loop", "0");
+            Cvar_Set("sg_bot_ffa_roam_route", "0");
+            Cvar_Set("sg_bot_ffa_spawn_camp_avoidance", "0");
+            Cvar_Set("sg_bot_ffa_spawn_camp_combat_avoidance", "0");
+            Cvar_Set("sg_bot_ffa_item_roles", "0");
+            Cvar_Set("sg_bot_ffa_role_combat", "0");
+            Cvar_Set("sg_bot_duel_live_pacing", "0");
+            Cvar_Set("sg_bot_match_item_policy", "0");
+            Cvar_Set("sg_bot_profile_item_policy_smoke", "0");
+            Cvar_Set("sg_bot_profile_movement_policy_smoke", "0");
+            Cvar_Set("sg_bot_allow_chat", "0");
+            Cvar_Set("sg_bot_chat_team_only", "0");
+            Cvar_Set("sg_bot_chat_min_interval_ms", "0");
+            Cvar_Set("sg_bot_chat_reply_policy_smoke", "0");
+            Cvar_Set("sg_bot_chat_event_policy_smoke", "0");
+            Cvar_Set("sg_bot_chat_live_events", "0");
+            Cvar_Set("sg_bot_behavior_enable", "0");
+            Cvar_Set("sg_bot_frame_command_smoke_target_memory", "0");
+            Cvar_Set("sg_bot_frame_command_smoke_survival_inventory", "0");
+            Cvar_Set("sg_bot_frame_command_smoke_survival_route", "0");
+            Cvar_Set("sg_bot_threat_retreat", "0");
+            Cvar_Set("sg_bot_team_role_route", "0");
+            Cvar_Set("sg_bot_team_item_roles", "0");
+            Cvar_Set("sg_bot_team_resource_denial", "0");
+            Cvar_Set("sg_bot_team_fire_avoidance", "0");
+            Cvar_Set("sg_bot_team_role_combat", "0");
+            Cvar_Set("sg_bot_ctf_role_route", "0");
+            Cvar_Set("sg_bot_ctf_role_combat", "0");
+            Cvar_Set("sg_bot_ctf_dropped_flag_route", "0");
+            Cvar_Set("sg_bot_ctf_carrier_support_route", "0");
+            Cvar_Set("sg_bot_ctf_base_return_route", "0");
+            Cvar_Set("sg_bot_ctf_objective_route", "0");
+            Cvar_Set("sg_bot_ctf_objective_transitions", "0");
+            Cvar_Set("sg_bot_ctf_item_roles", "0");
         }
         forced_travel_type = SV_BotFrameCommandSmokeForcedTravelType();
         if (forced_travel_type > 0) {
@@ -3352,6 +6422,22 @@ static void SV_BotFrameCommandSmokeFrame(void)
                    "elapsed_ms=%u duration_ms=%d count=%d reports=%d\n",
                    elapsed_ms, duration_ms, SV_BotCount(), soak_progress_reports);
     } else if (++settle_frames < SV_BotFrameCommandSmokeSettleFrames()) {
+        return;
+    }
+
+    if (SV_BotFrameCommandSmokeIsBotChatLiveMatchResult() &&
+        !match_result_intermission_requested) {
+        const int begin_success = SV_BotIntermissionSmokeBegin();
+        const int settle_target = SV_BotFrameCommandSmokeSettleFrames();
+
+        match_result_intermission_requested = true;
+        settle_frames = settle_target > 8 ? settle_target - 8 : 0;
+        Com_Printf("q3a_bot_frame_command_smoke_match_result_intermission_requested "
+                   "count=%d success=%d\n",
+                   SV_BotCount(), begin_success);
+        SV_BotIntermissionSmokeStatus(
+            target_bots, 0, target_bots, begin_success ? 1 : -1,
+            begin_success ? target_bots : -1, 0, target_bots);
         return;
     }
 
@@ -3463,6 +6549,14 @@ static void SV_BotFrameCommandSmokeFrame(void)
         } else {
             SV_BotFrameCommandStatus(target_bots, expected_commands);
         }
+    }
+
+    if (SV_BotFrameCommandSmokeUsesBotChatPolicy()) {
+        if (SV_BotFrameCommandSmokeIsBotChatLiveMatchResult()) {
+            SV_BotIntermissionSmokeStatus(target_bots, 0, target_bots, 1,
+                                          target_bots, 0, target_bots);
+        }
+        SV_BotChatPolicySmokeStatus(target_bots, target_bots, 1, 1);
     }
 
     SV_BotRemoveAll();
@@ -4584,6 +7678,16 @@ unsigned SV_Frame(unsigned msec)
         SV_BotMinPlayersSmokeFrame();
         SV_BotProfileSmokeFrame();
         SV_BotTeamPolicySmokeFrame();
+        SV_BotWarmupSmokeFrame();
+        SV_BotVoteSmokeFrame();
+        SV_BotAdminAuditSmokeFrame();
+        SV_BotTournamentSmokeFrame();
+        SV_BotMapVoteSmokeFrame();
+        SV_BotMyMapSmokeFrame();
+        SV_BotIntermissionSmokeFrame();
+        SV_BotNextMapSmokeFrame();
+        SV_BotScoreboardSmokeFrame();
+        SV_BotMatchLogSmokeFrame();
         SV_BotFrameCommandSmokeFrame();
 
         // send messages back to the UDP clients
@@ -4883,6 +7987,18 @@ void SV_Init(void)
     sv_bot_profile_smoke_target =
         Cvar_Get("sv_bot_profile_smoke_target", "smoke", 0);
     sv_bot_team_policy_smoke = Cvar_Get("sv_bot_team_policy_smoke", "0", 0);
+    sv_bot_warmup_smoke = Cvar_Get("sv_bot_warmup_smoke", "0", 0);
+    sv_bot_vote_smoke = Cvar_Get("sv_bot_vote_smoke", "0", 0);
+    sv_bot_admin_audit_smoke =
+        Cvar_Get("sv_bot_admin_audit_smoke", "0", 0);
+    sv_bot_tournament_smoke = Cvar_Get("sv_bot_tournament_smoke", "0", 0);
+    sv_bot_mapvote_smoke = Cvar_Get("sv_bot_mapvote_smoke", "0", 0);
+    sv_bot_mymap_smoke = Cvar_Get("sv_bot_mymap_smoke", "0", 0);
+    sv_bot_intermission_smoke =
+        Cvar_Get("sv_bot_intermission_smoke", "0", 0);
+    sv_bot_nextmap_smoke = Cvar_Get("sv_bot_nextmap_smoke", "0", 0);
+    sv_bot_scoreboard_smoke = Cvar_Get("sv_bot_scoreboard_smoke", "0", 0);
+    sv_bot_matchlog_smoke = Cvar_Get("sv_bot_matchlog_smoke", "0", 0);
     sv_bot_frame_command_smoke = Cvar_Get("sv_bot_frame_command_smoke", "0", 0);
     sv_bot_frame_command_smoke_soak_ms =
         Cvar_Get("sv_bot_frame_command_smoke_soak_ms", "600000", 0);

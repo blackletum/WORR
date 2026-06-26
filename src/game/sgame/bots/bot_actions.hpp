@@ -32,6 +32,8 @@ struct BotActionContext {
 	int maxHealth = 0;
 	int armor = 0;
 	int inventoryItem = 0;
+	int inventoryUsePriority = 0;
+	const char *inventoryUseReason = "inventory_use";
 	BotItemContext item{};
 	BotCombatContext combat{};
 };
@@ -83,6 +85,27 @@ enum class BotActionCommandRequestFailure {
 	ItemNotUsable,
 	ItemNotWeapon,
 	InventoryItemIsWeapon,
+};
+
+enum class BotActionCommandDispatchOutcome {
+	None,
+	Submitted,
+	Deferred,
+	Failed,
+};
+
+enum class BotActionCommandDispatchFailure {
+	None,
+	InvalidRequest,
+	InvalidClientIndex,
+	ClientEntityUnavailable,
+	NotBotClient,
+	InactiveClient,
+	MissingItem,
+	MissingInventoryItem,
+	MissingUseCallback,
+	UnsupportedCommand,
+	UnsupportedKind,
 };
 
 struct BotActionApplyResult {
@@ -158,6 +181,43 @@ struct BotActionStatus {
 	int appliedUseButtons = 0;
 	int pendingWeaponSwitches = 0;
 	int pendingInventoryUses = 0;
+	int weaponInventoryScans = 0;
+	int weaponInventoryCandidates = 0;
+	int weaponInventoryReadyCandidates = 0;
+	int weaponInventorySelections = 0;
+	int weaponInventorySwitchRecommendations = 0;
+	int weaponInventoryKeepCurrent = 0;
+	int weaponInventoryPendingDeferrals = 0;
+	int weaponInventoryNoEnemySkips = 0;
+	int weaponInventoryNoCandidateSkips = 0;
+	int weaponInventoryAmmoSkips = 0;
+	int weaponInventorySplashUnsafeSkips = 0;
+	int weaponInventoryRangeSelections = 0;
+	int weaponInventoryEstimateSelections = 0;
+	int inventoryPolicyScans = 0;
+	int inventoryPolicyCandidates = 0;
+	int inventoryPolicyUsableCandidates = 0;
+	int inventoryPolicySelections = 0;
+	int inventoryPolicyCombatUses = 0;
+	int inventoryPolicySurvivalUses = 0;
+	int inventoryPolicyUtilityUses = 0;
+	int inventoryPolicyEnvironmentUses = 0;
+	int inventoryPolicyDeployableUses = 0;
+	int inventoryPolicyEscapeUses = 0;
+	int inventoryPolicyPlacementChecks = 0;
+	int inventoryPolicyPlacementDeferrals = 0;
+	int inventoryPolicyPowerArmorUses = 0;
+	int inventoryPolicyNukeDeferrals = 0;
+	int inventoryPolicyNukeSafetyChecks = 0;
+	int inventoryPolicyNukeFriendlyDeferrals = 0;
+	int inventoryPolicyNukeSelfDeferrals = 0;
+	int inventoryPolicyNukeUses = 0;
+	int inventoryPolicyExistingRequestDeferrals = 0;
+	int inventoryPolicyActiveDeferrals = 0;
+	int inventoryPolicyOwnedSphereDeferrals = 0;
+	int inventoryPolicyNoCellsSkips = 0;
+	int inventoryPolicyNoCandidateSkips = 0;
+	int inventoryPolicyNoUsableSkips = 0;
 	int commandRequestBuilds = 0;
 	int commandRequestAccepted = 0;
 	int commandRequestRejected = 0;
@@ -169,10 +229,21 @@ struct BotActionStatus {
 	int commandRequestUnusableItems = 0;
 	int commandRequestWeaponRejects = 0;
 	int commandRequestInventoryRejects = 0;
+	int commandRequestDispatchAttempts = 0;
+	int commandRequestSubmitted = 0;
+	int commandRequestDeferred = 0;
+	int commandRequestDispatchFailures = 0;
+	int weaponCommandDispatches = 0;
+	int inventoryCommandDispatches = 0;
 	int lastCommandRequestClientIndex = -1;
 	int lastCommandRequestItem = 0;
 	BotActionCommandRequestKind lastCommandRequestKind = BotActionCommandRequestKind::None;
 	BotActionCommandRequestFailure lastCommandRequestFailure = BotActionCommandRequestFailure::None;
+	int lastCommandDispatchClientIndex = -1;
+	int lastCommandDispatchItem = 0;
+	BotActionCommandRequestKind lastCommandDispatchKind = BotActionCommandRequestKind::None;
+	BotActionCommandDispatchOutcome lastCommandDispatchOutcome = BotActionCommandDispatchOutcome::None;
+	BotActionCommandDispatchFailure lastCommandDispatchFailure = BotActionCommandDispatchFailure::None;
 	int weaponSwitchRequests = 0;
 	int weaponSwitchValidatedRequests = 0;
 	int weaponSwitchRejectedRequests = 0;
@@ -193,19 +264,51 @@ struct BotActionStatus {
 	int lastItem = 0;
 	int lastEntity = -1;
 	int lastWeaponItem = 0;
+	int lastWeaponInventoryClientIndex = -1;
+	int lastWeaponInventoryCurrentItem = 0;
+	int lastWeaponInventorySelectedItem = 0;
+	int lastWeaponInventoryCandidateCount = 0;
+	int lastWeaponInventoryReadyCount = 0;
+	int lastWeaponInventoryCurrentScore = 0;
+	int lastWeaponInventorySelectedScore = 0;
+	int lastWeaponInventorySelectedAmmo = 0;
+	int lastWeaponInventorySelectedScoreMargin = 0;
+	int lastWeaponInventorySelectedPriority = 0;
+	int lastWeaponInventorySelectedAmmoPerShot = 0;
+	int lastWeaponInventorySelectedSplashDamage = 0;
+	int lastWeaponInventorySelectedSelfDamageRisk = 0;
+	int lastWeaponInventorySelectedEstimateAdjustment = 0;
+	int lastInventoryPolicyClientIndex = -1;
+	int lastInventoryPolicyItem = 0;
+	int lastInventoryPolicyCandidateCount = 0;
+	int lastInventoryPolicyUsableCount = 0;
+	int lastInventoryPolicyScore = 0;
+	int lastInventoryPolicyPriority = 0;
 	BotActionIntent lastIntent = BotActionIntent::None;
 	BotActionApplyFailure lastApplyFailure = BotActionApplyFailure::None;
 	BotWeaponSwitchProofEvent lastWeaponSwitchEvent = BotWeaponSwitchProofEvent::None;
+	BotItemSpecialKind lastInventoryPolicySpecialKind = BotItemSpecialKind::None;
+	BotWeaponRangeBand lastWeaponInventorySelectedRangeBand = BotWeaponRangeBand::Unknown;
+	BotWeaponAttackModel lastWeaponInventorySelectedAttackModel = BotWeaponAttackModel::Unknown;
+	const char *lastWeaponInventoryReason = "none";
+	const char *lastWeaponInventoryEstimateReason = "none";
+	const char *lastInventoryPolicyReason = "none";
 };
 
 void BotActions_ResetStatus();
 BotActionContext BotActions_BuildContext(const gentity_t *bot);
+void BotActions_EnrichCombatInventory(const gentity_t *bot, BotActionContext *context);
+void BotActions_EnrichInventoryUse(const gentity_t *bot, BotActionContext *context);
 BotActionDecision BotActions_Decide(const BotActionContext &context);
 BotActionApplyResult BotActions_ApplyDecisionDetailed(const BotActionDecision &decision, usercmd_t *cmd);
 bool BotActions_ApplyDecision(const BotActionDecision &decision, usercmd_t *cmd);
 BotActionApplyFailure BotActions_ValidateDecisionForApplication(const BotActionDecision &decision);
 BotActionCommandRequest BotActions_BuildCommandRequest(const BotActionDecision &decision);
 BotActionCommandRequestFailure BotActions_ValidateCommandRequest(const BotActionDecision &decision);
+void BotActions_RecordCommandDispatch(
+	const BotActionCommandRequest &request,
+	BotActionCommandDispatchOutcome outcome,
+	BotActionCommandDispatchFailure failure);
 bool BotActions_IsWeaponSwitchDecision(const BotActionDecision &decision);
 bool BotActions_RecordWeaponSwitchRequest(const BotActionDecision &decision);
 void BotActions_RecordWeaponSwitchRequest(int expectedWeaponItem);
@@ -230,4 +333,6 @@ const char *BotActions_IntentName(BotActionIntent intent);
 const char *BotActions_ApplyFailureName(BotActionApplyFailure failure);
 const char *BotActions_CommandRequestKindName(BotActionCommandRequestKind kind);
 const char *BotActions_CommandRequestFailureName(BotActionCommandRequestFailure failure);
+const char *BotActions_CommandDispatchOutcomeName(BotActionCommandDispatchOutcome outcome);
+const char *BotActions_CommandDispatchFailureName(BotActionCommandDispatchFailure failure);
 const char *BotActions_WeaponSwitchProofEventName(BotWeaponSwitchProofEvent event);

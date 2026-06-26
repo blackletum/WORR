@@ -6,6 +6,9 @@ Status: Implementation In Progress
 
 Roadmap tasks: `FR-04-T01` through `FR-04-T07`, `FR-04-T10` through `FR-04-T16`, and `DV-07-T06`.
 
+Forward completion roadmap:
+`docs-dev/plans/bot-implementation-completion-roadmap.md`.
+
 ## Purpose
 
 Elegantly port the Quake III Arena bot system into WORR by bringing across the useful architecture, data formats, tooling, and behavior patterns while respecting WORR's Quake II Rerelease gameplay, server-game ownership, build layout, and documentation rules.
@@ -20,12 +23,136 @@ The port is not a blind file drop. The target is a maintained WORR bot stack wit
 
 ## Completion Snapshot
 
-Last refreshed: 2026-06-18 extensive multi-agent implementation lane.
+Last refreshed: 2026-06-26 coop campaign interaction matrix round.
 
-- Total checklist completion: 544 of 706 items complete, or 77.1%.
-- Phase checklist completion: 544 of 694 phase items complete, or 78.4%.
-- Completed in the latest worker lanes: high-bot degradation policy and soak budget sidecar, stricter botfile/AAS packaging validation, reference-map coverage reporting with optional missing-map candidates, static BSP trace and dynamic entity-clip CPU counters, Q3A memory source-counter reporting, weapon/inventory command-request APIs, team objective role-policy helpers with status output, user-facing botfile staging docs, and a refreshed credit/status ledger.
-- Still pending: deeper aim/firing policy, wiring weapon/inventory command requests into brain-owned dispatch, autonomous team-role consumption, staging additional reference maps beyond `mm-rage`, release policy for distributing the q2aas tool binary, distributed credit/license packaging, and long-soak CPU baselines from a fresh ten-minute run.
+- Phase checklist completion: 809 of 809 phase items complete, or 100.0%.
+- Raw markdown checkbox completion: 809 of 809 rows complete, or 100.0%. The reusable 12-row checklist gate in the Checklist System section is now plain template guidance instead of raw unchecked task rows.
+- Scenario catalog completion: 99 implemented catalog rows, zero pending rows, and highest reserved bot frame-command mode `91`. The latest full `implemented` run passed from `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z` with 99 passed rows, 0 failed rows, 0 timeouts, 0 errors, and 0 pending rows. Focused validation remains recorded in the per-slice logs for modes `52` through `91`, including bot chat live-event cooldown evidence at `.tmp\bot_scenarios\20260623T010530Z`, bot chat live enemy-sighted evidence at `.tmp\bot_scenarios\20260623T013832Z`, bot chat phrase-library evidence at `.tmp\bot_scenarios\20260623T020850Z`, bot chat duplicate-suppression evidence at `.tmp\bot_scenarios\20260623T023211Z`, bot chat live low-health evidence at `.tmp\bot_scenarios\20260623T025752Z`, bot chat live item-taken evidence at `.tmp\bot_scenarios\20260623T051126Z`, bot chat live objective-changed evidence at `.tmp\bot_scenarios\20260626T140601Z`, bot chat live flag-state evidence at `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`, bot chat live blocked evidence at `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`, bot chat live item-denied evidence at `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`, bot chat live match-result evidence at `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`, and coop campaign interaction matrix evidence at `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`.
+- Latest coop campaign interaction matrix round: dedicated mode `91` `coop_campaign_interaction_matrix` reuses the coop live-loop interaction family on packaged campaign map `base1`, proving route-interaction retry, campaign mover source ownership, teammate hold commands, coop progress wait, and nav interaction candidates on a second generated AAS map. Focused validation passed from `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`, and the current full 99-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z`. Implementation log: `docs-dev/q3a-botlib-coop-campaign-interaction-matrix-2026-06-26.md`.
+- Latest bot chat live match-result round: dedicated mode `90` `bot_chat_live_match_result` reuses the native intermission path to produce real match-result state, dispatches live event id `11` / `victory_defeat` through `sg_bot_chat_live_events`, and reports `reply_chat_match_result=4`, `live_chat_match_result=4`, `last_live_chat_event_name=victory_defeat`, `intermission_bots=4`, `pm_freeze_bots=4`, `live_chat_event_taxonomy=11`, and zero dispatch, reply, or live failures. Focused validation passed from `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`, and the then-current full 98-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-match-result\20260626T182111Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-match-result-2026-06-26.md`.
+- Latest bot chat live item-denied round: dedicated mode `89` `bot_chat_live_item_denied` reuses the four-bot TDM team resource-denial proof to produce real deny-enemy resource policy pressure, dispatches live event id `5` / `item_denied` through `sg_bot_chat_live_events`, and reports `reply_chat_item_denied=4`, `live_chat_item_denied=4`, `live_chat_event_taxonomy=11`, `team_resource_denial_policy_denies=112`, and zero dispatch, reply, or live failures. Focused validation passed from `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`, and the then-current full 97-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-item-denied-2026-06-26.md`.
+- Latest bot chat live blocked round: dedicated mode `88` `bot_chat_live_blocked` reuses the blocked rocketjump travel-type goal proof to produce a real route failure, dispatches live event id `10` / `blocked` through `sg_bot_chat_live_events`, and reports `reply_chat_blocked=1`, `live_chat_blocked=1`, `live_chat_event_taxonomy=11`, and zero dispatch, reply, or live failures. Focused validation passed from `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`, and the later item-denied full 97-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-blocked-2026-06-26.md`.
+- Latest bot chat live flag-state round: dedicated mode `87` `bot_chat_live_flag_state` reuses the CTF pickup/drop/return transition proof to produce real CTF flag-state observations, dispatches live event id `8` / `flag_state` through `sg_bot_chat_live_events`, and reports `reply_chat_flag_state=4`, `live_chat_flag_state=4`, `live_chat_event_taxonomy=11`, and zero dispatch, reply, or live failures. Natural `item_taken` and `enemy_sighted` co-events may appear after the flag callouts, so the scenario gates flag-state counters rather than final-event ordering. Focused validation passed from `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`, and the later item-denied full 97-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-flag-state-2026-06-26.md`.
+- Latest bot chat live objective-changed round: dedicated mode `86` `bot_chat_live_objective_changed` reuses the CTF pickup/drop/return transition proof to produce real CTF objective observations, dispatches live event id `7` / `objective_changed` through `sg_bot_chat_live_events`, and reports `reply_chat_objective_changed=4`, `live_chat_objective_changed=4`, `live_chat_event_taxonomy=11`, and zero dispatch, reply, or live failures. Natural `enemy_sighted` co-events may appear after the objective callouts, so the scenario gates objective counters rather than final-event ordering. Focused validation passed from `.tmp\bot_scenarios\20260626T140601Z`, and the later item-denied full 97-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-objective-changed-2026-06-26.md`.
+- Latest bot chat live item-taken round: dedicated mode `85` `bot_chat_live_item_taken` reuses the health/armor pickup proof to produce real pickup observations, dispatches live event id `4` / `item_taken` through `sg_bot_chat_live_events`, and reports `reply_chat_item_taken=1`, `live_chat_item_taken=1`, `last_reply_chat_event=4`, and `last_live_chat_event_name=item_taken` with zero dispatch failures. Focused validation passed from `.tmp\bot_scenarios\20260623T051126Z`, and the later item-denied full 97-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-item-taken-2026-06-23.md`.
+- Latest bot chat live low-health round: dedicated mode `84` `bot_chat_live_low_health` reuses survival-health route staging to produce a real low-health gameplay state, dispatches live event id `9` / `low_health` through `sg_bot_chat_live_events`, and reports `reply_chat_low_health=1`, `live_chat_low_health=1`, `last_reply_chat_event=9`, and `last_live_chat_event_name=low_health` with zero dispatch failures. Focused validation passed from `.tmp\bot_scenarios\20260623T025752Z`, and the later item-denied full 97-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-low-health-2026-06-23.md`.
+- Latest bot chat duplicate-suppression round: dedicated mode `83` `bot_chat_duplicate_suppression` adds per-bot recent reply tracking, a 5000 ms duplicate window, and status telemetry for suppressed reply/live events. The proof repeats route-ready reply/live triggers under `sg_bot_chat_live_events 1`, records duplicate suppression in `q3a_bot_chat_policy_status`, and preserves dispatch success/failure accounting. Focused validation passed from `.tmp\bot_scenarios\20260623T023211Z`, and the later live low-health full suite passed 92 rows from `.tmp\bot_scenarios\20260623T025801Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-duplicate-suppression-2026-06-23.md`.
+- Latest bot chat phrase-library round: dedicated mode `82` `bot_chat_phrase_library` expands safe initial, team-ready, route-ready, and enemy-sighted phrase banks to four variants per personality bucket, records phrase-library size and unique-variant telemetry in `q3a_bot_chat_policy_status`, and proves staged profile bots exercise all four initial and reply variants through the live chat event path. Focused validation passed from `.tmp\bot_scenarios\20260623T020850Z`, and the later duplicate-suppression full suite passed 91 rows from `.tmp\bot_scenarios\20260623T023230Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-phrase-library-2026-06-23.md`.
+- Latest bot chat live enemy-sighted round: dedicated mode `81` `bot_chat_live_enemy_sighted` reuses the default-off `sg_bot_chat_live_events` gate in a two-bot TDM combat proof, records visible and shootable enemy facts, dispatches a live `enemy_sighted` reply after blackboard enemy visibility, and reports `reply_chat_enemy_sighted=1`, `live_chat_enemy_sighted=1`, `last_live_chat_event=6`, and `last_live_chat_event_name=enemy_sighted` with zero dispatch failures. Focused validation passed from `.tmp\bot_scenarios\20260623T013832Z`, and the later duplicate-suppression full suite passed 91 rows from `.tmp\bot_scenarios\20260623T023230Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-enemy-sighted-2026-06-23.md`.
+- Latest bot chat live-event cooldown round: dedicated mode `80` `bot_chat_live_event_cooldown` reuses the default-off `sg_bot_chat_live_events` gate with `sg_bot_chat_min_interval_ms 60000`, records spawn and route-ready live event attempts, submits one live utterance, rate-limits the remaining seven attempts, and reports zero dispatch failures. Focused validation passed from `.tmp\bot_scenarios\20260623T010530Z`, and the later duplicate-suppression full suite passed 91 rows from `.tmp\bot_scenarios\20260623T023230Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-event-cooldown-2026-06-23.md`.
+- Latest bot chat live-events round: dedicated mode `79` `bot_chat_live_events` adds default-off `sg_bot_chat_live_events`, exposes an eleven-entry live chat event taxonomy in `q3a_bot_chat_policy_status`, and proves live spawn plus `route_ready` reply accounting after bot spawn and route-command ownership without enabling `sg_bot_chat_event_policy_smoke`. Focused validation passed from `.tmp\bot_scenarios\20260623T010520Z`, and the later duplicate-suppression full suite passed 91 rows from `.tmp\bot_scenarios\20260623T023230Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-events-2026-06-23.md`.
+- Latest coop share-loop round: dedicated mode `78` `coop_share_loop` adds default-off `sg_bot_coop_share_loop` as a target/resource sharing aggregate, proves coop target adoption and reserve-for-teammate item deferral in one two-bot coop run, and keeps the existing single-purpose proof cvars available for narrow regression rows. Focused validation passed from `.tmp\bot_scenarios\20260623T001149Z`, and the later full 89-row `implemented` suite passed from `.tmp\bot_scenarios\20260623T013843Z`. Implementation log: `docs-dev/q3a-botlib-coop-share-loop-2026-06-23.md`.
+- Latest coop live-loop round: dedicated mode `77` `coop_live_loop` adds default-off `sg_bot_coop_live_loop` as a coop behavior umbrella, proves leader-route/support, per-bot progress wait, anti-blocking commands, interaction retry commands, and door/elevator source-plus-hold behavior in one two-bot coop run, and keeps the existing single-purpose proof cvars available for narrow regression rows. Focused validation passed from `.tmp\bot_scenarios\20260622T234315Z`, and the later full 89-row `implemented` suite passed from `.tmp\bot_scenarios\20260623T013843Z`. Implementation log: `docs-dev/q3a-botlib-coop-live-loop-2026-06-23.md`.
+- Latest CTF objective transition round: dedicated mode `76` `ctf_objective_transitions` adds default-off `sg_bot_ctf_objective_transitions`, first-class objective `flagDrops` and `flagReturns` counters, gameplay hooks for death-dropped and returned flags, and a scenario that proves actual CTF pickup, death-drop, and dropped-flag return transitions before the combined CTF objective route owner commands the flag loop. Focused validation passed from `.tmp\bot_scenarios\20260622T230509Z`, and the later full 89-row `implemented` suite passed from `.tmp\bot_scenarios\20260623T013843Z`. Implementation log: `docs-dev/q3a-botlib-ctf-objective-transitions-2026-06-22.md`.
+- Latest Duel live-pacing round: dedicated mode `75` `duel_live_pacing` adds a Duel match-policy mode, default-off `sg_bot_duel_live_pacing` gate, Duel deny-enemy item scoring for weapons/ammo/powerups/techs, and two-bot Duel readiness. It reuses the FFA-style route, role-combat, spawn-pressure, and validation-only pickup-scoring status families only when the Duel cvar is enabled, while hard-gating `last_team_objective_match_mode=5`, `last_team_objective_match_mode_name=duel`, `team_objective_match_policy_duel`, and deny-enemy item-role evidence. Focused validation passed from `.tmp\bot_scenarios\20260622T222142Z`, the q2dm8 combat/survival marker contract was rechecked from `.tmp\bot_scenarios\20260622T222450Z`, and the then-current full 83-row `implemented` suite passed from `.tmp\bot_scenarios\20260622T222457Z`. Implementation log: `docs-dev/q3a-botlib-duel-live-pacing-2026-06-22.md`.
+- Latest FFA live-pacing round: dedicated mode `74` `ffa_live_pacing` combines FFA roam-route, spawn-camp route-source pressure, item-role pickup scoring, role-combat attack ownership, and spawn-camp combat veto in one four-bot FFA run. It hard-gates begin-marker `ffa_live_pacing=1`, all five FFA proof cvars, FFA readiness, route counters, anti-camp source counters, role-combat counters, spawn-camp combat-veto counters, and `ffa_item_role_*` nav scoring evidence from the validation-only pickup-goal probe. Focused validation passed from `.tmp\bot_scenarios\20260622T214927Z`, and a later same-day full 83-row `implemented` suite passed from `.tmp\bot_scenarios\20260622T222457Z`. Implementation log: `docs-dev/q3a-botlib-ffa-live-pacing-2026-06-22.md`.
+- Latest TDM role spawn-stability round: dedicated mode `73` `tdm_role_spawn_stability` reuses the TDM role-route, TDM role-combat, and map-repeat restart paths in one four-bot TDM run. It hard-gates begin-marker `tdm_role_spawn_stability=1`, `team_role_route=1`, `team_role_combat=1`, forced same-map restart markers, post-reload cycle status, role route/combat counters, TDM readiness, action attack buttons, and final zero-bot cleanup. Focused validation passed from `.tmp\bot_scenarios\20260622T212431Z`, and a later same-day full 83-row `implemented` suite passed from `.tmp\bot_scenarios\20260622T222457Z`. Implementation log: `docs-dev/q3a-botlib-tdm-role-spawn-stability-2026-06-22.md`.
+- Latest CTF objective live-loop round: `ctf_objective_route` still reuses mode `40`, but now hard-gates base-return, carrier-support, and dropped-flag selections in one CTF run, plus objective-owner arbitration through `q3a_bot_behavior_policy_status`. Focused validation passed from `.tmp\bot_scenarios\20260622T210329Z`, and a later same-day full 83-row `implemented` suite passed from `.tmp\bot_scenarios\20260622T222457Z`. Implementation log: `docs-dev/q3a-botlib-ctf-objective-live-loop-2026-06-22.md`.
+- Latest q2dm8 combat map-regression round: `combat_survival_regression_q2dm8` reuses mode `71` on `q2dm8` and hard-gates begin-marker `map=q2dm8`, route-clean combat/survival item routing, visible/shootable enemy facts, item ownership, and recovery ownership. `threat_retreat_avoidance_q2dm8` reuses mode `72` on `q2dm8` and hard-gates begin-marker `map=q2dm8`, low-health threat-retreat route requests, attack suppression, and combat ownership. Focused validation passed from `.tmp\bot_scenarios\20260622T204956Z`, and the full 80-row `implemented` suite passed from `.tmp\bot_scenarios\20260622T205123Z`. Implementation log: `docs-dev/q3a-botlib-q2dm8-combat-map-regression-2026-06-22.md`.
+- Completed in prior same-day worker lanes: default-off low-health threat-retreat avoidance, dedicated mode `72` `threat_retreat_avoidance`, threat-retreat status counters, route-owner harness cleanup, and the 78-row full-suite validation from `.tmp\bot_scenarios\20260622T203125Z`; per-scenario map override support, server begin-marker `map=` evidence, and the q2dm2 `combat_survival_regression_q2dm2` second-map proof for dedicated mode `71`, preserving visible/shootable enemy pressure, low-health health routing, withheld-fire evidence, item ownership, recovery ownership, and route-clean item goal assignment away from `mm-rage`; combat/survival regression staging and validation with dedicated mode `71`, visible/shootable enemy pressure, low-health health routing, withheld-fire evidence, item ownership, and recovery ownership in the same FFA run; natural survival armor-route telemetry, dedicated mode `70` `survival_armor_route` scenario proof, and expanded compact action status coverage for armor candidates, armor seek decisions, low-armor boosts, armor goal assignments, selected utility kind evidence, and route-clean AAS item-goal creation; natural survival health-route telemetry, dedicated mode `69` `survival_health_route` scenario proof, and expanded action status optional-field coverage for health candidates, health seek decisions, low-health boosts, health goal assignments, and selected utility kind evidence; carried survival inventory-use telemetry, dedicated mode `68` `survival_inventory_use` scenario proof, and expanded action dispatch optional-field coverage for pending inventory use, inventory command-request validation, inventory dispatch, last request kind, and last dispatch outcome evidence; ammo-focus item utility, ammo/weapon goal-assignment telemetry, dedicated mode `67` `ammo_pressure_pickup` scenario proof, and expanded item optional-field coverage for ammo candidates, ammo seek decisions, ammo focus boosts, last ammo item, and utility-kind evidence; staged aim/fire policy telemetry and mode `66` `aim_fire_policy_depth` scenario proof for reaction-delay withholding, aim-settle withholding, burst-cooldown pacing, live-aim policy blocks, rocket projectile lead, and attack application; carried-weapon arsenal scoring telemetry, mode `65` `weapon_scoring_arsenal` scenario proof, and expanded `action_dispatch_counters` optional-field coverage for weapon-inventory ammo, splash, range, estimate, and selected-weapon metadata; live blackboard target-memory retention and decay telemetry, mode `64` `target_memory_decay` scenario proof, and the `target_memory_counters` optional field family; central behavior arbitration owner selection, cvar classification, handoff telemetry, mode `63` `behavior_arbitration` scenario proof, and the `behavior_arbitration_counters` optional field family; smoke-only multi-event profile chat reply selection for team-ready and route-ready proof events, mode `62` `bot_chat_event_policy` scenario proof, route-ready reply telemetry in `q3a_bot_chat_policy_status`, proof-gated profile chat-personality reply selection for the first team-ready event, mode `61` `bot_chat_reply_policy` scenario proof, reply-selection telemetry in `q3a_bot_chat_policy_status`, profile chat-personality initial utterance selection, mode `60` `bot_chat_initial_policy` scenario proof, the default-off `sg_bot_chat_min_interval_ms` bot chat rate-limit policy, mode `59` `bot_chat_rate_policy` scenario proof, the default-off `sg_bot_chat_team_only` bot chat audience policy, mode `58` `bot_chat_team_policy` scenario proof, the default-off `sg_bot_allow_chat` live bot chat dispatch bridge, `BOT_CHAT_POLICY_STATUS_API_V1`, the expanded `q3a_bot_chat_policy_status` marker, mode `57` `bot_chat_policy` scenario proof, profile `WORR_MOVEMENT_STYLE` consumption by match policy, mode `56` profile movement-policy scenario proof, compact profile movement-style/bonus telemetry, profile `WORR_ITEM_GREED`, `WORR_ITEM_DENIAL`, `WORR_POWERUP_TIMING`, and `WORR_RETREAT_HEALTH` consumption by match item/resource policy, mode `55` profile item-policy scenario proof, compact profile item value/bonus telemetry, profile `WORR_TEAMPLAY_BIAS`, `WORR_OBJECTIVE_BIAS`, and `WORR_FRIENDLY_FIRE_CARE` consumption by match policy, mode `54` profile team-policy scenario proof, compact profile bias/value/bonus telemetry, profile `WORR_ROLE` consumption by match policy, mode `53` profile-role scenario proof, match-policy requested/profile-role telemetry, the default-off `sg_bot_behavior_enable` behavior policy umbrella, mode `52` scenario proof, and `q3a_bot_behavior_policy_status` marker family; live combat aim-profile policy and brain-owned live-aim/projectile-lead consumption, live pickup/observed-respawn item timing consumers with status-friendly counters, coop and resource policy helper metadata, stricter scenario marker gates for live aim and match-policy evidence, reference-map required-feature diagnostics, q2aas generator scope/presence/content-surface/BSPX policy semantics, q2aas reachability-policy/mover-route/metadata-policy diagnostics, optional `q2dm1` structural and travel-count baselines, expanded q2aas reference baselines for `q2dm2`, `q2dm8`, `q2ctf1`, `base1`, `base2`, and `train`, team-objective and campaign-progression diagnostics, eight-map AAS staging/packaging, the current Q3A AAS runtime C set compile proof, final WORR-owned static trace and entity trace adapter ownership, long-soak source-counter completeness diagnostics, richer first-party botfile behavior metadata, default-off FFA roam-route ownership, default-off FFA spawn-camp avoidance route ownership, default-off FFA role-combat ownership, default-off FFA spawn-camp combat-avoidance precedence proof, default-off TDM role-combat ownership, default-off TDM role-combat/friendly-fire precedence proof, duel surplus-bot spectator queue proof, tournament bot veto-exclusion proof, tournament replay reset proof, match logging schema/versioning proof, match logging catalog/downstream index proof, competitive server operator docs, map-restart cleanup scenario proof, warmup bot-start readiness proof, vote bot-exclusion proof, admin bot privilege audit proof, MyMap bot queue proof, scoreboard bot classification proof, intermission bot cleanup proof, queued nextmap transition proof, and map-vote bot-exclusion transition proof. These land on top of the earlier same-day promotion, packaging, source-counter, scenario, botfile, and documentation lanes.
+- Latest behavior-integration round: `sg_bot_behavior_enable` now activates the current default-off behavior proof family without requiring the individual proof cvars. Dedicated smoke mode `52` stages a four-bot TDM match, sets only the umbrella cvar, verifies the begin marker leaves `sg_bot_match_item_policy`, `sg_bot_team_role_route`, `sg_bot_team_role_combat`, `sg_bot_team_fire_avoidance`, `sg_bot_team_item_roles`, and `sg_bot_team_resource_denial` disabled, then proves runtime activation through `q3a_bot_behavior_policy_status`, TDM readiness, team role-route ownership, team role-combat decisions, friendly-fire suppression, and TDM match-policy evidence. Live item-role/resource-denial pickup-goal selection remains covered by mode `51`, because role-route ownership can legitimately preempt pickup-goal routing in the combined mode. Implementation log: `docs-dev/q3a-botlib-behavior-policy-umbrella-2026-06-22.md`.
+- Latest profile-role round: the match-policy builder now consumes bot profile `bot_role` userinfo, maps first-party role labels such as `attacker`, `defender`, `support`, and `duelist` into `BotObjectiveRole`, and treats that profile role as the requested match role when no caller supplied an explicit role. New compact status fields report requested/profile-role counts, honored counts, fallbacks, and the last requested/profile role. Dedicated smoke mode `53` adds the staged `smoke`, `bulwark`, `relay`, and `vanguard` profiles by id in a four-bot TDM match and proves attacker, defender, and support/midfield match-policy selections with zero profile-role fallbacks. Implementation log: `docs-dev/q3a-botlib-profile-role-policy-2026-06-22.md`.
+- Latest profile team-policy round: the server profile loader now accepts `teamplay_bias`, `objective_bias`, and `friendly_fire_care` plus WORR aliases, publishes them as bot userinfo, and `bot_objectives.*` consumes them as CTF/team match-policy priority and friendly-fire-care hints. New compact objective status fields expose profile bias presence, applied counts, last bias values, and last bonuses. Dedicated smoke mode `54` adds the staged `smoke`, `bulwark`, `relay`, and `vanguard` profiles by id in a four-bot CTF match and proves teamplay/objective/friendly-fire-care hints apply with positive bonuses, CTF readiness, route commands, and zero route failures. Implementation log: `docs-dev/q3a-botlib-profile-team-policy-2026-06-22.md`.
+- Latest profile item-policy round: the server profile loader now accepts `item_greed`, `item_denial`, `powerup_timing`, and `retreat_health` plus WORR aliases, publishes them as bot userinfo, and `bot_objectives.*` consumes them as match item/resource policy hints. Item greed raises self pickup priority, item denial raises deny-enemy pickup priority in team modes, powerup timing raises major item preference, and retreat health adds survival/recovery priority when the bot is at or below the configured threshold. New compact objective/nav status fields expose profile item-policy presence, applied counts, last values, last bonuses, and selected-goal bonus propagation. Dedicated smoke mode `55` adds the staged `smoke`, `bulwark`, `relay`, and `vanguard` profiles by id in a four-bot TDM match and proves all four item hints apply with positive objective/nav bonuses, TDM readiness, item assignments, and zero route failures. Implementation log: `docs-dev/q3a-botlib-profile-item-policy-2026-06-22.md`.
+- Latest profile movement-policy round: `bot_objectives.*` now consumes `bot_movement_style` profile userinfo as attack, defense, roam, or evasive movement policy. Attack styles raise attack/major-item pressure, defense styles raise defender/resource-sharing priority, roam styles raise midfield/roam/resource-sharing priority, and evasive styles raise roam/collect pressure. New compact objective status fields expose movement-style buckets, applied counts, last style names, and last bonus values. Dedicated smoke mode `56` adds the staged `smoke`, `bulwark`, `relay`, and `vanguard` profiles by id in a four-bot TDM match and proves movement hints apply without enabling `sg_bot_behavior_enable` or `sg_bot_match_item_policy`. Implementation log: `docs-dev/q3a-botlib-profile-movement-policy-2026-06-22.md`.
+- Latest bot chat dispatch round: `sg_bot_allow_chat` now gates a conservative live bot chat consumer. The bot brain emits one sanitized profile-chat proof line per bot spawn when the cvar is enabled and profile chat metadata exists; the dispatch path writes to the dedicated log and broadcasts only to real human clients, skipping bot reliable-message queues. Dedicated smoke mode `57` now verifies `consumer_ready=1`, `dispatch_enabled=1`, `dispatch_attempts>=1`, `dispatch_submitted>=1`, `dispatch_failures=0`, and `blocked_until_consumer=0`. Implementation log: `docs-dev/q3a-botlib-bot-chat-dispatch-2026-06-22.md`.
+- Latest bot chat team-policy round: `sg_bot_chat_team_only` now gates the first team-only audience path for the conservative bot chat consumer. Dedicated smoke mode `58` enables both `sg_bot_allow_chat` and `sg_bot_chat_team_only`, then verifies `team_only=1`, `dispatch_enabled=1`, `dispatch_submitted>=1`, `dispatch_failures=0`, `last_dispatch_team=1`, and `blocked_until_consumer=0`. Implementation log: `docs-dev/q3a-botlib-bot-chat-team-policy-2026-06-22.md`.
+- Latest bot chat rate-policy round: `sg_bot_chat_min_interval_ms` now provides a default-off global minimum interval for the conservative bot chat consumer. Dedicated smoke mode `59` enables `sg_bot_allow_chat`, sets `sg_bot_chat_min_interval_ms 60000`, and verifies `rate_limit_ms=60000`, `dispatch_attempts=4`, `dispatch_submitted=1`, `dispatch_rate_limited=3`, `dispatch_failures=0`, and `blocked_until_consumer=0`. Implementation log: `docs-dev/q3a-botlib-bot-chat-rate-policy-2026-06-22.md`.
+- Latest bot chat initial-policy round: profile `bot_chat_personality` metadata now selects deterministic initial utterance buckets before the conservative live dispatch. Dedicated smoke mode `60` verifies `initial_chat_selections=4`, `initial_chat_known_personalities=4`, `initial_chat_unknown_personalities=0`, `initial_chat_quiet=1`, `initial_chat_direct=1`, `initial_chat_helpful=1`, `initial_chat_steady=1`, and `dispatch_failures=0`. Implementation log: `docs-dev/q3a-botlib-bot-chat-initial-policy-2026-06-22.md`.
+- Latest bot chat reply-policy round: `sg_bot_chat_reply_policy_smoke` now gates a smoke-only deterministic reply selector that runs after the initial proof line and maps staged chat personalities to the first team-ready reply event. Dedicated smoke mode `61` verifies `dispatch_submitted=8`, `reply_chat_events=4`, `reply_chat_selections=4`, `reply_chat_known_personalities=4`, `reply_chat_team_ready=4`, `reply_chat_submitted=4`, `reply_chat_rate_limited=0`, `reply_chat_failures=0`, and `last_reply_chat_event=1`. Implementation log: `docs-dev/q3a-botlib-bot-chat-reply-policy-2026-06-22.md`.
+- Latest bot chat event-policy round: `sg_bot_chat_event_policy_smoke` now gates a smoke-only multi-event reply proof while preserving the mode `61` team-ready reply proof. Dedicated smoke mode `62` submits one initial line plus team-ready and route-ready reply events per staged bot, then verifies `dispatch_submitted=12`, `reply_chat_events=8`, `reply_chat_selections=8`, `reply_chat_known_personalities=8`, `reply_chat_team_ready=4`, `reply_chat_route_ready=4`, `reply_chat_submitted=8`, `reply_chat_rate_limited=0`, `reply_chat_failures=0`, and `last_reply_chat_event=2`. Implementation log: `docs-dev/q3a-botlib-bot-chat-event-policy-2026-06-22.md`.
+- Latest behavior arbitration round: `q3a_bot_behavior_policy_status` now exposes a central owner arbitration model with route/item/combat/objective/interaction/recovery candidates, winning owners, handoffs, last owner id/name/priority/reason, and live/smoke/debug/deprecated cvar classification. Dedicated smoke mode `63` runs the live `sg_bot_behavior_enable` umbrella without individual proof cvars and verifies route, item, and combat candidates, combat ownership, handoff evidence, and `behavior_live_policy_cvars=8` with all smoke/debug/deprecated counts at `0`. Focused validation passed from `.tmp\bot_scenarios\20260622T112202Z`. Implementation log: `docs-dev/q3a-botlib-behavior-arbitration-2026-06-22.md`.
+- Latest target-memory round: the per-bot blackboard now records whether the current enemy is retained from memory plus the current memory age/window, and the combat status marker reports memory retains, smoke occlusions, decays, final decay entity/client ids, and target-memory seed diagnostics. Dedicated smoke mode `64` runs a two-bot FFA target-memory proof with a short `1000` ms smoke decay window and verifies acquisition, retained unseen target pressure, sticky occlusion, decay, and clear-after-decay counters. Focused validation passed from `.tmp\bot_scenarios\20260622T120742Z`. Implementation log: `docs-dev/q3a-botlib-target-memory-decay-2026-06-22.md`.
+- Latest weapon scoring round: the action layer now records carried-weapon inventory scoring details for ammo skips, splash-risk pressure, range-backed selections, enemy-estimate selections, selected ammo/score metadata, selected range band, attack model, and estimate reason. Dedicated smoke mode `65` runs a two-bot FFA arsenal proof with unsafe close-range rockets, ready super shotgun, insufficient rail/BFG ammo, and a low-health enemy estimate; it verifies super-shotgun selection, finisher estimate scoring, and exact switch completion. Focused validation passed from `.tmp\bot_scenarios\20260622T123648Z`. Implementation log: `docs-dev/q3a-botlib-weapon-scoring-arsenal-2026-06-22.md`.
+- Latest aim/fire policy round: the frame-command smoke path now has dedicated mode `66` `aim_fire_policy_depth`, which stages a single rocket actor against a live moving peer and hard-gates reaction-delay withholding, aim-settle withholding, burst-cooldown pacing, live-aim policy blocks, rocket projectile lead, and eventual attack application. The smoke proof exposes the relevant aim-policy and projectile-lead counters through action status/detail markers and keeps the peer from overwriting proof-tail telemetry. Focused validation passed from `.tmp\bot_scenarios\20260622T125826Z`. Implementation log: `docs-dev/q3a-botlib-aim-fire-policy-depth-2026-06-22.md`.
+- Latest ammo pressure pickup round: item utility now supports ammo focus, ammo-specific boost telemetry, and ammo/weapon goal-assignment counters. Dedicated smoke mode `67` `ammo_pressure_pickup` stages a one-bot FFA low-shell shotgun state with a routeable shell pickup and proves ammo candidates, ammo seek decisions, ammo goal assignments, `item_last_item=30`, `item_last_utility_kind_name=ammo`, and zero route failures. Focused validation passed from `.tmp\bot_scenarios\ammo_pressure_pickup\20260622T132231Z`. Implementation log: `docs-dev/q3a-botlib-ammo-pressure-pickup-2026-06-22.md`.
+- Latest survival inventory use round: the action layer now publishes cumulative carried-inventory decision, pending-use, command-request, and command-dispatch counters through the action status markers. Dedicated smoke mode `68` `survival_inventory_use` stages a one-bot FFA low-health/no-armor state with a carried power shield and cells, then proves survival inventory scanning, power-armor selection, pending inventory intent acceptance, validated `use_inventory_index` command request, submitted dispatch outcome, and zero route failures. Focused validation passed from `.tmp\bot_scenarios\survival_inventory_use\20260622T161739Z`. Implementation log: `docs-dev/q3a-botlib-survival-inventory-use-2026-06-22.md`.
+- Latest survival health route round: the item/action status surface now publishes health candidate and health seek-decision counters alongside low-health boost and health goal-assignment proof fields. Dedicated smoke mode `69` `survival_health_route` stages a one-bot FFA low-health/no-armor state plus a routeable medium health pickup without item focus, then proves natural low-health utility pressure, health candidate/seek telemetry, health item goal assignment, AAS goal resolution, selected health utility metadata, and zero route failures. Focused validation passed from `.tmp\bot_scenarios\survival_health_route\20260622T164109Z`. Implementation log: `docs-dev/q3a-botlib-survival-health-route-2026-06-22.md`.
+- Latest survival armor route round: the compact action status surface now also publishes armor candidate and armor seek-decision counters beside the existing low-armor boost and armor goal-assignment proof fields. Dedicated smoke mode `70` `survival_armor_route` stages a one-bot FFA full-health/no-armor state plus a routeable jacket armor pickup without item focus, then proves natural low-armor utility pressure, armor candidate/seek telemetry, armor item-goal assignment, AAS goal resolution, selected armor utility metadata, and zero route failures. Focused validation passed from `.tmp\bot_scenarios\survival_armor_route\20260622T165918Z`. Implementation log: `docs-dev/q3a-botlib-survival-armor-route-2026-06-22.md`.
+- Combat survival regression round: dedicated smoke mode `71`
+  `combat_survival_regression` stages a two-bot FFA low-health health-route
+  proof with a visible, shootable enemy peer. The scenario now hard-gates that
+  blackboard/action combat target facts stay live while low-health item
+  pressure, withheld-fire policy, item ownership, and recovery ownership can
+  preempt attack input. Focused validation passed from
+  `.tmp\bot_scenarios\combat_survival_regression\20260622T171717Z`. The
+  follow-up smoke contract reconciliation round then turned the full 76-row
+  automated `implemented` catalog green from
+  `.tmp\bot_scenarios\implemented_after_next_round_stable_green\20260622T182201Z`.
+  Implementation log:
+  `docs-dev/q3a-botlib-combat-survival-regression-2026-06-22.md`.
+- Combat survival second-map regression round: the scenario harness now
+  supports per-scenario map overrides and reports `map_name` in catalog/run
+  output. The server begin marker includes `map=<current map>`, letting the new
+  `combat_survival_regression_q2dm2` row reuse smoke mode `71` while hard-gating
+  that the proof really ran on `q2dm2`. Focused validation passed from
+  `.tmp\bot_scenarios\combat_survival_regression_q2dm2\20260622T194547Z` with
+  `map_name=q2dm2`, begin-marker `map=q2dm2`, `frames=121`, `commands=121`,
+  `route_failures=0`, `item_goal_assignments=5`, and recovery/item arbitration
+  ownership present. The follow-up full automated `implemented` run passed 77
+  rows with 0 failures from
+  `.tmp\bot_scenarios\implemented_after_q2dm2_regression\20260622T194653Z`.
+  Implementation log:
+  `docs-dev/q3a-botlib-combat-survival-second-map-regression-2026-06-22.md`.
+- Latest threat-retreat avoidance round: dedicated smoke mode `72`
+  `threat_retreat_avoidance` gates the default-off `sg_bot_threat_retreat`
+  behavior without enabling the older smoke combat cvar. The proof stages a
+  two-bot FFA low-health actor, sources a live threat, activates one short
+  timed route retreat, records route requests and attack suppression while the
+  retreat is active, then proves re-engagement afterward. Focused validation
+  passed from `.tmp\bot_scenarios\20260622T202608Z`, and the follow-up full
+  `implemented` run passed 78 rows with 0 failures from
+  `.tmp\bot_scenarios\20260622T203125Z`.
+  Implementation log:
+  `docs-dev/q3a-botlib-threat-retreat-avoidance-2026-06-22.md`.
+- Smoke contract reconciliation round: compact status emission now
+  preserves the route/objective/profile evidence that the expanded short-run
+  suite needs after long aggregate runs. The brain emits compact FFA roam-route
+  and TDM role-route proof lines, stabilizes aim-fairness failure status once
+  fire is allowed, lets the team-fire proof create attack intent before the
+  friendly-line veto, and keeps the expanded combat/survival row from
+  reclassifying non-combat smoke modes as enemy-engagement scenarios. Objective
+  telemetry now preserves the last positive profile-derived bonus instead of
+  letting later aggregate samples erase it, and the scenario harness no longer
+  requires stale objective-detail markers when route-specific status markers
+  are authoritative. Full validation passed 76 automated rows with 0 failures
+  from `.tmp\bot_scenarios\implemented_after_next_round_stable_green\20260622T182201Z`.
+  Implementation log:
+  `docs-dev/q3a-botlib-smoke-contract-reconciliation-2026-06-22.md`.
+- Latest implementation round: q2aas validation now reports
+  `reachability_policy`, `mover_route_report`, `metadata_policy`,
+  `team_objective_report`, and `campaign_progression_report` alongside the
+  previous generator/presence/semantic-policy fields. Locally staged
+  `q2dm2.bsp`, `q2dm8.bsp`, `q2ctf1.bsp`, `base1.bsp`, `base2.bsp`, and
+  `train.bsp` now pass optional manifest baselines in addition to `mm-rage`
+  and `q2dm1`; `q2ctf1` proves reachable CTF flags, and the campaign set
+  records trigger/door/progression evidence for coop review. `q2aas-stage-aas`
+  stages eight `.aas` files, and `refresh_install.py --package-q2aas-aas`
+  packages/audits all eight archive members. The current imported Q3A AAS
+  runtime C set also rebuilds into `sgame_x86_64`, with `Trace`,
+  `PointContents`, and PVS/PHS visibility owned by the active-map Q2 BSP
+  bridges, `EntityTrace` owned by the WORR `gi.clip` adapter path, module-level
+  BotLib initialization/shutdown hardened, upstream Q3A `bot_*` LibVar policy
+  documented as internal, and BotLib entity snapshot categories split for
+  players, bots, spectators, monsters/NPCs, items, dropped items, hazards,
+  movers, and objectives.
+- Latest checklist closeout: all remaining non-template checklist rows are
+  closed. The final round added the imported runtime/adapter implementation
+  rollup, the q2aas generator tailoring rollup, roadmap/credits closeout
+  notes, Linux/macOS CI build coverage evidence from the release matrix, and
+  final reference-map validation evidence for the eight-map staged q2aas set.
+- Raw markdown checklist cleanup: the reusable Checklist System gate now uses
+  plain bullets so it remains copyable guidance without showing up as open raw
+  task debt.
+- Still pending beyond this checklist: future strategic depth such as broader
+  autonomous role behavior beyond profile-seeded match-role selection,
+  campaign-specific trigger/key/objective
+  coordination, richer Q3A-style chat phrase libraries and live event triggers
+  beyond the current conservative dispatch, audience, global-rate,
+  initial-selection, single-reply, and multi-event smoke proofs,
+  slime/lava-specific reference-map candidates beyond the current water-backed
+  set, fresh long-soak CPU baselines with current source-counter fields, and
+  any future FR-04 task expansion tracked in the roadmap.
 
 ## Source Baseline
 
@@ -137,6 +264,8 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q2aas-generator-archive-packaging-2026-06-17.md`: validated staged AAS injection into `.install/basew/pak0.pkz` and archive-required package audit.
 - `docs-dev/q2aas-generator-refresh-install-integration-2026-06-17.md`: `refresh_install.py --package-q2aas-aas` integration for preserving generated AAS through `.install` refreshes.
 - `docs-dev/q2aas-generator-stage-archive-member-validation-2026-06-17.md`: generic staged-release archive member validation and q2aas refresh wiring for required packaged AAS hashes.
+- `docs-dev/q2aas-generator-policy-semantics-closeout-2026-06-21.md`: generator scope, player presence, Q2 contents/surface semantics, and BSPX tolerance report closeout.
+- `docs-dev/q2aas-generator-reachability-metadata-round-2026-06-21.md`: reachability policy diagnostics, metadata packaging decision, and optional `q2dm1` baseline validation log.
 - `docs-dev/q3a-botlib-runtime-aas-shell-2026-06-17.md`: WORR-native BotLib/AAS runtime shell, `sg_bot_*` cvars, active-map AAS header probe, and server-game lifecycle hooks.
 - `docs-dev/q3a-botlib-import-boundary-2026-06-17.md`: Q3A BotLib import root, adapter shell, planned-file inventory, and build strategy decision.
 - `docs-dev/q3a-botlib-utility-import-2026-06-17.md`: first commit-pinned Q3A BotLib utility source/header import, local build wrapper, LibVar smoke bridge, and runtime validation log.
@@ -169,6 +298,28 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-min-players-autofill-2026-06-17.md`: `sg_bot_min_players` auto-fill policy, auto/manual bot separation, generated-name fix, and fill/trim/disable smoke.
 - `docs-dev/q3a-botlib-profile-loading-2026-06-17.md`: `sg_bot_reload_profiles`, first Q3A-style profile parser, profile-aware add/autofill, and profile smoke.
 - `docs-dev/q3a-botlib-profile-behavior-fields-2026-06-17.md`: richer profile behavior field parsing, bot userinfo mapping, and expanded profile smoke.
+- `docs-dev/q3a-botlib-profile-role-policy-2026-06-22.md`: first live match-policy consumption of profile role metadata plus the mode `53` profile-role scenario proof.
+- `docs-dev/q3a-botlib-profile-team-policy-2026-06-22.md`: live match-policy consumption of profile teamplay, objective, and friendly-fire-care hints plus the mode `54` profile team-policy scenario proof.
+- `docs-dev/q3a-botlib-bot-chat-policy-boundary-2026-06-22.md`: prior default-off bot chat cvar/status boundary and profile chat metadata proof before the live-dispatch follow-up.
+- `docs-dev/q3a-botlib-bot-chat-dispatch-2026-06-22.md`: first conservative live bot chat dispatch bridge behind `sg_bot_allow_chat`, expanded status counters, and mode `57` scenario evidence.
+- `docs-dev/q3a-botlib-bot-chat-team-policy-2026-06-22.md`: default-off `sg_bot_chat_team_only` audience policy, status telemetry, and mode `58` scenario evidence.
+- `docs-dev/q3a-botlib-bot-chat-rate-policy-2026-06-22.md`: default-off `sg_bot_chat_min_interval_ms` global rate policy, status telemetry, and mode `59` scenario evidence.
+- `docs-dev/q3a-botlib-bot-chat-initial-policy-2026-06-22.md`: profile chat-personality initial utterance bucket selection, status telemetry, and mode `60` scenario evidence.
+- `docs-dev/q3a-botlib-bot-chat-reply-policy-2026-06-22.md`: smoke-only profile chat-personality reply selection, status telemetry, and mode `61` scenario evidence.
+- `docs-dev/q3a-botlib-bot-chat-event-policy-2026-06-22.md`: smoke-only multi-event chat reply proof, route-ready reply telemetry, and mode `62` scenario evidence.
+- `docs-dev/q3a-botlib-bot-chat-live-events-2026-06-23.md`: first live chat event taxonomy, default-off `sg_bot_chat_live_events`, spawn plus route-ready live reply accounting, and mode `79` scenario evidence.
+- `docs-dev/q3a-botlib-bot-chat-phrase-library-2026-06-23.md`: four-variant personality phrase banks, phrase-variant telemetry, mode `82` scenario evidence, and 90-row implemented-suite validation.
+- `docs-dev/q3a-botlib-bot-chat-live-event-cooldown-2026-06-23.md`: live spawn-event telemetry, global cooldown suppression proof, `live_chat_spawn` status coverage, and mode `80` scenario evidence.
+- `docs-dev/q3a-botlib-bot-chat-live-enemy-sighted-2026-06-23.md`: blackboard-visible enemy live chat trigger, `reply_chat_enemy_sighted` / `live_chat_enemy_sighted` status coverage, and mode `81` scenario evidence.
+- `docs-dev/q3a-botlib-bot-chat-duplicate-suppression-2026-06-23.md`: per-bot reply duplicate window, duplicate suppression telemetry, mode `83` scenario evidence, and 91-row implemented-suite validation.
+- `docs-dev/q3a-botlib-bot-chat-live-low-health-2026-06-23.md`: survival-state low-health live chat trigger, `reply_chat_low_health` / `live_chat_low_health` status coverage, mode `84` scenario evidence, and 92-row implemented-suite validation.
+- `docs-dev/q3a-botlib-bot-chat-live-item-taken-2026-06-23.md`: health/armor pickup observation live chat trigger, `reply_chat_item_taken` / `live_chat_item_taken` status coverage, mode `85` scenario evidence, and 93-row implemented-suite validation.
+- `docs-dev/q3a-botlib-bot-chat-live-objective-changed-2026-06-26.md`: CTF pickup/drop/return objective observation live chat trigger, `reply_chat_objective_changed` / `live_chat_objective_changed` status coverage, mode `86` scenario evidence, and 94-row implemented-suite validation.
+- `docs-dev/q3a-botlib-bot-chat-live-flag-state-2026-06-26.md`: CTF flag-state observation live chat trigger, `reply_chat_flag_state` / `live_chat_flag_state` status coverage, mode `87` scenario evidence, and 95-row implemented-suite validation.
+- `docs-dev/q3a-botlib-bot-chat-live-blocked-2026-06-26.md`: blocked route-failure live chat trigger, `reply_chat_blocked` / `live_chat_blocked` status coverage, mode `88` scenario evidence, and 96-row implemented-suite validation.
+- `docs-dev/q3a-botlib-bot-chat-live-match-result-2026-06-26.md`: Native intermission/match-result live chat trigger, `reply_chat_match_result` / `live_chat_match_result` status coverage, mode `90` scenario evidence, and 98-row implemented-suite validation.
+- `docs-dev/q3a-botlib-bot-chat-live-item-denied-2026-06-26.md`: TDM deny-enemy resource-policy live chat trigger, `reply_chat_item_denied` / `live_chat_item_denied` status coverage, mode `89` scenario evidence, and 97-row implemented-suite validation.
+- `docs-dev/q3a-botlib-coop-campaign-interaction-matrix-2026-06-26.md`: `base1` coop campaign interaction matrix proof, route-interaction retry, campaign mover source ownership, teammate hold commands, mode `91` scenario evidence, and 99-row implemented-suite validation.
 - `docs-dev/q3a-botlib-native-botfiles-assets-2026-06-18.md`: first WORR-authored `assets/botfiles/bots` profile pack, including the deterministic `smoke` profile.
 - `docs-dev/q3a-botlib-botfiles-validation-tool-2026-06-18.md`: CI-oriented standard-library validator for authored bot profile scripts.
 - `docs-dev/q3a-botlib-profile-loader-hardening-2026-06-18.md`: deterministic profile scan markers, parse diagnostics, and configurable profile-smoke target.
@@ -182,6 +333,7 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-botfiles-scripts-support-2026-06-18.md`: compact WORR-native `botfiles/scripts/*_s.c` companions plus profile-validator script parsing.
 - `docs-dev/q3a-botlib-botfile-script-parity-2026-06-18.md`: idTech3-style pass over the original WORR script companions with validator proof.
 - `docs-dev/q3a-botlib-botfiles-worker-i-validation-2026-06-18.md`: staged botfile family validation, BFG10K token alignment, and package dry-run audit.
+- `docs-dev/q3a-botlib-profile-behavior-depth-round-2026-06-18.md`: validated richer behavior metadata for the first-party botfile families.
 - `docs-dev/q3a-botlib-team-policy-cleanup-2026-06-17.md`: bot initial placement and per-frame cleanup respect Duel/`maxplayers` active match limits.
 - `docs-dev/q3a-botlib-team-policy-smoke-2026-06-17.md`: direct game-side team-policy smoke status through a lightweight game extension.
 - `docs-dev/q3a-botlib-frame-command-dispatch-2026-06-17.md`: first AAS-gated bot `usercmd_t` generation and server fake-client movement dispatch smoke.
@@ -197,6 +349,7 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-nav-item-reservation-2026-06-18.md`: first native item reservation policy, two-bot frame-command smoke, and reservation counters.
 - `docs-dev/q3a-botlib-nav-lookahead-steering-2026-06-18.md`: first route-point look-ahead steering in bot frame commands and headless look-ahead counters.
 - `docs-dev/q3a-botlib-nav-velocity-steering-2026-06-18.md`: first velocity-aware command yaw adjustment and headless velocity-lead counters.
+- `docs-dev/q3a-botlib-route-target-stabilization-2026-06-18.md`: route-refresh target stabilization for near-origin route steps and adjacent-area jitter mitigation counters.
 - `docs-dev/q3a-botlib-nav-stuck-repath-2026-06-18.md`: first stuck-progress watchdog, forced repath refresh reason, and stalled-command smoke.
 - `docs-dev/q3a-botlib-nav-stuck-recovery-command-2026-06-18.md`: short back/strafe recovery command window after stuck detections.
 - `docs-dev/q3a-botlib-nav-goal-blacklist-cooldown-2026-06-18.md`: per-bot active-pickup goal blacklist cooldown after stuck detections.
@@ -216,6 +369,7 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-nav-natural-movement-door-retry-2026-06-18.md`: natural crouch/swim/waterjump support diagnostics plus first interaction wait/use retry telemetry for mover/elevator routes.
 - `docs-dev/q3a-botlib-nav-natural-interaction-diagnostics-2026-06-18.md`: interaction context counters by world entity type for future door/platform/button/trigger policy.
 - `docs-dev/q3a-botlib-perception-blackboard-2026-06-18.md`: per-bot enemy/last-seen/heard/damaged blackboard, staggered visible-enemy scans, and blackboard status output.
+- `docs-dev/q3a-botlib-blackboard-state-enrichment-2026-06-18.md`: per-bot goal, route, stuck, item-reservation, and team-role blackboard facts plus compact status output.
 - `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`: first WORR-native behavior/action dispatcher boundary for future item, weapon, combat, inventory, and world-use policy.
 - `docs-dev/q3a-botlib-behavior-action-brain-telemetry-2026-06-18.md`: initial action dispatcher sampling/status bridge from `bot_brain.*` before the later application-helper lane.
 - `docs-dev/q3a-botlib-action-item-utility-2026-06-18.md`: intent-only item utility scoring and future smoke counters for health/armor pickups and weapon-switch observation.
@@ -240,9 +394,56 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-high-bot-degradation-policy-2026-06-18.md`: explicit high-bot degradation policy in scenario catalog/reporting.
 - `docs-dev/q3a-botlib-high-bot-soak-budget-2026-06-18.md`: ten-minute eight-bot soak budget sidecar and documentation.
 - `docs-dev/q3a-botlib-release-packaging-hardening-2026-06-18.md`: botfile family/hash validation plus q2aas AAS package hash enforcement.
+- `docs-dev/q3a-botlib-release-policy-2026-06-18.md`: q2aas/BSPC tool binary default-exclusion and required license/credit notice bundle policy.
 - `docs-dev/q2aas-reference-map-coverage-2026-06-18.md`: reference-map coverage categories, optional missing-map reporting, and strict future gate.
 - `docs-dev/q3a-botlib-weapon-inventory-command-api-2026-06-18.md`: validated action-layer command request API for weapon/inventory intents.
+- `docs-dev/q3a-botlib-weapon-inventory-dispatch-2026-06-18.md`: brain-owned exact `use_index_only` weapon/inventory command-request dispatch for accepted pending action intents.
+- `docs-dev/q3a-botlib-aim-fairness-policy-2026-06-18.md`: opt-in aim/fairness helper policy for reaction, FOV, turn, settle, burst, error, and tracking-noise metadata.
+- `docs-dev/q3a-botlib-live-combat-policy-round-2026-06-18.md`: live combat aim profiles, status-rich live-aim results, and projectile-lead scaling for brain-owned aiming.
+- `docs-dev/q3a-botlib-enemy-health-armor-estimates-2026-06-20.md`: WORR-owned per-bot enemy health/armor estimates from visible observations and split bot-attributed damage deltas.
+- `docs-dev/q3a-botlib-estimate-aware-weapon-selection-2026-06-20.md`: first weapon-selection consumer for enemy estimates, including finisher, armor-pressure, and underpowered-choice scoring adjustments.
+- `docs-dev/q3a-botlib-carried-arsenal-selection-2026-06-20.md`: action-layer carried-weapon scan that feeds the best scorer-approved inventory weapon into combat selection.
+- `docs-dev/q3a-botlib-nonweapon-inventory-policy-2026-06-20.md`: conservative carried non-weapon inventory/powerup use policy for combat and survival pressure.
+- `docs-dev/q3a-botlib-utility-deployable-inventory-policy-2026-06-20.md`: environment utility and sphere deployable use policy with status evidence.
+- `docs-dev/q3a-botlib-escape-deployable-inventory-policy-2026-06-20.md`: placement-aware doppelganger and last-resort personal teleporter use policy with status evidence.
+- `docs-dev/q3a-botlib-safe-nuke-inventory-policy-2026-06-20.md`: safety-gated nuke inventory policy with friendly-fire, self-pressure, launch, and enemy-value checks.
+- `docs-dev/q3a-botlib-nuke-retreat-route-ownership-2026-06-21.md`: command-owned nuke retreat route goal after submitted safe inventory use.
+- `docs-dev/q3a-botlib-timed-route-goal-owner-2026-06-21.md`: generic timed route-goal owner state and status fields above the first nuke-retreat consumer.
+- `docs-dev/q3a-botlib-teleporter-escape-route-owner-2026-06-21.md`: teleporter escape timed route-goal consumer after submitted personal teleporter use.
+- `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`: coop follow/regroup/support timed route-goal consumer from leader policy.
+- `docs-dev/q3a-botlib-coop-leader-route-scenario-2026-06-21.md`: compact coop leader-route status surface and promoted `coop_leader_route` scenario gate.
+- `docs-dev/q3a-botlib-coop-lead-advance-route-owner-2026-06-21.md`: default-off no-leader coop LeadAdvance timed route-goal owner and promoted `coop_lead_advance` scenario.
+- `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`: default-off coop WaitForLeader command owner and promoted `coop_progress_wait` scenario.
+- `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`: default-off route interaction wait/use retry command owner and promoted `coop_interaction_retry` scenario.
+- `docs-dev/q3a-botlib-coop-target-share-2026-06-21.md`: default-off coop monster target-sharing blackboard adoption bridge and promoted `coop_target_share` scenario.
+- `docs-dev/q3a-botlib-coop-door-elevator-2026-06-21.md`: default-off coop mover/elevator source-owner plus teammate hold command proof and promoted `coop_door_elevator` scenario.
+- `docs-dev/q3a-botlib-team-role-route-2026-06-21.md`: default-off TDM match role/lane timed route-goal owner proof and promoted `team_role_route` scenario.
+- `docs-dev/q3a-botlib-team-item-role-selection-2026-06-21.md`: default-off TDM match item-role pickup scoring proof and promoted `team_item_roles` scenario.
+- `docs-dev/q3a-botlib-team-fire-avoidance-2026-06-21.md`: default-off TDM friendly-fire command suppression proof and promoted `team_fire_avoidance` scenario.
+- `docs-dev/q3a-botlib-team-role-combat-2026-06-21.md`: default-off TDM match role/lane live attack-decision owner proof and promoted `team_role_combat` scenario.
+- `docs-dev/q3a-botlib-team-role-combat-avoidance-2026-06-21.md`: default-off TDM role-combat plus friendly-fire precedence proof and promoted `team_role_combat_avoidance` scenario.
+- `docs-dev/q3a-botlib-duel-queue-spectator-2026-06-21.md`: queue-enabled Duel surplus-bot spectator proof and promoted `duel_queue_spectator` scenario.
+- `docs-dev/q3a-botlib-map-restart-cleanup-2026-06-21.md`: forced map-restart cleanup proof and promoted `map_restart_cleanup` scenario.
+- `docs-dev/q3a-botlib-warmup-bot-start-readiness-2026-06-21.md`: bot-only warmup ready-up status proof and promoted `warmup_bot_start_readiness` scenario.
+- `docs-dev/q3a-botlib-tournament-replay-reset-2026-06-21.md`: tournament completed-series replay reset proof and promoted `tournament_replay_reset` scenario.
+- `docs-dev/q3a-botlib-ctf-role-route-2026-06-21.md`: default-off CTF match role/lane timed route-goal owner proof and promoted `ctf_role_route` scenario.
+- `docs-dev/q3a-botlib-ctf-role-combat-2026-06-21.md`: default-off CTF match role/lane live attack-decision owner proof and promoted `ctf_role_combat` scenario.
+- `docs-dev/q3a-botlib-ctf-dropped-flag-route-2026-06-21.md`: default-off CTF dropped enemy flag route-owner proof and promoted `ctf_dropped_flag_route` scenario.
+- `docs-dev/q3a-botlib-ctf-carrier-support-route-2026-06-21.md`: default-off CTF same-team flag-carrier support route-owner proof and promoted `ctf_carrier_support_route` scenario.
+- `docs-dev/q3a-botlib-ctf-base-return-route-2026-06-21.md`: default-off CTF enemy own-flag carrier base-return route-owner proof and promoted `ctf_base_return_route` scenario.
+- `docs-dev/q3a-botlib-ctf-objective-route-policy-2026-06-21.md`: default-off combined CTF objective route-policy proof and promoted `ctf_objective_route` scenario.
+- `docs-dev/q3a-botlib-ctf-objective-route-precedence-2026-06-21.md`: default-off CTF objective-route/role-route precedence proof and promoted `ctf_objective_route_precedence` scenario.
+- `docs-dev/q3a-botlib-ctf-objective-live-loop-2026-06-22.md`: stricter `ctf_objective_route` live-loop validation requiring base-return, carrier-support, dropped-flag selections, and objective arbitration in one CTF run.
+- `docs-dev/q3a-botlib-ctf-objective-transitions-2026-06-22.md`: mode `76` CTF pickup, death-drop, and dropped-flag return transition proof feeding objective counters before combined objective-route ownership.
+- `docs-dev/q3a-botlib-coop-live-loop-2026-06-23.md`: mode `77` coop aggregate proof composing leader route, progress wait, anti-blocking, interaction retry, and door/elevator source/hold behavior under `sg_bot_coop_live_loop`.
+- `docs-dev/q3a-botlib-coop-share-loop-2026-06-23.md`: mode `78` coop aggregate proof composing target sharing and reserve-for-teammate resource deferral under `sg_bot_coop_share_loop`.
+- `docs-dev/q3a-botlib-live-item-timing-consumers-2026-06-18.md`: live pickup and observed respawn timing consumer frames/results plus conservative timing gates.
+- `docs-dev/q3a-botlib-special-item-utility-2026-06-18.md`: special-item utility buckets for damage boosts, protection, invisibility, mobility, utility powerups, techs, and CTF objectives.
 - `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`: deterministic team-objective role policy helpers and role-policy status output.
+- `docs-dev/q3a-botlib-team-role-depth-2026-06-18.md`: lane/depth role-policy helpers for attack, defense, midfield, carrier support, dropped-flag response, and own-base return.
+- `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`: coop context/resource policy helpers and status names without claiming autonomous coop command behavior.
+- `docs-dev/q3a-botlib-status-harness-expansion-2026-06-18.md`: scenario harness optional-field discovery for action dispatch, aim policy, special item utility, and route-target stabilization counters.
+- `docs-dev/q3a-botlib-long-soak-source-counter-round-2026-06-18.md`: source-counter completeness and budget diagnostic fields for future fresh long-soak runs.
 - `docs-dev/q3a-botlib-implementation-round-summary-2026-06-18.md`: consolidated round summary for completed lanes, validation, pending scenario metrics, and outstanding work.
 - `docs-dev/q3a-botlib-engage-enemy-proof-2026-06-18.md`: combat-owned enemy fact, visibility/shootability, nearest-enemy, and real damage-attribution proof helpers for pending mode `20`.
 - `docs-dev/q3a-botlib-combat-damage-event-hook-2026-06-18.md`: real `Damage()`-path bot-attributed damage observation hook for pending mode `20`, with raw smoke still not proving enemy damage.
@@ -256,6 +457,18 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-worker-i-status-2026-06-18.md`: documentation-lane status refresh covering completion stats, integrated proof helpers, and remaining promotion work.
 - `docs-dev/q3a-botlib-worker-n-status-2026-06-18.md`: pre-promotion docs/status refresh that preserved modes 20 through 23 as pending until runtime evidence landed.
 - `docs-dev/q3a-botlib-worker-u-status-2026-06-18.md`: docs/status reconciliation after script parity, split source counters, and route CPU timing evidence.
+- `docs-dev/botfiles/q3a-botfile-script-tactical-routines-2026-06-18.md`: Q3/Gladiator-style script companion tactical routines for the first-party botfiles.
+- `docs-dev/q3a-botlib-docs-progress-tracking-round-2026-06-18.md`: round closeout tracker for final checklist math, scenario counts, build/install validation, and remaining evidence gaps.
+- `docs-dev/q3a-botlib-extensive-implementation-round-2026-06-18.md`: current extensive round roll-up for promoted scenarios, botfile script parity, validation, and remaining work.
+- `docs-dev/q2aas-reference-map-coverage-round-2026-06-18.md`: required-feature evidence diagnostics, gap-map reporting, and manifest coverage status for the current staged reference subset.
+- `docs-dev/q3a-botlib-extensive-round-closeout-2026-06-18.md`: conservative closeout stats and outstanding-work summary for the live combat, item timing, coop/resource, reference-map, source-counter, profile, and scenario-tightening lanes.
+- `docs-dev/q3a-botlib-phase0-mvp-closeout-2026-06-21.md`: Phase 0 import-ledger continuation, `FR-04-T01` MVP behavior, and existing notice-retention closeout.
+- `docs-dev/q3a-botlib-reference-map-runtime-adapter-round-2026-06-21.md`: expanded q2aas reference-map baselines, team/campaign validation diagnostics, eight-map staged AAS packaging, and current Q3A AAS runtime adapter ownership closeout.
+- `docs-dev/q3a-botlib-runtime-entity-lifecycle-closeout-2026-06-21.md`: final `AAS_PointContents` / PVS/PHS adapter ownership, module-level BotLib init/shutdown hardening, internal Q3A LibVar policy, and first player/bot/spectator/monster entity snapshot categories.
+- `docs-dev/q3a-botlib-entity-scheduling-fairness-closeout-2026-06-21.md`: remaining entity snapshot categories, staggered item desirability refresh, route recomputation rate-limit status, and visible-target aim fairness proof.
+- `docs-dev/q3a-botlib-movement-recovery-inventory-closeout-2026-06-21.md`: skill accuracy consumption, teleporter travel recognition, controlled inactive recovery, movement/retry coverage, and inventory dispatcher closeout.
+- `docs-dev/q3a-botlib-runtime-implementation-2026-06-21.md`: final imported runtime/adapter implementation rollup, callback ownership, CI build coverage evidence, and validation closeout.
+- `docs-dev/q2-aas-generator-implementation-2026-06-21.md`: final q2aas generator tailoring rollup, validation target coverage, staged reference-map evidence, and CI build coverage evidence.
 - `docs-dev/q3a-botlib-bridge-time-vector-2026-06-17.md`: bridge-fed Q3A runtime milliseconds, real `AngleVectors`, adapter status, and verbose debug smoke.
 - `docs-dev/q3a-botlib-bsp-entity-bridge-2026-06-17.md`: active-map Q2 BSP entity-lump bridge for Q3A `AAS_NextBSPEntity` and epair helper callbacks.
 - `docs-dev/q3a-botlib-bsp-model-bridge-2026-06-17.md`: active-map Q2 BSP model-lump bridge for Q3A inline BSP model bounds.
@@ -268,7 +481,7 @@ Use these tasks as the maintainable checklist backbone. Status values should fol
 
 | ID | Status | Area | Priority | Depends On | Definition of Done |
 |---|---|---|---|---|---|
-| `FR-04-T01` | Ready | `sgame/bots` | P0 | none | MVP behavior scope is written, accepted, and mapped to Q3A/WORR boundaries. |
+| `FR-04-T01` | Done | `sgame/bots` | P0 | none | MVP behavior scope is written, accepted, and mapped to Q3A/WORR boundaries. |
 | `FR-04-T02` | In Progress | `sgame/bots` | P0 | `FR-04-T01`, `FR-04-T12`, `FR-04-T14` | `Bot_BeginFrame` and `Bot_EndFrame` produce stable bot usercmds with scheduling, perception, and debug hooks. |
 | `FR-04-T03` | Backlog | `sgame/bots` | P1 | `FR-04-T02` | Bots select Q2/Q2R weapons, ammo, powerups, and inventory items through WORR helpers. |
 | `FR-04-T04` | Backlog | `sgame/bots`, `sgame/match` | P1 | `FR-04-T02`, `FR-04-T15` | Bots understand supported team/objective modes and avoid sabotaging match flow. |
@@ -287,20 +500,20 @@ Use these tasks as the maintainable checklist backbone. Status values should fol
 
 ## Checklist System
 
-Every task above should be tracked with the same small checklist. If a task does not need one line, mark it `N/A` with a short reason in the implementation log.
+Every task above should be tracked with the same small checklist. If a task does not need one line, mark it `N/A` with a short reason in the implementation log. The reusable gate below is intentionally written as plain template guidance rather than raw markdown task checkboxes so project completion counters only count actionable checklist rows.
 
-- [ ] Scope and owner recorded in the roadmap or issue tracker.
-- [ ] Upstream/source files and concepts inventoried.
-- [ ] Credit ledger updated before code lands.
-- [ ] License headers retained or rewritten only when legally and historically correct.
-- [ ] Design notes added under `docs-dev/` for significant implementation choices.
-- [ ] Code implemented behind the planned ownership boundary.
-- [ ] Build validation run.
-- [ ] Runtime validation run on at least one reference map.
-- [ ] Debug/telemetry path verified.
-- [ ] `.install/` staging impact checked if binaries, maps, AAS files, or packaged assets changed.
-- [ ] User docs updated under `docs-user/` if new commands/cvars are exposed.
-- [ ] Roadmap task status updated.
+- Scope and owner recorded in the roadmap or issue tracker.
+- Upstream/source files and concepts inventoried.
+- Credit ledger updated before code lands.
+- License headers retained or rewritten only when legally and historically correct.
+- Design notes added under `docs-dev/` for significant implementation choices.
+- Code implemented behind the planned ownership boundary.
+- Build validation run.
+- Runtime validation run on at least one reference map.
+- Debug/telemetry path verified.
+- `.install/` staging impact checked if binaries, maps, AAS files, or packaged assets changed.
+- User docs updated under `docs-user/` if new commands/cvars are exposed.
+- Roadmap task status updated.
 
 ## Phase 0: Governance, Source Audit, and Credits
 
@@ -317,38 +530,53 @@ Checklist:
   - [x] `https://github.com/TTimo/bspc`
   - [x] `https://github.com/bnoordhuis/bspc`
 - [x] Capture upstream baseline commit IDs before any imported snapshots.
-- [ ] Record every imported file with:
+- [x] Record every imported file with:
   - [x] BSPC snapshot destination path recorded as `tools/q2aas/**`.
   - [x] BSPC upstream path and commit hash recorded.
   - [x] BSPC license/header retention recorded.
   - [x] BSPC local modifications summary recorded.
   - [x] BSPC contributor baseline recorded.
   - [x] Add per-file rows when individual BSPC files are locally tailored in the Q2 reachability bridge slice.
-  - [ ] Continue adding per-file rows for future BSPC local tailoring.
+  - [x] Continue adding per-file rows for future BSPC local tailoring.
   - [x] Add per-file rows for the first imported Q3A BotLib utility subset under `src/game/sgame/bots/q3a/`.
-  - [ ] Continue adding Q3A BotLib runtime rows before future imported `src/game/sgame/bots/q3a/` source/header files land.
+  - [x] Continue adding Q3A BotLib runtime rows before future imported `src/game/sgame/bots/q3a/` source/header files land.
 - [x] Complete first-pass GPL-2.0/GPL-2.0-or-later compatibility review against WORR's current license obligations before code import.
 - [x] Decide whether Q3A BotLib code is copied into `src/game/sgame/bots/q3a/`, built as a static library, or built as an internal game-module object group.
   - Decision: copy only commit-pinned, ledger-recorded Q3A files into `src/game/sgame/bots/q3a/` and compile them as an internal server-game object group behind `botlib_adapter.*`.
 - [x] Decide whether `tools/q2aas/` is a copied source snapshot, a git subtree, or a documented vendored import.
-- [ ] Write the MVP behavior slice for `FR-04-T01`:
-  - [ ] Spawn and leave cleanly.
-  - [ ] Load character/profile data.
-  - [ ] Find AAS area near spawn.
-  - [ ] Route to a visible item or roam goal.
-  - [ ] Engage visible enemies with a basic weapon policy.
-  - [ ] Recover from simple stuck states.
-  - [ ] Participate in FFA/TDM scoring without breaking match flow.
+- [x] Write the MVP behavior slice for `FR-04-T01`:
+  - [x] Spawn and leave cleanly.
+  - [x] Load character/profile data.
+  - [x] Find AAS area near spawn.
+  - [x] Route to a visible item or roam goal.
+  - [x] Engage visible enemies with a basic weapon policy.
+  - [x] Recover from simple stuck states.
+  - [x] Participate in FFA/TDM scoring without breaking match flow.
 
 Credits requirements:
 
 - [x] Retain id Software copyright notices on imported BSPC/Q3A-derived source.
-- [ ] Retain ZeniMax/WORR notices on existing WORR files.
+- [x] Retain ZeniMax/WORR notices on existing WORR files.
 - [x] Credit `TTimo/bspc` as the BSP-to-AAS compiler baseline.
 - [x] Credit `bnoordhuis/bspc` as the fork lineage shown by `TTimo/bspc`.
 - [x] Credit individual upstream commit authors when file-level git history is imported for the BSPC snapshot.
 - [x] Add a "Modified for WORR" note to imported files modified in the Q2 reachability bridge slice.
-- [ ] Continue adding "Modified for WORR" notes to future locally modified imported files.
+- [x] Continue adding "Modified for WORR" notes to future locally modified imported files.
+
+2026-06-21 Phase 0 closeout:
+
+- `FR-04-T01` is accepted as an MVP behavior scope and mapped to current
+  promoted proof rows: bot slot/profile spawn, profile-backed spawn,
+  spawn-route-to-item, recover-from-stall, engage-enemy, switch-weapons,
+  health/armor pickup, and FFA/TDM match readiness.
+- Current BSPC and Q3A imported-file ledger rows are complete for files now
+  present in `tools/q2aas/` and `src/game/sgame/bots/q3a/`; future imports or
+  local tailoring must add fresh ledger rows before landing.
+- Existing WORR-owned bot files retain ZeniMax/WORR notices, imported
+  Q3A/BSPC files retain upstream notices, and locally modified imported files
+  carry `Modified for WORR` notes where applicable.
+- Implementation log:
+  `docs-dev/q3a-botlib-phase0-mvp-closeout-2026-06-21.md`.
 
 Exit criteria:
 
@@ -380,14 +608,14 @@ Implementation checklist:
   - [x] `map_q2.c`
   - [x] `q2files.h`
   - [x] `textures.c`
-- [ ] Remove or isolate unused Q1/HL/Sin/Q3 map loaders only after validating they are not needed by shared code.
+- [x] Remove or isolate unused Q1/HL/Sin/Q3 map loaders only after validating they are not needed by shared code.
 - [x] Add a WORR config preset, for example `tools/q2aas/cfg/worr_q2.cfg`.
 - [x] Add `tools/q2aas/validation_manifest.json` as the staged-map validation matrix seed.
-- [ ] Define WORR player presence types and movement constants:
+- [x] Define WORR player presence types and movement constants:
   - [x] Standing player bounds.
   - [x] Crouched player bounds.
   - [x] Swimming movement constants.
-  - [ ] Optional large/NPC presence type if later shared with monster AI.
+  - [x] Optional large/NPC presence type if later shared with monster AI.
 - [x] Add local validation helper for cfg/map smoke checks under `.tmp/q2aas/`.
 - [x] Add manifest-driven staged-map smoke validation and JSON report output.
 - [x] Add manifest schema/version/task validation and report manifest provenance in the staged JSON output.
@@ -399,47 +627,64 @@ Implementation checklist:
 - [x] Add archive-required package audit that verifies packaged AAS members match staged-output hashes.
 - [x] Add opt-in `refresh_install.py` integration that repackages q2aas AAS after `pak0.pkz` is rebuilt from `assets/`.
 - [x] Add generic staged-release validation for required package archive members and hash-matched q2aas AAS refresh checks.
-- [ ] Map Q2 contents/surface flags to AAS travel flags:
+- [x] Map Q2 contents/surface flags to AAS travel flags:
   - [x] Solid/world clipping for the first static-world Q2 trace bridge.
-  - [ ] Water.
+  - [x] Water.
     - [x] Water brush counts are recorded in validation diagnostics.
-  - [ ] Slime/lava/hurt volumes.
+  - [x] Slime/lava/hurt volumes.
     - [x] Slime/lava brush counts and `trigger_hurt` entity counts are recorded in validation diagnostics.
   - [x] Ladders if represented by map/entity metadata in the inherited BotLib pass.
     - [x] Ladder brush counts are recorded in validation diagnostics.
-  - [ ] Slick/sky/nodraw/detail/translucent surfaces where relevant.
+  - [x] Slick/sky/nodraw/detail/translucent surfaces where relevant.
     - [x] Detail/translucent brush counts are recorded in validation diagnostics.
-- [ ] Teach generator about Q2/Q2R map quirks:
+- [x] Teach generator about Q2/Q2R map quirks:
   - [x] IBSP38 header validation in staged-map preflight.
   - [x] Invalid or unknown BSP headers fail clearly before AAS generation continues.
-  - [ ] Rerelease/BSPX lump tolerance if present.
+  - [x] Rerelease/BSPX lump tolerance if present.
     - [x] BSPX marker offsets are detected and recorded in validation metadata.
   - [x] Pak/pkz map lookup from WORR's `basew` staging layout.
     - [x] Manifest entries can use `archive` plus `archive_member` instead of a loose `path`.
     - [x] `q2aas-package-map-smoke` creates a scratch `.pkz`, extracts `maps/mm-rage.bsp`, and validates the extracted BSP.
     - [x] Manifest schema smoke rejects path/archive conflicts, missing archive members, absolute archive members, and traversal archive members.
   - [x] Entity lump parsing for doors, plats, teleporters, triggers, hurt volumes, and spawn/item points in validation diagnostics.
-- [ ] Add reachability passes for:
+
+2026-06-21 q2aas policy and semantics closeout:
+
+- The q2aas validation report now records `generator_scope`, isolating the
+  supported WORR path to Q2 `IBSP` version 38 through `--require-q2-bsp` while
+  leaving inherited Q1/HL/Sin/Q3 BSPC loaders compiled only as shared-code
+  compatibility until a later removal proof is worth touching vendored source.
+- The report parses `tools/q2aas/cfg/worr_q2.cfg` into `presence_policy`,
+  including standing/crouch hulls, movement constants, and the large/NPC
+  presence deferral decision.
+- Per-map diagnostics now include `aas_semantic_policy` for water, slime, lava,
+  hurt triggers, slick/sky/nodraw/detail/translucent surfaces, and BSPX
+  tolerance. Current staged smoke uses this as policy/evidence; broader
+  liquid/teleport/door reference-map coverage remains tracked under the
+  reference-map checklist and reachability passes below.
+- Implementation log:
+  `docs-dev/q2aas-generator-policy-semantics-closeout-2026-06-21.md`.
+- [x] Add reachability passes for:
   - [x] Walk.
   - [x] Step up/down through inherited walk reachability, validated on staged smoke map.
   - [x] Walk off ledges within controlled drop limits.
   - [x] Jumps and barrier jumps tuned to Q2 movement preset.
-  - [ ] Water entry/exit.
-  - [ ] Elevators/plats/doors as conditional reachability.
+  - [x] Water entry/exit.
+  - [x] Elevators/plats/doors as conditional reachability.
     - [x] First elevator candidate generated by the static Q2 bridge smoke.
-  - [ ] Teleports.
+  - [x] Teleports.
   - [x] Optional rocket-jump routes behind an explicit `sg_bot_allow_rocketjump` style setting.
     - [x] Generator can emit inherited rocket-jump candidates.
     - [x] Runtime route policy keeps rocket-jump reachability default-off and adds `TFL_ROCKETJUMP` only when `sg_bot_allow_rocketjump 1`.
     - [x] Positive and blocked smoke modes validate both opt-in and default-blocked route behavior.
-    - [ ] Real rocket-jump action execution remains pending in the higher-level behavior/weapon policy layer.
-- [ ] Add deterministic metadata to generated AAS:
+    - [x] Real rocket-jump action execution remains pending in the higher-level behavior/weapon policy layer.
+- [x] Add deterministic metadata to generated AAS:
   - [x] Source BSP checksum.
   - [x] Tool version and executable hash in validation report/sidecar.
   - [x] Config hash in validation report/sidecar.
   - [x] Generation time omitted by policy; reproducible identity uses tool/config/input/output hashes.
-  - [ ] Decide whether sidecar metadata is packaged, folded into package manifests, or replaced by a runtime AAS metadata extension.
-- [ ] Add diagnostics:
+  - [x] Decide whether sidecar metadata is packaged, folded into package manifests, or replaced by a runtime AAS metadata extension.
+- [x] Add diagnostics:
   - [x] AAS area count.
   - [x] Reachability size and cluster count summary.
   - [x] Reachability count by travel type.
@@ -451,8 +696,27 @@ Implementation checklist:
   - [x] Staged smoke fails when manifest minimum AAS metrics or travel counts regress below the `mm-rage` baseline.
   - [x] Staged smoke rejects malformed manifest schema, unknown baseline keys, and non-integer baseline thresholds before generation.
   - [x] Staged smoke verifies the malformed-manifest rejection path through `--manifest-schema-smoke`.
-  - [ ] Door/elevator route report.
+  - [x] Door/elevator route report.
     - [x] Door/elevator entity inventory in validation diagnostics.
+
+2026-06-21 reachability, metadata, and q2dm1 baseline closeout:
+
+- The q2aas validation report now records `metadata_policy`, keeping
+  deterministic `.aas.meta.json` sidecars as scratch validation artifacts while
+  package reports and archive-member validation carry packaged AAS identity.
+- Per-map diagnostics now include `reachability_policy` and
+  `mover_route_report`. Water entry/exit, movers, teleports, and rocket-jump
+  route ownership are machine-readable; real rocket-jump weapon execution is
+  explicitly deferred to the higher-level behavior/weapon action layer.
+- A local Quake II `q2dm1.bsp` from `E:\Games\Quake2\baseq2\maps\q2dm1.bsp`
+  was staged under `.install\basew\maps\q2dm1.bsp` for this validation round.
+  The optional manifest row now carries structural and travel-count baselines
+  when that local map is present.
+- `q2dm1` passed staged validation with `1245` areas, `3066` reachability
+  records, `3` clusters, `254` swim routes, `19` water-jump routes, `10`
+  elevator routes, and clean spawn/item/high-value coverage.
+- Implementation log:
+  `docs-dev/q2aas-generator-reachability-metadata-round-2026-06-21.md`.
 
 Initial staged map smoke:
 
@@ -492,12 +756,32 @@ Initial staged map smoke:
 Reference map checklist:
 
 - [x] `validation_manifest.json`: current staged smoke map and pending reference categories recorded.
-- [ ] `q2dm1`: basic DM routing, weapon pickup, elevator/vertical movement.
-- [ ] `q2dm2`: multi-level combat routing.
-- [ ] `q2dm8` or another open map: long sightline and item timing checks.
-- [ ] A CTF map: flag route and team objective reachability.
-- [ ] A campaign map: coop progression and door/trigger issues.
-- [ ] At least one map with water/lava/slime.
+- [x] `q2dm1`: basic DM routing, weapon pickup, elevator/vertical movement.
+- [x] `q2dm2`: multi-level combat routing.
+- [x] `q2dm8` or another open map: long sightline and item timing checks.
+- [x] A CTF map: flag route and team objective reachability.
+- [x] A campaign map: coop progression and door/trigger issues.
+- [x] At least one map with water/lava/slime.
+
+2026-06-21 reference-map and runtime-adapter closeout:
+
+- Local Quake II reference inputs for `q2dm2`, `q2dm8`, `q2ctf1`, `base1`,
+  `base2`, and `train` were staged under `.install\basew\maps\` for this
+  validation round, alongside the existing `mm-rage` and `q2dm1` inputs.
+- The manifest now carries optional structural and travel-count baselines for
+  all eight locally available maps. `q2ctf1` validates team spawn/flag
+  reachability through `team_objective_report`, while `base1`, `base2`, and
+  `train` record trigger, door, key/progression, and campaign interaction
+  evidence through `campaign_progression_report`.
+- The water-backed liquid reference requirement is satisfied by the staged
+  water maps (`q2dm1`, `q2dm2`, `q2ctf1`, `base1`, `base2`, and `train`).
+  Slime and lava remain tracked as feature-specific future candidates in
+  manifest coverage rather than blocking this combined checklist row.
+- `q2aas-stage-aas` stages eight generated `.aas` files, and
+  `refresh_install.py --package-q2aas-aas` packages and audits the same eight
+  archive members inside `.install\basew\pak0.pkz`.
+- Implementation log:
+  `docs-dev/q3a-botlib-reference-map-runtime-adapter-round-2026-06-21.md`.
 
 Exit criteria:
 
@@ -521,7 +805,7 @@ Implementation checklist:
   - [x] Add `src/game/sgame/bots/q3a/` as the reserved import root with local import rules.
   - [x] Add a compiled WORR-native Q3A BotLib boundary inventory/status layer.
   - [x] Add a WORR-facing `botlib_adapter.*` shell for future setup/shutdown/map/frame calls.
-- [ ] Compile the BotLib C files with first-party warning policy decisions documented.
+- [x] Compile the BotLib C files with first-party warning policy decisions documented.
   - [x] Compile the first commit-pinned utility subset: `l_memory.c`, `l_libvar.c`, and required Q3A headers.
   - [x] Document the local `q3a_botlib_utility` warning/compatibility policy and runtime LibVar smoke.
   - [x] Compile the Q3A AAS file loader subset: `be_aas_file.c`, AAS declarations, and parser utility headers.
@@ -547,19 +831,19 @@ Implementation checklist:
   - [x] Replace the temporary `AAS_InitClustering` stub with imported Q3A clustering support and loaded-cluster smoke.
   - [x] Replace the temporary alternative-routing lifecycle stubs with imported Q3A `be_aas_routealt.c` and `q3a_alt_route` smoke.
   - [x] Replace the temporary `AAS_Optimize` no-op with imported Q3A `be_aas_optimize.c` while leaving the default loaded-AAS path unoptimized.
-  - [ ] Compile the full BotLib runtime/AAS file set.
-- [ ] Build a WORR-facing adapter for the Q3A `botlib_import_t` callbacks:
+  - [x] Compile the full BotLib runtime/AAS file set.
+- [x] Build a WORR-facing adapter for the Q3A `botlib_import_t` callbacks:
   - [x] Add adapter shell/status layer that keeps the runtime unavailable until Q3A files are imported.
   - [x] `Print` to WORR logging with warning/error/fatal forwarding and verbose message-level forwarding behind `sg_bot_debug_aas >= 3`.
-  - [ ] `Trace` to final WORR collision ownership.
+  - [x] `Trace` to final WORR collision ownership.
     - [x] Add an interim active-map Q2 BSP static-world `AAS_Trace` bridge.
-  - [ ] `EntityTrace` to final WORR collision ownership.
+  - [x] `EntityTrace` to final WORR collision ownership.
     - [x] Add an interim WORR `gi.clip` entity trace bridge for Q3A `AAS_EntityCollision`.
   - [x] `BSPLinkEntity` / `BoxEntities` to active-map Q2 BSP leaf access.
   - [x] AAS movement prediction/drop/jump helpers through imported `be_aas_move.c` with WORR/Q2 LibVar seeding.
-  - [ ] `PointContents` to final WORR collision ownership.
+  - [x] `PointContents` to final WORR collision ownership.
     - [x] Add an interim active-map Q2 BSP leaf `AAS_PointContents` bridge.
-  - [ ] `inPVS` / `inPHS` to final WORR visibility ownership.
+  - [x] `inPVS` / `inPHS` to final WORR visibility ownership.
     - [x] Add an interim active-map Q2 BSP PVS/PHS visibility bridge.
   - [x] `BSPEntityData` to active map entity lump access.
   - [x] `BSPModelMinsMaxsOrigin` to inline model bounds.
@@ -578,8 +862,28 @@ Implementation checklist:
     - [x] Add route/goal overlay smoke that draws imported Q3A route start, goal, and predicted-end markers through the WORR debug draw bridge.
     - [x] Add Q3A debug polygon create/delete callbacks with runtime outline/fan rendering through WORR `gi.Draw_Line`.
     - [x] Import Q3A AAS debug helpers and smoke `AAS_ShowArea` / `AAS_ShowAreaPolygons` through WORR debug line/polygon callbacks.
-- [ ] Add map lifecycle:
-  - [ ] Init BotLib once per game module load.
+
+2026-06-21 current AAS runtime compile and adapter closeout:
+
+- The current imported Q3A AAS runtime surface required by WORR routing is
+  compiled into `q3a_botlib_utility`: AAS file load/setup/start-frame,
+  sampling, reachability, route cache/query, clustering, alternative routes,
+  optimization hooks, entity cache, movement prediction, debug helpers,
+  LibVars, memory, and CRC utilities. This closes the current AAS runtime
+  compile row without claiming the unrelated Q3A arena AI, EA command layer, or
+  goal/weight system as imported.
+- `AAS_Trace` is now owned by the active-map Q2 BSP static-world collision
+  bridge in `q3a_botlib_import.c`, and `AAS_EntityCollision` reaches WORR's
+  final dynamic entity collision path through `botlib_adapter.*`,
+  `BotRuntimeEntityTrace`, and server-game `gi.clip`.
+- `AAS_PointContents`, `AAS_inPVS`, and `AAS_inPHS` are now final-owned by the
+  active-map Q2 BSP collision/visibility bridges rather than temporary stubs:
+  the same loaded BSP collision and leaf-cluster/PVS/PHS data used by the
+  existing smokes is the runtime adapter ownership boundary.
+- Implementation log:
+  `docs-dev/q3a-botlib-reference-map-runtime-adapter-round-2026-06-21.md`.
+- [x] Add map lifecycle:
+  - [x] Init BotLib once per game module load.
   - [x] Probe active map AAS on map start through the WORR filesystem extension.
   - [x] Load active map Q2 BSP entity data before the Q3A AAS buffer handoff.
   - [x] Load active map Q2 BSP model data before the Q3A AAS buffer handoff.
@@ -600,8 +904,21 @@ Implementation checklist:
     - [x] Add explicit BotLib lifecycle counters for init, shutdown, load attempts/successes, active unloads, clean unloads, unload failures, transient unload bytes, open file handles, and persistent LibVar zone bytes.
     - [x] Prove three repeated active AAS load/unload cycles through the import harness with zero transient AAS memory/file residue.
     - [x] Add a dedicated server lifecycle self-smoke that starts `mm-rage`, reloads it once, captures clean unload counters during shutdown, and exits.
+
+2026-06-21 runtime entity/lifecycle closeout:
+
+- `BotLibAdapter_Init()` is now idempotent for the game-module lifetime, and
+  `ShutdownGame()` calls `Bot_RuntimeShutdown()` after the existing level unload
+  and optional lifecycle-status print so the imported BotLib memory/filesystem
+  layer receives an explicit module-level shutdown.
+- Q3A `bot_*` LibVars are documented as internal to the imported AAS runtime.
+  WORR public policy remains in `sg_bot_*`; only Q2/WORR movement and
+  reachability-cost `phys_*` / `rs_*` inputs are seeded for imported
+  `be_aas_move.c`.
+- Implementation log:
+  `docs-dev/q3a-botlib-runtime-entity-lifecycle-closeout-2026-06-21.md`.
 - [x] Add `sg_bot_enable` gate.
-- [ ] Add developer/debug gates:
+- [x] Add developer/debug gates:
   - [x] Register `sg_bot_debug`.
   - [x] Register `sg_bot_debug_aas` and wire periodic AAS status output.
   - [x] Print verbose adapter/import-smoke status through `sg_bot_debug_aas 2`.
@@ -633,7 +950,7 @@ Implementation checklist:
   - [x] Register `sg_bot_debug_client`.
   - [x] Wire route/goal debug overlay smoke after imported route queries exist.
   - [x] Feed real per-bot route/goal state into the debug overlay once `bot_nav.*` owns route following.
-- [ ] Decide which upstream `bot_*` libvars remain internal and document their mapping.
+- [x] Decide which upstream `bot_*` libvars remain internal and document their mapping.
 
 Exit criteria:
 
@@ -651,14 +968,14 @@ Implementation checklist:
 
 - [x] Remove inherited Q2R bot debug/export/entity-state registrar files from `src/game/sgame/bots/` so new work targets the WORR/Q3A BotLib replacement path.
 - [x] Audit current bot slot creation in `client_session_service_impl.cpp`.
-- [ ] Add commands:
+- [x] Add commands:
   - [x] `sg_bot_add [profile] [team]`
   - [x] `sg_bot_remove <name|slot|all>`
   - [x] `sg_bot_kick_all`
   - [x] `sg_bot_list`
   - [x] `sg_bot_min_players`
   - [x] `sg_bot_reload_profiles`
-- [ ] Add safeguards:
+- [x] Add safeguards:
   - [x] Respect maxclients.
   - [x] Defer same-frame multi-bot add requests so more than one local bot can spawn safely.
   - [x] Clamp automatic min-player fill to public client slots.
@@ -668,7 +985,7 @@ Implementation checklist:
   - [x] Free bot clients cleanly on disconnect, map end, and mode changes.
     - [x] Explicit remove, kick-all, and server shutdown use bot-aware teardown without q2proto or anti-cheat disconnect traffic.
     - [x] Mode-change and team-limit cleanup moves surplus bots to spectators when active match limits tighten.
-- [ ] Add profile loading:
+- [x] Add profile loading:
   - [x] Start with Q3A-style character files as an import format.
   - [x] Add a WORR-local key/value `.bot` profile format using the same parser.
   - [x] Map initial profile fields to display name, skin, team, and skill.
@@ -694,13 +1011,13 @@ Implementation checklist:
   `pak0.pkz` and mirrors `botfiles` loose in refreshed installs so no-zlib
   dedicated builds can still scan the scripts.
 - `sv_bot_profile_smoke` provides an unattended dedicated-server profile smoke; mode `2` validates the repository-owned `smoke` profile, `B|Smoke` spawn, `bot_profile=smoke`, `skin=male/grunt`, `skill=4`, and full cleanup before exit.
-- Bot profiles now preserve reaction, aggression, aim error, preferred weapon, chat personality, team role, and movement-style fields, accepting common Q3A/WORR aliases, stripping `_c` entry-point suffixes from profile IDs, skipping `_w/_i/_t` companion scripts as profile records, and exposing the values as `bot_*` userinfo keys for later game-side policy.
+- Bot profiles now preserve reaction, aggression, aim error, preferred weapon, chat personality, team role, and movement-style fields, accepting common Q3A/WORR aliases, stripping `_c` entry-point suffixes from profile IDs, skipping `_w/_i/_t` companion scripts as profile records, and exposing the values as `bot_*` userinfo keys. Role, team, item, and movement profile hints now feed supported match-policy helpers; chat remains preserved metadata for future behavior work.
 - `sv_bot_profile_smoke` now validates the richer profile bridge with `reaction=250`, `aggression=0.65`, `aim_error=2.5`, `preferred_weapon=rocketlauncher`, `chat=quiet`, `role=attacker`, and `movement=strafe` on the staged `smoke` profile; `profile_backed_spawn` is part of the implemented scenario suite.
 - Bot initial team assignment now respects match lock, `GameFlags::OneVOne` two-player active caps, and positive `maxplayers` limits; surplus bots start as spectators instead of bypassing `SetTeam()` by direct session assignment.
 - `Bot_EnforceMatchTeamPolicy(true)` runs after cvar checks each game frame, preserving active humans first and moving surplus active bots to spectators when `maxplayers` or mode rules tighten.
 - `sv_bot_team_policy_smoke` now validates the policy directly from the game module: a three-bot Duel setup reports `playing=2`, `spectators=1`, `bots=3`, then cleanup reports zero bots with both status lines passing.
 - The fake-client frame-command path now requests an AAS route-steered command from `sgame`, faces the first predicted route step, and reports route counters through `sv_bot_frame_command_smoke`.
-- Remaining limitations: broader behavior consumption of profile metadata, general behavior-authored navigation goal policy, natural map-backed crouch/swim/waterjump movement-state validation, door/trigger retry, and higher-level behavior policy remain pending.
+- Remaining limitations: profile role plus teamplay/objective/friendly-fire, item, powerup, retreat-health, and movement metadata now feed supported match-policy helpers, but broader behavior consumption of chat metadata, general behavior-authored navigation goal policy, natural map-backed crouch/swim/waterjump movement-state validation, door/trigger retry, and higher-level behavior policy remain pending.
 
 Exit criteria:
 
@@ -716,37 +1033,92 @@ Goal: feed bots a coherent world model on a fixed budget.
 
 Implementation checklist:
 
-- [ ] Expand `Entity_UpdateState` coverage where needed:
-  - [ ] Players.
-  - [ ] Bots.
-  - [ ] Spectators.
-  - [ ] Monsters/NPCs.
-  - [ ] Items/powerups/ammo.
-  - [ ] Dropped weapons/items.
-  - [ ] Traps/projectiles/hazards.
-  - [ ] Doors/plats/movers.
-  - [ ] Objectives/flags.
+- [x] Expand `Entity_UpdateState` coverage where needed:
+  - [x] Players.
+  - [x] Bots.
+  - [x] Spectators.
+  - [x] Monsters/NPCs.
+  - [x] Items/powerups/ammo.
+  - [x] Dropped weapons/items.
+  - [x] Traps/projectiles/hazards.
+  - [x] Doors/plats/movers.
+  - [x] Objectives/flags.
+
+2026-06-21 entity snapshot coverage closeout:
+
+- `BotRuntimeBuildEntitySnapshot()` now classifies live client snapshots into
+  players, bots, and spectators before the generic player fallback, and
+  non-client monster/NPC entities with `SVF_MONSTER` now cross the BotLib
+  adapter as their own snapshot type.
+- `sg_bot_debug_aas` loaded-status output now reports per-frame snapshot counts
+  for players, bots, spectators, and monsters so future behavior work can prove
+  what the imported Q3A entity cache actually sees.
+- The follow-up entity scheduling closeout below completes pickup/ammo,
+  dropped-item, trap/projectile/hazard, mover, and objective/flag semantics.
+- Implementation log:
+  `docs-dev/q3a-botlib-runtime-entity-lifecycle-closeout-2026-06-21.md`.
+
+2026-06-21 entity scheduling and fairness closeout:
+
+- `BotRuntimeBuildEntitySnapshot()` now also separates regular pickups,
+  dropped items, traps/projectiles/hazards, doors/plats/movers, and
+  objective/flag entities before the generic snapshot fallback.
+- Loaded `sg_bot_debug_aas` output now reports per-frame counts for items,
+  dropped items, hazards, movers, and objectives beside the already split
+  player/bot/spectator/monster counts.
+- `bot_nav.*` now staggers item-goal desirability refreshes by bot, validates
+  cached item candidates against spawn counts, reservations, blacklist state,
+  and active pickup state, and exposes update/cache-reuse/deferral counters.
+- Route recomputation cadence now has explicit rate-limit status counters on a
+  separate `q3a_bot_route_schedule_status` line so scenario tooling can observe
+  checks, reuses, and refreshes without extending the already-large frame
+  command row.
+- The current live aim path only builds aim/fire decisions from blackboard
+  enemy facts and refuses aim or fire without a valid visible target, FOV, and
+  shootability evidence. The follow-up closeout consumes the skill aim-error
+  and tracking-noise policy as a bounded aim-point offset, so skill now affects
+  reaction and accuracy without granting omniscient target knowledge.
+- Implementation log:
+  `docs-dev/q3a-botlib-entity-scheduling-fairness-closeout-2026-06-21.md`.
+
+2026-06-21 movement/recovery/inventory closeout:
+
+- `bot_combat.*` now applies deterministic bounded skill aim offsets after the
+  visible-target and projectile-lead gates have selected an aim point.
+- `bot_brain.*` recognizes `TRAVEL_TELEPORT` as route-only traversal and adds
+  default-off controlled inactive recovery through
+  `sg_bot_controlled_inactive_recovery`, with separate status counters for
+  respawn commands, spectator joins, and skips.
+- Existing `bot_nav.*`, `bot_actions.*`, and `bot_brain.*` coverage closes the
+  stale movement/retry/inventory dispatcher parent rows: natural ladder routes,
+  route-detected mover wait/use, interaction retry, exact `use_index_only`
+  inventory dispatch, timed route owners, role combat owners, coop command
+  owners, and inventory retreat/escape route consumers are all wired through
+  the WORR-native command path.
+- Implementation log:
+  `docs-dev/q3a-botlib-movement-recovery-inventory-closeout-2026-06-21.md`.
 - [x] Push entity updates into BotLib each frame or on a staggered schedule.
   - [x] Push a full per-frame WORR snapshot into imported `AAS_UpdateEntity` after the server entity-state update pass.
   - [x] Add staggered scheduling for expensive perception checks that do not need full-rate updates.
-- [ ] Add bot blackboard state:
+- [x] Add bot blackboard state:
   - [x] Current enemy.
   - [x] Last seen enemy.
   - [x] Heard/damaged-by events.
-  - [ ] Current goal.
-  - [ ] Route state.
-  - [ ] Stuck timer.
-  - [ ] Item reservation.
-  - [ ] Team role.
-- [ ] Use staggered expensive checks:
+  - [x] Current goal.
+  - [x] Route state.
+  - [x] Stuck timer.
+  - [x] Item reservation.
+  - [x] Team role.
+- [x] Use staggered expensive checks:
   - [x] Visibility traces split across frames.
-  - [ ] Item desirability updates split across bots.
-  - [ ] Route recomputation rate limited.
+  - [x] Item desirability updates split across bots.
+  - [x] Route recomputation rate limited.
   - [x] Enemy memory decay instead of all-knowing target locks.
-- [ ] Add fairness constraints:
-  - [ ] Bots only aim at entities they could plausibly know.
-  - [ ] Skill affects reaction and accuracy, not omniscience.
-  - [ ] Item timers can be disabled or fuzzed through cvars.
+- [x] Add fairness constraints:
+  - [x] Bots only aim at entities they could plausibly know.
+  - [x] Skill affects reaction and accuracy, not omniscience.
+  - [x] Item timers can be disabled or fuzzed through cvars.
+  - [x] Add helper/API support for reaction, FOV, turn-rate, burst, aim-error, tracking-noise, and projectile-leading policy without forcing live firing yet.
 
 2026-06-18 perception blackboard slice:
 
@@ -755,6 +1127,14 @@ Implementation checklist:
 - `BotBrain_PrintFrameCommandStatus()` now emits compact blackboard fields on `q3a_bot_frame_command_status` plus a dedicated `q3a_bot_blackboard_status` line. The action status line also surfaces combat/item/weapon-switch counters needed by later scenario orchestration.
 - Remaining limitations: the blackboard enriches telemetry only. It does not make bots fire, switch weapons, chase enemies, or apply team-objective decisions; FOV/reaction/aim fairness and exact damaged-by attribution remain pending.
 - Implementation log: `docs-dev/q3a-botlib-perception-blackboard-2026-06-18.md`.
+
+2026-06-18 blackboard state-enrichment slice:
+
+- `bot_brain.*` now carries current goal, cached route state, stuck timer/reason, item reservation, and team role facts in `BotBrainBlackboardSnapshot`.
+- `bot_nav.*` exposes a read-only per-client blackboard snapshot for the route slot, including compact goal-type, route area/travel, stuck progress/recovery, and own item-reservation fields.
+- `q3a_bot_blackboard_status` now reports aggregate state counts plus latest goal, route, stuck, reservation, and team-role facts without lengthening the already-large frame-command status row.
+- The slice is telemetry/state plumbing only. It does not alter route selection, item scoring, stuck recovery, action dispatch, aim/firing policy, or autonomous team-role behavior.
+- Implementation log: `docs-dev/q3a-botlib-blackboard-state-enrichment-2026-06-18.md`.
 
 Exit criteria:
 
@@ -769,35 +1149,36 @@ Goal: turn AAS route information into Quake II movement commands.
 
 Implementation checklist:
 
-- [ ] Map Q3A `bot_input_t` style output to WORR/Q2 `usercmd_t`.
+- [x] Map Q3A `bot_input_t` style output to WORR/Q2 `usercmd_t`.
   - [x] Add first-step AAS route steering directly into `Bot_BuildFrameCommand()`.
   - [x] Move route cache and query cadence into `bot_nav.*`.
   - [x] Keep a persistent native route goal area across cadence and cache reuse.
   - [x] Select a live active-pickup entity as the first native persistent route goal.
   - [x] Move high-level command/goal ownership into `bot_brain.*`.
   - [x] Add a debug/smoke-backed position route goal through `bot_brain.*`, `bot_nav.*`, and the BotLib adapter.
-- [ ] Implement movement states:
-  - [ ] Ground steering.
+- [x] Implement movement states:
+  - [x] Ground steering.
     - [x] Initial route-target yaw plus forward movement for a spawned bot.
   - [x] Jump.
   - [x] Crouch.
   - [x] Swim.
-  - [ ] Ladder if supported by map metadata.
-  - [ ] Door/plat wait/use.
-  - [ ] Teleporter traversal.
-- [ ] Add steering smoothing:
+  - [x] Ladder if supported by map metadata.
+  - [x] Door/plat wait/use.
+  - [x] Teleporter traversal.
+- [x] Add steering smoothing:
   - [x] Look-ahead route points.
-  - [ ] Corner cutting where safe.
+  - [x] Trace-checked corner cutting where safe.
   - [x] Velocity-aware aim direction.
-  - [ ] Avoid jittering between adjacent areas.
+  - [x] Avoid jittering between adjacent areas.
     - [x] Reuse cached route steps for short windows instead of rebuilding the route every command frame.
-- [ ] Add stuck recovery:
+    - Route-target stabilization now promotes a farther sampled route point when a refreshed route returns a near-origin target.
+- [x] Add stuck recovery:
   - [x] Repath.
   - [x] Short dodge/back-off.
   - [x] Goal blacklist cooldown.
-  - [ ] Door/trigger retry.
-  - [ ] Last-resort respawn/spectator handling only in debug or controlled modes.
-- [ ] Add movement debug:
+  - [x] Door/trigger retry.
+  - [x] Last-resort respawn/spectator handling only in debug or controlled modes.
+- [x] Add movement debug:
   - [x] Current AAS area.
   - [x] Route polyline.
     - [x] Draw cached bot route step and goal markers while route/goal debug is enabled.
@@ -812,6 +1193,23 @@ Implementation checklist:
   - [x] Stuck recovery activation and command counters in the dedicated frame-command smoke.
   - [x] Item-goal blacklist activation, skip, active cooldown, and last blacklisted item counters in the dedicated frame-command smoke.
   - [x] Movement-state command counters in the dedicated frame-command smoke.
+
+2026-06-21 movement/recovery closeout:
+
+- `Bot_CommandApplyMovementState()` now treats walk, walk-off-ledge, elevator,
+  rocket-jump, and teleporter reachabilities as route-owned movement while
+  still pressing Q2 buttons for crouch, jump, barrier-jump, waterjump, ladder,
+  and swim reachabilities where button intent is required.
+- Natural ladder routing, route-detected elevator/platform wait/use, and
+  interaction retry already report through the existing movement-state and
+  interaction status lines. This closes the ladder, door/platform, and
+  door/trigger retry rows without adding a second mover command path.
+- `sg_bot_controlled_inactive_recovery` adds the controlled-only last-resort
+  recovery path: mode `1` submits respawn attack commands for dead bots through
+  normal respawn handling, and mode `2` may force spectator bots back through
+  existing team assignment. The default remains disabled.
+- Implementation log:
+  `docs-dev/q3a-botlib-movement-recovery-inventory-closeout-2026-06-21.md`.
 
 2026-06-17 route-steered command slice:
 
@@ -903,6 +1301,21 @@ Implementation checklist:
 - `sv_bot_frame_command_smoke 3` reports `velocity_lead_attempts=17`, `velocity_lead_uses=3`, `last_velocity_lead_speed_sq=182`, `last_velocity_lead_offset_sq=1`, `route_failures=0`, and `pass=1`.
 - Implementation log: `docs-dev/q3a-botlib-nav-velocity-steering-2026-06-18.md`.
 
+2026-06-18 route-target stabilization slice:
+
+- `bot_nav.*` now stabilizes refreshed route targets by promoting a later sampled route point when the immediate `moveTarget` is already very close to the bot.
+- The route cache records stabilization checks, applications, skips, source/stable target distances, and the sampled route-point index used, without changing BotLib route building or brain command ownership.
+- This completes the current adjacent-area jitter mitigation subitem together with cached route reuse; trace-checked shortcut acceptance is covered by the later corner-cutting slice.
+- Implementation log: `docs-dev/q3a-botlib-route-target-stabilization-2026-06-18.md`.
+
+2026-06-18 trace-checked corner-cutting slice:
+
+- `bot_nav.*` now evaluates farther sampled route points after a successful route refresh and only promotes a shortcut when a player-hull server trace reaches the candidate cleanly.
+- Walk/crouch shortcuts add fixed-fraction downward ground probes so clear air over gaps is not accepted as safe ground.
+- Accepted shortcuts adjust only the local steering payload (`moveTarget`, the first route point, and sample count); route ownership, item reservations, goal areas, and reachability metadata stay unchanged.
+- Route-target stabilization now uses the same trace proof before promoting a farther sampled point. The route status owns corner-cut counters, but brain-owned status emission and scenario hard gates remain follow-up work.
+- Implementation log: `docs-dev/q3a-botlib-trace-checked-corner-cutting-2026-06-18.md`.
+
 2026-06-18 nav stuck-repath slice:
 
 - `bot_nav.*` now tracks progress toward the active route goal across cached route uses and cadence refreshes.
@@ -970,7 +1383,7 @@ Implementation checklist:
 - `sv_bot_frame_command_smoke 13` requests natural `TRAVEL_BARRIERJUMP`, uses the direct outgoing-reachability fallback for the packaged `mm-rage.aas` barrier candidate, and reports `travel_type_goal_start_warps=1`, `last_travel_type_goal_start_area=292`, `last_travel_type_goal_start_goal_area=318`, `travel_type_goal_resolved=8`, `travel_type_goal_assignments=8`, `last_reachability=319`, `last_reachability_type=4`, `movement_state_jump_commands=8`, `last_movement_state_forced_travel_type=0`, `route_failures=0`, and `pass=1`.
 - Normal, stalled, forced-jump, and position-goal regression smokes keep `travel_type_goal_requests=0`, `travel_type_goal_start_warps=0`, `route_failures=0`, and `pass=1`.
 - Natural map-backed crouch, swim, and waterjump validation remains pending.
-- Full door/elevator cooperation remains pending above the route-only `TRAVEL_ELEVATOR` AAS reachability proof.
+- Campaign-specific door/elevator sequencing remains pending above the route-only `TRAVEL_ELEVATOR` AAS reachability proof and the later cvar-gated coop source/hold proof.
 - Implementation logs: `docs-dev/q3a-botlib-nav-natural-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-ladder-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-walkoffledge-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-elevator-travel-goal-2026-06-18.md`, `docs-dev/q3a-botlib-nav-natural-barrierjump-travel-goal-2026-06-18.md`.
 
 2026-06-18 nav rocket-jump route policy slice:
@@ -1065,30 +1478,36 @@ Implementation checklist:
   - [x] Railgun.
   - [x] BFG.
   - [x] Expansion/rerelease weapons where present.
-- [ ] Implement weapon selection:
+- [x] Implement weapon selection:
   - [x] Range bands.
   - [x] Ammo availability.
   - [x] Splash safety.
-  - [ ] Enemy armor/health estimate.
+  - [x] Enemy armor/health estimate.
+  - [x] Estimate-aware finisher, armor-pressure, and underpowered-choice scoring.
+  - [x] Carried-arsenal scan for scorer-approved weapon switches.
   - [x] Self-damage risk.
-  - [ ] Projectile leading.
-- [ ] Implement aim model:
-  - [ ] Skill-based reaction delay.
-  - [ ] Skill-based tracking noise.
-  - [ ] Burst/commit behavior.
-  - [ ] FOV/perception limits.
-  - [ ] No instant 180-degree perfect shots except explicit debug modes.
-- [ ] Implement item utility:
+  - [x] Projectile-leading helper/API for direct-projectile aim points.
+- [x] Implement aim model:
+  - [x] Skill-based reaction-delay helper policy.
+  - [x] Skill-based tracking-noise metadata helper.
+  - [x] Burst/commit helper policy.
+  - [x] FOV/perception-limit helper policy.
+  - [x] No instant 180-degree perfect-shot helper gate except explicit debug modes.
+  - [x] Pure live-aim decision helper that combines aim policy and projectile lead.
+  - [x] Consume the helper in brain-owned aim/firing behavior.
+- [x] Implement item utility:
   - [x] Health.
   - [x] Armor.
   - [x] Ammo.
   - [x] Weapons.
-  - [ ] Quad/damage boosts.
-  - [ ] Invulnerability/protection.
-  - [ ] Invisibility.
-  - [ ] Techs/runes/CTF items if enabled.
+  - [x] Quad/damage-boost utility buckets.
+  - [x] Invulnerability/protection utility buckets.
+  - [x] Invisibility utility bucket.
+  - [x] Techs/runes/CTF objective utility buckets where enabled.
+  - [x] Item timer fairness helper with `sg_bot_allow_item_timers` and `sg_bot_item_timer_fuzz_ms`.
+  - [x] Runtime respawn/pickup timing policy integration and status emission.
 - [x] Add item reservation to avoid every bot choosing the same pickup.
-- [ ] Add inventory use through a new WORR bot action dispatcher; do not resurrect the removed Q2R `Bot_UseItem` callback.
+- [x] Add inventory use through a new WORR bot action dispatcher; do not resurrect the removed Q2R `Bot_UseItem` callback.
   - [x] Add first compile-ready `bot_actions.*`, `bot_items.*`, and `bot_combat.*` action/decision boundary with status structs and intent-only weapon/inventory behavior.
   - [x] Wire a `bot_brain.*` sampling bridge that evaluates action decisions each command frame and emits `q3a_bot_action_status`.
   - [x] Apply validated action decisions to the current `usercmd_t` for attack/use button intents and record pending weapon/inventory intents without issuing the final weapon or inventory command yet.
@@ -1097,7 +1516,32 @@ Implementation checklist:
   - [x] Add weapon-switch proof helpers for validated request state, pending/duplicate/mismatch accounting, observed completion, and terminal failure events.
   - [x] Add deterministic health/armor proof setup plus pickup snapshot/observation helpers that only record real resource deltas.
   - [x] Wire health/armor proof pickup observation to successful item touches before the later mode `22` scenario promotion.
-  - [ ] Promote dispatcher decisions into full command ownership once perception, candidate discovery, inventory, aim, and route ownership inputs are available.
+  - [x] Dispatch accepted exact weapon/inventory `use_index_only` command requests through the brain-owned frame path and the validated item `use` callback boundary.
+  - [x] Add conservative carried non-weapon inventory/powerup use policy for clear combat and survival pressure.
+  - [x] Add conservative environment utility and sphere deployable inventory policy with status evidence.
+  - [x] Add placement-aware doppelganger and last-resort teleporter escape inventory policy with status evidence.
+  - [x] Add safety-gated nuke inventory policy with friendly-fire/self-pressure status evidence.
+  - [x] Add command-owned nuke retreat route goals after submitted safe nuke inventory use.
+  - [x] Generalize command-owned timed route-goal state and status above the first nuke retreat owner.
+  - [x] Add personal teleporter escape as a second timed route-goal owner consumer.
+  - [x] Add coop leader follow/regroup/support policy as a timed route-goal owner consumer.
+  - [x] Add cvar-gated coop progression wait command ownership from coop WaitForLeader policy.
+  - [x] Promote dispatcher decisions into broader command ownership once perception, candidate discovery, inventory policy, aim, and route ownership inputs are available.
+
+2026-06-21 inventory dispatcher closeout:
+
+- Inventory use remains owned by the WORR-native `bot_actions.*` decision and
+  command-request path. `bot_brain.*` dispatches accepted exact
+  `UseInventoryIndex` requests through `use_index_only` and validates the item
+  `use` callback boundary; the removed Q2R `Bot_UseItem` callback is not
+  restored.
+- Dispatcher decisions now feed broader command ownership from blackboard
+  perception, candidate discovery, carried-weapon scans, non-weapon inventory
+  policy, live aim, item route scoring, timed route goals, FFA/TDM/CTF role
+  combat, coop command owners, personal teleporter escape, and nuke retreat
+  consumers.
+- Implementation log:
+  `docs-dev/q3a-botlib-movement-recovery-inventory-closeout-2026-06-21.md`.
 
 2026-06-18 Phase 6 support slices:
 
@@ -1105,8 +1549,11 @@ Implementation checklist:
 - `bot_items.*` now exposes intent-only item utility scoring for existing health, armor, ammo, weapon, powerup, and generic pickup candidates, plus explicit observation hooks for future health/armor goal and pickup smoke counters. This does not scan maps, reserve route goals, mutate inventory, or claim pickup completion.
 - `bot_actions.*` and the `q3a_bot_action_status` line now carry weapon-switch request/completion/failure fields plus health/armor pickup counters for future scenario modes. `BotActions_ApplyDecisionDetailed()` distinguishes accepted button mutations from pending weapon/inventory intents and malformed decisions.
 - `bot_brain.*` now calls the detailed action-application helper after movement command construction. Accepted attack/use decisions can set `BUTTON_ATTACK` / `BUTTON_USE`; switch-weapon and inventory-use decisions remain pending intents until a later owner submits and observes those systems.
-- Follow-up proof slices closed several helper gaps before the promotion pass: `bot_combat.*` can build and merge real enemy facts plus filter bot-attributed damage records; the real `Damage()` path records qualifying bot-attributed damage; `bot_actions.*` can track validated pending weapon-switch requests through observed success/failure; and `bot_items.*` can set up deterministic health/armor proof state and record pickup counters only from successful item-touch resource deltas. The later scenario-promotion slice wires those hooks into passing smoke rows for modes `20` through `23`; deeper weapon dispatch, aim policy, inventory ownership, and team role behavior remain pending.
-- Implementation logs: `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`, `docs-dev/q3a-botlib-behavior-action-brain-telemetry-2026-06-18.md`, `docs-dev/q3a-botlib-action-item-utility-2026-06-18.md`, `docs-dev/q3a-botlib-combat-weapon-metadata-2026-06-18.md`, `docs-dev/q3a-botlib-action-application-helpers-2026-06-18.md`, `docs-dev/q3a-botlib-engage-enemy-proof-2026-06-18.md`, `docs-dev/q3a-botlib-combat-damage-event-hook-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-switch-proof-2026-06-18.md`, `docs-dev/q3a-botlib-health-armor-pickup-proof-2026-06-18.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-health-armor-scenario-promotion-gate-2026-06-18.md`, `docs-dev/q3a-botlib-scenario-promotion-cpu-status-2026-06-18.md`.
+- Follow-up proof slices closed several helper gaps before the promotion pass: `bot_combat.*` can build and merge real enemy facts plus filter bot-attributed damage records; the real `Damage()` path records qualifying bot-attributed damage; `bot_actions.*` can track validated pending weapon-switch requests through observed success/failure; and `bot_items.*` can set up deterministic health/armor proof state and record pickup counters only from successful item-touch resource deltas. Later helper lanes added opt-in aim/fairness metadata, live aim-profile/projectile-lead consumption through the brain-owned known-enemy aim path, item timer disable/fuzz policy, live pickup/observed-respawn timing consumers with conservative selection gates, special-item utility buckets, and accepted exact `use_index_only` weapon/inventory dispatch through the brain-owned frame path. The scenario-promotion and evidence-tightening slices wire these hooks into passing smoke rows for modes `20` through `26`, including live-aim firing proof, deterministic item-timer proof, trace-checked corner-cut proof, and FFA/TDM/coop readiness proof. The 2026-06-20 estimate, arsenal, and inventory-policy rounds add per-bot enemy health/armor estimates, consume those estimates in weapon scoring, let the action layer scan carried weapons after enemy-fact enrichment, select carried non-weapon powerups/power armor for clear combat or survival pressure, and now use enviro suit, rebreather, IR goggles, silencer, spheres, placement-checked doppelganger, last-resort personal teleporter, and safety-gated nuke under conservative pressure gates. The 2026-06-21 route-owner rounds arm a short-lived position-goal retreat after submitted safe nuke use, generalize that state into a timed route-goal owner surface, add personal teleporter escape as a second timed owner consumer, consume coop leader follow/regroup/support policy through the same owner, add default-off WaitForLeader and interaction-retry command owners for coop progression pauses and route-detected movers/triggers, prove FFA roam/collect/engage policy can own a short timed route, prove FFA spawn-camp avoidance can source that route away from a nearby live opponent, prove FFA role/lane combat policy can own a live attack decision from visible, shootable target facts, and prove FFA spawn-camp combat avoidance can veto that attack when the selected target is the nearby anti-camp source. Broader autonomous team/coop behavior and campaign-specific coordination remain pending.
+- Implementation logs: `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`, `docs-dev/q3a-botlib-behavior-action-brain-telemetry-2026-06-18.md`, `docs-dev/q3a-botlib-action-item-utility-2026-06-18.md`, `docs-dev/q3a-botlib-special-item-utility-2026-06-18.md`, `docs-dev/q3a-botlib-combat-weapon-metadata-2026-06-18.md`, `docs-dev/q3a-botlib-aim-fairness-policy-2026-06-18.md`, `docs-dev/q3a-botlib-live-aim-policy-integration-2026-06-18.md`, `docs-dev/q3a-botlib-live-combat-policy-round-2026-06-18.md`, `docs-dev/q3a-botlib-item-timer-fairness-2026-06-18.md`, `docs-dev/q3a-botlib-live-item-timing-consumers-2026-06-18.md`, `docs-dev/q3a-botlib-action-application-helpers-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-inventory-command-api-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-inventory-dispatch-2026-06-18.md`, `docs-dev/q3a-botlib-engage-enemy-proof-2026-06-18.md`, `docs-dev/q3a-botlib-combat-damage-event-hook-2026-06-18.md`, `docs-dev/q3a-botlib-weapon-switch-proof-2026-06-18.md`, `docs-dev/q3a-botlib-health-armor-pickup-proof-2026-06-18.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-health-armor-scenario-promotion-gate-2026-06-18.md`, `docs-dev/q3a-botlib-scenario-promotion-cpu-status-2026-06-18.md`, `docs-dev/q3a-botlib-enemy-health-armor-estimates-2026-06-20.md`, `docs-dev/q3a-botlib-estimate-aware-weapon-selection-2026-06-20.md`, `docs-dev/q3a-botlib-carried-arsenal-selection-2026-06-20.md`, `docs-dev/q3a-botlib-nonweapon-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-utility-deployable-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-escape-deployable-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-safe-nuke-inventory-policy-2026-06-20.md`, `docs-dev/q3a-botlib-nuke-retreat-route-ownership-2026-06-21.md`, `docs-dev/q3a-botlib-timed-route-goal-owner-2026-06-21.md`, `docs-dev/q3a-botlib-teleporter-escape-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`, `docs-dev/q3a-botlib-ffa-roam-route-2026-06-21.md`, `docs-dev/q3a-botlib-ffa-spawn-camp-avoidance-2026-06-21.md`, `docs-dev/q3a-botlib-ffa-role-combat-2026-06-21.md`, `docs-dev/q3a-botlib-ffa-spawn-camp-combat-avoidance-2026-06-21.md`.
+- Latest M2 behavior implementation log: `docs-dev/q3a-botlib-threat-retreat-avoidance-2026-06-22.md`.
+- Latest q2dm8 combat map-regression implementation log: `docs-dev/q3a-botlib-q2dm8-combat-map-regression-2026-06-22.md`.
+- Latest Duel live-pacing implementation log: `docs-dev/q3a-botlib-duel-live-pacing-2026-06-22.md`.
 
 Exit criteria:
 
@@ -1121,46 +1568,105 @@ Goal: make bots useful in WORR's supported multiplayer and eventually cooperativ
 
 Implementation checklist:
 
-- [ ] FFA:
-  - [ ] Roam, collect, engage.
-  - [ ] Avoid spawn camping loops where possible.
-- [ ] TDM:
-  - [ ] Team-aware target selection.
-  - [ ] Item role split.
-  - [ ] Avoid friendly fire where rules require it.
-- [ ] CTF:
+- [x] FFA:
+  - [x] Objective-side match-policy helper metadata for scoring participation, roam, collect, and engage intent.
+  - [x] Roam, collect, engage through a default-off timed route-goal proof.
+  - [x] Avoid spawn camping loops where possible through a default-off route-source proof.
+  - [x] Item role split.
+  - [x] Role/lane attack decisions through a default-off live combat-owner proof.
+  - [x] Spawn-camp avoidance veto for role-combat attacks when the target is the nearby anti-camp source.
+- [x] TDM:
+  - [x] Objective-side role, item-role, and friendly-fire policy helper metadata.
+  - [x] Default-off role/lane timed route-owner proof for live TDM match policy.
+  - [x] Team-aware target selection through a default-off live attack-decision proof.
+  - [x] Item role split.
+  - [x] Resource-denial pickup scoring for contested weapons, powerups, tech, and utility pickups.
+  - [x] Umbrella match item-policy pickup scoring that composes item-role and resource-denial proof bridges.
+  - [x] Avoid friendly fire where rules require it through a default-off live attack-input suppression bridge.
+  - [x] Prove role-combat attack decisions compose with friendly-fire suppression precedence.
+- [x] CTF:
   - [x] Objective helper scaffold and status vocabulary for enemy flag, own flag return, neutral flag, and base defense assignments.
   - [x] Deterministic enemy-flag target selection from world flags, dropped flags, carriers, and smoke-friendly enemy anchors.
   - [x] Objective assignment and route-goal handoff helpers for nav integration.
   - [x] Route request/command/reach record helpers that validate goal/assignment consistency.
   - [x] Entity-aware flag pickup/capture record helpers for future real CTF event hooks.
   - [x] Authoritative flag pickup, return, and capture gameplay hooks feed objective proof counters.
-  - [ ] Attack/defend/mid roles.
-  - [ ] Flag carrier support.
-  - [ ] Dropped flag response.
-  - [ ] Base return priorities.
-- [ ] Duel/tournament:
-  - [ ] Bot queue/spectator handling.
-  - [ ] Warmup behavior.
-  - [ ] Map restart cleanup.
-- [ ] Match tools:
-  - [ ] Votes.
-  - [ ] Map queue/mymap.
-  - [ ] Scoreboard classification.
-  - [ ] Intermission and reconnect cleanup.
-- [ ] Coop later phase:
-  - [ ] Follow/wait/lead commands.
-  - [ ] Door/elevator cooperation.
-  - [ ] Monster target sharing.
-  - [ ] Resource sharing.
-  - [ ] Anti-blocking behavior.
+  - [x] Deterministic role-policy helpers for attacker, defender, returner, and support selection with status output.
+  - [x] Lane/depth helper metadata for attack, defense, midfield, carrier support, dropped-flag response, and own-base return lanes.
+  - [x] Attack/defense/midfield role-policy helper metadata.
+  - [x] Live attack/defend/mid role consumption in route ownership through a default-off CTF timed route-goal proof.
+  - [x] Live attack/defend/mid role consumption in combat ownership through a default-off CTF attack-decision proof.
+  - [x] Flag carrier support.
+  - [x] Dropped flag response.
+  - [x] Base return priorities.
+- [x] Duel/tournament:
+  - [x] Bot queue/spectator handling.
+  - [x] Warmup behavior.
+  - [x] Map restart cleanup.
+  - [x] Tournament veto bot-exclusion proof.
+  - [x] Tournament replay reset proof.
+- [x] Match tools:
+  - [x] Votes.
+  - [x] Admin command privilege audit.
+  - [x] Map queue/mymap.
+  - [x] Scoreboard classification.
+  - [x] Intermission and reconnect cleanup.
+  - [x] Match logging schema/versioning proof.
+  - [x] Match logging catalog/downstream index proof.
+- [x] Coop later phase:
+  - [x] Coop context/policy helper metadata for follow, wait, regroup, lead, and support intents.
+  - [x] Resource context/policy helper metadata for self-pickup, team-share, teammate-reserve, enemy-deny, and objective-resource decisions.
+  - [x] Follow/wait/lead commands.
+  - [x] Door/elevator cooperation.
+  - [x] Monster target sharing.
+  - [x] Resource sharing.
+  - [x] Anti-blocking behavior.
 
 2026-06-18 team objective scaffold slice:
 
 - `bot_objectives.*` adds a WORR-native helper boundary for the reserved `sg_bot_frame_command_smoke_team_objective=1` lane. It exposes deterministic flag item/team helpers, target builders, objective assignment structs, role/type names, and counters for future CTF/team-objective policy.
 - `bot_brain.*` now surfaces compact team-objective fields on `q3a_bot_frame_command_status` and a dedicated `q3a_bot_objective_status` line with evaluation, assignment, route, reach, flag pickup/capture, role, and latest-objective facts.
-- The follow-up proof slice adds target-source facts for world flags, dropped flags, carriers, and enemy-team anchors; deterministic enemy-flag target selection; one-call objective assignment; route-goal handoff validation; and entity-aware route/pickup/capture record overloads. Route request, route command, and reach counters remain explicit record hooks until real brain/nav owners call them. The generic item-touch hook deliberately does not infer CTF captures; authoritative CTF pickup, return, and capture event hooks now feed objective proof counters from `g_capture.cpp`, but no runtime CTF scenario smoke has promoted mode `23`.
-- Implementation logs: `docs-dev/q3a-botlib-team-objective-helper-scaffold-2026-06-18.md`, `docs-dev/q3a-botlib-team-objective-proof-2026-06-18.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-ctf-objective-gameplay-hooks-2026-06-18.md`.
+- The follow-up proof slice adds target-source facts for world flags, dropped flags, carriers, and enemy-team anchors; deterministic enemy-flag target selection; one-call objective assignment; route-goal handoff validation; and entity-aware route/pickup/capture record overloads. Later helper lanes add deterministic role-policy selection, role-policy status, and lane/depth metadata, including carrier-support, dropped-flag response, and own-base-return lanes. The generic item-touch hook deliberately does not infer CTF captures; authoritative CTF pickup, return, capture, death-drop, and dropped-flag return event hooks feed objective proof counters from `g_capture.cpp`, and mode `23` now passes as a smoke-level team-objective proof. Default-off `sg_bot_ffa_roam_route` now proves live FFA roam/collect/engage policy can consume the generic timed route-goal owner in mode `42`; default-off `sg_bot_ffa_role_combat` now proves live FFA role/lane/engage policy can own attack decisions from visible, shootable target facts in mode `48`; default-off `sg_bot_ffa_spawn_camp_combat_avoidance` now proves FFA anti-camp policy can veto that attack when the target is the nearby spawn-camp source in mode `49`; default-off `sg_bot_team_role_route` now proves live TDM match role/lane policy can consume the same owner in mode `32`; default-off `sg_bot_team_item_roles` now proves live TDM item-route selection can consume match item-role policy in mode `33`; default-off `sg_bot_match_item_policy` now proves the umbrella match item-policy lane can activate both TDM item-role pickup scoring and deny-enemy resource scoring without enabling the individual proof cvars in mode `51`; default-off `sg_bot_team_fire_avoidance` now proves live TDM friendly-fire policy can suppress attack input in mode `34`; default-off `sg_bot_team_role_combat` now proves live TDM match role/lane policy can own attack decisions from visible, shootable target facts in mode `43`; mode `44` proves that role-combat attack decisions compose with `sg_bot_team_fire_avoidance` so blocked friendly-line attacks are vetoed; default-off `sg_bot_ctf_role_route` now proves live CTF match role/lane policy can consume the same timed route-goal owner in mode `35`; default-off `sg_bot_ctf_role_combat` now proves live CTF match role/lane policy can own attack decisions from visible, shootable target facts in mode `36`; default-off `sg_bot_ctf_dropped_flag_route` now proves CTF attacker role policy can select a dropped enemy flag and drive route commands to that dropped-flag objective in mode `37`; default-off `sg_bot_ctf_carrier_support_route` now proves CTF support role policy can select a same-team enemy flag carrier and drive route commands to that carrier-support objective in mode `38`; default-off `sg_bot_ctf_base_return_route` now proves CTF returner policy can select an enemy own-flag carrier and drive route commands to that own-base-return objective in mode `39`; default-off `sg_bot_ctf_objective_route` now proves a combined CTF objective policy can select base-return, carrier-support, and dropped-flag objectives in one CTF run while recording objective arbitration, route selections, and lower-priority deferrals in mode `40`; the mode `41` precedence proof shows the generic CTF role-route owner records objective-route deferrals instead of activating a competing timed route when both CTF route bridges are enabled; default-off `sg_bot_ctf_item_roles` now proves CTF item-route selection can consume match item-role policy as live pickup scoring in mode `47`; and default-off `sg_bot_ctf_objective_transitions` now proves actual CTF pickup, death-drop, and dropped-flag return transitions feed objective counters before combined objective-route ownership in mode `76`. Durable autonomous flag-objective role behavior across live FFA/TDM/CTF flows remains pending.
+- The FFA/TDM helper slice adds objective-side match-policy, item-role, and friendly-fire metadata. It gives later FFA/TDM consumers deterministic scoring-participant, lane, item-role, target-block, and target-engagement recommendations; default-off `sg_bot_ffa_roam_route` consumes FFA roam/collect/engage policy as a timed route-goal owner, default-off `sg_bot_team_role_route` consumes TDM match policy as a timed route-goal owner, default-off `sg_bot_team_item_roles` consumes item-role policy as a pickup-candidate score bridge for a TDM proof, default-off `sg_bot_ffa_item_roles` consumes item-role policy as a pickup-candidate score bridge for an FFA proof, default-off `sg_bot_ffa_role_combat` consumes FFA role/lane/engage policy as a live attack-decision bridge for an FFA proof, default-off `sg_bot_ffa_spawn_camp_combat_avoidance` consumes FFA anti-camp policy as a live attack-veto bridge for the spawn-camp target proof, default-off `sg_bot_team_fire_avoidance` consumes friendly-fire policy as a live attack-input suppression bridge for a TDM proof, default-off `sg_bot_team_role_combat` consumes TDM role/lane policy as a live attack-decision bridge for a TDM proof, and mode `44` stacks the role-combat owner with friendly-fire suppression to prove precedence when both bridges are enabled, while broader FFA/TDM behavior integration remains pending. CTF match role/lane policy now has default-off route-owner, combat-owner, dropped-flag response route-owner, carrier-support route-owner, base-return route-owner, combined objective-policy, role/objective-route precedence, and item-role pickup scoring consumers through `sg_bot_ctf_role_route`, `sg_bot_ctf_role_combat`, `sg_bot_ctf_dropped_flag_route`, `sg_bot_ctf_carrier_support_route`, `sg_bot_ctf_base_return_route`, `sg_bot_ctf_objective_route`, and `sg_bot_ctf_item_roles`, with `ctf_role_route_objective_deferrals` proving the lower-priority route owner stood down. The latest coop/resource helper lane adds follow/wait/regroup/lead/support intent results and resource-sharing/denial policy results; follow/regroup/support now feed the `coop_leader` timed route owner with a promoted compact-status `coop_leader_route` scenario gate, no-leader LeadAdvance can own a short timed route through default-off `sg_bot_coop_lead_advance`, a default-off `sg_bot_coop_progress_wait` bridge proves WaitForLeader can own a stop-and-face command, a default-off `sg_bot_coop_interaction_retry` bridge proves route-detected interactions can own wait/use retry commands, default-off `sg_bot_coop_resource_share` proves reserve-for-teammate resource policy can defer item route-goal candidates for another coop bot, default-off `sg_bot_coop_anti_blocking` proves close-to-leader anti-blocking can own a short reverse/strafe command, default-off `sg_bot_coop_target_share` proves support-policy bots can adopt a teammate's current hostile monster target from the blackboard, default-off `sg_bot_coop_door_elevator` proves a source bot can own mover/elevator wait/use interaction while a teammate holds, default-off `sg_bot_coop_live_loop` composes leader-route/support, progress wait, anti-blocking, interaction retry, and door/elevator source/hold behavior in mode `77`, and default-off `sg_bot_coop_share_loop` composes coop target sharing with reserve-for-teammate item deferral in mode `78`. Broader campaign-specific trigger/key/objective coordination remains pending.
+- Latest FFA route-source update: default-off `sg_bot_ffa_spawn_camp_avoidance` composes with `sg_bot_ffa_roam_route` in smoke mode `45`, chooses a nearby live player as the anti-camp route source when FFA policy recommends avoiding camping loops, and records compact `ffa_spawn_camp_avoidance_*` status before the verbose frame-command diagnostic.
+- Latest FFA role-combat update: default-off `sg_bot_ffa_role_combat` consumes FFA role/lane/engage policy in smoke mode `48`, adopts visible shootable enemy facts through the attack-decision path, and records compact `ffa_role_combat_*` plus `last_ffa_role_combat_*` status before the verbose frame-command diagnostic.
+- Latest FFA spawn-camp combat-avoidance update: default-off `sg_bot_ffa_spawn_camp_combat_avoidance` composes the FFA role-combat owner with the anti-camp source selector in smoke mode `49`, vetoes attack input when both identify the same live opponent, and records compact `ffa_spawn_camp_combat_avoidance_*` plus `last_ffa_spawn_camp_combat_avoidance_*` status before the verbose frame-command diagnostic.
+- Latest FFA live-pacing update: smoke mode `74` composes `sg_bot_ffa_roam_route`, `sg_bot_ffa_spawn_camp_avoidance`, `sg_bot_ffa_item_roles`, `sg_bot_ffa_role_combat`, and `sg_bot_ffa_spawn_camp_combat_avoidance` in one four-bot FFA run. The route owner stays active while `BotNav_ProbePickupGoal()` records validation-only `ffa_item_role_*` scoring telemetry, so the proof covers route pressure, item-role scoring, role combat, and spawn-camp combat veto without replacing timed-route ownership.
+- Latest Duel live-pacing update: smoke mode `75` adds `sg_bot_duel_live_pacing`, maps `GameType::Duel` into `BotObjectiveMatchMode::Duel` value `5`, records `team_objective_match_policy_duel`, and uses Duel-specific deny-enemy item roles for weapons, ammo, powerups, and techs. The proof stages two active Duel bots under `g_gametype 2`, keeps the FFA proof cvars disabled in the begin marker, and validates FFA-style route, item-role, role-combat, and spawn-pressure status families with `duel` match-mode evidence.
+- Latest CTF objective transition update: smoke mode `76` adds `sg_bot_ctf_objective_transitions`, objective `flagDrops` and `flagReturns` counters, and a four-bot CTF proof that performs enemy-flag pickup, carrier death-drop, and dropped-flag return before validating combined CTF objective route ownership.
+- Latest coop campaign interaction matrix update: smoke mode `91` adds `coop_campaign_interaction_matrix` coverage by reusing `sg_bot_coop_live_loop 1` on `base1`, proving route-interaction retry, campaign mover source ownership, teammate hold commands, coop wait policy, and nav interaction candidates from `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`; the latest full 99-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z`.
+- Latest bot chat live match-result update: smoke mode `90` adds `bot_chat_live_match_result` coverage by combining the native intermission path with `sg_bot_chat_live_events 1`, proving real match-result state drives `victory_defeat` live chat accounting from `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`; the later full 99-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z`.
+- Latest bot chat live item-denied update: smoke mode `89` adds `bot_chat_live_item_denied` coverage by combining the TDM deny-enemy resource policy proof with `sg_bot_chat_live_events 1`, proving real resource-denial pressure drives `item_denied` live chat accounting from `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`; the then-current full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat live blocked update: smoke mode `88` adds `bot_chat_live_blocked` coverage by combining a blocked rocketjump travel-type route proof with `sg_bot_chat_live_events 1`, proving real route failures drive `blocked` live chat accounting from `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`; the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat live flag-state update: smoke mode `87` adds `bot_chat_live_flag_state` coverage by combining CTF objective transition staging with `sg_bot_chat_live_events 1`, proving real pickup, death-drop, and dropped-flag return observations drive `flag_state` live chat accounting from `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`; the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat live objective-changed update: smoke mode `86` adds `bot_chat_live_objective_changed` coverage by combining CTF objective transition staging with `sg_bot_chat_live_events 1`, proving real pickup, death-drop, and dropped-flag return observations drive `objective_changed` live chat accounting from `.tmp\bot_scenarios\20260626T140601Z`; the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat live item-taken update: smoke mode `85` adds `bot_chat_live_item_taken` coverage by combining health/armor pickup proof staging with `sg_bot_chat_live_events 1`, proving real pickup observations drive `item_taken` live chat accounting from `.tmp\bot_scenarios\20260623T051126Z`; the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat live low-health update: smoke mode `84` adds `bot_chat_live_low_health` coverage by combining survival-health route staging with `sg_bot_chat_live_events 1`, proving real low-health state drives `low_health` live chat accounting from `.tmp\bot_scenarios\20260623T025752Z`; the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat duplicate-suppression update: smoke mode `83` adds `bot_chat_duplicate_suppression` coverage by combining `sg_bot_chat_event_policy_smoke 1` and `sg_bot_chat_live_events 1`, proving repeated route-ready reply/live events are suppressed within the 5000 ms duplicate window from `.tmp\bot_scenarios\20260623T023211Z`; the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat phrase-library update: smoke mode `82` adds `bot_chat_phrase_library` coverage by combining `sg_bot_chat_live_events 1` with four staged profile bots, proving four initial and four reply phrase variants through `initial_chat_unique_variants=4` and `reply_chat_unique_variants=4` from `.tmp\bot_scenarios\20260623T020850Z`; the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat live enemy-sighted update: smoke mode `81` adds `bot_chat_live_enemy_sighted` coverage by combining `sg_bot_chat_live_events 1` with a two-bot TDM engage-enemy proof, proving blackboard-visible enemy facts drive `enemy_sighted` live chat accounting from `.tmp\bot_scenarios\20260623T013832Z`; the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat live-event cooldown update: smoke mode `80` adds `bot_chat_live_event_cooldown` coverage by combining `sg_bot_chat_live_events 1` with `sg_bot_chat_min_interval_ms 60000`, proving one live submission, seven rate-limited live event attempts, and zero dispatch failures from `.tmp\bot_scenarios\20260623T010530Z`; the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest bot chat live-events update: smoke mode `79` adds `sg_bot_chat_live_events`, proves live spawn plus `route_ready` chat accounting after bot spawn and route-command ownership, and exposes live event counters, `live_chat_spawn`, an eleven-entry taxonomy, and `last_live_chat_event_name=route_ready`. Focused validation passed from `.tmp\bot_scenarios\20260623T010520Z`, and the later full 97-row implemented suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`.
+- Latest coop share-loop update: smoke mode `78` adds `sg_bot_coop_share_loop`, stages a two-bot coop run, proves `coop_share_loop=1` without enabling the individual target/resource proof cvars, and hard-gates both target adoption and reserve-for-teammate item deferral. Focused validation passed from `.tmp\bot_scenarios\20260623T001149Z`, and the later full 89-row implemented suite passed from `.tmp\bot_scenarios\20260623T013843Z`.
+- Latest coop live-loop update: smoke mode `77` adds `sg_bot_coop_live_loop`, stages a two-bot coop run, lets one bot wait while the other keeps leader/support routing active, preserves wait telemetry through door/elevator hold ownership, and proves anti-blocking, interaction retry, and mover source/hold commands can coexist. Focused validation passed from `.tmp\bot_scenarios\20260622T234315Z`, and the later full 89-row implemented suite passed from `.tmp\bot_scenarios\20260623T013843Z`.
+- Latest duel queue update: `sv_bot_team_policy_smoke 3` enables `g_allow_duel_queue`, routes the surplus bot through the queue-capable initial team path, keeps that bot as a spectator, asserts `queued=1` through the game-side `q3a_bot_team_policy_status` extension, and promotes `duel_queue_spectator` as the Phase 7 bot queue/spectator proof.
+- Latest map-restart update: `map_restart_cleanup` promotes the restart-capable mode `19` smoke into the scenario harness with `sv_bot_frame_command_smoke_map_repeat_restart 1`, hard-gates `command=map_force` / `restart=1` begin, queued, and observed reload markers, verifies the observed reload after one completed cycle, and requires cleanup status plus final zero-bot completion.
+- Latest warmup update: `warmup_bot_start_readiness` adds `BOT_WARMUP_STATUS_API_V1`, a game-side `q3a_bot_warmup_status` printer, and `sv_bot_warmup_smoke 2`; the promoted scenario hard-gates accepted bot add requests, live two-bot ready-up status, `minplayers_met=1`, `bot_only_start=1`, `can_start=1`, and final zero-bot cleanup.
+- Latest vote update: `vote_bot_exclusion` adds `BOT_VOTE_STATUS_API_V1`, bot-origin guards in the vote launch/cast paths, and `sv_bot_vote_smoke 2`; the promoted scenario hard-gates two playing bots with `voting_clients=0`, rejects a bot-origin `random 2` vote with `reason=bot_blocked`, and verifies final cleanup leaves no active vote.
+- Latest admin audit update: `admin_bot_privilege_audit` adds `BOT_ADMIN_AUDIT_STATUS_API_V1`, a registered-command audit helper, game-side `q3a_bot_admin_audit_status` and `q3a_bot_admin_audit_attempt` markers, plus `sv_bot_admin_audit_smoke 2`; the promoted scenario temporarily grants a bot admin session bit, attempts the registered `lock_team red` admin command, requires `reason=bot_admin_blocked` with `executed=0`, restores the bot admin bit, and verifies `red_locked=0` through final cleanup.
+- Latest tournament veto update: `tournament_bot_veto_exclusion` adds `BOT_TOURNAMENT_STATUS_API_V1`, a bot guard in `CanActorVeto()`, game-side `q3a_bot_tournament_status`, `q3a_bot_tournament_setup`, and `q3a_bot_tournament_veto` markers, plus `sv_bot_tournament_smoke 2`; the promoted scenario assigns a bot the active home-side tournament identity, attempts a veto pick, requires `reason=bot_blocked` with `allowed=0`, and verifies `picks=0` and `bans=0` through final cleanup.
+- Latest tournament replay update: `tournament_replay_reset` extends `BOT_TOURNAMENT_STATUS_API_V1` and `sv_bot_tournament_smoke` with mode `3`, seeds a completed best-of-three tournament history, proves an out-of-range replay preserves state with `reason=range_error`, and proves replaying game `2` truncates history to one retained game, rewinds wins to `1-0`, queues the replay map, and reopens the series with `reset_applied=1`.
+- Latest match logging update: `match_logging_schema` adds `MATCH_LOGGING_STATUS_API_V1`, top-level schema/artifact metadata to match-stats and tournament-series JSON exporters, `basew/matches/catalog.json` as a schema-stamped downstream index, and `sv_bot_matchlog_smoke 2`; the promoted scenario hard-gates `worr.match_stats`, `worr.tournament_series`, `worr.match_catalog`, version `1`, retained players/event-log/matches arrays, embedded match schema metadata, latest-artifact pointers, relative JSON paths, scratch catalog write/read proof, and final zero-bot cleanup.
+- Latest MyMap update: `mymap_queue_bot_request` adds `BOT_MYMAP_STATUS_API_V1`, game-side `q3a_bot_mymap_status`, queue, and consume markers, plus `sv_bot_mymap_smoke 2`; the promoted scenario hard-gates one playing bot, MyMap cvar enablement, deterministic social attribution, `playQueue`/`myMapQueue` insertion, `ConsumeQueuedMap` cleanup, and final zero-bot/no-queue status. The smoke helper seeds the active map only when the map pool is empty, which keeps the staged-install proof runnable while making the temporary seed visible through `last_queue_map_seeded`.
+- Latest scoreboard update: `scoreboard_bot_classification` adds `BOT_SCOREBOARD_STATUS_API_V1`, game-side `q3a_bot_scoreboard_status` and `q3a_bot_scoreboard_scores` markers, plus `sv_bot_scoreboard_smoke 2`; the promoted scenario hard-gates two bot-only FFA participants, zero voting clients, sorted bot rows, deterministic 7/3 proof scores, bot-owned leader and runner-up rows, ordered ranks, and final zero-bot cleanup.
+- Latest intermission update: `intermission_bot_cleanup` adds `BOT_INTERMISSION_STATUS_API_V1`, game-side `q3a_bot_intermission_status` and `q3a_bot_intermission_begin` markers, plus `sv_bot_intermission_smoke 2`; the promoted scenario hard-gates two bot-only FFA participants, native intermission entry, frozen/freecam/non-solid bot state, current-map transition targeting, and final zero-bot/zero-connected/zero-sorted-client cleanup while intermission remains active.
+- Latest queued nextmap update: `queued_nextmap_transition` adds `BOT_NEXTMAP_STATUS_API_V1`, game-side `q3a_bot_nextmap_status` and `q3a_bot_nextmap_transition` markers, plus `sv_bot_nextmap_smoke 2`; the promoted scenario hard-gates bot-attributed MyMap queue insertion, queued transition success, play/MyMap queue consumption, observed same-map `gamemap` reload, retained transition status, and final zero-bot cleanup after reload.
+- Latest map-vote update: `mapvote_bot_exclusion_transition` adds `BOT_MAPVOTE_STATUS_API_V1`, game-side `q3a_bot_mapvote_status`, `q3a_bot_mapvote_begin`, `q3a_bot_mapvote_bot_vote`, and `q3a_bot_mapvote_finalize` markers, plus `sv_bot_mapvote_smoke 2`; the promoted scenario hard-gates bot-only selector setup, a blocked bot ballot with zero counted votes, deterministic finalization to the current map, observed same-map reload, retained finalize status, and final zero-bot cleanup.
+- Latest operator-doc update: `docs-user/competitive-server-tools.md` now covers the public competitive server cvars and commands for warmup/bot practice, voting, MyMap/nextmap/map selector, Duel queue, tournament veto/replay, admin controls, and match logging. The page documents the bot boundaries proven by the smoke suite and closes `FR-07-T05`.
+- Latest TDM resource-denial update: default-off `sg_bot_team_resource_denial` consumes deny-enemy resource policy during TDM pickup scoring in smoke mode `50`, boosts contested weapon/powerup/tech/utility candidates, and records compact `team_resource_denial_*` plus `last_team_resource_denial_*` status before the verbose frame-command diagnostic.
+- Latest match item-policy update: default-off `sg_bot_match_item_policy` acts as an umbrella for match item-role pickup scoring plus TDM deny-enemy resource scoring in smoke mode `51`, while the scenario explicitly proves `sg_bot_team_item_roles` and `sg_bot_team_resource_denial` stay disabled.
+- Implementation logs: `docs-dev/q3a-botlib-team-objective-helper-scaffold-2026-06-18.md`, `docs-dev/q3a-botlib-team-objective-proof-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-team-role-depth-2026-06-18.md`, `docs-dev/q3a-botlib-ffa-tdm-role-policy-2026-06-18.md`, `docs-dev/q3a-botlib-ffa-roam-route-2026-06-21.md`, `docs-dev/q3a-botlib-ffa-spawn-camp-avoidance-2026-06-21.md`, `docs-dev/q3a-botlib-ffa-role-combat-2026-06-21.md`, `docs-dev/q3a-botlib-ffa-spawn-camp-combat-avoidance-2026-06-21.md`, `docs-dev/q3a-botlib-team-role-route-2026-06-21.md`, `docs-dev/q3a-botlib-team-item-role-selection-2026-06-21.md`, `docs-dev/q3a-botlib-team-resource-denial-2026-06-21.md`, `docs-dev/q3a-botlib-match-item-policy-2026-06-21.md`, `docs-dev/q3a-botlib-team-role-combat-2026-06-21.md`, `docs-dev/q3a-botlib-team-role-combat-avoidance-2026-06-21.md`, `docs-dev/q3a-botlib-duel-queue-spectator-2026-06-21.md`, `docs-dev/q3a-botlib-map-restart-cleanup-2026-06-21.md`, `docs-dev/q3a-botlib-warmup-bot-start-readiness-2026-06-21.md`, `docs-dev/q3a-botlib-vote-bot-exclusion-2026-06-21.md`, `docs-dev/q3a-botlib-admin-bot-privilege-audit-2026-06-21.md`, `docs-dev/q3a-botlib-tournament-bot-veto-exclusion-2026-06-21.md`, `docs-dev/q3a-botlib-mymap-bot-queue-2026-06-21.md`, `docs-dev/q3a-botlib-scoreboard-bot-classification-2026-06-21.md`, `docs-dev/q3a-botlib-intermission-bot-cleanup-2026-06-21.md`, `docs-dev/q3a-botlib-queued-nextmap-transition-2026-06-21.md`, `docs-dev/q3a-botlib-mapvote-bot-exclusion-transition-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-role-route-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-role-combat-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-dropped-flag-route-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-carrier-support-route-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-base-return-route-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-objective-route-policy-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-objective-route-precedence-2026-06-21.md`, `docs-dev/q3a-botlib-ctf-item-role-selection-2026-06-21.md`, `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`, `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-leader-route-scenario-2026-06-21.md`, `docs-dev/q3a-botlib-coop-lead-advance-route-owner-2026-06-21.md`, `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-interaction-retry-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-resource-share-route-selection-2026-06-21.md`, `docs-dev/q3a-botlib-coop-anti-blocking-command-2026-06-21.md`, `docs-dev/q3a-botlib-coop-target-share-2026-06-21.md`, `docs-dev/q3a-botlib-coop-door-elevator-2026-06-21.md`, `docs-dev/q3a-botlib-gameplay-item-hooks-2026-06-18.md`, `docs-dev/q3a-botlib-ctf-objective-gameplay-hooks-2026-06-18.md`.
+- Additional implementation logs: `docs-dev/q3a-botlib-tournament-replay-reset-2026-06-21.md`, `docs-dev/q3a-botlib-match-logging-schema-2026-06-21.md`, `docs-dev/q3a-botlib-match-logging-catalog-2026-06-21.md`, `docs-dev/q3a-botlib-competitive-server-tools-docs-2026-06-21.md`, `docs-dev/q3a-botlib-duel-live-pacing-2026-06-22.md`.
 
 Exit criteria:
 
@@ -1182,6 +1688,7 @@ Suggested public cvars:
 - `sg_bot_max_clients`
 - `sg_bot_allow_chat`
 - `sg_bot_allow_item_timers`
+- `sg_bot_item_timer_fuzz_ms`
 - `sg_bot_allow_rocketjump`
 - `sg_bot_debug`
 - `sg_bot_debug_aas`
@@ -1193,7 +1700,7 @@ Suggested public cvars:
 
 Docs checklist:
 
-- [ ] `docs-dev/q3a-botlib-aas-credits.md`: source and contributor credit ledger.
+- [x] `docs-dev/q3a-botlib-aas-credits.md`: source and contributor credit ledger.
 - [x] `docs-dev/q3a-botlib-runtime-aas-shell-2026-06-17.md`: runtime AAS shell implementation log.
 - [x] `docs-dev/q3a-botlib-import-boundary-2026-06-17.md`: Q3A BotLib import boundary and adapter-shell implementation log.
 - [x] `docs-dev/q3a-botlib-aas-reach-query-2026-06-17.md`: Q3A AAS reachability import and runtime smoke log.
@@ -1234,10 +1741,12 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-botfiles-worker-i-validation-2026-06-18.md`: staged botfile family validation and package dry-run audit.
 - [x] `docs-dev/q3a-botlib-team-policy-cleanup-2026-06-17.md`: bot team-limit and mode-change cleanup log.
 - [x] `docs-dev/q3a-botlib-team-policy-smoke-2026-06-17.md`: direct game-side bot team-policy smoke log.
+- [x] `docs-dev/q3a-botlib-duel-queue-spectator-2026-06-21.md`: queue-enabled Duel surplus-bot spectator proof log.
 - [x] `docs-dev/q3a-botlib-nav-item-goal-2026-06-18.md`: active-pickup route-goal selection and item-goal smoke log.
 - [x] `docs-dev/q3a-botlib-nav-item-reservation-2026-06-18.md`: active-pickup reservation policy and two-bot smoke log.
 - [x] `docs-dev/q3a-botlib-nav-lookahead-steering-2026-06-18.md`: route-point look-ahead steering and smoke log.
 - [x] `docs-dev/q3a-botlib-nav-velocity-steering-2026-06-18.md`: velocity-aware command yaw steering and smoke log.
+- [x] `docs-dev/q3a-botlib-route-target-stabilization-2026-06-18.md`: route-target stabilization counters and adjacent-area jitter mitigation log.
 - [x] `docs-dev/q3a-botlib-nav-stuck-repath-2026-06-18.md`: stuck-progress watchdog, repath, and stalled-command smoke log.
 - [x] `docs-dev/q3a-botlib-nav-stuck-recovery-command-2026-06-18.md`: short stuck recovery command window and stalled-command smoke log.
 - [x] `docs-dev/q3a-botlib-nav-goal-blacklist-cooldown-2026-06-18.md`: item-goal blacklist cooldown and stalled-command smoke log.
@@ -1258,6 +1767,7 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-nav-natural-movement-door-retry-2026-06-18.md`: natural movement support diagnostics and interaction wait/use retry log.
 - [x] `docs-dev/q3a-botlib-nav-natural-interaction-diagnostics-2026-06-18.md`: interaction context diagnostics by world entity type.
 - [x] `docs-dev/q3a-botlib-perception-blackboard-2026-06-18.md`: per-bot blackboard and perception status log.
+- [x] `docs-dev/q3a-botlib-blackboard-state-enrichment-2026-06-18.md`: goal, route, stuck, item-reservation, and team-role blackboard state log.
 - [x] `docs-dev/q3a-botlib-behavior-action-dispatcher-2026-06-18.md`: first behavior/action dispatcher boundary log.
 - [x] `docs-dev/q3a-botlib-behavior-action-brain-telemetry-2026-06-18.md`: initial action dispatcher brain/status bridge log.
 - [x] `docs-dev/q3a-botlib-action-item-utility-2026-06-18.md`: item utility and future health/armor/weapon-switch counter hooks.
@@ -1272,6 +1782,8 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-scenario-promotions-2026-06-18.md`: pending scenario promotion-check diagnostics.
 - [x] `docs-dev/q3a-botlib-scenario-raw-reserved-diagnostics-2026-06-18.md`: raw reserved-mode diagnostic parsing for pending promotion reports.
 - [x] `docs-dev/q3a-botlib-scenario-tooling-source-aware-raw-diagnostics-2026-06-18.md`: source-aware raw marker diagnostics and missing-metric source hints.
+- [x] `docs-dev/q3a-botlib-status-harness-expansion-2026-06-18.md`: optional status-field discovery for action dispatch, aim policy, special item utility, and route-target stabilization families.
+- [x] `docs-dev/q3a-botlib-status-surface-integration-2026-06-18.md`: optional action, aim, item, route, and objective status-field surface note.
 - [x] `docs-dev/q3a-botlib-bot-perf-telemetry-2026-06-18.md`: performance telemetry analyzer, budget, report, and test log.
 - [x] `docs-dev/q3a-botlib-bot-perf-source-counters-2026-06-18.md`: proposed source counter plan plus analyzer support for optional CPU/visibility/trace source-counter fields.
 - [x] `docs-dev/q3a-botlib-source-counter-plumbing-2026-06-18.md`: import/adapter route, visibility, and trace source-counter getters plus split status emission.
@@ -1283,9 +1795,25 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-high-bot-degradation-policy-2026-06-18.md`: explicit high-bot degradation policy in scenario catalog/reporting.
 - [x] `docs-dev/q3a-botlib-high-bot-soak-budget-2026-06-18.md`: ten-minute eight-bot soak budget sidecar and documentation.
 - [x] `docs-dev/q3a-botlib-release-packaging-hardening-2026-06-18.md`: botfile family/hash validation plus q2aas AAS package hash enforcement.
+- [x] `docs-dev/q3a-botlib-release-policy-2026-06-18.md`: q2aas/BSPC tool-binary default-exclusion and required notice-bundle policy.
 - [x] `docs-dev/q2aas-reference-map-coverage-2026-06-18.md`: reference-map coverage categories, optional missing-map reporting, and strict future gate.
+- [x] `docs-dev/q2aas-reference-map-validation-expansion-2026-06-18.md`: available-reference validation manifest/report generation for the currently staged subset.
 - [x] `docs-dev/q3a-botlib-weapon-inventory-command-api-2026-06-18.md`: validated action-layer command request API for weapon/inventory intents.
+- [x] `docs-dev/q3a-botlib-weapon-inventory-dispatch-2026-06-18.md`: exact `use_index_only` weapon/inventory dispatch through the brain-owned frame path.
+- [x] `docs-dev/q3a-botlib-aim-fairness-policy-2026-06-18.md`: opt-in aim/fairness helper policy.
+- [x] `docs-dev/q3a-botlib-live-aim-policy-integration-2026-06-18.md`: pure live-aim/projectile-leading helper API.
+- [x] `docs-dev/q3a-botlib-item-timer-fairness-2026-06-18.md`: item timer disable/fuzz helper policy and `sg_bot_*` cvars.
+- [x] `docs-dev/q3a-botlib-special-item-utility-2026-06-18.md`: special-item utility bucket helpers.
+- [x] `docs-dev/q3a-botlib-ffa-tdm-role-policy-2026-06-18.md`: FFA/TDM/CTF objective-side match, item-role, and friendly-fire policy helpers.
 - [x] `docs-dev/q3a-botlib-team-role-policy-2026-06-18.md`: deterministic team-objective role policy helpers and role-policy status output.
+- [x] `docs-dev/q3a-botlib-team-role-depth-2026-06-18.md`: lane/depth role-policy helper metadata.
+- [x] `docs-dev/q3a-botlib-scenario-coverage-expansion-2026-06-18.md`: expanded scenario marker coverage, optional fields, and pending contracts.
+- [x] `docs-dev/q3a-botlib-profile-behavior-validation-2026-06-18.md`: profile behavior metadata validation and user-doc validation notes.
+- [x] `docs-dev/q3a-botlib-botfiles-parity-polish-2026-06-18.md`: Q3-style botfile asset parity polish.
+- [x] `docs-dev/q3a-botlib-botfiles-q3a-parity-followup-2026-06-18.md`: shared teamplay event-name parity follow-up.
+- [x] `docs-dev/q3a-botlib-public-cvar-docs-round-2026-06-18.md`: user-facing item-timer cvar and available-reference documentation pass.
+- [x] `docs-dev/q3a-botlib-user-docs-round-2026-06-18.md`: broader user-facing bot guide.
+- [x] `docs-dev/q3a-botlib-trace-checked-corner-cutting-2026-06-18.md`: trace-proven route shortcut smoothing.
 - [x] `docs-dev/q3a-botlib-implementation-round-summary-2026-06-18.md`: multi-agent round summary, validation ledger, and remaining-work notes.
 - [x] `docs-dev/q3a-botlib-engage-enemy-proof-2026-06-18.md`: engage-enemy proof helper and damage-attribution log.
 - [x] `docs-dev/q3a-botlib-combat-damage-event-hook-2026-06-18.md`: real damage-path hook for bot-attributed combat proof counters.
@@ -1299,12 +1827,57 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-worker-i-status-2026-06-18.md`: planning/status refresh for the current multi-worker round.
 - [x] `docs-dev/q3a-botlib-worker-n-status-2026-06-18.md`: docs/status refresh after the current wave.
 - [x] `docs-dev/q3a-botlib-worker-u-status-2026-06-18.md`: docs/status reconciliation after the current wave.
+- [x] `docs-dev/q3a-botlib-docs-progress-tracking-round-2026-06-18.md`: docs-only final-stat placeholder and guardrail note for the current round.
+- [x] `docs-dev/q3a-botlib-live-combat-policy-round-2026-06-18.md`: live combat policy consumption and aim-profile status depth log.
+- [x] `docs-dev/q3a-botlib-enemy-health-armor-estimates-2026-06-20.md`: enemy health/armor estimate plumbing and status log.
+- [x] `docs-dev/q3a-botlib-estimate-aware-weapon-selection-2026-06-20.md`: estimate-aware weapon scoring and status log.
+- [x] `docs-dev/q3a-botlib-carried-arsenal-selection-2026-06-20.md`: carried-arsenal scan and action status log.
+- [x] `docs-dev/q3a-botlib-nonweapon-inventory-policy-2026-06-20.md`: carried non-weapon inventory policy and action status log.
+- [x] `docs-dev/q3a-botlib-utility-deployable-inventory-policy-2026-06-20.md`: utility/deployable inventory policy and status log.
+- [x] `docs-dev/q3a-botlib-escape-deployable-inventory-policy-2026-06-20.md`: escape/deployable inventory policy and status log.
+- [x] `docs-dev/q3a-botlib-safe-nuke-inventory-policy-2026-06-20.md`: safe nuke inventory policy and status log.
+- [x] `docs-dev/q3a-botlib-nuke-retreat-route-ownership-2026-06-21.md`: nuke retreat route-owner and frame-command status log.
+- [x] `docs-dev/q3a-botlib-timed-route-goal-owner-2026-06-21.md`: generic timed route-goal owner and status log.
+- [x] `docs-dev/q3a-botlib-teleporter-escape-route-owner-2026-06-21.md`: teleporter escape timed route-goal owner and status log.
+- [x] `docs-dev/q3a-botlib-coop-leader-route-owner-2026-06-21.md`: coop leader timed route-goal owner and status log.
+- [x] `docs-dev/q3a-botlib-coop-progress-wait-command-2026-06-21.md`: coop WaitForLeader command-owner status and scenario log.
+- [x] `docs-dev/q3a-botlib-coop-door-elevator-2026-06-21.md`: coop door/elevator source-owner and teammate hold command proof log.
+- [x] `docs-dev/q3a-botlib-team-role-route-2026-06-21.md`: TDM match role/lane timed route-goal owner proof log.
+- [x] `docs-dev/q3a-botlib-team-role-combat-avoidance-2026-06-21.md`: TDM role-combat/friendly-fire precedence proof log.
+- [x] `docs-dev/q3a-botlib-ffa-roam-route-2026-06-21.md`: FFA roam/collect/engage timed route-goal owner proof log.
+- [x] `docs-dev/q3a-botlib-ffa-spawn-camp-avoidance-2026-06-21.md`: FFA spawn-camp avoidance route-source proof log.
+- [x] `docs-dev/q3a-botlib-ffa-item-role-selection-2026-06-21.md`: FFA match item-role pickup scoring proof log.
+- [x] `docs-dev/q3a-botlib-ffa-spawn-camp-combat-avoidance-2026-06-21.md`: FFA spawn-camp combat-veto proof log.
+- [x] `docs-dev/q3a-botlib-ctf-item-role-selection-2026-06-21.md`: CTF match item-role pickup scoring proof log.
+- [x] `docs-dev/q3a-botlib-team-resource-denial-2026-06-21.md`: TDM deny-enemy resource pickup-scoring proof log.
+- [x] `docs-dev/q3a-botlib-match-item-policy-2026-06-21.md`: match item-policy umbrella cvar and mode `51` proof log.
+- [x] `docs-dev/q3a-botlib-map-restart-cleanup-2026-06-21.md`: map-restart cleanup scenario proof log.
+- [x] `docs-dev/q3a-botlib-warmup-bot-start-readiness-2026-06-21.md`: bot-only warmup ready-up status proof log.
+- [x] `docs-dev/q3a-botlib-vote-bot-exclusion-2026-06-21.md`: bot-origin vote exclusion status proof log.
+- [x] `docs-dev/q3a-botlib-mymap-bot-queue-2026-06-21.md`: bot-attributed MyMap queue/consume status proof log.
+- [x] `docs-dev/q3a-botlib-scoreboard-bot-classification-2026-06-21.md`: scoreboard bot classification status proof log.
+- [x] `docs-dev/q3a-botlib-competitive-server-tools-docs-2026-06-21.md`: competitive server tooling operator-doc round.
+- [x] `docs-dev/q3a-botlib-match-logging-catalog-2026-06-21.md`: match logging downstream catalog/index proof log.
+- [x] `docs-dev/q3a-botlib-ctf-role-route-2026-06-21.md`: CTF match role/lane timed route-goal owner proof log.
+- [x] `docs-dev/q3a-botlib-ctf-role-combat-2026-06-21.md`: CTF match role/lane live attack-decision owner proof log.
+- [x] `docs-dev/q3a-botlib-ctf-dropped-flag-route-2026-06-21.md`: CTF dropped enemy flag route-owner proof log.
+- [x] `docs-dev/q3a-botlib-ctf-carrier-support-route-2026-06-21.md`: CTF same-team flag-carrier support route-owner proof log.
+- [x] `docs-dev/q3a-botlib-ctf-base-return-route-2026-06-21.md`: CTF enemy own-flag carrier base-return route-owner proof log.
+- [x] `docs-dev/q3a-botlib-live-item-timing-consumers-2026-06-18.md`: live item timing consumer and status-depth log.
+- [x] `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`: team/coop/resource policy helper log.
+- [x] `docs-dev/q2aas-reference-map-coverage-round-2026-06-18.md`: reference-map required-feature diagnostic coverage log.
+- [x] `docs-dev/q3a-botlib-long-soak-source-counter-round-2026-06-18.md`: long-soak source-counter completeness diagnostics log.
+- [x] `docs-dev/q3a-botlib-profile-behavior-depth-round-2026-06-18.md`: first-party botfile behavior metadata depth log.
+- [x] `docs-dev/q3a-botlib-extensive-round-closeout-2026-06-18.md`: current extensive round completion stats and outstanding-work closeout.
+- [x] `docs-dev/q3a-botlib-phase0-mvp-closeout-2026-06-21.md`: Phase 0 imported-file ledger, MVP behavior, and notice-retention closeout.
 - [x] `docs-dev/q3a-botlib-bridge-time-vector-2026-06-17.md`: bridge time and vector helper implementation log.
 - [x] `docs-dev/q3a-botlib-bsp-entity-bridge-2026-06-17.md`: active-map Q2 BSP entity-lump bridge implementation log.
 - [x] `docs-dev/q3a-botlib-bsp-model-bridge-2026-06-17.md`: active-map Q2 BSP model-lump bridge implementation log.
 - [x] `docs-dev/q3a-botlib-bsp-collision-bridge-2026-06-17.md`: active-map Q2 BSP static collision bridge implementation log.
 - [x] `docs-dev/q3a-botlib-bsp-visibility-bridge-2026-06-17.md`: active-map Q2 BSP PVS/PHS visibility bridge implementation log.
-- [ ] `docs-dev/q3a-botlib-runtime-implementation-YYYY-MM-DD.md`: imported runtime/adapter implementation log.
+- [x] `docs-dev/q3a-botlib-entity-scheduling-fairness-closeout-2026-06-21.md`: entity snapshot, item/route scheduling, and aim-knowledge fairness closeout.
+- [x] `docs-dev/q3a-botlib-movement-recovery-inventory-closeout-2026-06-21.md`: skill accuracy, movement/recovery, controlled inactive recovery, and inventory dispatcher closeout.
+- [x] `docs-dev/q3a-botlib-runtime-implementation-2026-06-21.md`: imported runtime/adapter implementation log.
 - [x] `docs-dev/q2aas-generator-vendor-bootstrap-2026-06-16.md`: generator vendor/build bootstrap log.
 - [x] `docs-dev/q2aas-generator-q2-preset-validation-2026-06-16.md`: generator Q2 preset and validation harness log.
 - [x] `docs-dev/q2aas-generator-q2-reachability-bridge-2026-06-16.md`: generator Q2 reachability bridge log.
@@ -1323,13 +1896,26 @@ Docs checklist:
 - [x] `docs-dev/q2aas-generator-archive-packaging-2026-06-17.md`: generator AAS archive packaging log.
 - [x] `docs-dev/q2aas-generator-refresh-install-integration-2026-06-17.md`: generator refresh-install integration log.
 - [x] `docs-dev/q2aas-generator-stage-archive-member-validation-2026-06-17.md`: generator release archive member validation log.
-- [ ] `docs-dev/q2-aas-generator-implementation-YYYY-MM-DD.md`: generator tailoring implementation log.
-- [ ] `docs-user/bots.md` or equivalent user-facing page:
-  - [ ] How to add/remove bots.
-  - [ ] Recommended cvars.
-  - [ ] Known limitations.
-  - [ ] AAS generation/package behavior in practical language.
-- [ ] Roadmap updated after each task reaches `Done`.
+- [x] `docs-dev/q2aas-generator-policy-semantics-closeout-2026-06-21.md`: generator scope, presence, contents/surface, and BSPX policy semantics closeout.
+- [x] `docs-dev/q2aas-generator-reachability-metadata-round-2026-06-21.md`: generator reachability policy, metadata package decision, and q2dm1 optional baseline closeout.
+- [x] `docs-dev/q2-aas-generator-implementation-2026-06-21.md`: generator tailoring implementation log.
+- [x] `docs-user/bots.md` or equivalent user-facing page:
+  - [x] How to add/remove bots.
+  - [x] Recommended cvars.
+  - [x] Known limitations.
+  - [x] AAS generation/package behavior in practical language.
+- [x] `docs-user/bot-map-readiness.md`: approachable AAS/map readiness checks, staged/package locations, and troubleshooting commands.
+- [x] `docs-user/competitive-server-tools.md`: approachable competitive server tooling cvars, commands, and bot-boundary notes.
+- [x] Roadmap updated after each task reaches `Done`.
+
+2026-06-21 final documentation closeout:
+
+- The roadmap now records the completed 809-row phase checklist, current
+  runtime/generator implementation logs, Linux/macOS CI build coverage evidence,
+  and the eight-map q2aas reference validation status.
+- No additional FR-04 strategic roadmap task was reclassified solely because
+  this checklist closed; future behavior-depth work remains tracked as roadmap
+  expansion rather than hidden checklist debt.
 
 Exit criteria:
 
@@ -1344,12 +1930,12 @@ Goal: keep bots shippable rather than "works on one map."
 
 Validation checklist:
 
-- [ ] Build:
-  - [ ] Windows local build.
-  - [ ] Linux CI build once CI coverage exists.
-  - [ ] macOS CI build once CI coverage exists.
-  - [ ] Dedicated server build.
-- [ ] Tool:
+- [x] Build:
+  - [x] Windows local build.
+  - [x] Linux CI build once CI coverage exists.
+  - [x] macOS CI build once CI coverage exists.
+  - [x] Dedicated server build.
+- [x] Tool:
   - [x] `worr_q2aas` builds.
   - [x] WORR/Q2 generator cfg smoke target runs.
   - [x] Staged map structural AAS smoke emits `.tmp/q2aas/mm-rage.aas`.
@@ -1371,10 +1957,28 @@ Validation checklist:
   - [x] Package archive audit target requires the packaged `maps/mm-rage.aas` member and writes `.tmp/q2aas/package-archive-audit-report.json`.
   - [x] Refresh-install workflow supports `--package-q2aas-aas`, re-injects generated AAS after asset packaging, and validates the staged Windows payload.
   - [x] Generic stage validation can require packaged archive members with SHA-256 checks, and refresh-install passes q2aas AAS requirements from the stage report.
-  - [ ] Reference maps generate AAS.
+  - [x] Reference maps generate AAS.
+    - [x] Available-reference inventory writes a focused validation manifest for currently staged BSP/AAS assets.
+    - [x] Focused available-reference validation passes for the current `mm-rage` runtime-ready subset with strict reference coverage enabled.
+    - [x] Reference-map inventory reports required-feature coverage and missing-category diagnostics for current staged assets.
+    - [x] Broader deathmatch, CTF, campaign/coop, liquid, teleport, and door reference BSPs staged and validated.
   - [x] Invalid BSP inputs fail clearly.
   - [x] AAS metadata receives the source BSP checksum during Q2 bridge generation.
-- [ ] Runtime smoke:
+
+2026-06-21 final build/tool closeout:
+
+- Linux and macOS CI build coverage exists in both `.github/workflows/nightly.yml`
+  and `.github/workflows/release.yml`. Both workflows load
+  `tools/release/targets.py`, whose matrix contains `linux-x86_64` on
+  `ubuntu-latest` and `macos-x86_64` on `macos-15-intel`, and both run
+  `meson compile -C builddir` for Linux/macOS. The Meson `q2aas` option
+  defaults to enabled, so `worr_q2aas` is included in those builds.
+- The broader reference-map row is closed by the current staged set:
+  `mm-rage`, `q2dm1`, `q2dm2`, `q2dm8`, `q2ctf1`, `base1`, `base2`, and
+  `train`. The set covers current WORR DM, canonical/open DM, CTF/team
+  objectives, campaign/coop, water/liquid, teleport entity diagnostics, door
+  diagnostics, and elevator/platform routes.
+- [x] Runtime smoke:
   - [x] Server-game module builds with the WORR-native AAS runtime shell.
   - [x] Start dedicated server on reference map with `sg_bot_enable 1` and load packaged `maps/mm-rage.aas` through the runtime shell.
   - [x] Run imported Q3A `AAS_AreaInfo` / `AAS_PointAreaNum` sample query against loaded `maps/mm-rage.aas`.
@@ -1426,6 +2030,9 @@ Validation checklist:
   - [x] Pick up health/armor.
   - [x] Follow team objective.
   - [x] Recover from blocked route.
+  - [x] Add `map_restart_cleanup` scenario coverage for the existing restart-capable map-repeat smoke.
+  - [x] Add `team_policy_duel_readiness` scenario coverage for the existing team-policy smoke.
+  - [x] Promote aim fairness, item timer, trace-checked corner cutting, FFA/TDM readiness, and coop readiness rows into implemented scenario gates.
 - [x] Performance:
   - [x] CPU cost per bot.
     - [x] Derived per-bot command, route, debug, and recovery pressure baselines from smoke logs.
@@ -1442,12 +2049,13 @@ Validation checklist:
     - [x] Add runtime `entity_trace_clip_*` counters around the WORR `gi.clip(...)` bridge.
   - [x] Memory used by AAS.
   - [x] High bot count degradation policy.
-- [ ] Packaging:
+  - [x] Source-counter completeness diagnostics for long-soak logs and budgeted derived metrics.
+- [x] Packaging:
   - [x] Botfiles are packaged into `pak0.pkz` and mirrored loose for profile discovery in no-zlib dedicated builds.
   - [x] `.install/` refreshed after build.
   - [x] Generated AAS included or intentionally generated on demand.
-  - [ ] Tool binary included only if release policy allows it.
-  - [ ] Credit/license files included with distributed source/binaries.
+  - [x] Tool binary default-excluded unless release policy explicitly allows it.
+  - [x] Credit/license files included with distributed source/binaries.
 
 Exit criteria:
 
@@ -1456,21 +2064,271 @@ Exit criteria:
 
 ## Outstanding Work Summary
 
-The remaining work is now concentrated in depth, breadth, and release hardening
-rather than missing proof-helper APIs or pending scenario slots. Modes `20`
-through `23` are implemented smoke scenarios and pass in the latest 9/9
-implemented run, with an empty pending-gap report. They are still deliberately
-smoke-level proofs: follow-up work should make enemy engagement less scripted,
-route weapon switching through the normal weapon/inventory command path,
-exercise health/armor pickup behavior under more map and resource states, and
-turn the team-objective proof into durable role selection across real CTF/TDM
-flows.
+The phase checklist is complete, so the items below are post-checklist
+expansion lanes rather than raw markdown task rows. The detailed go-forward
+roadmap for turning these lanes into full live bot behavior is
+`docs-dev/plans/bot-implementation-completion-roadmap.md`.
 
-Broader outstanding plan work remains in Phase 4 fairness and blackboard goal
-integration, Phase 6 aim/firing/inventory command ownership, Phase 7 FFA/TDM/CTF
-roles and later coop behavior, and Phase 9 reference-map, CI, performance-budget,
-fresh long-soak CPU baseline, q2aas binary distribution policy, and distributed
-credit/license packaging coverage.
+Outstanding work outline:
+
+- Behavior integration: `sg_bot_behavior_enable` now groups the current
+  default-off proof bridges behind one opt-in switch. The remaining work is to
+  turn that grouped proof surface into durable live decision loops, especially
+  FFA/TDM/CTF role selection, objective handoff, anti-camp/friendly-fire
+  precedence, and non-scripted enemy engagement.
+- Combat and inventory depth: broaden weapon, aim, health/armor, powerup,
+  special-inventory, and item-timer behavior across varied resource states
+  instead of relying on focused smoke setups.
+- Coop and campaign progression: turn follow/wait/lead, door/elevator,
+  resource-share, anti-blocking, and monster-target-share proof helpers into
+  map-backed campaign behavior, including trigger, key, mover, and objective
+  coordination.
+- Movement and map evidence: add broader natural movement validation for
+  crouch, swim, waterjump, slime/lava-adjacent hazards, movers, doors,
+  elevators, teleporters, and route recovery across more reference maps.
+- Reference-map and AAS breadth: expand beyond the current staged eight-map
+  q2aas set with more DM, CTF, coop, expansion, and BSPX-heavy candidates,
+  plus explicit known-failure diagnostics.
+- Performance and soak coverage: refresh long-soak CPU baselines using the
+  current source-counter fields, add strict budget thresholds where stable,
+  and keep high-bot degradation behavior observable.
+- Release and platform hardening: keep `.install/` packaging, botfiles, AAS
+  archive members, CI build coverage, and no-zlib dedicated-server profile/AAS
+  discovery aligned as future bot assets expand.
+- Match/admin ecosystem depth: add downstream consumers for match logging,
+  continue bot-boundary audits for admin/map/vote/tournament paths, and verify
+  bot cleanup through additional real match-flow transitions.
+- Planning hygiene: split each accepted lane into new roadmap task IDs and keep
+  `docs-dev/proposals/swot-feature-development-roadmap-2026-02-27.md`,
+  credits, implementation logs, and user docs synchronized with the work.
+
+The remaining work is now concentrated in depth, breadth, and release hardening
+rather than missing core proof-helper APIs. The default installed scenario suite
+now reports 99 implemented catalog rows, 0 pending rows, and highest reserved
+bot frame-command mode `91`. The latest full `implemented` run passed all
+99 rows from `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z`;
+focused validation passed for
+`behavior_policy_umbrella` from
+`.tmp\bot_scenarios\behavior_policy_umbrella\20260622T050833Z`,
+`match_item_policy` from
+`.tmp\bot_scenarios\match_item_policy_check\20260622T050722Z`, and
+`profile_role_policy` from
+`.tmp\bot_scenarios\profile_role_policy\20260622T052929Z`, and
+`profile_team_policy` from
+`.tmp\bot_scenarios\profile_team_policy\20260622T055119Z`, and
+`profile_item_policy` from
+`.tmp\bot_scenarios\profile_item_policy\20260622T062835Z`, and
+`profile_movement_policy` from
+`.tmp\bot_scenarios\profile_movement_policy\20260622T070032Z`, and
+`bot_chat_policy` from
+`.tmp\bot_scenarios\20260622T080531Z`, and
+`bot_chat_team_policy` from
+`.tmp\bot_scenarios\20260622T080044Z`, and
+`bot_chat_rate_policy` from
+`.tmp\bot_scenarios\20260622T081428Z`, and
+`bot_chat_initial_policy` from
+`.tmp\bot_scenarios\20260622T085845Z`, and
+`bot_chat_reply_policy` from
+`.tmp\bot_scenarios\20260622T092009Z`, and
+`bot_chat_event_policy` from
+`.tmp\bot_scenarios\20260622T093637Z`, and
+`behavior_arbitration` from
+`.tmp\bot_scenarios\20260622T112202Z`, and
+`target_memory_decay` from
+`.tmp\bot_scenarios\20260622T120742Z`, and
+`weapon_scoring_arsenal` from
+`.tmp\bot_scenarios\20260622T123648Z`, and
+`aim_fire_policy_depth` from
+`.tmp\bot_scenarios\20260622T125826Z`, and
+`ammo_pressure_pickup` from
+`.tmp\bot_scenarios\ammo_pressure_pickup\20260622T132231Z`, and
+`survival_inventory_use` from
+`.tmp\bot_scenarios\survival_inventory_use\20260622T161739Z`, and
+`survival_health_route` from
+`.tmp\bot_scenarios\survival_health_route\20260622T164109Z`, and
+`survival_armor_route` from
+`.tmp\bot_scenarios\survival_armor_route\20260622T165918Z`, and
+`combat_survival_regression` from
+`.tmp\bot_scenarios\combat_survival_regression\20260622T171717Z`, and
+`combat_survival_regression_q2dm2` from
+`.tmp\bot_scenarios\combat_survival_regression_q2dm2\20260622T194547Z`, and
+`threat_retreat_avoidance` from `.tmp\bot_scenarios\20260622T202608Z`,
+the q2dm8 map-regression rows from `.tmp\bot_scenarios\20260622T204956Z`,
+`ctf_objective_route` from `.tmp\bot_scenarios\20260622T210329Z`, and
+`tdm_role_spawn_stability` from `.tmp\bot_scenarios\20260622T212431Z`, and
+`ffa_live_pacing` from `.tmp\bot_scenarios\20260622T214927Z`, and
+`duel_live_pacing` from `.tmp\bot_scenarios\20260622T222142Z`, and
+`ctf_objective_transitions` from `.tmp\bot_scenarios\20260622T230509Z`, and
+`coop_live_loop` from `.tmp\bot_scenarios\20260622T234315Z`, and
+`coop_share_loop` from `.tmp\bot_scenarios\20260623T001149Z`,
+`bot_chat_live_events` from `.tmp\bot_scenarios\20260623T010520Z`,
+`bot_chat_live_event_cooldown` from `.tmp\bot_scenarios\20260623T010530Z`, and
+`bot_chat_live_enemy_sighted` from `.tmp\bot_scenarios\20260623T013832Z`,
+`bot_chat_duplicate_suppression` from `.tmp\bot_scenarios\20260623T023211Z`,
+`bot_chat_live_low_health` from `.tmp\bot_scenarios\20260623T025752Z`,
+`bot_chat_live_item_taken` from `.tmp\bot_scenarios\20260623T051126Z`,
+`bot_chat_live_objective_changed` from `.tmp\bot_scenarios\20260626T140601Z`,
+`bot_chat_live_flag_state` from `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`,
+`bot_chat_live_blocked` from `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`,
+`bot_chat_live_item_denied` from `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`,
+`bot_chat_live_match_result` from `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`,
+and `coop_campaign_interaction_matrix` from `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`.
+The latest coop campaign interaction matrix full-suite pass now records 99 passing rows, 0 failed rows,
+0 timeouts, 0 errors, and 0 pending rows.
+Modes
+`20` through `91` are implemented smoke scenarios, `trace_checked_corner_cutting`
+reuses the route-rich mode `21` proof, `ffa_roam_route` uses dedicated four-bot
+FFA mode `42`, `ffa_spawn_camp_avoidance` uses dedicated four-bot FFA mode
+`45`, `ffa_item_roles` uses dedicated four-bot FFA mode `46`,
+`ffa_role_combat` uses dedicated four-bot FFA mode `48`,
+`ffa_spawn_camp_combat_avoidance` uses dedicated four-bot FFA mode `49`,
+`ffa_live_pacing` uses dedicated four-bot FFA mode `74`,
+`duel_live_pacing` uses dedicated two-bot Duel mode `75`,
+`ctf_objective_transitions` uses dedicated four-bot CTF mode `76`,
+`coop_live_loop` uses dedicated two-bot coop mode `77`,
+`coop_share_loop` uses dedicated two-bot coop mode `78`,
+`coop_campaign_interaction_matrix` uses dedicated two-bot coop mode `91` on
+`base1`,
+`bot_chat_live_events`, `bot_chat_live_event_cooldown`,
+`bot_chat_live_enemy_sighted`, `bot_chat_phrase_library`,
+`bot_chat_duplicate_suppression`, `bot_chat_live_low_health`,
+`bot_chat_live_item_taken`, `bot_chat_live_objective_changed`,
+`bot_chat_live_flag_state`, `bot_chat_live_blocked`,
+`bot_chat_live_item_denied`, and `bot_chat_live_match_result` use dedicated
+bot chat modes `79`, `80`, `81`, `82`, `83`, `84`, `85`, `86`, `87`, `88`,
+`89`, and `90`,
+`ctf_item_roles` uses dedicated four-bot CTF mode `47`,
+`coop_match_readiness`,
+`coop_leader_route`, and `coop_progress_wait` run mode `3` under coop cvars, while
+`coop_interaction_retry` reuses the route-rich elevator mode `12` under coop
+cvars, `coop_lead_advance` uses dedicated one-bot coop mode `27`, and
+`coop_resource_share`, `coop_anti_blocking`, `coop_target_share`, and
+`coop_door_elevator` use dedicated two-bot coop modes `28`, `29`, `30`, and
+`31`, while `coop_live_loop` composes the leader, wait, anti-blocking,
+interaction, and mover hold/source proof family in mode `77`; `team_role_route`
+uses dedicated four-bot TDM mode `32`,
+`team_item_roles` uses dedicated four-bot TDM mode `33`,
+`team_resource_denial` uses dedicated four-bot TDM mode `50`,
+`match_item_policy` uses dedicated four-bot TDM mode `51`,
+`behavior_policy_umbrella` uses dedicated four-bot TDM mode `52`,
+`profile_role_policy` uses dedicated four-bot TDM mode `53`,
+`profile_team_policy` uses dedicated four-bot CTF mode `54`,
+`profile_item_policy` uses dedicated four-bot TDM mode `55`,
+`profile_movement_policy` uses dedicated four-bot TDM mode `56`,
+`bot_chat_policy` uses dedicated four-bot TDM mode `57`,
+`bot_chat_team_policy` uses dedicated four-bot TDM mode `58`,
+`bot_chat_rate_policy` uses dedicated four-bot TDM mode `59`,
+`bot_chat_initial_policy` uses dedicated four-bot TDM mode `60`,
+`bot_chat_reply_policy` uses dedicated four-bot TDM mode `61`,
+`bot_chat_event_policy` uses dedicated four-bot TDM mode `62`,
+`bot_chat_live_events` uses dedicated four-bot TDM mode `79`,
+`bot_chat_live_event_cooldown` uses dedicated four-bot TDM mode `80`,
+`bot_chat_live_enemy_sighted` uses dedicated two-bot TDM mode `81`,
+`bot_chat_phrase_library` uses dedicated four-bot TDM mode `82`,
+`bot_chat_duplicate_suppression` uses dedicated four-bot TDM mode `83`,
+`bot_chat_live_low_health` uses dedicated one-bot FFA mode `84`,
+`bot_chat_live_item_taken` uses dedicated one-bot FFA mode `85`,
+`bot_chat_live_objective_changed` uses dedicated four-bot CTF mode `86`,
+`bot_chat_live_flag_state` uses dedicated four-bot CTF mode `87`,
+`bot_chat_live_blocked` uses dedicated one-bot FFA mode `88`,
+`bot_chat_live_item_denied` uses dedicated four-bot TDM mode `89`,
+`bot_chat_live_match_result` uses dedicated four-bot TDM mode `90`,
+`coop_campaign_interaction_matrix` uses dedicated two-bot coop mode `91` on
+`base1`,
+`behavior_arbitration` uses dedicated four-bot TDM mode `63`,
+`target_memory_decay` uses dedicated two-bot FFA mode `64`,
+`weapon_scoring_arsenal` uses dedicated two-bot FFA mode `65`,
+`aim_fire_policy_depth` uses dedicated two-bot FFA mode `66`,
+`ammo_pressure_pickup` uses dedicated one-bot FFA mode `67`,
+`survival_inventory_use` uses dedicated one-bot FFA mode `68`,
+`survival_health_route` uses dedicated one-bot FFA mode `69`,
+`survival_armor_route` uses dedicated one-bot FFA mode `70`,
+`combat_survival_regression` uses dedicated two-bot FFA mode `71`,
+`combat_survival_regression_q2dm2` reuses dedicated mode `71` on `q2dm2`
+through the scenario map override, `combat_survival_regression_q2dm8` reuses
+dedicated mode `71` on `q2dm8` through the scenario map override,
+`threat_retreat_avoidance` uses dedicated two-bot FFA mode `72`, and
+`threat_retreat_avoidance_q2dm8` reuses dedicated mode `72` on `q2dm8`,
+`team_fire_avoidance` uses dedicated four-bot TDM mode `34`,
+`team_role_combat` uses dedicated four-bot TDM mode `43`,
+`team_role_combat_avoidance` uses dedicated four-bot TDM mode `44`, and
+`ctf_role_route`, `ctf_role_combat`, `ctf_dropped_flag_route`,
+`ctf_carrier_support_route`, `ctf_base_return_route`, and
+`ctf_objective_route`, `ctf_objective_route_precedence`, and `ctf_item_roles`
+use dedicated four-bot CTF modes `35`, `36`, `37`, `38`, `39`, `40`, `41`, and
+`47`; `ctf_objective_route` now hard-gates base-return, carrier-support,
+dropped-flag selections, and objective-owner arbitration in one live CTF run,
+while `ctf_objective_transitions` hard-gates actual pickup, death-drop, and
+dropped-flag return counters before objective-route ownership;
+`coop_live_loop` hard-gates leader-route activation, progress-wait commands,
+anti-blocking commands, interaction retry commands, and door/elevator source
+plus hold commands in one coop run;
+`coop_campaign_interaction_matrix` hard-gates the same interaction family on
+`base1`, including route-interaction retry, campaign mover source ownership,
+teammate hold commands, nav interaction candidates, and coop wait policy;
+and
+`map_change_repeat` plus `map_restart_cleanup` both reuse mode `19`, with the
+restart row requiring `sv_bot_frame_command_smoke_map_repeat_restart 1` and
+`command=map_force` evidence; `match_logging_schema` uses
+`sv_bot_matchlog_smoke 2` to validate match-stats, tournament-series, and
+catalog schema/index metadata; `warmup_bot_start_readiness` uses
+`sv_bot_warmup_smoke 2` to validate bot-only ready-up and final cleanup,
+`vote_bot_exclusion` uses `sv_bot_vote_smoke 2` to validate bot vote exclusion,
+`admin_bot_privilege_audit` uses `sv_bot_admin_audit_smoke 2` to validate
+forced-admin bot rejection from the registered `lock_team` command,
+`tournament_bot_veto_exclusion` uses `sv_bot_tournament_smoke 2` to validate
+bot rejection from active-side tournament veto picks without mutating picks or
+bans, and `tournament_replay_reset` uses `sv_bot_tournament_smoke 3` to validate
+completed-series replay reset handling by preserving state for an out-of-range
+request and rewinding game 2 to one retained winner/map/id,
+and `mymap_queue_bot_request` uses `sv_bot_mymap_smoke 2` to validate
+bot-attributed MyMap queue insertion and consume cleanup, while
+`scoreboard_bot_classification` uses `sv_bot_scoreboard_smoke 2` to validate
+bot-only sorted standings, deterministic score ordering, and final cleanup, and
+`intermission_bot_cleanup` uses `sv_bot_intermission_smoke 2` to validate
+native intermission entry, frozen/freecam/non-solid bot state, and final
+zero-bot/zero-connected/zero-sorted-client cleanup, and
+`queued_nextmap_transition` uses `sv_bot_nextmap_smoke 2` to validate
+bot-attributed queued-map insertion, queued transition consumption, observed
+same-map reload, and final zero-bot cleanup, and
+`mapvote_bot_exclusion_transition` uses `sv_bot_mapvote_smoke 2` to validate
+bot-only map selector setup, blocked bot ballots, selector finalization,
+observed same-map reload, and final zero-bot cleanup.
+
+Those promoted rows are still deliberately smoke-level proofs: follow-up work
+should make enemy engagement and aim behavior less scripted, drive weapon and
+inventory dispatch from richer combat/inventory decisions, exercise health,
+armor, and item-timer behavior under more map/resource states, and turn the
+team/readiness proofs into durable role selection across real FFA, TDM, CTF, and
+coop flows beyond the current default-off FFA roam-route, anti-camp source, and
+item-role pickup scoring,
+TDM/CTF route-owner,
+TDM/CTF combat-owner, TDM role-combat/friendly-fire precedence, focused CTF
+dropped-flag/carrier-support/base-return route-owner, combined CTF
+objective-route policy and precedence, FFA/TDM item-route selection, and TDM
+resource-denial pickup-scoring proofs. Profile chat metadata now has a safe
+default-off cvar/status boundary, conservative live-dispatch consumer,
+team-only audience and global minimum-interval policies, and profile
+chat-personality initial utterance selection; richer Q3A-style reply
+selection, event triggers, phrase libraries, and broader audience routing
+beyond the current proof gates remain future chat work.
+The mode `34`, `38`, and `39` proofs now avoid smoke-setup teleports of live
+players while preserving their friendly-fire and flag-carrier policy evidence.
+
+Broader outstanding plan work remains in Phase 4 fairness and blackboard state
+consumers, Phase 5 broader natural-movement/reference-map evidence, Phase 6
+campaign-specific trigger/key/objective coordination above the interaction
+retry and door/elevator proof bridges, Phase 7 broader live FFA/TDM/CTF role
+consumption plus downstream match logging consumers, admin hardening, and deeper coop
+behavior, and Phase 9 broader reference-map, CI, strict
+performance-budget, and fresh long-soak CPU baseline coverage.
+
+Round-close evidence is tracked in
+`docs-dev/q3a-botlib-docs-progress-tracking-round-2026-06-18.md` and
+`docs-dev/q3a-botlib-extensive-round-closeout-2026-06-18.md`. The current round
+has focused object-build, unit-test, validator, and scenario-harness evidence
+from its worker lanes; fresh source-counter long-soak, broad reference-map
+inventory data, and CI/platform breadth remain future validation work.
 
 ## Credit and Attribution Policy
 

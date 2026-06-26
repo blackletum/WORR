@@ -192,21 +192,104 @@ anything with spaces.
   values should mean less perfect aim.
 - `WORR_AIM_ERROR`: Q3-style extension for WORR aim imprecision.
 - `preferred_weapon`, `weapon`, or `favorite_weapon`: weapon preference hint,
-  such as `rocketlauncher`.
+  such as `rocketlauncher`. Common aliases such as `rocket launcher`,
+  `rocket_launcher`, and `rl` are accepted by the validator.
 - `WORR_PREFERRED_WEAPON`: Q3-style extension for WORR weapon preference.
 - `chat_personality`, `chat`, or `personality`: short chat style label, such as
-  `quiet`.
+  `quiet`. Packaged profiles should use one of the known labels such as
+  `quiet`, `direct`, `taunting`, `helpful`, or `steady`, or expect a validator
+  warning until the new label is registered. The `sg_bot_allow_chat` cvar is
+  default-off; when enabled, it allows the current conservative bot chat
+  dispatch proof and selects the initial proof line from the bot's chat
+  personality bucket. `sg_bot_chat_team_only` can route that proof through team
+  chat, and `sg_bot_chat_min_interval_ms <ms>` can require a global minimum
+  interval between submitted proof-chat lines. Smoke-only reply and multi-event
+  reply selectors also use this personality metadata for validation while the
+  richer chat system is still being built.
 - `WORR_CHAT_PERSONALITY`: Q3-style extension for WORR chat style.
 - `role` or `team_role`: team behavior hint, such as `attacker`, `defender`, or
-  `support`.
+  `support`. Known aliases include `attack`, `offense`, `defense`, `duelist`,
+  `anchor`, `relay`, `midfielder`, `midfield`, `roamer`, and `returner`.
+  Supported match roles now feed FFA/TDM/CTF match-policy selection when no
+  stronger role request is active.
 - `WORR_ROLE`: Q3-style extension for WORR team role.
 - `movement_style`, `movement`, or `move_style`: movement flavor hint, such as
-  `strafe`.
+  `strafe`. Known labels include `strafe`, `pressure`, `anchor`, `kite`,
+  `patrol`, `roam`, `rush`, `camp`, `circle strafe`, `flank`, and `retreat`.
+  Supported movement styles now feed match-policy helpers: strafe, pressure,
+  rush, and circle-strafe styles favor attack and major-item pressure; anchor
+  and camp styles favor defense and team resource sharing; patrol, roam, and
+  flank styles favor midfield/roam behavior; kite, retreat, and evasive styles
+  favor roam and recovery collection.
 - `WORR_MOVEMENT_STYLE`: Q3-style extension for WORR movement flavor.
+- `reaction_jitter_ms`: extra reaction variation in milliseconds. Higher values
+  make a bot less clockwork even when its base reaction is fast.
+- `WORR_REACTION_JITTER_MS`: Q3-style extension for WORR reaction variation.
+- `aim_tracking_noise`: extra aim wobble in degrees for tracking and live aim
+  policy.
+- `WORR_AIM_TRACKING_NOISE`: Q3-style extension for WORR aim tracking noise.
+- `aim_lead_scale`: projectile-leading scale. `1.0` means normal lead, lower
+  values under-lead, and higher values slightly over-lead.
+- `WORR_AIM_LEAD_SCALE`: Q3-style extension for WORR projectile lead scale.
+- `combat_fov`: combat awareness cone in degrees.
+- `WORR_COMBAT_FOV`: Q3-style extension for WORR combat field of view.
+- `teamplay_bias`: how strongly the bot should favor team coordination. This
+  now feeds supported team match-policy helpers.
+- `objective_bias`: how strongly the bot should favor match objectives over
+  wandering or dueling. This now feeds supported CTF objective policy helpers.
+- `friendly_fire_care`: how careful the bot should be about firing through
+  teammates. This now feeds supported team friendly-fire policy helpers.
+- `WORR_TEAMPLAY_BIAS`, `WORR_OBJECTIVE_BIAS`, and
+  `WORR_FRIENDLY_FIRE_CARE`: Q3-style extensions for WORR team policy hints.
+- `item_greed`: how strongly the bot should favor pickups for itself.
+- `item_denial`: how strongly the bot should take items to deny them to enemies.
+- `powerup_timing`: how strongly the bot should care about major item timing.
+- `retreat_health`: health threshold where survival and recovery items should
+  become more attractive.
+- `WORR_ITEM_GREED`, `WORR_ITEM_DENIAL`, `WORR_POWERUP_TIMING`, and
+  `WORR_RETREAT_HEALTH`: Q3-style extensions for WORR item policy hints.
 
 Some behavior fields are parsed and preserved before every bot policy uses them.
-Treat them as safe profile metadata and tuning hints; exact behavior can change
-as the BotLib work continues.
+Role, teamplay, objective, friendly-fire-care, item-greed, item-denial,
+powerup-timing, retreat-health, and movement-style hints already affect
+supported match-policy helpers. The item-policy hints are used when match
+item/resource policy is active: greed favors self pickups, denial favors
+deny-enemy pickups in team modes, powerup timing favors major items, and retreat
+health raises survival-item priority once the bot is at or below that health
+threshold. Treat chat fields as safe profile metadata and tuning hints whose
+exact behavior can change as the BotLib work continues. `sg_bot_allow_chat`
+currently gates a narrow once-per-spawn live dispatch proof whose initial line
+comes from the profile chat personality, and `sg_bot_chat_team_only` can limit
+that proof to team chat. `sg_bot_chat_min_interval_ms <ms>` sets a global
+minimum interval between submitted proof-chat lines, with rate-limited attempts
+skipped rather than counted as failures. Current development builds also use
+chat personality for smoke-only reply and multi-event route-ready proofs;
+richer conversation and broader live event-triggered reply behavior remains
+future work.
+
+The profile validator checks behavior metadata before packaging:
+
+- `reaction` is validated as `0` to `5000` milliseconds after Q3
+  `CHARACTERISTIC_REACTIONTIME` seconds are normalized.
+- `aggression` is validated as `0.0` to `1.0`.
+- `aim_error` is validated as `0` to `90` degrees.
+- `reaction_jitter_ms` is validated as `0` to `2000` milliseconds.
+- `aim_tracking_noise` is validated as `0` to `90` degrees.
+- `aim_lead_scale` is validated as `0.0` to `2.0`.
+- `combat_fov` is validated as `1` to `360` degrees.
+- Team and item bias values are validated as `0.0` to `1.0`.
+- `retreat_health` is validated as `0` to `200`.
+- Behavior labels must be simple short labels using letters, numbers, spaces,
+  underscores, or hyphens. Malformed labels fail validation.
+- Unknown but well-formed weapon, chat, role, or movement labels produce
+  warnings so authors can either use a known alias or add the new value to the
+  validator.
+- Packaged Q3-style `botfiles/bots/*_c.c` profiles should either omit behavior
+  tuning metadata from a skill block or provide the full behavior family:
+  reaction, aggression, aim error, preferred weapon, chat personality, team
+  role, movement style, reaction jitter, aim noise, projectile lead, combat FOV,
+  team/objective/friendly-fire policy, item greed/denial/powerup timing, and
+  retreat health.
 
 ## Script Companions
 
@@ -246,6 +329,22 @@ skill 1
     CHARACTERISTIC_AGGRESSION 0.48
     WORR_SKIN "male/major"
     WORR_TEAM "red"
+    WORR_AIM_ERROR 4.8
+    WORR_PREFERRED_WEAPON "chaingun"
+    WORR_CHAT_PERSONALITY "direct"
+    WORR_ROLE "attacker"
+    WORR_MOVEMENT_STYLE "pressure"
+    WORR_REACTION_JITTER_MS 160
+    WORR_AIM_TRACKING_NOISE 3.8
+    WORR_AIM_LEAD_SCALE 0.85
+    WORR_COMBAT_FOV 115
+    WORR_TEAMPLAY_BIAS 0.55
+    WORR_OBJECTIVE_BIAS 0.70
+    WORR_FRIENDLY_FIRE_CARE 0.50
+    WORR_ITEM_GREED 0.62
+    WORR_ITEM_DENIAL 0.65
+    WORR_POWERUP_TIMING 0.70
+    WORR_RETREAT_HEALTH 35
 }
 
 skill 5
@@ -264,6 +363,17 @@ skill 5
     WORR_CHAT_PERSONALITY "direct"
     WORR_ROLE "attacker"
     WORR_MOVEMENT_STYLE "pressure"
+    WORR_REACTION_JITTER_MS 60
+    WORR_AIM_TRACKING_NOISE 1.5
+    WORR_AIM_LEAD_SCALE 1.10
+    WORR_COMBAT_FOV 145
+    WORR_TEAMPLAY_BIAS 0.70
+    WORR_OBJECTIVE_BIAS 0.86
+    WORR_FRIENDLY_FIRE_CARE 0.72
+    WORR_ITEM_GREED 0.74
+    WORR_ITEM_DENIAL 0.88
+    WORR_POWERUP_TIMING 0.92
+    WORR_RETREAT_HEALTH 25
 }
 ```
 

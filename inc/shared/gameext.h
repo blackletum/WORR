@@ -67,4 +67,15 @@ typedef struct {
 } debug_draw_api_v1_t;
 
 #include "bot_frame_command.h"
+#include "bot_admin_audit_status.h"
+#include "bot_chat_policy_status.h"
+#include "bot_intermission_status.h"
+#include "bot_mapvote_status.h"
+#include "bot_mymap_status.h"
+#include "bot_nextmap_status.h"
+#include "bot_scoreboard_status.h"
 #include "bot_team_policy_status.h"
+#include "bot_tournament_status.h"
+#include "bot_vote_status.h"
+#include "bot_warmup_status.h"
+#include "match_logging_status.h"

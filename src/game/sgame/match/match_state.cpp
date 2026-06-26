@@ -637,9 +637,18 @@ bool Tournament_ReplayGame(int gameNumber, std::string &message) {
     return false;
   }
 
-  TournamentEnsureStateForMatch();
+  if (!game.tournament.active) {
+    TournamentEnsureStateForMatch();
+  }
+
   if (!game.tournament.active) {
     message = "Tournament state is not active.";
+    return false;
+  }
+
+  const std::string mapName = game.tournament.mapOrder[targetIndex];
+  if (mapName.empty()) {
+    message = "Replay map is missing.";
     return false;
   }
 
@@ -676,12 +685,6 @@ bool Tournament_ReplayGame(int gameNumber, std::string &message) {
 
   game.tournament.gamesPlayed = static_cast<int>(targetIndex);
   game.tournament.seriesComplete = false;
-
-  const std::string &mapName = game.tournament.mapOrder[targetIndex];
-  if (mapName.empty()) {
-    message = "Replay map is missing.";
-    return false;
-  }
 
   gi.LocBroadcast_Print(PRINT_CENTER,
                         "$g_sgame_auto_7548560aaebb",

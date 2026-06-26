@@ -4114,6 +4114,12 @@ extern cvar_t *sg_bot_debug_route;
 extern cvar_t *sg_bot_debug_goal;
 extern cvar_t *sg_bot_debug_client;
 extern cvar_t *sg_bot_cpu_budget_ms;
+extern cvar_t *sg_bot_allow_chat;
+extern cvar_t *sg_bot_chat_team_only;
+extern cvar_t *sg_bot_chat_min_interval_ms;
+extern cvar_t *sg_bot_chat_reply_policy_smoke;
+extern cvar_t *sg_bot_chat_event_policy_smoke;
+extern cvar_t *sg_bot_chat_live_events;
 extern cvar_t *sg_bot_lifecycle_smoke;
 
 extern cvar_t *flood_msgs;
@@ -5067,7 +5073,132 @@ void player_die(gentity_t *self, gentity_t *inflictor, gentity_t *attacker,
 //
 void ServerCommand();
 void BotTeamPolicy_PrintStatus(int expectedPlaying, int expectedSpectators,
-                               int expectedBots);
+                               int expectedBots, int expectedQueued);
+void BotVote_PrintStatus(int expectedBots, int expectedHumans,
+                         int expectedPlaying, int expectedVotingClients,
+                         int expectedActiveVote,
+                         int expectedLastLaunchBlocked);
+int BotVote_TryLaunchFirstBotVote(const char* voteName, const char* voteArg);
+void BotVote_ResetStatus();
+void BotMapVote_PrintStatus(int expectedBots, int expectedActive,
+                            int expectedCandidates,
+                            int expectedLastBotVoteBlocked,
+                            int expectedLastFinalizeSuccess,
+                            int expectedChangeMapSet);
+int BotMapVote_BeginCurrentMapVote();
+int BotMapVote_TryCastFirstBotVote(int voteIndex);
+int BotMapVote_FinalizeAndExit();
+void BotMapVote_ResetStatus();
+void BotMyMap_PrintStatus(int expectedBots, int expectedPlayQueue,
+                          int expectedMyMapQueue,
+                          int expectedLastQueueSuccess,
+                          int expectedLastConsumeSuccess);
+int BotMyMap_TryQueueFirstBotMyMap(const char* mapName);
+int BotMyMap_ConsumeQueuedMap();
+void BotMyMap_ResetStatus();
+void BotMyMap_ClearQueues();
+void BotWarmup_PrintStatus(int expectedBots, int expectedHumans,
+                           int expectedPlaying, int expectedCanStart);
+bool BotChatPolicy_Dispatch(gentity_t* ent, const char* message, bool team);
+void BotChatPolicy_ResetDispatchStatus();
+int BotChatPolicy_ConsumerReady();
+int BotChatPolicy_DispatchAttempts();
+int BotChatPolicy_DispatchSubmitted();
+int BotChatPolicy_DispatchFailures();
+int BotChatPolicy_DispatchRateLimited();
+int BotChatPolicy_RateLimitMilliseconds();
+int BotChatPolicy_LastDispatchTimeMilliseconds();
+int BotChatPolicy_LastDispatchClient();
+int BotChatPolicy_LastDispatchTeam();
+int BotChatPolicy_InitialSelections();
+int BotChatPolicy_InitialKnownPersonalities();
+int BotChatPolicy_InitialUnknownPersonalities();
+int BotChatPolicy_InitialQuiet();
+int BotChatPolicy_InitialDirect();
+int BotChatPolicy_InitialTaunting();
+int BotChatPolicy_InitialHelpful();
+int BotChatPolicy_InitialSteady();
+int BotChatPolicy_LastInitialClient();
+int BotChatPolicy_LastInitialPersonality();
+int BotChatPolicy_LastInitialPhrase();
+int BotChatPolicy_InitialPhraseVariants();
+int BotChatPolicy_InitialUniquePhraseVariants();
+int BotChatPolicy_LastInitialPhraseVariant();
+int BotChatPolicy_ReplyEnabled();
+int BotChatPolicy_ReplyEvents();
+int BotChatPolicy_ReplySelections();
+int BotChatPolicy_ReplyKnownPersonalities();
+int BotChatPolicy_ReplyUnknownPersonalities();
+int BotChatPolicy_ReplyTeamReady();
+int BotChatPolicy_ReplyRouteReady();
+int BotChatPolicy_ReplyItemTaken();
+int BotChatPolicy_ReplyItemDenied();
+int BotChatPolicy_ReplyObjectiveChanged();
+int BotChatPolicy_ReplyFlagState();
+int BotChatPolicy_ReplyEnemySighted();
+int BotChatPolicy_ReplyLowHealth();
+int BotChatPolicy_ReplyBlocked();
+int BotChatPolicy_ReplyMatchResult();
+int BotChatPolicy_ReplySubmitted();
+int BotChatPolicy_ReplyRateLimited();
+int BotChatPolicy_ReplyDuplicateSuppressed();
+int BotChatPolicy_ReplyFailures();
+int BotChatPolicy_LastReplyClient();
+int BotChatPolicy_LastReplyPersonality();
+int BotChatPolicy_LastReplyPhrase();
+int BotChatPolicy_ReplyPhraseVariants();
+int BotChatPolicy_ReplyUniquePhraseVariants();
+int BotChatPolicy_LastReplyPhraseVariant();
+int BotChatPolicy_LastReplyEvent();
+int BotChatPolicy_LiveEnabled();
+int BotChatPolicy_LiveEvents();
+int BotChatPolicy_LiveSpawn();
+int BotChatPolicy_LiveRouteReady();
+int BotChatPolicy_LiveItemTaken();
+int BotChatPolicy_LiveItemDenied();
+int BotChatPolicy_LiveObjectiveChanged();
+int BotChatPolicy_LiveFlagState();
+int BotChatPolicy_LiveEnemySighted();
+int BotChatPolicy_LiveLowHealth();
+int BotChatPolicy_LiveBlocked();
+int BotChatPolicy_LiveMatchResult();
+int BotChatPolicy_LiveSubmitted();
+int BotChatPolicy_LiveRateLimited();
+int BotChatPolicy_LiveDuplicateSuppressed();
+int BotChatPolicy_LiveFailures();
+int BotChatPolicy_LiveEventTaxonomy();
+int BotChatPolicy_DuplicateWindowMilliseconds();
+int BotChatPolicy_LastDuplicateClient();
+int BotChatPolicy_LastDuplicateEvent();
+const char* BotChatPolicy_LastDuplicateEventName();
+int BotChatPolicy_LastDuplicatePhrase();
+int BotChatPolicy_LastDuplicateElapsedMilliseconds();
+int BotChatPolicy_LastLiveEvent();
+const char* BotChatPolicy_LastLiveEventName();
+void BotChatPolicy_PrintStatus(int expectedBots, int expectedProfileChat,
+                               int expectedAllowChat,
+                               int expectedDispatchEnabled);
+void BotIntermission_PrintStatus(int expectedBots, int expectedHumans,
+                                 int expectedPlaying,
+                                 int expectedIntermission,
+                                 int expectedPmFreezeBots,
+                                 int expectedPostIntermission,
+                                 int expectedSortedBots);
+int BotIntermission_BeginIntermission();
+void BotIntermission_ResetStatus();
+void BotNextMap_PrintStatus(int expectedBots, int expectedPlayQueue,
+                            int expectedMyMapQueue,
+                            int expectedLastTransitionSuccess,
+                            int expectedLastTransitionConsumed,
+                            int expectedChangeMapSet);
+int BotNextMap_TransitionQueuedMap();
+void BotNextMap_ResetStatus();
+void BotScoreboard_PrintStatus(int expectedBots, int expectedHumans,
+                               int expectedPlaying, int expectedSortedBots,
+                               int expectedLeaderBot, int expectedTopScore,
+                               int expectedSecondScore);
+int BotScoreboard_ApplyTestScores(int leaderScore, int runnerScore);
+void BotScoreboard_ResetStatus();
 bool G_FilterPacket(const char *from);
 void G_LoadIPFilters();
 void G_SaveIPFilters();
@@ -5237,8 +5368,26 @@ std::optional<MapEntry> AutoSelectNextMap();
 std::vector<const MapEntry *> MapSelectorVoteCandidates(int maxCandidates = 3);
 void MapSelector_ClearVote(LevelLocals &levelState, int clientIndex);
 int MapSelector_SyncVotes(LevelLocals &levelState);
+void MapSelectorFinalize();
+void MapSelector_CastVote(gentity_t *ent, int voteIndex);
 int PrintMapListFiltered(gentity_t *ent, bool cycleOnly,
                          const std::string &filterQuery);
+
+void BotAdminAudit_PrintStatus(int expectedBots, int expectedAdminBots,
+                               int expectedLastBlocked,
+                               int expectedRedLocked);
+int BotAdminAudit_TryFirstBotAdminCommand();
+void BotAdminAudit_ResetStatus();
+
+void BotTournament_PrintStatus(int expectedBots, int expectedActive,
+                               int expectedVetoStarted, int expectedPicks,
+                               int expectedBans,
+                               int expectedLastVetoBlocked);
+int BotTournament_SetupBotVetoState();
+int BotTournament_TryFirstBotVetoPick(const char *mapName);
+int BotTournament_SetupReplayState();
+int BotTournament_TryReplayGame(int gameNumber);
+void BotTournament_ResetStatus();
 
 //
 // match_state.cpp
@@ -5255,6 +5404,7 @@ void Match_UpdateDuelRecords();
 //
 // match_logging.cpp
 //
+int MatchLogging_PrintSchemaStatus();
 
 //
 // g_chase.cpp
