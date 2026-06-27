@@ -122,6 +122,95 @@ static inline bool VK_UI_Check(VkResult result, const char *what)
     return false;
 }
 
+static bool VK_UI_ArrayBytes(size_t item_size, uint32_t count, size_t *out_size,
+                             const char *what)
+{
+    if (!out_size || (item_size && (size_t)count > SIZE_MAX / item_size)) {
+        Com_SetLastError(va("Vulkan UI: %s allocation size overflow", what));
+        return false;
+    }
+
+    *out_size = item_size * (size_t)count;
+    return true;
+}
+
+static bool VK_UI_GrowCapacityTo(uint32_t current, uint32_t needed,
+                                 uint32_t initial, uint32_t *out_capacity,
+                                 const char *what)
+{
+    uint32_t new_capacity = current ? current : initial;
+    while (new_capacity < needed) {
+        if (new_capacity > UINT32_MAX / VK_UI_BUFFER_GROWTH_FACTOR) {
+            Com_SetLastError(va("Vulkan UI: %s capacity overflow", what));
+            return false;
+        }
+        new_capacity *= VK_UI_BUFFER_GROWTH_FACTOR;
+    }
+
+    *out_capacity = new_capacity;
+    return true;
+}
+
+static bool VK_UI_GrowCapacityPast(uint32_t current, uint32_t needed_index,
+                                   uint32_t initial, uint32_t *out_capacity,
+                                   const char *what)
+{
+    if (needed_index == UINT32_MAX) {
+        Com_SetLastError(va("Vulkan UI: %s capacity overflow", what));
+        return false;
+    }
+
+    return VK_UI_GrowCapacityTo(current, needed_index + 1, initial, out_capacity, what);
+}
+
+static bool VK_UI_AddCount(uint32_t value, uint32_t delta, uint32_t *out_value,
+                           const char *what)
+{
+    if (value > UINT32_MAX - delta) {
+        Com_SetLastError(va("Vulkan UI: %s count overflow", what));
+        return false;
+    }
+
+    *out_value = value + delta;
+    return true;
+}
+
+static bool VK_UI_TexturePixelCount(int width, int height, size_t *out_pixels)
+{
+    if (!out_pixels || width <= 0 || height <= 0) {
+        return false;
+    }
+
+    size_t pixels_w = (size_t)width;
+    size_t pixels_h = (size_t)height;
+    if (pixels_w > SIZE_MAX / pixels_h) {
+        return false;
+    }
+
+    *out_pixels = pixels_w * pixels_h;
+    return true;
+}
+
+static bool VK_UI_TextureByteSize(int width, int height, size_t bytes_per_pixel,
+                                  size_t *out_bytes)
+{
+    if (!out_bytes || !bytes_per_pixel) {
+        return false;
+    }
+
+    size_t pixels;
+    if (!VK_UI_TexturePixelCount(width, height, &pixels)) {
+        return false;
+    }
+
+    if (pixels > SIZE_MAX / bytes_per_pixel) {
+        return false;
+    }
+
+    *out_bytes = pixels * bytes_per_pixel;
+    return true;
+}
+
 static inline VkDevice VK_UI_Device(void)
 {
     return vk_ui.ctx ? vk_ui.ctx->device : VK_NULL_HANDLE;
@@ -246,12 +335,20 @@ static bool VK_UI_EnsureDrawCapacity(uint32_t needed_vertices,
                                      uint32_t needed_draws)
 {
     if (needed_vertices > vk_ui.vertex_capacity) {
-        uint32_t new_capacity = vk_ui.vertex_capacity ? vk_ui.vertex_capacity : VK_UI_INITIAL_VERTEX_CAPACITY;
-        while (new_capacity < needed_vertices) {
-            new_capacity *= VK_UI_BUFFER_GROWTH_FACTOR;
+        uint32_t new_capacity;
+        if (!VK_UI_GrowCapacityTo(vk_ui.vertex_capacity, needed_vertices,
+                                  VK_UI_INITIAL_VERTEX_CAPACITY, &new_capacity,
+                                  "vertex")) {
+            return false;
         }
 
-        void *new_vertices = realloc(vk_ui.vertices, sizeof(*vk_ui.vertices) * new_capacity);
+        size_t new_size;
+        if (!VK_UI_ArrayBytes(sizeof(*vk_ui.vertices), new_capacity, &new_size,
+                              "vertex")) {
+            return false;
+        }
+
+        void *new_vertices = realloc(vk_ui.vertices, new_size);
         if (!new_vertices) {
             Com_SetLastError("Vulkan UI: out of memory for vertices");
             return false;
@@ -262,12 +359,20 @@ static bool VK_UI_EnsureDrawCapacity(uint32_t needed_vertices,
     }
 
     if (needed_indices > vk_ui.index_capacity) {
-        uint32_t new_capacity = vk_ui.index_capacity ? vk_ui.index_capacity : VK_UI_INITIAL_INDEX_CAPACITY;
-        while (new_capacity < needed_indices) {
-            new_capacity *= VK_UI_BUFFER_GROWTH_FACTOR;
+        uint32_t new_capacity;
+        if (!VK_UI_GrowCapacityTo(vk_ui.index_capacity, needed_indices,
+                                  VK_UI_INITIAL_INDEX_CAPACITY, &new_capacity,
+                                  "index")) {
+            return false;
         }
 
-        void *new_indices = realloc(vk_ui.indices, sizeof(*vk_ui.indices) * new_capacity);
+        size_t new_size;
+        if (!VK_UI_ArrayBytes(sizeof(*vk_ui.indices), new_capacity, &new_size,
+                              "index")) {
+            return false;
+        }
+
+        void *new_indices = realloc(vk_ui.indices, new_size);
         if (!new_indices) {
             Com_SetLastError("Vulkan UI: out of memory for indices");
             return false;
@@ -278,12 +383,20 @@ static bool VK_UI_EnsureDrawCapacity(uint32_t needed_vertices,
     }
 
     if (needed_draws > vk_ui.draw_capacity) {
-        uint32_t new_capacity = vk_ui.draw_capacity ? vk_ui.draw_capacity : VK_UI_INITIAL_DRAW_CAPACITY;
-        while (new_capacity < needed_draws) {
-            new_capacity *= VK_UI_BUFFER_GROWTH_FACTOR;
+        uint32_t new_capacity;
+        if (!VK_UI_GrowCapacityTo(vk_ui.draw_capacity, needed_draws,
+                                  VK_UI_INITIAL_DRAW_CAPACITY, &new_capacity,
+                                  "draw")) {
+            return false;
         }
 
-        void *new_draws = realloc(vk_ui.draws, sizeof(*vk_ui.draws) * new_capacity);
+        size_t new_size;
+        if (!VK_UI_ArrayBytes(sizeof(*vk_ui.draws), new_capacity, &new_size,
+                              "draw")) {
+            return false;
+        }
+
+        void *new_draws = realloc(vk_ui.draws, new_size);
         if (!new_draws) {
             Com_SetLastError("Vulkan UI: out of memory for draw commands");
             return false;
@@ -309,8 +422,14 @@ static bool VK_UI_EnsureHostBuffers(void)
 
 static bool VK_UI_EnsureGpuBuffers(void)
 {
-    size_t needed_vertex_bytes = sizeof(*vk_ui.vertices) * vk_ui.vertex_capacity;
-    size_t needed_index_bytes = sizeof(*vk_ui.indices) * vk_ui.index_capacity;
+    size_t needed_vertex_bytes;
+    size_t needed_index_bytes;
+    if (!VK_UI_ArrayBytes(sizeof(*vk_ui.vertices), vk_ui.vertex_capacity,
+                          &needed_vertex_bytes, "vertex gpu buffer") ||
+        !VK_UI_ArrayBytes(sizeof(*vk_ui.indices), vk_ui.index_capacity,
+                          &needed_index_bytes, "index gpu buffer")) {
+        return false;
+    }
 
     if (needed_vertex_bytes > vk_ui.vertex_buffer_bytes) {
         VK_UI_DestroyBuffer(&vk_ui.vertex_buffer, &vk_ui.vertex_memory, &vk_ui.vertex_mapped);
@@ -396,19 +515,31 @@ static bool VK_UI_EnsureImageCapacity(uint32_t needed)
         return true;
     }
 
-    uint32_t new_capacity = vk_ui.image_capacity ? vk_ui.image_capacity : VK_UI_INITIAL_IMAGE_CAPACITY;
-    while (new_capacity <= needed) {
-        new_capacity *= VK_UI_BUFFER_GROWTH_FACTOR;
+    uint32_t new_capacity;
+    if (!VK_UI_GrowCapacityPast(vk_ui.image_capacity, needed,
+                                VK_UI_INITIAL_IMAGE_CAPACITY, &new_capacity,
+                                "image")) {
+        return false;
     }
 
-    size_t new_size = sizeof(*vk_ui.images) * new_capacity;
+    size_t new_size;
+    if (!VK_UI_ArrayBytes(sizeof(*vk_ui.images), new_capacity, &new_size,
+                          "image")) {
+        return false;
+    }
+
+    size_t old_size;
+    if (!VK_UI_ArrayBytes(sizeof(*vk_ui.images), vk_ui.image_capacity, &old_size,
+                          "image")) {
+        return false;
+    }
+
     void *new_images = realloc(vk_ui.images, new_size);
     if (!new_images) {
         Com_SetLastError("Vulkan UI: out of memory for image handles");
         return false;
     }
 
-    size_t old_size = sizeof(*vk_ui.images) * vk_ui.image_capacity;
     memset((byte *)new_images + old_size, 0, new_size - old_size);
 
     vk_ui.images = new_images;
@@ -666,7 +797,11 @@ static void VK_UI_UpdateDescriptorSet(vk_ui_image_t *image)
 static bool VK_UI_UploadImageData(vk_ui_image_t *image, int width, int height,
                                   const byte *rgba, VkImageLayout old_layout)
 {
-    size_t pixel_size = (size_t)width * (size_t)height * 4;
+    size_t pixel_size;
+    if (!VK_UI_TextureByteSize(width, height, 4, &pixel_size)) {
+        Com_SetLastError("Vulkan UI: image upload size overflow");
+        return false;
+    }
 
     VkBuffer staging_buffer = VK_NULL_HANDLE;
     VkDeviceMemory staging_memory = VK_NULL_HANDLE;
@@ -789,7 +924,11 @@ static bool VK_UI_UploadImageDataSubRect(vk_ui_image_t *image, int x, int y,
                                          int width, int height,
                                          const byte *rgba, VkImageLayout old_layout)
 {
-    size_t pixel_size = (size_t)width * (size_t)height * 4;
+    size_t pixel_size;
+    if (!VK_UI_TextureByteSize(width, height, 4, &pixel_size)) {
+        Com_SetLastError("Vulkan UI: image upload size overflow");
+        return false;
+    }
 
     VkBuffer staging_buffer = VK_NULL_HANDLE;
     VkDeviceMemory staging_memory = VK_NULL_HANDLE;
@@ -1010,7 +1149,12 @@ static bool VK_UI_LoadPcxRgba(const byte *raw_data, size_t raw_len,
         return false;
     }
 
-    uint8_t *indexed = malloc((size_t)width * (size_t)height);
+    size_t indexed_bytes;
+    if (!VK_UI_TextureByteSize(width, height, sizeof(uint8_t), &indexed_bytes)) {
+        return false;
+    }
+
+    uint8_t *indexed = malloc(indexed_bytes);
     if (!indexed) {
         return false;
     }
@@ -1047,7 +1191,12 @@ static bool VK_UI_LoadPcxRgba(const byte *raw_data, size_t raw_len,
         }
     }
 
-    size_t rgba_bytes = (size_t)width * (size_t)height * sizeof(uint32_t);
+    size_t rgba_bytes;
+    if (!VK_UI_TextureByteSize(width, height, sizeof(uint32_t), &rgba_bytes)) {
+        free(indexed);
+        return false;
+    }
+
     uint32_t *rgba = malloc(rgba_bytes);
     if (!rgba) {
         free(indexed);
@@ -1078,13 +1227,22 @@ static bool VK_UI_LoadWalRgba(const byte *raw_data, size_t raw_len,
         return false;
     }
 
-    uint32_t size = width * height;
+    size_t indexed_bytes;
+    if (!VK_UI_TextureByteSize((int)width, (int)height, 1, &indexed_bytes)) {
+        return false;
+    }
+
+    uint32_t size = (uint32_t)indexed_bytes;
     uint32_t offset = LittleLong(mt->offsets[0]);
     if (offset + size < offset || offset + size > raw_len) {
         return false;
     }
 
-    size_t rgba_bytes = (size_t)size * sizeof(uint32_t);
+    size_t rgba_bytes;
+    if (!VK_UI_TextureByteSize((int)width, (int)height, sizeof(uint32_t), &rgba_bytes)) {
+        return false;
+    }
+
     uint32_t *rgba = malloc(rgba_bytes);
     if (!rgba) {
         return false;
@@ -1177,7 +1335,12 @@ static bool VK_UI_LoadRgbaFromFile(const char *path, int *out_w, int *out_h, byt
         return false;
     }
 
-    size_t rgba_bytes = (size_t)width * (size_t)height * 4;
+    size_t rgba_bytes;
+    if (!VK_UI_TextureByteSize(width, height, 4, &rgba_bytes)) {
+        stbi_image_free(decoded);
+        return false;
+    }
+
     byte *rgba_copy = malloc(rgba_bytes);
     if (!rgba_copy) {
         stbi_image_free(decoded);
@@ -1464,9 +1627,13 @@ static bool VK_UI_EnqueueQuad(float x, float y, float w, float h,
         return false;
     }
 
-    if (!VK_UI_EnsureDrawCapacity(vk_ui.vertex_count + 4,
-                                  vk_ui.index_count + 6,
-                                  vk_ui.draw_count + 1)) {
+    uint32_t needed_vertices;
+    uint32_t needed_indices;
+    uint32_t needed_draws;
+    if (!VK_UI_AddCount(vk_ui.vertex_count, 4, &needed_vertices, "vertex") ||
+        !VK_UI_AddCount(vk_ui.index_count, 6, &needed_indices, "index") ||
+        !VK_UI_AddCount(vk_ui.draw_count, 1, &needed_draws, "draw") ||
+        !VK_UI_EnsureDrawCapacity(needed_vertices, needed_indices, needed_draws)) {
         return false;
     }
 
@@ -1489,8 +1656,8 @@ static bool VK_UI_EnqueueQuad(float x, float y, float w, float h,
     vk_ui.indices[vk_ui.index_count + 4] = base_vertex + 1;
     vk_ui.indices[vk_ui.index_count + 5] = base_vertex + 2;
 
-    vk_ui.vertex_count += 4;
-    vk_ui.index_count += 6;
+    vk_ui.vertex_count = needed_vertices;
+    vk_ui.index_count = needed_indices;
 
     VkRect2D scissor = VK_UI_CurrentScissor();
 
@@ -1533,9 +1700,13 @@ static bool VK_UI_EnqueueVignette(float x, float y, float w, float h,
         return false;
     }
 
-    if (!VK_UI_EnsureDrawCapacity(vk_ui.vertex_count + 8,
-                                  vk_ui.index_count + 24,
-                                  vk_ui.draw_count + 1)) {
+    uint32_t needed_vertices;
+    uint32_t needed_indices;
+    uint32_t needed_draws;
+    if (!VK_UI_AddCount(vk_ui.vertex_count, 8, &needed_vertices, "vertex") ||
+        !VK_UI_AddCount(vk_ui.index_count, 24, &needed_indices, "index") ||
+        !VK_UI_AddCount(vk_ui.draw_count, 1, &needed_draws, "draw") ||
+        !VK_UI_EnsureDrawCapacity(needed_vertices, needed_indices, needed_draws)) {
         return false;
     }
 
@@ -1571,8 +1742,8 @@ static bool VK_UI_EnqueueVignette(float x, float y, float w, float h,
         vk_ui.indices[vk_ui.index_count + i] = base_vertex + ring_indices[i];
     }
 
-    vk_ui.vertex_count += 8;
-    vk_ui.index_count += 24;
+    vk_ui.vertex_count = needed_vertices;
+    vk_ui.index_count = needed_indices;
 
     vk_ui_draw_t *draw = &vk_ui.draws[vk_ui.draw_count++];
     draw->first_index = base_index;
@@ -1640,9 +1811,13 @@ static bool VK_UI_EnqueueRotatedQuad(float x, float y, float w, float h,
         return false;
     }
 
-    if (!VK_UI_EnsureDrawCapacity(vk_ui.vertex_count + 4,
-                                  vk_ui.index_count + 6,
-                                  vk_ui.draw_count + 1)) {
+    uint32_t needed_vertices;
+    uint32_t needed_indices;
+    uint32_t needed_draws;
+    if (!VK_UI_AddCount(vk_ui.vertex_count, 4, &needed_vertices, "vertex") ||
+        !VK_UI_AddCount(vk_ui.index_count, 6, &needed_indices, "index") ||
+        !VK_UI_AddCount(vk_ui.draw_count, 1, &needed_draws, "draw") ||
+        !VK_UI_EnsureDrawCapacity(needed_vertices, needed_indices, needed_draws)) {
         return false;
     }
 
@@ -1693,8 +1868,8 @@ static bool VK_UI_EnqueueRotatedQuad(float x, float y, float w, float h,
     vk_ui.indices[vk_ui.index_count + 4] = base_vertex + 1;
     vk_ui.indices[vk_ui.index_count + 5] = base_vertex + 2;
 
-    vk_ui.vertex_count += 4;
-    vk_ui.index_count += 6;
+    vk_ui.vertex_count = needed_vertices;
+    vk_ui.index_count = needed_indices;
 
     VkRect2D scissor = VK_UI_CurrentScissor();
 
@@ -2128,8 +2303,14 @@ void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
         return;
     }
 
-    size_t vertex_bytes = sizeof(*vk_ui.vertices) * vk_ui.vertex_count;
-    size_t index_bytes = sizeof(*vk_ui.indices) * vk_ui.index_count;
+    size_t vertex_bytes;
+    size_t index_bytes;
+    if (!VK_UI_ArrayBytes(sizeof(*vk_ui.vertices), vk_ui.vertex_count,
+                          &vertex_bytes, "vertex frame upload") ||
+        !VK_UI_ArrayBytes(sizeof(*vk_ui.indices), vk_ui.index_count,
+                          &index_bytes, "index frame upload")) {
+        return;
+    }
 
     memcpy(vk_ui.vertex_mapped, vk_ui.vertices, vertex_bytes);
     memcpy(vk_ui.index_mapped, vk_ui.indices, index_bytes);
@@ -2363,11 +2544,17 @@ bool VK_UI_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *
         return false;
     }
 
+    size_t pixels;
+    if (!VK_UI_TexturePixelCount(width, height, &pixels)) {
+        Com_SetLastError("Vulkan UI: image transparency size overflow");
+        return false;
+    }
+
     if (!VK_UI_SetImagePixels(image, width, height, pic)) {
         return false;
     }
 
-    image->transparent = VK_UI_ImageHasTransparency(pic, (size_t)width * (size_t)height);
+    image->transparent = VK_UI_ImageHasTransparency(pic, pixels);
     if (image->transparent) {
         image->flags |= IF_TRANSPARENT;
         image->flags &= ~IF_OPAQUE;
@@ -2386,7 +2573,9 @@ bool VK_UI_UpdateImageRGBASubRect(qhandle_t handle, int x, int y, int width, int
         return false;
     }
 
-    if (x < 0 || y < 0 || x + width > image->width || y + height > image->height) {
+    if (image->width <= 0 || image->height <= 0 ||
+        x < 0 || y < 0 || width > image->width || height > image->height ||
+        x > image->width - width || y > image->height - height) {
         Com_SetLastError("Vulkan UI: sub-rect update out of bounds");
         return false;
     }

@@ -33,13 +33,11 @@ set g_statex_humans_present 1
 set g_statex_export_html 1
 ```
 
-For bot practice, also enable the bot runtime and choose a small autofill
-target:
+For bot practice, choose a small autofill target:
 
 ```text
-set sg_bot_enable 1
-set sg_bot_profile vanguard
-set sg_bot_min_players 4
+set bot_profile vanguard
+set bot_min_players 4
 ```
 
 See [Bots](bots.md), [Bot Profiles](bot-profiles.md), and
@@ -53,7 +51,7 @@ immediately. `match_start_no_humans 1` lets a bot-filled practice server start
 when there are no human players, which is useful for local validation and
 always-on warmup servers.
 
-Bots can fill practice slots through `sg_bot_min_players`, but they are treated
+Bots can fill practice slots through `bot_min_players`, but they are treated
 as bots by the competitive systems. They do not become voting humans, tournament
 captains, or match-log human presence.
 

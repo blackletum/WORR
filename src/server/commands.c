@@ -1380,11 +1380,11 @@ void SV_ListMatches_f(list_t *list)
     LIST_FOR_EACH(addrmatch_t, match, list, entry) {
         format_mask(match, addr, sizeof(addr));
         if (!match->time) {
-            strcpy(last, "never");
+            Q_strlcpy(last, "never", sizeof(last));
         } else {
             struct tm *tm = localtime(&match->time);
             if (!tm || !strftime(last, sizeof(last), "%d %b %H:%M", tm))
-                strcpy(last, "error");
+                Q_strlcpy(last, "error", sizeof(last));
         }
         Com_Printf("%-2d %-18s %-4u %-12s %s\n", ++id, addr,
                    match->hits, last, match->comment);

@@ -31,8 +31,11 @@ constexpr int BOT_COMBAT_ESTIMATE_ARMORED_THRESHOLD = 50;
 constexpr int BOT_COMBAT_ESTIMATE_DURABLE_EFFECTIVE_HEALTH = 100;
 constexpr int BOT_COMBAT_ESTIMATE_FINISHER_BONUS = 7;
 constexpr int BOT_COMBAT_ESTIMATE_ARMOR_PRESSURE_BONUS = 6;
-constexpr int BOT_COMBAT_ESTIMATE_UNDERPOWERED_PENALTY = 6;
+constexpr int BOT_COMBAT_ESTIMATE_UNDERPOWERED_PENALTY = 14;
 constexpr int BOT_COMBAT_ESTIMATE_PRESSURE_PRIORITY_THRESHOLD = 50;
+constexpr int BOT_COMBAT_WEAK_HEALTH = 45;
+constexpr int BOT_COMBAT_WEAK_EFFECTIVE_HEALTH = 65;
+constexpr int BOT_COMBAT_STACKED_EFFECTIVE_HEALTH = 125;
 constexpr int BOT_COMBAT_DEFAULT_FIELD_OF_VIEW_DEGREES = 110;
 constexpr int BOT_COMBAT_MIN_FIELD_OF_VIEW_DEGREES = 30;
 constexpr int BOT_COMBAT_MAX_FIELD_OF_VIEW_DEGREES = 180;
@@ -922,6 +925,29 @@ bool BotCombat_IsEstimateUnderpoweredWeapon(const BotWeaponMetadata &metadata) {
 	return metadata.priority < BOT_COMBAT_ESTIMATE_PRESSURE_PRIORITY_THRESHOLD;
 }
 
+int BotCombat_SelfEffectiveHealth(const BotCombatContext &context) {
+	return BotCombat_EstimatedHealthValue(context.selfHealth) +
+		BotCombat_EstimatedHealthValue(context.selfArmor);
+}
+
+bool BotCombat_SelfIsWeak(const BotCombatContext &context) {
+	return context.selfHealth > 0 &&
+		(context.selfHealth <= BOT_COMBAT_WEAK_HEALTH ||
+			BotCombat_SelfEffectiveHealth(context) <= BOT_COMBAT_WEAK_EFFECTIVE_HEALTH);
+}
+
+bool BotCombat_EnemyEstimateIsStacked(const BotCombatContext &context) {
+	if (!BotCombat_CanUseEnemyEstimate(context)) {
+		return false;
+	}
+
+	const int armorEstimate = BotCombat_EstimatedHealthValue(context.enemyArmorEstimate);
+	const int effectiveHealth = BotCombat_EstimatedEffectiveHealth(context);
+	return effectiveHealth >= BOT_COMBAT_STACKED_EFFECTIVE_HEALTH ||
+		(armorEstimate >= BOT_COMBAT_ESTIMATE_ARMORED_THRESHOLD &&
+			effectiveHealth >= BOT_COMBAT_ESTIMATE_DURABLE_EFFECTIVE_HEALTH);
+}
+
 BotWeaponEstimateAdjustment BotCombat_BuildEstimateWeaponAdjustment(
 	const BotWeaponMetadata &metadata,
 	const BotCombatContext &context,
@@ -1129,6 +1155,30 @@ void BotCombat_ResetStatus() {
 	botCombatStatus.lastDamageTargetEntity = -1;
 }
 
+bool BotCombat_ShouldAvoidWeakUnderpoweredFight(const BotCombatContext &context) {
+	if (!context.hasEnemy ||
+		!context.enemyVisible ||
+		!context.enemyShootable ||
+		!BotCombat_SelfIsWeak(context) ||
+		!BotCombat_EnemyEstimateIsStacked(context)) {
+		return false;
+	}
+
+	const BotWeaponSelectionResult selection = BotCombat_SelectPreferredWeapon(context);
+	if (selection.shouldSwitch &&
+		selection.weaponItem > 0 &&
+		selection.weaponItem != context.currentWeaponItem &&
+		selection.metadata != nullptr &&
+		!BotCombat_IsEstimateUnderpoweredWeapon(*selection.metadata)) {
+		return false;
+	}
+
+	const BotWeaponMetadata *currentWeaponMetadata =
+		BotCombat_GetWeaponMetadata(context.currentWeaponItem);
+	return currentWeaponMetadata != nullptr &&
+		BotCombat_IsEstimateUnderpoweredWeapon(*currentWeaponMetadata);
+}
+
 BotCombatDecision BotCombat_Evaluate(const BotCombatContext &context) {
 	botCombatStatus.evaluations++;
 	botCombatStatus.lastEnemyDistanceSquared = context.enemyDistanceSquared;
@@ -1195,6 +1245,13 @@ BotCombatDecision BotCombat_Evaluate(const BotCombatContext &context) {
 		botCombatStatus.lastWeaponItem = context.currentWeaponItem;
 		botCombatStatus.lastPriority = 0;
 		botCombatStatus.lastSelectionReason = "splash_fire_unsafe";
+		return {};
+	}
+	if (BotCombat_ShouldAvoidWeakUnderpoweredFight(context)) {
+		botCombatStatus.withheldFire++;
+		botCombatStatus.lastWeaponItem = context.currentWeaponItem;
+		botCombatStatus.lastPriority = 0;
+		botCombatStatus.lastSelectionReason = "weak_underpowered";
 		return {};
 	}
 

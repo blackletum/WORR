@@ -9,35 +9,35 @@ botfile pack. The package keeps the canonical copy in `basew/pak0.pkz` and also
 stages the same `botfiles/` tree as loose files under `basew/` so dedicated
 servers can discover, edit, and reload profiles without unpacking the archive.
 If you are using an older or incomplete development build without profile files,
-the bot commands still work, but `sg_bot_add <profile>` falls back to adding a
+the bot commands still work, but `addbot <profile>` falls back to adding a
 bot using that text as its display name.
 
 ## Quick Start
 
-Start a deathmatch server with bot support enabled:
+Start a deathmatch server:
 
 ```powershell
-.\worr_ded_x86_64.exe +set basedir . +set game basew +set deathmatch 1 +set maxclients 8 +set sg_bot_enable 1 +map q2dm1
+.\worr_ded_x86_64.exe +set basedir . +set game basew +set deathmatch 1 +set maxclients 8 +map q2dm1
 ```
 
 From the server console or rcon:
 
 ```text
-sg_bot_reload_profiles
-sg_bot_add vanguard
-sg_bot_list
-sg_bot_remove vanguard
+bot_reload_profiles
+addbot vanguard
+botlist
+removebot vanguard
 ```
 
 Useful bot commands:
 
-- `sg_bot_add [profile] [team]`: add one bot. The first argument is treated as a
+- `addbot [profile] [team]`: add one bot. The first argument is treated as a
   profile id or profile name when one exists.
-- `sg_bot_remove <name|slot|all>`: remove one bot by name/slot, or remove all
+- `removebot <name|slot|all>`: remove one bot by name/slot, or remove all
   bots.
-- `sg_bot_kick_all`: remove all bots.
-- `sg_bot_list`: show bot slots currently on the server.
-- `sg_bot_reload_profiles`: rescan profile files without restarting the server.
+- `kickbots`: remove all bots.
+- `botlist`: show bot slots currently on the server.
+- `bot_reload_profiles`: rescan profile files without restarting the server.
 
 ## Where Profiles Live After Install
 
@@ -93,7 +93,7 @@ After adding or changing profile files on a running server, reload the profile
 table:
 
 ```text
-sg_bot_reload_profiles
+bot_reload_profiles
 ```
 
 Reloading affects future bot adds and auto-filled bots. Bots already in the
@@ -105,14 +105,14 @@ want to see identity or tuning changes immediately.
 Once profiles are present, add one by id:
 
 ```text
-sg_bot_add vanguard
+addbot vanguard
 ```
 
 To force a team for this add, pass the team after the profile:
 
 ```text
-sg_bot_add vanguard red
-sg_bot_add bulwark blue
+addbot vanguard red
+addbot bulwark blue
 ```
 
 The command team overrides the team written in the profile. Team values are most
@@ -127,34 +127,32 @@ profile is mostly for validation and smoke tests.
 
 ## Minimum Player Bots
 
-`sg_bot_min_players` keeps the server filled to a target population while
-`sg_bot_enable` is on. Humans and manually added bots both count toward the
-target. Auto-filled bots are removed when humans join, when the target is
-lowered, or when bot support is disabled.
+`bot_min_players` keeps the server filled to a target population. Humans and
+manually added bots both count toward the target. Auto-filled bots are removed
+when humans join or when the target is lowered.
 
 Example: keep a four-player practice server filled with the default `vanguard`
 profile:
 
 ```text
-set sg_bot_enable 1
-set sg_bot_profile vanguard
-set sg_bot_min_players 4
+set bot_profile vanguard
+set bot_min_players 4
 ```
 
-If `sg_bot_profile` names a loaded profile, auto-filled bots use that profile.
+If `bot_profile` names a loaded profile, auto-filled bots use that profile.
 If it is empty or does not match a loaded profile, WORR uses generated bot names
 such as `bot1`, `bot2`, and `bot3`.
 
 To stop auto-fill without kicking manually added bots, lower the target:
 
 ```text
-set sg_bot_min_players 0
+set bot_min_players 0
 ```
 
 To remove every current bot:
 
 ```text
-sg_bot_remove all
+removebot all
 ```
 
 ## Profile Fields
@@ -198,11 +196,11 @@ anything with spaces.
 - `chat_personality`, `chat`, or `personality`: short chat style label, such as
   `quiet`. Packaged profiles should use one of the known labels such as
   `quiet`, `direct`, `taunting`, `helpful`, or `steady`, or expect a validator
-  warning until the new label is registered. The `sg_bot_allow_chat` cvar is
+  warning until the new label is registered. The `bot_allow_chat` cvar is
   default-off; when enabled, it allows the current conservative bot chat
   dispatch proof and selects the initial proof line from the bot's chat
-  personality bucket. `sg_bot_chat_team_only` can route that proof through team
-  chat, and `sg_bot_chat_min_interval_ms <ms>` can require a global minimum
+  personality bucket. `bot_chat_team_only` can route that proof through team
+  chat, and `bot_chat_min_interval_ms <ms>` can require a global minimum
   interval between submitted proof-chat lines. Smoke-only reply and multi-event
   reply selectors also use this personality metadata for validation while the
   richer chat system is still being built.
@@ -257,10 +255,10 @@ item/resource policy is active: greed favors self pickups, denial favors
 deny-enemy pickups in team modes, powerup timing favors major items, and retreat
 health raises survival-item priority once the bot is at or below that health
 threshold. Treat chat fields as safe profile metadata and tuning hints whose
-exact behavior can change as the BotLib work continues. `sg_bot_allow_chat`
+exact behavior can change as the BotLib work continues. `bot_allow_chat`
 currently gates a narrow once-per-spawn live dispatch proof whose initial line
-comes from the profile chat personality, and `sg_bot_chat_team_only` can limit
-that proof to team chat. `sg_bot_chat_min_interval_ms <ms>` sets a global
+comes from the profile chat personality, and `bot_chat_team_only` can limit
+that proof to team chat. `bot_chat_min_interval_ms <ms>` sets a global
 minimum interval between submitted proof-chat lines, with rate-limited attempts
 skipped rather than counted as failures. Current development builds also use
 chat personality for smoke-only reply and multi-event route-ready proofs;
@@ -380,13 +378,14 @@ skill 5
 After adding or changing profile files on a running server:
 
 ```text
-sg_bot_reload_profiles
-sg_bot_add vanguard
+bot_reload_profiles
+addbot vanguard
 ```
 
 ## Operator Notes
 
-- Add `set sg_bot_enable 1` to your server config before relying on bots.
+- Bots are enabled by default; check for `set bot_enable 0` in old configs if
+  bots stop receiving navigation commands.
 - Keep `maxclients` high enough for humans plus any manual or auto-filled bots.
 - Bot profile files are server-side, but referenced skins must still exist in
   the game data players use.

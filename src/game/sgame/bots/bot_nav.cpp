@@ -242,7 +242,7 @@ bool botNavNaturalMovementSupportChecked = false;
 bool BotNavRocketJumpAllowed() {
 	static cvar_t *allowRocketJump = nullptr;
 	if (allowRocketJump == nullptr && gi.cvar != nullptr) {
-		allowRocketJump = gi.cvar("sg_bot_allow_rocketjump", "0", CVAR_NOFLAGS);
+		allowRocketJump = gi.cvar("bot_allow_rocketjump", "0", CVAR_NOFLAGS);
 	}
 	return allowRocketJump != nullptr && allowRocketJump->integer > 0;
 }
@@ -250,7 +250,7 @@ bool BotNavRocketJumpAllowed() {
 bool BotNavBehaviorPolicyEnabled() {
 	static cvar_t *behaviorEnable = nullptr;
 	if (behaviorEnable == nullptr && gi.cvar != nullptr) {
-		behaviorEnable = gi.cvar("sg_bot_behavior_enable", "0", CVAR_NOFLAGS);
+		behaviorEnable = gi.cvar("bot_behavior_enable", "1", CVAR_NOFLAGS);
 	}
 	return behaviorEnable != nullptr && behaviorEnable->integer > 0;
 }
@@ -258,7 +258,7 @@ bool BotNavBehaviorPolicyEnabled() {
 bool BotNavCoopShareLoopEnabled() {
 	static cvar_t *shareLoop = nullptr;
 	if (shareLoop == nullptr && gi.cvar != nullptr) {
-		shareLoop = gi.cvar("sg_bot_coop_share_loop", "0", CVAR_NOFLAGS);
+		shareLoop = gi.cvar("bot_coop_share_loop", "0", CVAR_NOFLAGS);
 	}
 	return shareLoop != nullptr && shareLoop->integer > 0;
 }
@@ -266,7 +266,7 @@ bool BotNavCoopShareLoopEnabled() {
 bool BotNavCoopResourceShareEnabled() {
 	static cvar_t *resourceShare = nullptr;
 	if (resourceShare == nullptr && gi.cvar != nullptr) {
-		resourceShare = gi.cvar("sg_bot_coop_resource_share", "0", CVAR_NOFLAGS);
+		resourceShare = gi.cvar("bot_coop_resource_share", "0", CVAR_NOFLAGS);
 	}
 	return BotNavBehaviorPolicyEnabled() ||
 		BotNavCoopShareLoopEnabled() ||
@@ -276,7 +276,7 @@ bool BotNavCoopResourceShareEnabled() {
 bool BotNavMatchItemPolicyEnabled() {
 	static cvar_t *matchItemPolicy = nullptr;
 	if (matchItemPolicy == nullptr && gi.cvar != nullptr) {
-		matchItemPolicy = gi.cvar("sg_bot_match_item_policy", "0", CVAR_NOFLAGS);
+		matchItemPolicy = gi.cvar("bot_match_item_policy", "0", CVAR_NOFLAGS);
 	}
 	return BotNavBehaviorPolicyEnabled() ||
 		(matchItemPolicy != nullptr && matchItemPolicy->integer > 0);
@@ -285,7 +285,7 @@ bool BotNavMatchItemPolicyEnabled() {
 bool BotNavDuelLivePacingEnabled() {
 	static cvar_t *duelLivePacing = nullptr;
 	if (duelLivePacing == nullptr && gi.cvar != nullptr) {
-		duelLivePacing = gi.cvar("sg_bot_duel_live_pacing", "0", CVAR_NOFLAGS);
+		duelLivePacing = gi.cvar("bot_duel_live_pacing", "0", CVAR_NOFLAGS);
 	}
 	return duelLivePacing != nullptr && duelLivePacing->integer > 0;
 }
@@ -293,7 +293,7 @@ bool BotNavDuelLivePacingEnabled() {
 bool BotNavFfaItemRolesEnabled() {
 	static cvar_t *ffaItemRoles = nullptr;
 	if (ffaItemRoles == nullptr && gi.cvar != nullptr) {
-		ffaItemRoles = gi.cvar("sg_bot_ffa_item_roles", "0", CVAR_NOFLAGS);
+		ffaItemRoles = gi.cvar("bot_ffa_item_roles", "0", CVAR_NOFLAGS);
 	}
 	return (ffaItemRoles != nullptr && ffaItemRoles->integer > 0) ||
 		BotNavDuelLivePacingEnabled() ||
@@ -303,7 +303,7 @@ bool BotNavFfaItemRolesEnabled() {
 bool BotNavCtfItemRolesEnabled() {
 	static cvar_t *ctfItemRoles = nullptr;
 	if (ctfItemRoles == nullptr && gi.cvar != nullptr) {
-		ctfItemRoles = gi.cvar("sg_bot_ctf_item_roles", "0", CVAR_NOFLAGS);
+		ctfItemRoles = gi.cvar("bot_ctf_item_roles", "0", CVAR_NOFLAGS);
 	}
 	return (ctfItemRoles != nullptr && ctfItemRoles->integer > 0) ||
 		BotNavMatchItemPolicyEnabled();
@@ -312,7 +312,7 @@ bool BotNavCtfItemRolesEnabled() {
 bool BotNavTeamItemRolesEnabled() {
 	static cvar_t *teamItemRoles = nullptr;
 	if (teamItemRoles == nullptr && gi.cvar != nullptr) {
-		teamItemRoles = gi.cvar("sg_bot_team_item_roles", "0", CVAR_NOFLAGS);
+		teamItemRoles = gi.cvar("bot_team_item_roles", "0", CVAR_NOFLAGS);
 	}
 	return (teamItemRoles != nullptr && teamItemRoles->integer > 0) ||
 		BotNavMatchItemPolicyEnabled();
@@ -321,7 +321,7 @@ bool BotNavTeamItemRolesEnabled() {
 bool BotNavTeamResourceDenialEnabled() {
 	static cvar_t *teamResourceDenial = nullptr;
 	if (teamResourceDenial == nullptr && gi.cvar != nullptr) {
-		teamResourceDenial = gi.cvar("sg_bot_team_resource_denial", "0", CVAR_NOFLAGS);
+		teamResourceDenial = gi.cvar("bot_team_resource_denial", "0", CVAR_NOFLAGS);
 	}
 	return (teamResourceDenial != nullptr && teamResourceDenial->integer > 0) ||
 		BotNavMatchItemPolicyEnabled();
@@ -366,7 +366,7 @@ bool BotNavCvarStringDisabled(const char *value) {
 BotNavItemFocusMode BotNavSmokeItemFocusMode() {
 	static cvar_t *itemFocus = nullptr;
 	if (itemFocus == nullptr && gi.cvar != nullptr) {
-		itemFocus = gi.cvar("sg_bot_frame_command_smoke_item_focus", "0", CVAR_NOFLAGS);
+		itemFocus = gi.cvar("bot_frame_command_smoke_item_focus", "0", CVAR_NOFLAGS);
 	}
 	if (itemFocus == nullptr) {
 		return BotNavItemFocusMode::None;

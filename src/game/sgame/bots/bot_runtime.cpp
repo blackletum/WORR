@@ -192,13 +192,13 @@ Vector3 CopyVectorFromBotLib(const float source[3]) {
 }
 
 bool BotRuntimeDebugDrawEnabled() {
-	return (sg_bot_debug_aas != nullptr && sg_bot_debug_aas->integer >= 3) ||
-		(sg_bot_debug_route != nullptr && sg_bot_debug_route->integer != 0) ||
-		(sg_bot_debug_goal != nullptr && sg_bot_debug_goal->integer != 0);
+	return (bot_debug_aas != nullptr && bot_debug_aas->integer >= 3) ||
+		(bot_debug_route != nullptr && bot_debug_route->integer != 0) ||
+		(bot_debug_goal != nullptr && bot_debug_goal->integer != 0);
 }
 
 bool BotRuntimeQ3APrintMessageEnabled() {
-	return sg_bot_debug_aas != nullptr && sg_bot_debug_aas->integer >= 3;
+	return bot_debug_aas != nullptr && bot_debug_aas->integer >= 3;
 }
 
 const char *BotRuntimeQ3APrintTypeName(int type) {
@@ -256,7 +256,7 @@ bool BotRuntimeBotClientCommand(int client, const char *command) {
 		return false;
 	}
 
-	if (sg_bot_debug_aas != nullptr && sg_bot_debug_aas->integer >= 3) {
+	if (bot_debug_aas != nullptr && bot_debug_aas->integer >= 3) {
 		gi.Com_PrintFmt(
 			"Q3A BotClientCommand rejected until bot command dispatch is implemented: client={} command=\"{}\"\n",
 			client,
@@ -656,9 +656,9 @@ void RunBotLibDebugDrawIfRequested() {
 		return;
 	}
 
-	const bool routeDebug = sg_bot_debug_route != nullptr && sg_bot_debug_route->integer != 0;
-	const bool goalDebug = sg_bot_debug_goal != nullptr && sg_bot_debug_goal->integer != 0;
-	const int debugClient = sg_bot_debug_client != nullptr ? sg_bot_debug_client->integer : -1;
+	const bool routeDebug = bot_debug_route != nullptr && bot_debug_route->integer != 0;
+	const bool goalDebug = bot_debug_goal != nullptr && bot_debug_goal->integer != 0;
+	const int debugClient = bot_debug_client != nullptr ? bot_debug_client->integer : -1;
 	if (routeDebug || goalDebug) {
 		if (!BotNav_DrawDebugOverlay(routeDebug, goalDebug, debugClient)) {
 			BotLibAdapter_RunRouteOverlaySmoke();
@@ -666,7 +666,7 @@ void RunBotLibDebugDrawIfRequested() {
 		return;
 	}
 
-	if (sg_bot_debug_aas == nullptr || sg_bot_debug_aas->integer < 3) {
+	if (bot_debug_aas == nullptr || bot_debug_aas->integer < 3) {
 		return;
 	}
 	if (level.time < lastDebugDrawSmokeTime) {
@@ -948,7 +948,7 @@ void LoadLevelAas() {
 }
 
 void PrintBotLibAdapterStatusIfRequested() {
-	if (sg_bot_debug_aas == nullptr || sg_bot_debug_aas->integer <= 1) {
+	if (bot_debug_aas == nullptr || bot_debug_aas->integer <= 1) {
 		return;
 	}
 
@@ -1129,7 +1129,7 @@ void PrintBotLibAdapterStatusIfRequested() {
 }
 
 void PrintAasStatusIfRequested() {
-	if (sg_bot_debug_aas == nullptr || !sg_bot_debug_aas->integer) {
+	if (bot_debug_aas == nullptr || !bot_debug_aas->integer) {
 		return;
 	}
 
@@ -1162,7 +1162,7 @@ void PrintAasStatusIfRequested() {
 		return;
 	}
 
-	if (botRuntimeStatus.enabled || sg_bot_debug_aas->integer > 1) {
+	if (botRuntimeStatus.enabled || bot_debug_aas->integer > 1) {
 		gi.Com_PrintFmt(
 			"Bot AAS: {} ({})\n",
 			botRuntimeStatus.aasPath.empty() ? "<none>" : botRuntimeStatus.aasPath.c_str(),
@@ -1173,12 +1173,12 @@ void PrintAasStatusIfRequested() {
 }
 
 void RunLifecycleSmokeAfterBeginLevel() {
-	if (sg_bot_lifecycle_smoke == nullptr || sg_bot_lifecycle_smoke->integer <= 0) {
+	if (bot_lifecycle_smoke == nullptr || bot_lifecycle_smoke->integer <= 0) {
 		lifecycleSmokePhase = 0;
 		return;
 	}
 
-	const int mode = sg_bot_lifecycle_smoke->integer;
+	const int mode = bot_lifecycle_smoke->integer;
 	worr::SetLogLevel(worr::LogLevel::Info);
 
 	if (mode == 4) {
@@ -1198,7 +1198,7 @@ void RunLifecycleSmokeAfterBeginLevel() {
 	if (mode >= 2 && lifecycleSmokePhase == 0 && botRuntimeStatus.attemptedLoad &&
 		!botRuntimeStatus.mapName.empty()) {
 		lifecycleSmokePhase = 1;
-		gi.cvarSet("sg_bot_lifecycle_smoke", mode >= 3 ? "4" : "1");
+		gi.cvarSet("bot_lifecycle_smoke", mode >= 3 ? "4" : "1");
 		gi.Com_PrintFmt("BotLib lifecycle smoke: reloading {}\n", botRuntimeStatus.mapName.c_str());
 		gi.AddCommandString(G_Fmt("map {}\n", botRuntimeStatus.mapName).data());
 		return;
@@ -1216,20 +1216,20 @@ void RunLifecycleSmokeAfterBeginLevel() {
 } // namespace
 
 void Bot_RuntimeRegisterCvars() {
-	sg_bot_enable = gi.cvar("sg_bot_enable", "0", CVAR_NOFLAGS);
-	sg_bot_debug = gi.cvar("sg_bot_debug", "0", CVAR_NOFLAGS);
-	sg_bot_debug_aas = gi.cvar("sg_bot_debug_aas", "0", CVAR_NOFLAGS);
-	sg_bot_debug_route = gi.cvar("sg_bot_debug_route", "0", CVAR_NOFLAGS);
-	sg_bot_debug_goal = gi.cvar("sg_bot_debug_goal", "0", CVAR_NOFLAGS);
-	sg_bot_debug_client = gi.cvar("sg_bot_debug_client", "-1", CVAR_NOFLAGS);
-	sg_bot_cpu_budget_ms = gi.cvar("sg_bot_cpu_budget_ms", "2", CVAR_NOFLAGS);
-	sg_bot_allow_chat = gi.cvar("sg_bot_allow_chat", "0", CVAR_NOFLAGS);
-	sg_bot_chat_team_only = gi.cvar("sg_bot_chat_team_only", "0", CVAR_NOFLAGS);
-	sg_bot_chat_min_interval_ms = gi.cvar("sg_bot_chat_min_interval_ms", "0", CVAR_NOFLAGS);
-	sg_bot_chat_reply_policy_smoke = gi.cvar("sg_bot_chat_reply_policy_smoke", "0", CVAR_NOFLAGS);
-	sg_bot_chat_event_policy_smoke = gi.cvar("sg_bot_chat_event_policy_smoke", "0", CVAR_NOFLAGS);
-	sg_bot_chat_live_events = gi.cvar("sg_bot_chat_live_events", "0", CVAR_NOFLAGS);
-	sg_bot_lifecycle_smoke = gi.cvar("sg_bot_lifecycle_smoke", "0", CVAR_NOFLAGS);
+	bot_enable = gi.cvar("bot_enable", "1", CVAR_NOFLAGS);
+	bot_debug = gi.cvar("bot_debug", "0", CVAR_NOFLAGS);
+	bot_debug_aas = gi.cvar("bot_debug_aas", "0", CVAR_NOFLAGS);
+	bot_debug_route = gi.cvar("bot_debug_route", "0", CVAR_NOFLAGS);
+	bot_debug_goal = gi.cvar("bot_debug_goal", "0", CVAR_NOFLAGS);
+	bot_debug_client = gi.cvar("bot_debug_client", "-1", CVAR_NOFLAGS);
+	bot_cpu_budget_ms = gi.cvar("bot_cpu_budget_ms", "2", CVAR_NOFLAGS);
+	bot_allow_chat = gi.cvar("bot_allow_chat", "0", CVAR_NOFLAGS);
+	bot_chat_team_only = gi.cvar("bot_chat_team_only", "0", CVAR_NOFLAGS);
+	bot_chat_min_interval_ms = gi.cvar("bot_chat_min_interval_ms", "0", CVAR_NOFLAGS);
+	bot_chat_reply_policy_smoke = gi.cvar("bot_chat_reply_policy_smoke", "0", CVAR_NOFLAGS);
+	bot_chat_event_policy_smoke = gi.cvar("bot_chat_event_policy_smoke", "0", CVAR_NOFLAGS);
+	bot_chat_live_events = gi.cvar("bot_chat_live_events", "0", CVAR_NOFLAGS);
+	bot_lifecycle_smoke = gi.cvar("bot_lifecycle_smoke", "0", CVAR_NOFLAGS);
 
 	BotLibAdapter_SetPrintCallback(BotRuntimeQ3APrint);
 	BotLibAdapter_SetBotClientCommandCallback(BotRuntimeBotClientCommand);
@@ -1248,7 +1248,7 @@ void Bot_RuntimeBeginLevel() {
 	lastDebugPrintTime = 0_ms;
 
 	if (!botRuntimeStatus.enabled) {
-		SetRuntimeState(BotAasRuntimeState::Disabled, "sg_bot_enable is 0");
+		SetRuntimeState(BotAasRuntimeState::Disabled, "bot_enable is 0");
 		PrintAasStatusIfRequested();
 		RunLifecycleSmokeAfterBeginLevel();
 		return;
@@ -1300,7 +1300,7 @@ void Bot_RuntimeRunFrame() {
 void Bot_RuntimePrintLifecycleStatus() {
 	const BotLibAdapterStatus &adapter = BotLibAdapter_GetStatus();
 	gi.Com_PrintFmt(
-		"BotLib lifecycle status: sg_bot_enable={}, runtime_state={}, map={}, aas={}, q3a_lifecycle={}, q3a_lifecycle_inits={}, q3a_lifecycle_shutdowns={}, q3a_lifecycle_load_attempts={}, q3a_lifecycle_load_successes={}, q3a_lifecycle_active_unloads={}, q3a_lifecycle_clean_unloads={}, q3a_lifecycle_unload_failures={}, q3a_lifecycle_last_unload_zone_active={}, q3a_lifecycle_last_unload_hunk_active={}, q3a_lifecycle_last_unload_open_files={}, q3a_lifecycle_persistent_zone={}\n",
+		"BotLib lifecycle status: bot_enable={}, runtime_state={}, map={}, aas={}, q3a_lifecycle={}, q3a_lifecycle_inits={}, q3a_lifecycle_shutdowns={}, q3a_lifecycle_load_attempts={}, q3a_lifecycle_load_successes={}, q3a_lifecycle_active_unloads={}, q3a_lifecycle_clean_unloads={}, q3a_lifecycle_unload_failures={}, q3a_lifecycle_last_unload_zone_active={}, q3a_lifecycle_last_unload_hunk_active={}, q3a_lifecycle_last_unload_open_files={}, q3a_lifecycle_persistent_zone={}\n",
 		Bot_RuntimeEnabled() ? "1" : "0",
 		static_cast<int>(botRuntimeStatus.state),
 		botRuntimeStatus.mapName.empty() ? "<none>" : botRuntimeStatus.mapName.c_str(),
@@ -1320,7 +1320,7 @@ void Bot_RuntimePrintLifecycleStatus() {
 }
 
 bool Bot_RuntimeEnabled() {
-	return sg_bot_enable != nullptr && sg_bot_enable->integer != 0;
+	return bot_enable != nullptr && bot_enable->integer != 0;
 }
 
 bool Bot_RuntimeAasLoaded() {

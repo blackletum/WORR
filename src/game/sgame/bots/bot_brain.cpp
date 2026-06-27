@@ -2014,7 +2014,7 @@ BotBrainBotPopulationStatus BotBrain_CountBotPopulationStatus() {
 bool BotBrain_SmokeMatchReadinessProof() {
 	static cvar_t *matchReadiness = nullptr;
 	if (matchReadiness == nullptr && gi.cvar != nullptr) {
-		matchReadiness = gi.cvar("sg_bot_frame_command_smoke_match_readiness", "0", CVAR_NOFLAGS);
+		matchReadiness = gi.cvar("bot_frame_command_smoke_match_readiness", "0", CVAR_NOFLAGS);
 	}
 	return matchReadiness != nullptr && matchReadiness->integer > 0;
 }
@@ -2568,6 +2568,7 @@ struct BotTimedRouteGoalState {
 	Vector3 goal = vec3_origin;
 	float distance = 0.0f;
 	float minDirectionSquared = 0.0f;
+	bool attackSuppression = false;
 	int matchMode = 0;
 	int matchRole = 0;
 	int matchLane = 0;
@@ -2586,8 +2587,12 @@ struct BotBrainBlackboardSlot {
 	int aimLastAttackTimeMilliseconds = 0;
 	BotTimedRouteGoalState timedRouteGoal{};
 	int threatRetreatCooldownUntilMilliseconds = 0;
+	int closeThreatSpacingCooldownUntilMilliseconds = 0;
 	int threatRetreatLastActivationMilliseconds = 0;
 	bool threatRetreatReengageRecorded = false;
+	bool threatRetreatLastAttackSuppression = false;
+	int threatRetreatLastHealth = 0;
+	int threatRetreatLastArmor = 0;
 	int lastScanFrame = -1;
 	int lastHeardEventKeyMilliseconds = 0;
 	int lastDamageEventKeyMilliseconds = 0;
@@ -2692,7 +2697,9 @@ struct BotCommandSmokeProofSlot {
 	bool ammoPressurePrepared = false;
 	bool survivalInventoryPrepared = false;
 	bool survivalRoutePrepared = false;
+	bool survivalRouteAssignmentRecorded = false;
 	bool threatRetreatPrepared = false;
+	bool threatRetreatSeeded = false;
 	bool healthArmorPrepared = false;
 	bool healthArmorProofRecorded = false;
 	bool armorProofRecorded = false;
@@ -2983,8 +2990,13 @@ constexpr int BOT_COMMAND_NUKE_RETREAT_MILLISECONDS = 6000;
 constexpr int BOT_COMMAND_TELEPORTER_ESCAPE_MILLISECONDS = 3500;
 constexpr int BOT_COMMAND_TELEPORTER_DAMAGE_SOURCE_MILLISECONDS = 5000;
 constexpr int BOT_COMMAND_THREAT_RETREAT_MILLISECONDS = 700;
+constexpr int BOT_COMMAND_THREAT_RETREAT_SMOKE_MILLISECONDS = 200;
 constexpr int BOT_COMMAND_THREAT_RETREAT_COOLDOWN_MILLISECONDS = 2200;
-constexpr int BOT_COMMAND_THREAT_RETREAT_LOW_HEALTH = 35;
+constexpr int BOT_COMMAND_THREAT_RETREAT_LOW_HEALTH = 45;
+constexpr int BOT_COMMAND_CLOSE_THREAT_SPACING_MILLISECONDS = 450;
+constexpr int BOT_COMMAND_CLOSE_THREAT_SPACING_COOLDOWN_MILLISECONDS = 350;
+constexpr int BOT_COMMAND_CLOSE_THREAT_DISTANCE_SQUARED = 160 * 160;
+constexpr float BOT_COMMAND_CLOSE_THREAT_FORWARD_DOT = 0.25f;
 constexpr int BOT_COMMAND_COOP_LEADER_ROUTE_MILLISECONDS = 2500;
 constexpr int BOT_COMMAND_COOP_LEAD_ADVANCE_MILLISECONDS = 2500;
 constexpr int BOT_COMMAND_FFA_ROAM_ROUTE_MILLISECONDS = 2500;
@@ -3022,7 +3034,7 @@ int Bot_CommandControlledInactiveRecoveryMode() {
 	static cvar_t *controlledRecovery = nullptr;
 	if (controlledRecovery == nullptr && gi.cvar != nullptr) {
 		controlledRecovery =
-			gi.cvar("sg_bot_controlled_inactive_recovery", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_controlled_inactive_recovery", "0", CVAR_NOFLAGS);
 	}
 	return controlledRecovery != nullptr ? controlledRecovery->integer : 0;
 }
@@ -3030,7 +3042,7 @@ int Bot_CommandControlledInactiveRecoveryMode() {
 int Bot_CommandSmokeForcedTravelType() {
 	static cvar_t *smokeTravelType = nullptr;
 	if (smokeTravelType == nullptr && gi.cvar != nullptr) {
-		smokeTravelType = gi.cvar("sg_bot_frame_command_smoke_travel_type", "0", CVAR_NOFLAGS);
+		smokeTravelType = gi.cvar("bot_frame_command_smoke_travel_type", "0", CVAR_NOFLAGS);
 	}
 	return smokeTravelType != nullptr ? smokeTravelType->integer : 0;
 }
@@ -3038,7 +3050,7 @@ int Bot_CommandSmokeForcedTravelType() {
 bool Bot_CommandPositionGoalEnabled() {
 	static cvar_t *positionGoalEnable = nullptr;
 	if (positionGoalEnable == nullptr && gi.cvar != nullptr) {
-		positionGoalEnable = gi.cvar("sg_bot_nav_position_goal_enable", "0", CVAR_NOFLAGS);
+		positionGoalEnable = gi.cvar("bot_nav_position_goal_enable", "0", CVAR_NOFLAGS);
 	}
 	return positionGoalEnable != nullptr && positionGoalEnable->integer > 0;
 }
@@ -3046,7 +3058,7 @@ bool Bot_CommandPositionGoalEnabled() {
 int Bot_CommandTravelTypeGoal() {
 	static cvar_t *travelTypeGoal = nullptr;
 	if (travelTypeGoal == nullptr && gi.cvar != nullptr) {
-		travelTypeGoal = gi.cvar("sg_bot_nav_travel_type_goal", "0", CVAR_NOFLAGS);
+		travelTypeGoal = gi.cvar("bot_nav_travel_type_goal", "0", CVAR_NOFLAGS);
 	}
 	return travelTypeGoal != nullptr ? travelTypeGoal->integer : 0;
 }
@@ -3054,7 +3066,7 @@ int Bot_CommandTravelTypeGoal() {
 bool Bot_CommandTravelTypeGoalWarpEnabled() {
 	static cvar_t *travelTypeGoalWarp = nullptr;
 	if (travelTypeGoalWarp == nullptr && gi.cvar != nullptr) {
-		travelTypeGoalWarp = gi.cvar("sg_bot_nav_travel_type_goal_warp", "0", CVAR_NOFLAGS);
+		travelTypeGoalWarp = gi.cvar("bot_nav_travel_type_goal_warp", "0", CVAR_NOFLAGS);
 	}
 	return travelTypeGoalWarp != nullptr && travelTypeGoalWarp->integer > 0;
 }
@@ -3062,7 +3074,7 @@ bool Bot_CommandTravelTypeGoalWarpEnabled() {
 bool Bot_CommandRocketJumpAllowed() {
 	static cvar_t *allowRocketJump = nullptr;
 	if (allowRocketJump == nullptr && gi.cvar != nullptr) {
-		allowRocketJump = gi.cvar("sg_bot_allow_rocketjump", "0", CVAR_NOFLAGS);
+		allowRocketJump = gi.cvar("bot_allow_rocketjump", "0", CVAR_NOFLAGS);
 	}
 	return allowRocketJump != nullptr && allowRocketJump->integer > 0;
 }
@@ -3070,7 +3082,7 @@ bool Bot_CommandRocketJumpAllowed() {
 int Bot_CommandAimSkill() {
 	static cvar_t *skill = nullptr;
 	if (skill == nullptr && gi.cvar != nullptr) {
-		skill = gi.cvar("sg_bot_skill", "3", CVAR_NOFLAGS);
+		skill = gi.cvar("bot_skill", "3", CVAR_NOFLAGS);
 	}
 	return std::clamp(
 		skill != nullptr ? skill->integer : BOT_COMMAND_AIM_DEFAULT_SKILL,
@@ -3168,7 +3180,7 @@ Vector3 Bot_CommandVectorFromCombat(const BotCombatVector3 &value) {
 bool Bot_CommandTravelTypeGoalExpectBlocked() {
 	static cvar_t *expectBlocked = nullptr;
 	if (expectBlocked == nullptr && gi.cvar != nullptr) {
-		expectBlocked = gi.cvar("sg_bot_nav_travel_type_goal_expect_blocked", "0", CVAR_NOFLAGS);
+		expectBlocked = gi.cvar("bot_nav_travel_type_goal_expect_blocked", "0", CVAR_NOFLAGS);
 	}
 	return expectBlocked != nullptr && expectBlocked->integer > 0;
 }
@@ -3176,7 +3188,7 @@ bool Bot_CommandTravelTypeGoalExpectBlocked() {
 bool Bot_CommandSmokeSoak() {
 	static cvar_t *soak = nullptr;
 	if (soak == nullptr && gi.cvar != nullptr) {
-		soak = gi.cvar("sg_bot_frame_command_smoke_soak", "0", CVAR_NOFLAGS);
+		soak = gi.cvar("bot_frame_command_smoke_soak", "0", CVAR_NOFLAGS);
 	}
 	return soak != nullptr && soak->integer > 0;
 }
@@ -3184,7 +3196,7 @@ bool Bot_CommandSmokeSoak() {
 bool Bot_CommandBehaviorPolicyEnabled() {
 	static cvar_t *behaviorEnable = nullptr;
 	if (behaviorEnable == nullptr && gi.cvar != nullptr) {
-		behaviorEnable = gi.cvar("sg_bot_behavior_enable", "0", CVAR_NOFLAGS);
+		behaviorEnable = gi.cvar("bot_behavior_enable", "1", CVAR_NOFLAGS);
 	}
 	return behaviorEnable != nullptr && behaviorEnable->integer > 0;
 }
@@ -3192,7 +3204,7 @@ bool Bot_CommandBehaviorPolicyEnabled() {
 bool Bot_CommandCoopLiveLoopEnabled() {
 	static cvar_t *liveLoop = nullptr;
 	if (liveLoop == nullptr && gi.cvar != nullptr) {
-		liveLoop = gi.cvar("sg_bot_coop_live_loop", "0", CVAR_NOFLAGS);
+		liveLoop = gi.cvar("bot_coop_live_loop", "0", CVAR_NOFLAGS);
 	}
 	return liveLoop != nullptr && liveLoop->integer > 0;
 }
@@ -3200,7 +3212,7 @@ bool Bot_CommandCoopLiveLoopEnabled() {
 bool Bot_CommandCoopShareLoopEnabled() {
 	static cvar_t *shareLoop = nullptr;
 	if (shareLoop == nullptr && gi.cvar != nullptr) {
-		shareLoop = gi.cvar("sg_bot_coop_share_loop", "0", CVAR_NOFLAGS);
+		shareLoop = gi.cvar("bot_coop_share_loop", "0", CVAR_NOFLAGS);
 	}
 	return shareLoop != nullptr && shareLoop->integer > 0;
 }
@@ -3208,7 +3220,7 @@ bool Bot_CommandCoopShareLoopEnabled() {
 bool Bot_CommandCoopProgressWaitCvarEnabled() {
 	static cvar_t *progressWait = nullptr;
 	if (progressWait == nullptr && gi.cvar != nullptr) {
-		progressWait = gi.cvar("sg_bot_coop_progress_wait", "0", CVAR_NOFLAGS);
+		progressWait = gi.cvar("bot_coop_progress_wait", "0", CVAR_NOFLAGS);
 	}
 	return progressWait != nullptr && progressWait->integer > 0;
 }
@@ -3222,7 +3234,7 @@ bool Bot_CommandCoopProgressWaitRequested() {
 bool Bot_CommandCoopLeadAdvanceRequested() {
 	static cvar_t *leadAdvance = nullptr;
 	if (leadAdvance == nullptr && gi.cvar != nullptr) {
-		leadAdvance = gi.cvar("sg_bot_coop_lead_advance", "0", CVAR_NOFLAGS);
+		leadAdvance = gi.cvar("bot_coop_lead_advance", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(leadAdvance != nullptr && leadAdvance->integer > 0);
@@ -3231,7 +3243,7 @@ bool Bot_CommandCoopLeadAdvanceRequested() {
 bool Bot_CommandCoopResourceShareRequested() {
 	static cvar_t *resourceShare = nullptr;
 	if (resourceShare == nullptr && gi.cvar != nullptr) {
-		resourceShare = gi.cvar("sg_bot_coop_resource_share", "0", CVAR_NOFLAGS);
+		resourceShare = gi.cvar("bot_coop_resource_share", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandCoopShareLoopEnabled() ||
@@ -3241,7 +3253,7 @@ bool Bot_CommandCoopResourceShareRequested() {
 bool Bot_CommandCoopTargetShareEnabled() {
 	static cvar_t *targetShare = nullptr;
 	if (targetShare == nullptr && gi.cvar != nullptr) {
-		targetShare = gi.cvar("sg_bot_coop_target_share", "0", CVAR_NOFLAGS);
+		targetShare = gi.cvar("bot_coop_target_share", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandCoopShareLoopEnabled() ||
@@ -3251,7 +3263,7 @@ bool Bot_CommandCoopTargetShareEnabled() {
 bool Bot_CommandCoopAntiBlockingEnabled() {
 	static cvar_t *antiBlocking = nullptr;
 	if (antiBlocking == nullptr && gi.cvar != nullptr) {
-		antiBlocking = gi.cvar("sg_bot_coop_anti_blocking", "0", CVAR_NOFLAGS);
+		antiBlocking = gi.cvar("bot_coop_anti_blocking", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandCoopLiveLoopEnabled() ||
@@ -3261,7 +3273,7 @@ bool Bot_CommandCoopAntiBlockingEnabled() {
 bool Bot_CommandCoopInteractionRetryEnabled() {
 	static cvar_t *interactionRetry = nullptr;
 	if (interactionRetry == nullptr && gi.cvar != nullptr) {
-		interactionRetry = gi.cvar("sg_bot_coop_interaction_retry", "0", CVAR_NOFLAGS);
+		interactionRetry = gi.cvar("bot_coop_interaction_retry", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandCoopLiveLoopEnabled() ||
@@ -3271,7 +3283,7 @@ bool Bot_CommandCoopInteractionRetryEnabled() {
 bool Bot_CommandCoopDoorElevatorEnabled() {
 	static cvar_t *doorElevator = nullptr;
 	if (doorElevator == nullptr && gi.cvar != nullptr) {
-		doorElevator = gi.cvar("sg_bot_coop_door_elevator", "0", CVAR_NOFLAGS);
+		doorElevator = gi.cvar("bot_coop_door_elevator", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandCoopLiveLoopEnabled() ||
@@ -3281,7 +3293,7 @@ bool Bot_CommandCoopDoorElevatorEnabled() {
 bool Bot_CommandTeamRoleRouteEnabled() {
 	static cvar_t *teamRoleRoute = nullptr;
 	if (teamRoleRoute == nullptr && gi.cvar != nullptr) {
-		teamRoleRoute = gi.cvar("sg_bot_team_role_route", "0", CVAR_NOFLAGS);
+		teamRoleRoute = gi.cvar("bot_team_role_route", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(teamRoleRoute != nullptr && teamRoleRoute->integer > 0);
@@ -3290,7 +3302,7 @@ bool Bot_CommandTeamRoleRouteEnabled() {
 bool Bot_CommandDuelLivePacingEnabled() {
 	static cvar_t *duelLivePacing = nullptr;
 	if (duelLivePacing == nullptr && gi.cvar != nullptr) {
-		duelLivePacing = gi.cvar("sg_bot_duel_live_pacing", "0", CVAR_NOFLAGS);
+		duelLivePacing = gi.cvar("bot_duel_live_pacing", "0", CVAR_NOFLAGS);
 	}
 	return duelLivePacing != nullptr && duelLivePacing->integer > 0;
 }
@@ -3298,7 +3310,7 @@ bool Bot_CommandDuelLivePacingEnabled() {
 bool Bot_CommandFfaRoamRouteEnabled() {
 	static cvar_t *ffaRoamRoute = nullptr;
 	if (ffaRoamRoute == nullptr && gi.cvar != nullptr) {
-		ffaRoamRoute = gi.cvar("sg_bot_ffa_roam_route", "0", CVAR_NOFLAGS);
+		ffaRoamRoute = gi.cvar("bot_ffa_roam_route", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandDuelLivePacingEnabled() ||
@@ -3309,7 +3321,7 @@ bool Bot_CommandFfaSpawnCampAvoidanceEnabled() {
 	static cvar_t *spawnCampAvoidance = nullptr;
 	if (spawnCampAvoidance == nullptr && gi.cvar != nullptr) {
 		spawnCampAvoidance =
-			gi.cvar("sg_bot_ffa_spawn_camp_avoidance", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_ffa_spawn_camp_avoidance", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandDuelLivePacingEnabled() ||
@@ -3320,7 +3332,7 @@ bool Bot_CommandFfaSpawnCampCombatAvoidanceEnabled() {
 	static cvar_t *combatAvoidance = nullptr;
 	if (combatAvoidance == nullptr && gi.cvar != nullptr) {
 		combatAvoidance =
-			gi.cvar("sg_bot_ffa_spawn_camp_combat_avoidance", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_ffa_spawn_camp_combat_avoidance", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandDuelLivePacingEnabled() ||
@@ -3330,24 +3342,33 @@ bool Bot_CommandFfaSpawnCampCombatAvoidanceEnabled() {
 bool Bot_CommandFfaItemRolesEnabled() {
 	static cvar_t *ffaItemRoles = nullptr;
 	if (ffaItemRoles == nullptr && gi.cvar != nullptr) {
-		ffaItemRoles = gi.cvar("sg_bot_ffa_item_roles", "0", CVAR_NOFLAGS);
+		ffaItemRoles = gi.cvar("bot_ffa_item_roles", "0", CVAR_NOFLAGS);
 	}
-	return Bot_CommandDuelLivePacingEnabled() ||
+	return Bot_CommandBehaviorPolicyEnabled() ||
+		Bot_CommandDuelLivePacingEnabled() ||
 		(ffaItemRoles != nullptr && ffaItemRoles->integer > 0);
 }
 
 bool Bot_CommandThreatRetreatEnabled() {
 	static cvar_t *threatRetreat = nullptr;
 	if (threatRetreat == nullptr && gi.cvar != nullptr) {
-		threatRetreat = gi.cvar("sg_bot_threat_retreat", "0", CVAR_NOFLAGS);
+		threatRetreat = gi.cvar("bot_threat_retreat", "0", CVAR_NOFLAGS);
 	}
-	return threatRetreat != nullptr && threatRetreat->integer > 0;
+	if (threatRetreat != nullptr && threatRetreat->integer > 0) {
+		return true;
+	}
+	if (!Bot_CommandBehaviorPolicyEnabled()) {
+		return false;
+	}
+	return deathmatch != nullptr &&
+		deathmatch->integer != 0 &&
+		(Game::Is(GameType::FreeForAll) || Game::Is(GameType::Duel));
 }
 
 bool Bot_CommandFfaRoleCombatEnabled() {
 	static cvar_t *ffaRoleCombat = nullptr;
 	if (ffaRoleCombat == nullptr && gi.cvar != nullptr) {
-		ffaRoleCombat = gi.cvar("sg_bot_ffa_role_combat", "0", CVAR_NOFLAGS);
+		ffaRoleCombat = gi.cvar("bot_ffa_role_combat", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandDuelLivePacingEnabled() ||
@@ -3372,7 +3393,7 @@ bool Bot_CommandFfaStylePacingPolicyEnabled(
 bool Bot_CommandTeamRoleCombatEnabled() {
 	static cvar_t *teamRoleCombat = nullptr;
 	if (teamRoleCombat == nullptr && gi.cvar != nullptr) {
-		teamRoleCombat = gi.cvar("sg_bot_team_role_combat", "0", CVAR_NOFLAGS);
+		teamRoleCombat = gi.cvar("bot_team_role_combat", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(teamRoleCombat != nullptr && teamRoleCombat->integer > 0);
@@ -3381,7 +3402,7 @@ bool Bot_CommandTeamRoleCombatEnabled() {
 bool Bot_CommandMatchItemPolicyEnabled() {
 	static cvar_t *matchItemPolicy = nullptr;
 	if (matchItemPolicy == nullptr && gi.cvar != nullptr) {
-		matchItemPolicy = gi.cvar("sg_bot_match_item_policy", "0", CVAR_NOFLAGS);
+		matchItemPolicy = gi.cvar("bot_match_item_policy", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(matchItemPolicy != nullptr && matchItemPolicy->integer > 0);
@@ -3391,7 +3412,7 @@ bool Bot_CommandProfileItemPolicySmoke() {
 	static cvar_t *profileItemPolicySmoke = nullptr;
 	if (profileItemPolicySmoke == nullptr && gi.cvar != nullptr) {
 		profileItemPolicySmoke =
-			gi.cvar("sg_bot_profile_item_policy_smoke", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_profile_item_policy_smoke", "0", CVAR_NOFLAGS);
 	}
 	return profileItemPolicySmoke != nullptr &&
 		profileItemPolicySmoke->integer > 0;
@@ -3401,7 +3422,7 @@ bool Bot_CommandProfileMovementPolicySmoke() {
 	static cvar_t *profileMovementPolicySmoke = nullptr;
 	if (profileMovementPolicySmoke == nullptr && gi.cvar != nullptr) {
 		profileMovementPolicySmoke =
-			gi.cvar("sg_bot_profile_movement_policy_smoke", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_profile_movement_policy_smoke", "0", CVAR_NOFLAGS);
 	}
 	return profileMovementPolicySmoke != nullptr &&
 		profileMovementPolicySmoke->integer > 0;
@@ -3410,7 +3431,7 @@ bool Bot_CommandProfileMovementPolicySmoke() {
 bool Bot_CommandCtfRoleRouteEnabled() {
 	static cvar_t *ctfRoleRoute = nullptr;
 	if (ctfRoleRoute == nullptr && gi.cvar != nullptr) {
-		ctfRoleRoute = gi.cvar("sg_bot_ctf_role_route", "0", CVAR_NOFLAGS);
+		ctfRoleRoute = gi.cvar("bot_ctf_role_route", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(ctfRoleRoute != nullptr && ctfRoleRoute->integer > 0);
@@ -3419,7 +3440,7 @@ bool Bot_CommandCtfRoleRouteEnabled() {
 bool Bot_CommandCtfRoleCombatEnabled() {
 	static cvar_t *ctfRoleCombat = nullptr;
 	if (ctfRoleCombat == nullptr && gi.cvar != nullptr) {
-		ctfRoleCombat = gi.cvar("sg_bot_ctf_role_combat", "0", CVAR_NOFLAGS);
+		ctfRoleCombat = gi.cvar("bot_ctf_role_combat", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(ctfRoleCombat != nullptr && ctfRoleCombat->integer > 0);
@@ -3429,7 +3450,7 @@ bool Bot_CommandCtfDroppedFlagRouteEnabled() {
 	static cvar_t *ctfDroppedFlagRoute = nullptr;
 	if (ctfDroppedFlagRoute == nullptr && gi.cvar != nullptr) {
 		ctfDroppedFlagRoute =
-			gi.cvar("sg_bot_ctf_dropped_flag_route", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_ctf_dropped_flag_route", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(ctfDroppedFlagRoute != nullptr && ctfDroppedFlagRoute->integer > 0);
@@ -3439,7 +3460,7 @@ bool Bot_CommandCtfCarrierSupportRouteEnabled() {
 	static cvar_t *ctfCarrierSupportRoute = nullptr;
 	if (ctfCarrierSupportRoute == nullptr && gi.cvar != nullptr) {
 		ctfCarrierSupportRoute =
-			gi.cvar("sg_bot_ctf_carrier_support_route", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_ctf_carrier_support_route", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(ctfCarrierSupportRoute != nullptr && ctfCarrierSupportRoute->integer > 0);
@@ -3449,7 +3470,7 @@ bool Bot_CommandCtfBaseReturnRouteEnabled() {
 	static cvar_t *ctfBaseReturnRoute = nullptr;
 	if (ctfBaseReturnRoute == nullptr && gi.cvar != nullptr) {
 		ctfBaseReturnRoute =
-			gi.cvar("sg_bot_ctf_base_return_route", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_ctf_base_return_route", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(ctfBaseReturnRoute != nullptr && ctfBaseReturnRoute->integer > 0);
@@ -3459,7 +3480,7 @@ bool Bot_CommandCtfObjectiveTransitionsEnabled() {
 	static cvar_t *ctfObjectiveTransitions = nullptr;
 	if (ctfObjectiveTransitions == nullptr && gi.cvar != nullptr) {
 		ctfObjectiveTransitions =
-			gi.cvar("sg_bot_ctf_objective_transitions", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_ctf_objective_transitions", "0", CVAR_NOFLAGS);
 	}
 	return ctfObjectiveTransitions != nullptr &&
 		ctfObjectiveTransitions->integer > 0;
@@ -3469,7 +3490,7 @@ bool Bot_CommandCtfObjectiveRouteEnabled() {
 	static cvar_t *ctfObjectiveRoute = nullptr;
 	if (ctfObjectiveRoute == nullptr && gi.cvar != nullptr) {
 		ctfObjectiveRoute =
-			gi.cvar("sg_bot_ctf_objective_route", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_ctf_objective_route", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		Bot_CommandCtfObjectiveTransitionsEnabled() ||
@@ -3479,7 +3500,7 @@ bool Bot_CommandCtfObjectiveRouteEnabled() {
 bool Bot_CommandTeamFireAvoidanceEnabled() {
 	static cvar_t *teamFireAvoidance = nullptr;
 	if (teamFireAvoidance == nullptr && gi.cvar != nullptr) {
-		teamFireAvoidance = gi.cvar("sg_bot_team_fire_avoidance", "0", CVAR_NOFLAGS);
+		teamFireAvoidance = gi.cvar("bot_team_fire_avoidance", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandBehaviorPolicyEnabled() ||
 		(teamFireAvoidance != nullptr && teamFireAvoidance->integer > 0);
@@ -3497,7 +3518,7 @@ bool Bot_CommandSmokeValueDisabled(const char *value) {
 const char *Bot_CommandSmokeCombatValue() {
 	static cvar_t *combat = nullptr;
 	if (combat == nullptr && gi.cvar != nullptr) {
-		combat = gi.cvar("sg_bot_frame_command_smoke_combat", "0", CVAR_NOFLAGS);
+		combat = gi.cvar("bot_frame_command_smoke_combat", "0", CVAR_NOFLAGS);
 	}
 	if (combat == nullptr) {
 		return "0";
@@ -3508,7 +3529,7 @@ const char *Bot_CommandSmokeCombatValue() {
 bool Bot_CommandSmokeCombat() {
 	static cvar_t *combat = nullptr;
 	if (combat == nullptr && gi.cvar != nullptr) {
-		combat = gi.cvar("sg_bot_frame_command_smoke_combat", "0", CVAR_NOFLAGS);
+		combat = gi.cvar("bot_frame_command_smoke_combat", "0", CVAR_NOFLAGS);
 	}
 	if (combat == nullptr) {
 		return false;
@@ -3544,7 +3565,7 @@ bool Bot_CommandSmokeEngageEnemy() {
 bool Bot_CommandSmokeWeaponSwitch() {
 	static cvar_t *weaponSwitch = nullptr;
 	if (weaponSwitch == nullptr && gi.cvar != nullptr) {
-		weaponSwitch = gi.cvar("sg_bot_frame_command_smoke_weapon_switch", "0", CVAR_NOFLAGS);
+		weaponSwitch = gi.cvar("bot_frame_command_smoke_weapon_switch", "0", CVAR_NOFLAGS);
 	}
 	return Bot_CommandSmokeCombatModeIs("switch_weapons") ||
 		(weaponSwitch != nullptr && weaponSwitch->integer > 0);
@@ -3561,7 +3582,7 @@ bool Bot_CommandSmokeAimFirePolicy() {
 const char *Bot_CommandSmokeItemFocusValue() {
 	static cvar_t *itemFocus = nullptr;
 	if (itemFocus == nullptr && gi.cvar != nullptr) {
-		itemFocus = gi.cvar("sg_bot_frame_command_smoke_item_focus", "0", CVAR_NOFLAGS);
+		itemFocus = gi.cvar("bot_frame_command_smoke_item_focus", "0", CVAR_NOFLAGS);
 	}
 	if (itemFocus == nullptr) {
 		return "0";
@@ -3588,7 +3609,7 @@ bool Bot_CommandSmokeSurvivalInventoryUse() {
 	static cvar_t *survivalInventory = nullptr;
 	if (survivalInventory == nullptr && gi.cvar != nullptr) {
 		survivalInventory =
-			gi.cvar("sg_bot_frame_command_smoke_survival_inventory", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_frame_command_smoke_survival_inventory", "0", CVAR_NOFLAGS);
 	}
 	return survivalInventory != nullptr && survivalInventory->integer > 0;
 }
@@ -3597,7 +3618,7 @@ const char *Bot_CommandSmokeSurvivalRouteValue() {
 	static cvar_t *survivalRoute = nullptr;
 	if (survivalRoute == nullptr && gi.cvar != nullptr) {
 		survivalRoute =
-			gi.cvar("sg_bot_frame_command_smoke_survival_route", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_frame_command_smoke_survival_route", "0", CVAR_NOFLAGS);
 	}
 	if (survivalRoute == nullptr) {
 		return "0";
@@ -3626,7 +3647,7 @@ bool Bot_CommandSmokeCombatSurvivalRoute() {
 bool Bot_CommandSmokeTeamObjective() {
 	static cvar_t *teamObjective = nullptr;
 	if (teamObjective == nullptr && gi.cvar != nullptr) {
-		teamObjective = gi.cvar("sg_bot_frame_command_smoke_team_objective", "0", CVAR_NOFLAGS);
+		teamObjective = gi.cvar("bot_frame_command_smoke_team_objective", "0", CVAR_NOFLAGS);
 	}
 	return teamObjective != nullptr && teamObjective->integer > 0;
 }
@@ -3634,7 +3655,7 @@ bool Bot_CommandSmokeTeamObjective() {
 bool Bot_CommandSmokeAimFairness() {
 	static cvar_t *aimFairness = nullptr;
 	if (aimFairness == nullptr && gi.cvar != nullptr) {
-		aimFairness = gi.cvar("sg_bot_frame_command_smoke_aim_fairness", "0", CVAR_NOFLAGS);
+		aimFairness = gi.cvar("bot_frame_command_smoke_aim_fairness", "0", CVAR_NOFLAGS);
 	}
 	return aimFairness != nullptr && aimFairness->integer > 0;
 }
@@ -3642,7 +3663,7 @@ bool Bot_CommandSmokeAimFairness() {
 bool Bot_CommandSmokeItemTimer() {
 	static cvar_t *itemTimer = nullptr;
 	if (itemTimer == nullptr && gi.cvar != nullptr) {
-		itemTimer = gi.cvar("sg_bot_frame_command_smoke_item_timer", "0", CVAR_NOFLAGS);
+		itemTimer = gi.cvar("bot_frame_command_smoke_item_timer", "0", CVAR_NOFLAGS);
 	}
 	return itemTimer != nullptr && itemTimer->integer > 0;
 }
@@ -3650,7 +3671,7 @@ bool Bot_CommandSmokeItemTimer() {
 bool Bot_CommandSmokeMatchReadiness() {
 	static cvar_t *matchReadiness = nullptr;
 	if (matchReadiness == nullptr && gi.cvar != nullptr) {
-		matchReadiness = gi.cvar("sg_bot_frame_command_smoke_match_readiness", "0", CVAR_NOFLAGS);
+		matchReadiness = gi.cvar("bot_frame_command_smoke_match_readiness", "0", CVAR_NOFLAGS);
 	}
 	return matchReadiness != nullptr && matchReadiness->integer > 0;
 }
@@ -3659,9 +3680,17 @@ bool Bot_CommandTargetMemorySmokeEnabled() {
 	static cvar_t *targetMemory = nullptr;
 	if (targetMemory == nullptr && gi.cvar != nullptr) {
 		targetMemory =
-			gi.cvar("sg_bot_frame_command_smoke_target_memory", "0", CVAR_NOFLAGS);
+			gi.cvar("bot_frame_command_smoke_target_memory", "0", CVAR_NOFLAGS);
 	}
 	return targetMemory != nullptr && targetMemory->integer > 0;
+}
+
+int Bot_CommandRawFrameCommandSmokeMode() {
+	static cvar_t *smoke = nullptr;
+	if (smoke == nullptr && gi.cvar != nullptr) {
+		smoke = gi.cvar("bot_frame_command_smoke", "0", CVAR_NOFLAGS);
+	}
+	return smoke != nullptr ? smoke->integer : 0;
 }
 
 int Bot_CommandSmokeScenarioMode() {
@@ -3795,6 +3824,12 @@ int Bot_CommandSmokeScenarioMode() {
 		return 20;
 	}
 	return 0;
+}
+
+int Bot_CommandThreatRetreatMilliseconds() {
+	return Bot_CommandRawFrameCommandSmokeMode() == 72 ?
+		BOT_COMMAND_THREAT_RETREAT_SMOKE_MILLISECONDS :
+		BOT_COMMAND_THREAT_RETREAT_MILLISECONDS;
 }
 
 bool Bot_CommandSmokeForcesImmediateCombatFire() {
@@ -4019,18 +4054,18 @@ const char *BotChatPolicy_InitialPhrase(int personality, int phrase) {
 }
 
 bool BotChatPolicy_ReplySmokeEnabled() {
-	return sg_bot_chat_reply_policy_smoke &&
-		sg_bot_chat_reply_policy_smoke->integer > 0;
+	return bot_chat_reply_policy_smoke &&
+		bot_chat_reply_policy_smoke->integer > 0;
 }
 
 bool BotChatPolicy_EventSmokeEnabled() {
-	return sg_bot_chat_event_policy_smoke &&
-		sg_bot_chat_event_policy_smoke->integer > 0;
+	return bot_chat_event_policy_smoke &&
+		bot_chat_event_policy_smoke->integer > 0;
 }
 
 bool BotChatPolicy_LiveEventsEnabled() {
-	return sg_bot_chat_live_events &&
-		sg_bot_chat_live_events->integer > 0;
+	return bot_chat_live_events &&
+		bot_chat_live_events->integer > 0;
 }
 
 int Bot_CommandBehaviorLivePolicyCvarCount() {
@@ -5048,7 +5083,7 @@ void BotChatPolicy_RecordReplySelection(
 }
 
 bool Bot_CommandMaybeDispatchChatPolicy(gentity_t *bot) {
-	if (!sg_bot_allow_chat || sg_bot_allow_chat->integer <= 0) {
+	if (!bot_allow_chat || bot_allow_chat->integer <= 0) {
 		return false;
 	}
 
@@ -5082,7 +5117,7 @@ bool Bot_CommandMaybeDispatchChatPolicy(gentity_t *bot) {
 
 	std::string message = BotChatPolicy_InitialPhrase(personality, phrase);
 	const bool teamOnly =
-		sg_bot_chat_team_only && sg_bot_chat_team_only->integer > 0;
+		bot_chat_team_only && bot_chat_team_only->integer > 0;
 	const int rateLimitedBefore = BotChatPolicy_DispatchRateLimited();
 	const int failuresBefore = BotChatPolicy_DispatchFailures();
 	const bool dispatched = BotChatPolicy_Dispatch(bot, message.c_str(), teamOnly);
@@ -5113,7 +5148,7 @@ bool Bot_CommandMaybeDispatchChatReplyEvent(
 	int event,
 	std::array<int, MAX_CLIENTS> &spawnCounts,
 	bool liveEvent) {
-	if (!sg_bot_allow_chat || sg_bot_allow_chat->integer <= 0) {
+	if (!bot_allow_chat || bot_allow_chat->integer <= 0) {
 		return false;
 	}
 
@@ -5160,7 +5195,7 @@ bool Bot_CommandMaybeDispatchChatReplyEvent(
 
 	std::string message = BotChatPolicy_ReplyPhrase(personality, event, phrase);
 	const bool teamOnly =
-		sg_bot_chat_team_only && sg_bot_chat_team_only->integer > 0;
+		bot_chat_team_only && bot_chat_team_only->integer > 0;
 	const int rateLimitedBefore = BotChatPolicy_DispatchRateLimited();
 	const int failuresBefore = BotChatPolicy_DispatchFailures();
 	const bool dispatched = BotChatPolicy_Dispatch(bot, message.c_str(), teamOnly);
@@ -7181,6 +7216,15 @@ BotCommandSmokeProofSlot *Bot_CommandSmokeProofSlotFor(gentity_t *bot) {
 		return nullptr;
 	}
 
+	const int rawMode = Bot_CommandRawFrameCommandSmokeMode();
+	if (rawMode <= 0) {
+		Bot_CommandFreeCoopTargetShareSmokeTarget();
+		Bot_CommandFreeCtfDroppedFlagSmokeTargets();
+		Bot_CommandFreeAmmoPressureSmokeTarget();
+		Bot_CommandFreeSurvivalRouteSmokeTarget();
+		return nullptr;
+	}
+
 	const int mode = Bot_CommandSmokeScenarioMode();
 	if (mode != 30 && mode != 78) {
 		Bot_CommandFreeCoopTargetShareSmokeTarget();
@@ -8056,6 +8100,10 @@ void Bot_CommandPrepareSurvivalRouteSmoke(
 			BotNav_ResetClient(clientIndex);
 		}
 	}
+	if (slot.survivalRoutePrepared && !slot.survivalRouteAssignmentRecorded) {
+		BotItems_RecordGoalAssignment(static_cast<int>(routeItem));
+		slot.survivalRouteAssignmentRecorded = true;
+	}
 }
 
 void Bot_CommandPrepareThreatRetreatSmoke(
@@ -8081,11 +8129,24 @@ void Bot_CommandPrepareThreatRetreatSmoke(
 	client->pers.health = bot->health;
 	client->pers.healthBonus = 0;
 
+	gentity_t *peer = Bot_CommandFindSmokePeer(bot);
 	if (!slot.threatRetreatPrepared) {
-		gentity_t *peer = Bot_CommandFindSmokePeer(bot);
 		slot.threatRetreatPrepared = Bot_CommandTryPlaceSmokePeer(bot, peer);
 		if (slot.threatRetreatPrepared) {
 			BotNav_ResetClient(clientIndex);
+		}
+	}
+
+	if (slot.threatRetreatPrepared && !slot.threatRetreatSeeded && peer != nullptr) {
+		int blackboardClientIndex = -1;
+		BotBrainBlackboardSlot *blackboardSlot =
+			Bot_BlackboardEnsureSlot(bot, &blackboardClientIndex);
+		if (blackboardSlot != nullptr && blackboardClientIndex == clientIndex) {
+			BotPerceptionEnemyFacts facts = Bot_PerceptionEvaluateEnemy(bot, peer);
+			if (Bot_PerceptionEnemyFactsValid(facts)) {
+				Bot_PerceptionSetCurrentEnemy(*blackboardSlot, facts, true);
+				slot.threatRetreatSeeded = true;
+			}
 		}
 	}
 }
@@ -9343,6 +9404,71 @@ gentity_t *Bot_CommandTimedRouteEnemySource(gentity_t *bot) {
 	return enemy;
 }
 
+bool Bot_CommandCloseFrontThreatSource(
+	gentity_t *bot,
+	Vector3 *source,
+	gentity_t **sourceEntity,
+	float *sourceDistanceSquared) {
+	if (source == nullptr || sourceEntity == nullptr || sourceDistanceSquared == nullptr) {
+		return false;
+	}
+
+	*source = vec3_origin;
+	*sourceEntity = nullptr;
+	*sourceDistanceSquared = 0.0f;
+
+	const int clientIndex = Bot_PerceptionClientIndex(bot);
+	if (bot == nullptr ||
+		bot->client == nullptr ||
+		clientIndex < 0 ||
+		clientIndex >= static_cast<int>(botBrainBlackboardSlots.size())) {
+		return false;
+	}
+
+	const BotBrainBlackboardSnapshot &snapshot =
+		botBrainBlackboardSlots[clientIndex].snapshot;
+	if (!snapshot.valid ||
+		!snapshot.currentEnemyVisible ||
+		snapshot.currentEnemyEntity < 0) {
+		return false;
+	}
+
+	gentity_t *enemy = Bot_PerceptionEntityFromMemory(
+		snapshot.currentEnemyEntity,
+		snapshot.currentEnemySpawnCount);
+	if (!Bot_PerceptionCombatTargetAlive(enemy) || enemy == bot) {
+		return false;
+	}
+
+	Vector3 toEnemy = enemy->s.origin - bot->s.origin;
+	toEnemy.z = 0.0f;
+	const float distanceSquared = toEnemy.lengthSquared();
+	if (distanceSquared < 1.0f ||
+		distanceSquared > BOT_COMMAND_CLOSE_THREAT_DISTANCE_SQUARED) {
+		return false;
+	}
+
+	Vector3 forward = { 1.0f, 0.0f, 0.0f };
+	Vector3 viewAngles = Bot_CommandCurrentViewAngles(bot);
+	viewAngles[PITCH] = 0.0f;
+	viewAngles[ROLL] = 0.0f;
+	AngleVectors(viewAngles, forward, nullptr, nullptr);
+	forward.z = 0.0f;
+	if (forward.lengthSquared() < 1.0f) {
+		return false;
+	}
+
+	if (toEnemy.normalized().dot(forward.normalized()) <
+		BOT_COMMAND_CLOSE_THREAT_FORWARD_DOT) {
+		return false;
+	}
+
+	*source = enemy->s.origin;
+	*sourceEntity = enemy;
+	*sourceDistanceSquared = distanceSquared;
+	return true;
+}
+
 bool Bot_CommandRecentDamageSource(gentity_t *bot, Vector3 *source) {
 	if (source == nullptr) {
 		return false;
@@ -9749,6 +9875,9 @@ void Bot_CommandRecordTimedRouteGoalOwnerLast(
 			distanceSquared,
 			state);
 	} else if (kind == BotTimedRouteGoalKind::ThreatRetreat) {
+		if (state == nullptr || !state->attackSuppression) {
+			return;
+		}
 		Bot_CommandRecordThreatRetreatLast(
 			clientIndex,
 			nullptr,
@@ -9757,7 +9886,8 @@ void Bot_CommandRecordTimedRouteGoalOwnerLast(
 			(goal - source).lengthSquared(),
 			botFrameCommandStatus.lastThreatRetreatHealth,
 			botFrameCommandStatus.lastThreatRetreatArmor,
-			botFrameCommandStatus.lastThreatRetreatLowHealth != 0,
+			state != nullptr ? state->attackSuppression :
+				botFrameCommandStatus.lastThreatRetreatLowHealth != 0,
 			remainingMilliseconds > 0,
 			"owner");
 	}
@@ -9934,7 +10064,8 @@ bool Bot_CommandActivateTimedRouteGoal(
 	const Vector3 &fallbackDirection,
 	int durationMilliseconds,
 	float distance = BOT_COMMAND_TIMED_ROUTE_DEFAULT_DISTANCE,
-	float minDirectionSquared = BOT_COMMAND_TIMED_ROUTE_MIN_DIRECTION_SQUARED) {
+	float minDirectionSquared = BOT_COMMAND_TIMED_ROUTE_MIN_DIRECTION_SQUARED,
+	bool attackSuppression = false) {
 	int clientIndex = -1;
 	BotBrainBlackboardSlot *slot = Bot_BlackboardEnsureSlot(bot, &clientIndex);
 	if (slot == nullptr || kind == BotTimedRouteGoalKind::None || durationMilliseconds <= 0) {
@@ -9950,6 +10081,7 @@ bool Bot_CommandActivateTimedRouteGoal(
 	state.fallbackDirection = fallbackDirection;
 	state.distance = distance;
 	state.minDirectionSquared = minDirectionSquared;
+	state.attackSuppression = attackSuppression;
 	state.matchMode = 0;
 	state.matchRole = 0;
 	state.matchLane = 0;
@@ -10052,6 +10184,19 @@ bool Bot_CommandThreatRetreatActive(gentity_t *bot) {
 		slot->timedRouteGoal.untilMilliseconds > nowMilliseconds;
 }
 
+bool Bot_CommandThreatRetreatSuppressesAttack(gentity_t *bot) {
+	int clientIndex = -1;
+	BotBrainBlackboardSlot *slot = Bot_BlackboardEnsureSlot(bot, &clientIndex);
+	if (slot == nullptr) {
+		return false;
+	}
+
+	const int nowMilliseconds = Bot_CommandCurrentTimeMilliseconds();
+	return slot->timedRouteGoal.kind == BotTimedRouteGoalKind::ThreatRetreat &&
+		slot->timedRouteGoal.untilMilliseconds > nowMilliseconds &&
+		slot->timedRouteGoal.attackSuppression;
+}
+
 bool Bot_CommandThreatRetreatSource(
 	gentity_t *bot,
 	const BotActionDecision &actionDecision,
@@ -10123,38 +10268,57 @@ void Bot_CommandActivateThreatRetreat(
 	const int health = std::max(bot->health, 0);
 	const int armor = Bot_PerceptionArmorValue(bot);
 	const bool lowHealth = health <= BOT_COMMAND_THREAT_RETREAT_LOW_HEALTH;
-	if (!lowHealth) {
+	Vector3 closeThreatSource = vec3_origin;
+	gentity_t *closeThreatEntity = nullptr;
+	float closeThreatDistanceSquared = 0.0f;
+	const bool closeThreat = !Teams() && Bot_CommandCloseFrontThreatSource(
+		bot,
+		&closeThreatSource,
+		&closeThreatEntity,
+		&closeThreatDistanceSquared);
+	if (!lowHealth && !closeThreat) {
 		return;
 	}
 
 	if (slot->timedRouteGoal.kind == BotTimedRouteGoalKind::ThreatRetreat &&
 		slot->timedRouteGoal.untilMilliseconds > nowMilliseconds) {
-		Bot_CommandRecordThreatRetreatLast(
-			clientIndex,
-			nullptr,
-			(bot->s.origin - slot->timedRouteGoal.source).lengthSquared(),
-			slot->timedRouteGoal.untilMilliseconds - nowMilliseconds,
-			(bot->s.origin - slot->timedRouteGoal.goal).lengthSquared(),
-			health,
-			armor,
-			true,
-			true,
-			"active");
-		return;
+		if (!slot->timedRouteGoal.attackSuppression) {
+			if (!lowHealth) {
+				return;
+			}
+		} else {
+			Bot_CommandRecordThreatRetreatLast(
+				clientIndex,
+				nullptr,
+				(bot->s.origin - slot->timedRouteGoal.source).lengthSquared(),
+				slot->timedRouteGoal.untilMilliseconds - nowMilliseconds,
+				(bot->s.origin - slot->timedRouteGoal.goal).lengthSquared(),
+				health,
+				armor,
+				slot->timedRouteGoal.attackSuppression,
+				true,
+				"active");
+			return;
+		}
 	}
 
-	if (slot->threatRetreatCooldownUntilMilliseconds > nowMilliseconds) {
-		Bot_CommandRecordThreatRetreatLast(
-			clientIndex,
-			nullptr,
-			0.0f,
-			0,
-			0.0f,
-			health,
-			armor,
-			true,
-			false,
-			"cooldown");
+	if (lowHealth) {
+		if (slot->threatRetreatCooldownUntilMilliseconds > nowMilliseconds) {
+			Bot_CommandRecordThreatRetreatLast(
+				clientIndex,
+				nullptr,
+				0.0f,
+				0,
+				0.0f,
+				health,
+				armor,
+				true,
+				false,
+				"cooldown");
+			return;
+		}
+	} else if (closeThreat &&
+		slot->closeThreatSpacingCooldownUntilMilliseconds > nowMilliseconds) {
 		return;
 	}
 
@@ -10163,7 +10327,15 @@ void Bot_CommandActivateThreatRetreat(
 	gentity_t *sourceEntity = nullptr;
 	float sourceDistanceSquared = 0.0f;
 	const char *reason = "none";
-	if (!Bot_CommandThreatRetreatSource(
+	const int durationMilliseconds = lowHealth ?
+		Bot_CommandThreatRetreatMilliseconds() :
+		BOT_COMMAND_CLOSE_THREAT_SPACING_MILLISECONDS;
+	if (!lowHealth && closeThreat) {
+		source = closeThreatSource;
+		sourceEntity = closeThreatEntity;
+		sourceDistanceSquared = closeThreatDistanceSquared;
+		reason = "close_front";
+	} else if (!Bot_CommandThreatRetreatSource(
 			bot,
 			actionDecision,
 			fallbackDirection,
@@ -10171,48 +10343,67 @@ void Bot_CommandActivateThreatRetreat(
 			&sourceEntity,
 			&sourceDistanceSquared,
 			&reason)) {
-		Bot_CommandRecordThreatRetreatLast(
-			clientIndex,
-			nullptr,
-			0.0f,
-			0,
-			0.0f,
-			health,
-			armor,
-			true,
-			false,
-			"no_threat");
-		return;
+		if (lowHealth && closeThreat) {
+			source = closeThreatSource;
+			sourceEntity = closeThreatEntity;
+			sourceDistanceSquared = closeThreatDistanceSquared;
+			reason = "close_front_survival";
+		} else {
+			Bot_CommandRecordThreatRetreatLast(
+				clientIndex,
+				nullptr,
+				0.0f,
+				0,
+				0.0f,
+				health,
+				armor,
+				lowHealth,
+				false,
+				"no_threat");
+			return;
+		}
 	}
 
+	const bool suppressAttack = lowHealth;
 	if (!Bot_CommandActivateTimedRouteGoal(
 			bot,
 			BotTimedRouteGoalKind::ThreatRetreat,
 			source,
 			fallbackDirection,
-			BOT_COMMAND_THREAT_RETREAT_MILLISECONDS,
+			durationMilliseconds,
 			BOT_COMMAND_THREAT_RETREAT_DISTANCE,
-			BOT_COMMAND_TIMED_ROUTE_MIN_DIRECTION_SQUARED)) {
+			BOT_COMMAND_TIMED_ROUTE_MIN_DIRECTION_SQUARED,
+			suppressAttack)) {
 		botFrameCommandStatus.threatRetreatInvalidSkips++;
 		return;
 	}
 
-	slot->threatRetreatCooldownUntilMilliseconds =
-		nowMilliseconds + BOT_COMMAND_THREAT_RETREAT_COOLDOWN_MILLISECONDS;
+	if (suppressAttack) {
+		slot->threatRetreatCooldownUntilMilliseconds =
+			nowMilliseconds + BOT_COMMAND_THREAT_RETREAT_COOLDOWN_MILLISECONDS;
+	} else {
+		slot->closeThreatSpacingCooldownUntilMilliseconds =
+			nowMilliseconds + BOT_COMMAND_CLOSE_THREAT_SPACING_COOLDOWN_MILLISECONDS;
+	}
 	slot->threatRetreatLastActivationMilliseconds = nowMilliseconds;
 	slot->threatRetreatReengageRecorded = false;
+	slot->threatRetreatLastAttackSuppression = suppressAttack;
+	slot->threatRetreatLastHealth = health;
+	slot->threatRetreatLastArmor = armor;
 	botFrameCommandStatus.threatRetreatActivations++;
-	Bot_CommandRecordThreatRetreatLast(
-		clientIndex,
-		sourceEntity,
-		sourceDistanceSquared,
-		BOT_COMMAND_THREAT_RETREAT_MILLISECONDS,
-		BOT_COMMAND_THREAT_RETREAT_DISTANCE * BOT_COMMAND_THREAT_RETREAT_DISTANCE,
-		health,
-		armor,
-		true,
-		true,
-		reason);
+	if (suppressAttack) {
+		Bot_CommandRecordThreatRetreatLast(
+			clientIndex,
+			sourceEntity,
+			sourceDistanceSquared,
+			durationMilliseconds,
+			BOT_COMMAND_THREAT_RETREAT_DISTANCE * BOT_COMMAND_THREAT_RETREAT_DISTANCE,
+			health,
+			armor,
+			true,
+			true,
+			reason);
+	}
 }
 
 bool Bot_CommandCoopLeaderIntentUsesRoute(BotObjectiveCoopIntent intent) {
@@ -10912,9 +11103,9 @@ void Bot_CommandBuildRouteRequest(BotNavRouteRequest *request) {
 	static cvar_t *positionGoalY = nullptr;
 	static cvar_t *positionGoalZ = nullptr;
 	if (positionGoalX == nullptr && gi.cvar != nullptr) {
-		positionGoalX = gi.cvar("sg_bot_nav_position_goal_x", "0", CVAR_NOFLAGS);
-		positionGoalY = gi.cvar("sg_bot_nav_position_goal_y", "0", CVAR_NOFLAGS);
-		positionGoalZ = gi.cvar("sg_bot_nav_position_goal_z", "0", CVAR_NOFLAGS);
+		positionGoalX = gi.cvar("bot_nav_position_goal_x", "0", CVAR_NOFLAGS);
+		positionGoalY = gi.cvar("bot_nav_position_goal_y", "0", CVAR_NOFLAGS);
+		positionGoalZ = gi.cvar("bot_nav_position_goal_z", "0", CVAR_NOFLAGS);
 	}
 
 	request->hasPositionGoal = true;
@@ -11306,6 +11497,38 @@ void Bot_CommandAdoptCtfRoleCombatTarget(
 	}
 }
 
+bool Bot_CommandRoleCombatShouldDefer(
+	gentity_t *bot,
+	int clientIndex,
+	const BotActionDecision &decision,
+	const char **reasonOut) {
+	if (reasonOut != nullptr) {
+		*reasonOut = "none";
+	}
+
+	if (decision.intent == BotActionIntent::SwitchWeapon && decision.wantsWeaponSwitch) {
+		if (reasonOut != nullptr) {
+			*reasonOut = "weapon_switch_pending";
+		}
+		return true;
+	}
+
+	BotActionContext context = BotActions_BuildContext(bot);
+	if (!context.valid || !context.alive) {
+		return false;
+	}
+
+	Bot_PerceptionEnrichActionContext(bot, clientIndex, &context);
+	if (!BotCombat_ShouldAvoidWeakUnderpoweredFight(context.combat)) {
+		return false;
+	}
+
+	if (reasonOut != nullptr) {
+		*reasonOut = "weak_underpowered";
+	}
+	return true;
+}
+
 BotActionDecision Bot_CommandApplyFfaRoleCombat(
 	gentity_t *bot,
 	const BotObjectiveMatchPolicy &policy,
@@ -11355,6 +11578,17 @@ BotActionDecision Bot_CommandApplyFfaRoleCombat(
 	gentity_t *target = Bot_CommandCtfRoleCombatTargetFromFacts(facts);
 	Bot_CommandAdoptCtfRoleCombatTarget(bot, *slot, target);
 	botFrameCommandStatus.ffaRoleCombatTargetSelections++;
+
+	const char *deferReason = "none";
+	if (Bot_CommandRoleCombatShouldDefer(bot, clientIndex, decision, &deferReason)) {
+		botFrameCommandStatus.ffaRoleCombatTargetDeferrals++;
+		Bot_CommandRecordFfaRoleCombatLast(
+			clientIndex,
+			policy,
+			&facts,
+			deferReason);
+		return decision;
+	}
 
 	const int priority = std::max(policy.engagePriority, policy.priority) +
 		BOT_COMMAND_FFA_ROLE_COMBAT_PRIORITY_BONUS;
@@ -11429,6 +11663,17 @@ BotActionDecision Bot_CommandApplyTeamRoleCombat(
 	Bot_CommandAdoptCtfRoleCombatTarget(bot, *slot, target);
 	botFrameCommandStatus.teamRoleCombatTargetSelections++;
 
+	const char *deferReason = "none";
+	if (Bot_CommandRoleCombatShouldDefer(bot, clientIndex, decision, &deferReason)) {
+		botFrameCommandStatus.teamRoleCombatTargetDeferrals++;
+		Bot_CommandRecordTeamRoleCombatLast(
+			clientIndex,
+			policy,
+			&facts,
+			deferReason);
+		return decision;
+	}
+
 	const int priority = std::max(policy.engagePriority, policy.priority) +
 		BOT_COMMAND_TEAM_ROLE_COMBAT_PRIORITY_BONUS;
 	if (decision.intent != BotActionIntent::Attack ||
@@ -11501,6 +11746,17 @@ BotActionDecision Bot_CommandApplyCtfRoleCombat(
 	gentity_t *target = Bot_CommandCtfRoleCombatTargetFromFacts(facts);
 	Bot_CommandAdoptCtfRoleCombatTarget(bot, *slot, target);
 	botFrameCommandStatus.ctfRoleCombatTargetSelections++;
+
+	const char *deferReason = "none";
+	if (Bot_CommandRoleCombatShouldDefer(bot, clientIndex, decision, &deferReason)) {
+		botFrameCommandStatus.ctfRoleCombatTargetDeferrals++;
+		Bot_CommandRecordCtfRoleCombatLast(
+			clientIndex,
+			policy,
+			&facts,
+			deferReason);
+		return decision;
+	}
 
 	const int priority = std::max(policy.engagePriority, policy.priority) +
 		BOT_COMMAND_CTF_ROLE_COMBAT_PRIORITY_BONUS;
@@ -11720,7 +11976,7 @@ BotActionDecision Bot_CommandApplyThreatRetreatAttackSuppression(
 	const BotActionDecision &decision) {
 	if (!Bot_CommandThreatRetreatEnabled() ||
 		!decision.pressAttack ||
-		!Bot_CommandThreatRetreatActive(bot)) {
+		!Bot_CommandThreatRetreatSuppressesAttack(bot)) {
 		return decision;
 	}
 
@@ -12729,7 +12985,8 @@ void Bot_CommandRecordThreatRetreatReengage(
 	if (slot == nullptr ||
 		clientIndex < 0 ||
 		slot->threatRetreatLastActivationMilliseconds <= 0 ||
-		slot->threatRetreatReengageRecorded) {
+		slot->threatRetreatReengageRecorded ||
+		!slot->threatRetreatLastAttackSuppression) {
 		return;
 	}
 
@@ -12738,7 +12995,7 @@ void Bot_CommandRecordThreatRetreatReengage(
 		Bot_CommandElapsedMilliseconds(
 			nowMilliseconds,
 			slot->threatRetreatLastActivationMilliseconds) <
-			BOT_COMMAND_THREAT_RETREAT_MILLISECONDS) {
+			Bot_CommandThreatRetreatMilliseconds()) {
 		return;
 	}
 
@@ -12750,9 +13007,11 @@ void Bot_CommandRecordThreatRetreatReengage(
 		0.0f,
 		0,
 		0.0f,
-		std::max(bot->health, 0),
-		Bot_PerceptionArmorValue(bot),
-		bot->health <= BOT_COMMAND_THREAT_RETREAT_LOW_HEALTH,
+		slot->threatRetreatLastHealth > 0
+			? slot->threatRetreatLastHealth
+			: std::max(bot->health, 0),
+		slot->threatRetreatLastArmor,
+		slot->threatRetreatLastAttackSuppression,
 		false,
 		"reengage");
 }
@@ -13774,7 +14033,7 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 	const BotLibAdapterStatus &adapterStatus = BotLibAdapter_GetStatus();
 	const BotBrainBotPopulationStatus botPopulation = BotBrain_CountBotPopulationStatus();
 	const int travelTypeGoal = Bot_CommandTravelTypeGoal();
-	const bool scenarioSmokePass = Bot_CommandSmokeScenarioMode() >= 20;
+	const bool scenarioSmokePass = Bot_CommandRawFrameCommandSmokeMode() >= 20;
 	const bool reservationPass = Bot_CommandSmokeSoak() ||
 		scenarioSmokePass ||
 		expectedMinCommands <= 1 ||

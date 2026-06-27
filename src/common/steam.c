@@ -119,6 +119,9 @@ static bool find_steam_app_path(const char *app_id, char *out_dir, size_t out_di
 {
     bool result = false;
 
+    if (!out_dir || !out_dir_length)
+        return false;
+
     // grab Steam installation path
     char folder_path[MAX_OSPATH];
 
@@ -126,7 +129,10 @@ static bool find_steam_app_path(const char *app_id, char *out_dir, size_t out_di
         return false;
 
     // grab library folders file
-    Q_strlcat(folder_path, "/steamapps/libraryfolders.vdf", sizeof(folder_path));
+    if (Q_strlcat(folder_path, "/steamapps/libraryfolders.vdf", sizeof(folder_path)) >= sizeof(folder_path)) {
+        Com_EPrintf("Steam libraryfolders.vdf path is too long.\n");
+        return false;
+    }
 
     FILE *libraryfolders = fopen(folder_path, "rb");
 
@@ -189,7 +195,10 @@ bool Steam_FindQuake2Path(rerelease_mode_t rr_mode, char *out_dir, size_t out_di
     if (!find_steam_app_path(QUAKE_II_STEAM_APP_ID, out_dir, out_dir_length))
         return false;
 
-    Q_strlcat(out_dir, "/steamapps/common/Quake 2", out_dir_length);
+    if (Q_strlcat(out_dir, "/steamapps/common/Quake 2", out_dir_length) >= out_dir_length) {
+        Com_EPrintf("Steam Quake II path is too long.\n");
+        return false;
+    }
 
     // found Steam dir - see if the mode we want is available
     listfiles_t list = {
@@ -214,7 +223,10 @@ bool Steam_FindQuake2Path(rerelease_mode_t rr_mode, char *out_dir, size_t out_di
     Z_Free(list.files);
 
     if (rr_mode == RERELEASE_MODE_YES && has_rerelease) {
-        Q_strlcat(out_dir, PATH_SEP_STRING "rerelease", out_dir_length);
+        if (Q_strlcat(out_dir, PATH_SEP_STRING "rerelease", out_dir_length) >= out_dir_length) {
+            Com_EPrintf("Steam Quake II rerelease path is too long.\n");
+            return false;
+        }
     }
 
     return true;

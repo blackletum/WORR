@@ -20,6 +20,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "server.h"
 #include "server/nav.h"
 #include "common/error.h"
+#include <limits.h>
+#include <stdint.h>
 #if USE_REF
 #include "../client/client.h"
 
@@ -412,14 +414,67 @@ typedef struct nav_ctx_s {
 #define NAV_ALLOCZ(n) \
     Z_TagMallocz(n, TAG_NAV)
 
+static bool Nav_ArrayBytes(size_t count, size_t item_size, size_t *out_size, const char *what)
+{
+    if (!out_size || (item_size && count > SIZE_MAX / item_size)) {
+        Com_SetLastError(va("nav: %s allocation size overflow", what));
+        return false;
+    }
+
+    *out_size = count * item_size;
+    return true;
+}
+
+static bool Nav_AddSize(size_t value, size_t delta, size_t *out_size, const char *what)
+{
+    if (!out_size || value > SIZE_MAX - delta) {
+        Com_SetLastError(va("nav: %s allocation size overflow", what));
+        return false;
+    }
+
+    *out_size = value + delta;
+    return true;
+}
+
+static bool Nav_CountBytes(int32_t count, size_t item_size, size_t *out_size, const char *what)
+{
+    if (count < 0) {
+        Com_SetLastError(va("nav: bad %s count", what));
+        return false;
+    }
+
+    return Nav_ArrayBytes((size_t)count, item_size, out_size, what);
+}
+
 nav_ctx_t *Nav_AllocCtx(void)
 {
-    size_t size = sizeof(nav_ctx_t) +
-        (sizeof(nav_open_t) * nav_data.num_nodes) +
-        (sizeof(int16_t) * nav_data.num_nodes) +
-        (sizeof(int16_t) * nav_data.num_nodes) +
-        (sizeof(float) * nav_data.num_nodes);
+    if (nav_data.num_nodes <= 0) {
+        Com_SetLastError("nav: cannot allocate context without nodes");
+        return NULL;
+    }
+
+    size_t open_bytes;
+    size_t came_from_bytes;
+    size_t went_to_bytes;
+    size_t score_bytes;
+    size_t size = sizeof(nav_ctx_t);
+    if (!Nav_CountBytes(nav_data.num_nodes, sizeof(nav_open_t), &open_bytes, "context open-set") ||
+        !Nav_CountBytes(nav_data.num_nodes, sizeof(int16_t), &came_from_bytes, "context came-from") ||
+        !Nav_CountBytes(nav_data.num_nodes, sizeof(int16_t), &went_to_bytes, "context went-to") ||
+        !Nav_CountBytes(nav_data.num_nodes, sizeof(float), &score_bytes, "context score") ||
+        !Nav_AddSize(size, open_bytes, &size, "context") ||
+        !Nav_AddSize(size, came_from_bytes, &size, "context") ||
+        !Nav_AddSize(size, went_to_bytes, &size, "context") ||
+        !Nav_AddSize(size, score_bytes, &size, "context")) {
+        return NULL;
+    }
+
     nav_ctx_t *ctx = Z_TagMalloc(size, TAG_NAV);
+    if (!ctx) {
+        Com_SetLastError("nav: out of memory for context");
+        return NULL;
+    }
+
     ctx->open_set = (nav_open_t *) (ctx + 1);
     ctx->came_from = (int16_t *) (ctx->open_set + nav_data.num_nodes);
     ctx->went_to = (int16_t *) (ctx->came_from + nav_data.num_nodes);
@@ -527,7 +582,7 @@ static nav_node_t *Nav_ClosestNodeTo(const vec3_t p, const PathRequest *request)
     nav_node_t *c = NULL;
     float minHeight = Nav_ParamSupplied(request->nodeSearch.minHeight, 64.0f);
     float maxHeight = Nav_ParamSupplied(request->nodeSearch.maxHeight, 64.0f);
-    float radius = Nav_ParamSupplied(request->nodeSearch.maxHeight, 512.0f); 
+    float radius = Nav_ParamSupplied(request->nodeSearch.radius, 512.0f);
     bool waterOnly = request->pathFlags == PathFlags_Water;
 
     float bz = p[2] - minHeight;
@@ -883,6 +938,12 @@ static void Nav_DebugPath(const PathInfo *path, const PathRequest *request)
 
 PathInfo Nav_Path(nav_path_t *path)
 {
+    if (!path || !path->request) {
+        PathInfo result = { 0 };
+        result.returnCode = PathReturnCode_NoNavAvailable;
+        return result;
+    }
+
     PathInfo result = Nav_Path_(path);
     
 #if USE_REF
@@ -902,7 +963,9 @@ void Nav_Load(const char *map_name)
 {
     Q_assert(!nav_data.loaded);
 
-    nav_data.loaded = true;
+    if (!map_name || !*map_name) {
+        return;
+    }
 
     Q_snprintf(nav_data.filename, sizeof(nav_data.filename), "bots/navigation/%s.nav", map_name);
 
@@ -912,24 +975,36 @@ void Nav_Load(const char *map_name)
     if (l < 0)
         return;
 
+    nav_data.loaded = true;
+
     int v;
 
     NAV_VERIFY_READ(v);
     NAV_VERIFY(v == NAV_MAGIC, "bad magic");
 
     NAV_VERIFY_READ(v);
-    NAV_VERIFY((v <= NAV_VERSION_LATEST), va("bad version %i\n", v));
+    NAV_VERIFY((v >= NAV_VERSION_1 && v <= NAV_VERSION_LATEST), va("bad version %i\n", v));
 
     NAV_VERIFY_READ(nav_data.num_nodes);
     NAV_VERIFY_READ(nav_data.num_links);
     NAV_VERIFY_READ(nav_data.num_traversals);
     NAV_VERIFY_READ(nav_data.heuristic);
 
-    NAV_VERIFY(nav_data.nodes = NAV_ALLOCZ(sizeof(nav_node_t) * nav_data.num_nodes), "out of memory");
-    if (nav_data.num_links)
-        NAV_VERIFY(nav_data.links = NAV_ALLOCZ(sizeof(nav_link_t) * nav_data.num_links), "out of memory");
+    NAV_VERIFY(nav_data.num_nodes > 0 && nav_data.num_nodes <= INT16_MAX, "bad node count");
+    NAV_VERIFY(nav_data.num_links >= 0 && nav_data.num_links <= INT16_MAX, "bad link count");
+    NAV_VERIFY(nav_data.num_traversals >= 0 && nav_data.num_traversals <= INT16_MAX, "bad traversal count");
+
+    size_t node_bytes;
+    size_t link_bytes;
+    size_t traversal_bytes;
+    NAV_VERIFY(Nav_CountBytes(nav_data.num_nodes, sizeof(nav_node_t), &node_bytes, "node"), "bad node count");
+    NAV_VERIFY(Nav_CountBytes(max(nav_data.num_links, 1), sizeof(nav_link_t), &link_bytes, "link"), "bad link count");
+    NAV_VERIFY(Nav_CountBytes(nav_data.num_traversals, sizeof(nav_traversal_t), &traversal_bytes, "traversal"), "bad traversal count");
+
+    NAV_VERIFY(nav_data.nodes = NAV_ALLOCZ(node_bytes), "out of memory");
+    NAV_VERIFY(nav_data.links = NAV_ALLOCZ(link_bytes), "out of memory");
     if (nav_data.num_traversals)
-        NAV_VERIFY(nav_data.traversals = NAV_ALLOCZ(sizeof(nav_traversal_t) * nav_data.num_traversals), "out of memory");
+        NAV_VERIFY(nav_data.traversals = NAV_ALLOCZ(traversal_bytes), "out of memory");
 
     nav_data.num_conditional_nodes = 0;
 
@@ -941,7 +1016,8 @@ void Nav_Load(const char *map_name)
         NAV_VERIFY_READ(node->num_links);
         int16_t first_link;
         NAV_VERIFY_READ(first_link);
-        NAV_VERIFY(first_link >= 0 && first_link + node->num_links <= nav_data.num_links, "bad node link extents");
+        NAV_VERIFY(node->num_links >= 0 && node->num_links <= nav_data.num_links, "bad node link count");
+        NAV_VERIFY(first_link >= 0 && first_link <= nav_data.num_links - node->num_links, "bad node link extents");
         node->links = &nav_data.links[first_link];
         NAV_VERIFY_READ(node->radius);
 
@@ -949,8 +1025,12 @@ void Nav_Load(const char *map_name)
             nav_data.num_conditional_nodes++;
     }
 
-    if (nav_data.num_conditional_nodes)
-        NAV_VERIFY(nav_data.conditional_nodes = NAV_ALLOCZ(sizeof(nav_node_t *) * nav_data.num_conditional_nodes), "out of memory");
+    if (nav_data.num_conditional_nodes) {
+        size_t conditional_bytes;
+        NAV_VERIFY(Nav_CountBytes(nav_data.num_conditional_nodes, sizeof(nav_node_t *),
+                                  &conditional_bytes, "conditional node"), "bad conditional node count");
+        NAV_VERIFY(nav_data.conditional_nodes = NAV_ALLOCZ(conditional_bytes), "out of memory");
+    }
 
     for (int i = 0, c = 0; i < nav_data.num_nodes; i++) {
         nav_node_t *node = nav_data.nodes + i;
@@ -983,7 +1063,7 @@ void Nav_Load(const char *map_name)
         link->edict = NULL;
 
         if (traversal != -1) {
-            NAV_VERIFY(traversal < nav_data.num_traversals, "bad link traversal");
+            NAV_VERIFY(traversal >= 0 && traversal < nav_data.num_traversals, "bad link traversal");
             link->traversal = &nav_data.traversals[traversal];
         }
     }
@@ -1000,9 +1080,12 @@ void Nav_Load(const char *map_name)
     }
     
     NAV_VERIFY_READ(nav_data.num_edicts);
+    NAV_VERIFY(nav_data.num_edicts >= 0 && nav_data.num_edicts <= MAX_EDICTS, "bad edict count");
 
     if (nav_data.num_edicts) {
-        NAV_VERIFY(nav_data.edicts = NAV_ALLOCZ(sizeof(nav_edict_t) * nav_data.num_edicts), "out of memory");
+        size_t edict_bytes;
+        NAV_VERIFY(Nav_CountBytes(nav_data.num_edicts, sizeof(nav_edict_t), &edict_bytes, "edict"), "bad edict count");
+        NAV_VERIFY(nav_data.edicts = NAV_ALLOCZ(edict_bytes), "out of memory");
 
         for (int i = 0; i < nav_data.num_edicts; i++) {
             nav_edict_t *edict = nav_data.edicts + i;
@@ -1021,11 +1104,14 @@ void Nav_Load(const char *map_name)
     }
 
     nav_data.node_link_bitmap_size = (nav_data.num_nodes + CHAR_BIT - 1) / CHAR_BIT;
-    NAV_VERIFY(nav_data.node_link_bitmap = NAV_ALLOCZ(nav_data.node_link_bitmap_size * nav_data.num_nodes), "out of memory");
+    size_t bitmap_bytes;
+    NAV_VERIFY(Nav_ArrayBytes((size_t)nav_data.node_link_bitmap_size, (size_t)nav_data.num_nodes,
+                              &bitmap_bytes, "node link bitmap"), "bad node link bitmap size");
+    NAV_VERIFY(nav_data.node_link_bitmap = NAV_ALLOCZ(bitmap_bytes), "out of memory");
 
     for (int i = 0; i < nav_data.num_nodes; i++) {
         nav_node_t *node = nav_data.nodes + i;
-        byte *bits = nav_data.node_link_bitmap + (nav_data.node_link_bitmap_size * i);
+        byte *bits = nav_data.node_link_bitmap + ((size_t)nav_data.node_link_bitmap_size * (size_t)i);
 
         for (nav_link_t *link = node->links; link != node->links + node->num_links; link++) {
             Q_SetBit(bits, link->target->id);
@@ -1035,7 +1121,7 @@ void Nav_Load(const char *map_name)
     Com_DPrintf("Bot navigation file (%s) loaded:\n %i nodes\n %i links\n %i traversals\n %i edicts\n",
         nav_data.filename, nav_data.num_nodes, nav_data.num_links, nav_data.num_traversals, nav_data.num_edicts);
 
-    nav_data.ctx = Nav_AllocCtx();
+    NAV_VERIFY(nav_data.ctx = Nav_AllocCtx(), "out of memory");
 
     goto cleanup;
 
@@ -1188,7 +1274,8 @@ static void Nav_RenderLink(const nav_node_t *node, int node_id, const vec3_t nod
     if (link->edict && link->edict->game_edict)
         Nav_RenderLinkEdict(node_origin, e, link->edict);
             
-    const byte *target_bits = nav_data.node_link_bitmap + (nav_data.node_link_bitmap_size * link->target->id);
+    const byte *target_bits = nav_data.node_link_bitmap +
+                              ((size_t)nav_data.node_link_bitmap_size * (size_t)link->target->id);
     bool link_disabled = ((node->flags | link->target->flags) & NodeFlag_Disabled);
     uint8_t link_alpha = link_disabled ? (alpha * 0.5f) : alpha;
             
@@ -1477,6 +1564,14 @@ void Nav_Shutdown(void)
 
 void Nav_RegisterEdict(const edict_t *edict)
 {
+    if (!edict) {
+        return;
+    }
+
+    if (nav_data.num_registered_edicts > q_countof(nav_data.registered_edicts)) {
+        nav_data.num_registered_edicts = q_countof(nav_data.registered_edicts);
+    }
+
     size_t free_slot = nav_data.num_registered_edicts;
 
     for (size_t i = 0; i < nav_data.num_registered_edicts; i++) {
@@ -1485,6 +1580,11 @@ void Nav_RegisterEdict(const edict_t *edict)
         } else if (nav_data.registered_edicts[i] == NULL) {
             free_slot = i;
         }
+    }
+
+    if (free_slot >= q_countof(nav_data.registered_edicts)) {
+        Com_WPrintf("Nav registered edict table is full; dropping edict %i\n", (int)edict->s.number);
+        return;
     }
 
     nav_data.registered_edicts[free_slot] = edict;
@@ -1496,6 +1596,10 @@ void Nav_RegisterEdict(const edict_t *edict)
 
 void Nav_UnRegisterEdict(const edict_t *edict)
 {
+    if (!edict) {
+        return;
+    }
+
     for (int i = 0; i < nav_data.num_edicts; i++) {
         if (nav_data.edicts[i].game_edict == edict) {
             nav_data.edicts[i].game_edict = NULL;
@@ -1507,13 +1611,9 @@ void Nav_UnRegisterEdict(const edict_t *edict)
         if (nav_data.registered_edicts[i] == edict) {
             nav_data.registered_edicts[i] = NULL;
 
-            for (i = nav_data.num_registered_edicts - 1; i >= 0; --i) {
-                if (nav_data.registered_edicts[i] == NULL) {
-                    nav_data.num_registered_edicts--;
-                    continue;
-                }
-
-                return;
+            while (nav_data.num_registered_edicts > 0 &&
+                   nav_data.registered_edicts[nav_data.num_registered_edicts - 1] == NULL) {
+                nav_data.num_registered_edicts--;
             }
             break;
         }

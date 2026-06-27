@@ -149,6 +149,34 @@ static inline bool VK_World_Check(VkResult result, const char *what)
     return false;
 }
 
+static bool VK_World_ArrayBytes(size_t count, size_t item_size, size_t *out_size,
+                                const char *what)
+{
+    if (!out_size || (item_size && count > SIZE_MAX / item_size)) {
+        Com_SetLastError(va("Vulkan world: %s allocation size overflow", what));
+        return false;
+    }
+
+    *out_size = count * item_size;
+    return true;
+}
+
+static bool VK_World_ImageBytes(int width, int height, size_t bytes_per_pixel,
+                                size_t *out_size, const char *what)
+{
+    if (!out_size || width <= 0 || height <= 0 || !bytes_per_pixel) {
+        Com_SetLastError(va("Vulkan world: %s invalid image dimensions", what));
+        return false;
+    }
+
+    size_t pixels;
+    if (!VK_World_ArrayBytes((size_t)width, (size_t)height, &pixels, what)) {
+        return false;
+    }
+
+    return VK_World_ArrayBytes(pixels, bytes_per_pixel, out_size, what);
+}
+
 static void VK_World_ClearWorldFaceMask(void)
 {
     free(vk_world.world_face_mask);
@@ -163,7 +191,13 @@ static bool VK_World_BuildWorldFaceMask(const bsp_t *bsp)
         return false;
     }
 
-    byte *mask = calloc((size_t)bsp->numfaces, sizeof(*mask));
+    size_t mask_bytes;
+    if (!VK_World_ArrayBytes((size_t)bsp->numfaces, sizeof(byte),
+                             &mask_bytes, "world-face mask")) {
+        return false;
+    }
+
+    byte *mask = calloc(1, mask_bytes);
     if (!mask) {
         Com_SetLastError("Vulkan world: out of memory for world-face mask");
         return false;
@@ -183,7 +217,7 @@ static bool VK_World_BuildWorldFaceMask(const bsp_t *bsp)
     }
 
     if (!world_range_valid) {
-        memset(mask, 1, (size_t)bsp->numfaces);
+        memset(mask, 1, mask_bytes);
     }
 
 #if USE_DEBUG
@@ -374,7 +408,12 @@ static bool VK_World_UploadVertices(const vk_world_vertex_t *vertices, uint32_t 
         return true;
     }
 
-    size_t bytes = (size_t)vertex_count * sizeof(*vertices);
+    size_t bytes;
+    if (!VK_World_ArrayBytes((size_t)vertex_count, sizeof(*vertices),
+                             &bytes, "vertex upload")) {
+        return false;
+    }
+
     if (!VK_World_CreateVertexBuffer(bytes)) {
         return false;
     }
@@ -399,8 +438,13 @@ static bool VK_World_UploadSkyVertices(const vk_world_vertex_t *vertices, uint32
         return true;
     }
 
+    size_t bytes;
+    if (!VK_World_ArrayBytes((size_t)vertex_count, sizeof(*vertices),
+                             &bytes, "sky vertex upload")) {
+        return false;
+    }
+
     VkDevice device = vk_world.ctx->device;
-    size_t bytes = (size_t)vertex_count * sizeof(*vertices);
 
     VkBufferCreateInfo buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -896,13 +940,25 @@ static bool VK_World_AllocAtlasBlock(int atlas_size, int *inuse, int width, int 
     return true;
 }
 
-static void VK_World_InitLightmapAtlasPixels(byte *rgba, int atlas_size)
+static bool VK_World_InitLightmapAtlasPixels(byte *rgba, int atlas_size)
 {
-    memset(rgba, 0, (size_t)atlas_size * (size_t)atlas_size * 4);
+    if (!rgba) {
+        Com_SetLastError("Vulkan world: missing lightmap atlas pixels");
+        return false;
+    }
+
+    size_t atlas_bytes;
+    if (!VK_World_ImageBytes(atlas_size, atlas_size, 4,
+                             &atlas_bytes, "lightmap atlas pixels")) {
+        return false;
+    }
+
+    memset(rgba, 0, atlas_bytes);
     rgba[0] = 255;
     rgba[1] = 255;
     rgba[2] = 255;
     rgba[3] = 255;
+    return true;
 }
 
 static void VK_World_BuildFaceLightmapPixels(const mface_t *face,
@@ -920,13 +976,17 @@ static void VK_World_BuildFaceLightmapPixels(const mface_t *face,
     int x = (int)face_lm->x - 1;
     int y = (int)face_lm->y - 1;
 
-    const int style_bytes = w * h * 3;
+    size_t style_bytes;
+    if (!VK_World_ImageBytes(w, h, 3, &style_bytes, "face lightmap style")) {
+        return;
+    }
+
     for (int ty = 0; ty < h; ty++) {
         for (int tx = 0; tx < w; tx++) {
             vec3_t light;
             VectorClear(light);
             const byte *style_map = face->lightmap;
-            const int pixel_index = 3 * (ty * w + tx);
+            size_t pixel_index = ((size_t)ty * (size_t)w + (size_t)tx) * 3;
 
             for (int s = 0; s < face->numstyles; s++) {
                 if (face->styles[s] == 255) {
@@ -984,16 +1044,18 @@ static void VK_World_BuildFaceLightmapPixels(const mface_t *face,
     memcpy(dst_br, src_br, 4);
 }
 
-static void VK_World_RebuildLightmapAtlasPixels(const bsp_t *bsp,
+static bool VK_World_RebuildLightmapAtlasPixels(const bsp_t *bsp,
                                                 const vk_world_face_lightmap_t *face_lms,
                                                 int atlas_size, const refdef_t *fd,
                                                 byte *rgba)
 {
     if (!bsp || !face_lms || atlas_size < 1 || !rgba) {
-        return;
+        return false;
     }
 
-    VK_World_InitLightmapAtlasPixels(rgba, atlas_size);
+    if (!VK_World_InitLightmapAtlasPixels(rgba, atlas_size)) {
+        return false;
+    }
 
     for (int i = 0; i < bsp->numfaces; i++) {
         const mface_t *face = &bsp->faces[i];
@@ -1009,6 +1071,8 @@ static void VK_World_RebuildLightmapAtlasPixels(const bsp_t *bsp,
 
         VK_World_BuildFaceLightmapPixels(face, face_lm, atlas_size, fd, rgba);
     }
+
+    return true;
 }
 
 static void VK_World_CacheLightStyles(const refdef_t *fd)
@@ -1066,12 +1130,20 @@ static bool VK_World_FaceUsesChangedStyle(const mface_t *face,
 
 static bool VK_World_UploadLightmapDirtyRect(int x, int y, int w, int h)
 {
-    if (!vk_world.lightmap_rgba || w <= 0 || h <= 0 || x < 0 || y < 0 ||
-        x + w > vk_world.lightmap_atlas_size || y + h > vk_world.lightmap_atlas_size) {
+    int atlas_size = vk_world.lightmap_atlas_size;
+    if (!vk_world.lightmap_rgba || atlas_size <= 0 || w <= 0 || h <= 0 ||
+        x < 0 || y < 0 || w > atlas_size || h > atlas_size ||
+        x > atlas_size - w || y > atlas_size - h) {
         return false;
     }
 
-    size_t bytes = (size_t)w * (size_t)h * 4;
+    size_t bytes;
+    size_t row_bytes;
+    if (!VK_World_ImageBytes(w, h, 4, &bytes, "lightmap dirty rect") ||
+        !VK_World_ArrayBytes((size_t)w, 4, &row_bytes, "lightmap dirty rect row")) {
+        return false;
+    }
+
     byte *rect_rgba = malloc(bytes);
     if (!rect_rgba) {
         Com_SetLastError("Vulkan world: out of memory for lightmap dirty rect upload");
@@ -1080,9 +1152,9 @@ static bool VK_World_UploadLightmapDirtyRect(int x, int y, int w, int h)
 
     for (int row = 0; row < h; row++) {
         const byte *src = vk_world.lightmap_rgba +
-                          (((size_t)(y + row) * (size_t)vk_world.lightmap_atlas_size + (size_t)x) * 4);
-        byte *dst = rect_rgba + ((size_t)row * (size_t)w * 4);
-        memcpy(dst, src, (size_t)w * 4);
+                          (((size_t)(y + row) * (size_t)atlas_size + (size_t)x) * 4);
+        byte *dst = rect_rgba + (size_t)row * row_bytes;
+        memcpy(dst, src, row_bytes);
     }
 
     bool ok = VK_UI_UpdateImageRGBASubRect(vk_world.lightmap_handle, x, y, w, h, rect_rgba);
@@ -1159,9 +1231,16 @@ static bool VK_World_UpdateLightmapStyles(const refdef_t *fd)
         }
 
         if (vk_lightmap_debug && vk_lightmap_debug->integer > 0) {
-            int atlas_area = vk_world.lightmap_atlas_size * vk_world.lightmap_atlas_size;
-            int rect_area = max(1, dirty_w * dirty_h);
-            float coverage = (100.0f * (float)rect_area) / (float)max(1, atlas_area);
+            size_t atlas_area;
+            size_t rect_area;
+            if (!VK_World_ImageBytes(vk_world.lightmap_atlas_size, vk_world.lightmap_atlas_size, 1,
+                                     &atlas_area, "lightmap debug atlas area") ||
+                !VK_World_ImageBytes(dirty_w, dirty_h, 1,
+                                     &rect_area, "lightmap debug dirty rect")) {
+                return false;
+            }
+
+            float coverage = (100.0f * (float)rect_area) / (float)atlas_area;
             Com_Printf("vk_lightmap_debug: styles=%d faces=%d rect=%dx%d@%d,%d (%.2f%% atlas)\n",
                        changed_style_count, updated_faces, dirty_w, dirty_h,
                        dirty_min_x, dirty_min_y, coverage);
@@ -1187,7 +1266,17 @@ static bool VK_World_BuildLightmapAtlas(const bsp_t *bsp,
         return false;
     }
 
-    vk_world_face_lightmap_t *face_lms = calloc((size_t)bsp->numfaces, sizeof(*face_lms));
+    if (bsp->numfaces <= 0) {
+        return false;
+    }
+
+    size_t face_lm_bytes;
+    if (!VK_World_ArrayBytes((size_t)bsp->numfaces, sizeof(vk_world_face_lightmap_t),
+                             &face_lm_bytes, "face lightmap table")) {
+        return false;
+    }
+
+    vk_world_face_lightmap_t *face_lms = calloc(1, face_lm_bytes);
     if (!face_lms) {
         Com_SetLastError("Vulkan world: out of memory for face lightmap table");
         return false;
@@ -1197,8 +1286,22 @@ static bool VK_World_BuildLightmapAtlas(const bsp_t *bsp,
 
     for (size_t cand = 0; cand < q_countof(atlas_candidates); cand++) {
         const int atlas_size = atlas_candidates[cand];
-        int *inuse = calloc((size_t)atlas_size, sizeof(*inuse));
-        byte *rgba = calloc((size_t)atlas_size * (size_t)atlas_size, 4);
+        size_t atlas_bytes;
+        if (!VK_World_ImageBytes(atlas_size, atlas_size, 4,
+                                 &atlas_bytes, "lightmap atlas")) {
+            free(face_lms);
+            return false;
+        }
+
+        size_t inuse_bytes;
+        if (!VK_World_ArrayBytes((size_t)atlas_size, sizeof(int),
+                                 &inuse_bytes, "lightmap atlas columns")) {
+            free(face_lms);
+            return false;
+        }
+
+        int *inuse = calloc(1, inuse_bytes);
+        byte *rgba = calloc(1, atlas_bytes);
         if (!inuse || !rgba) {
             free(inuse);
             free(rgba);
@@ -1207,7 +1310,7 @@ static bool VK_World_BuildLightmapAtlas(const bsp_t *bsp,
             return false;
         }
 
-        memset(face_lms, 0, (size_t)bsp->numfaces * sizeof(*face_lms));
+        memset(face_lms, 0, face_lm_bytes);
 
         // Reserve (0,0) as fullbright texel for surfaces without lightmaps.
         inuse[0] = 1;
@@ -1248,11 +1351,12 @@ static bool VK_World_BuildLightmapAtlas(const bsp_t *bsp,
         free(inuse);
 
         if (!failed) {
-            VK_World_RebuildLightmapAtlasPixels(bsp, face_lms, atlas_size, fd, rgba);
-            *out_faces = face_lms;
-            *out_atlas_size = atlas_size;
-            *out_rgba = rgba;
-            return true;
+            if (VK_World_RebuildLightmapAtlasPixels(bsp, face_lms, atlas_size, fd, rgba)) {
+                *out_faces = face_lms;
+                *out_atlas_size = atlas_size;
+                *out_rgba = rgba;
+                return true;
+            }
         }
 
         free(rgba);
@@ -1350,21 +1454,45 @@ static bool VK_World_BuildMesh(vk_world_vertex_t **out_vertices,
     }
 
     uint32_t vertex_count = (uint32_t)triangle_count * 3;
-    vk_world_vertex_t *vertices = malloc((size_t)vertex_count * sizeof(*vertices));
+    size_t vertex_bytes;
+    if (!VK_World_ArrayBytes((size_t)vertex_count, sizeof(vk_world_vertex_t),
+                             &vertex_bytes, "mesh vertex")) {
+        return false;
+    }
+
+    vk_world_vertex_t *vertices = malloc(vertex_bytes);
     if (!vertices) {
         Com_SetLastError("Vulkan world: out of memory building mesh");
         return false;
     }
 
-    vk_world_batch_t *batches = malloc((size_t)triangle_count * sizeof(*batches));
+    size_t batch_bytes;
+    if (!VK_World_ArrayBytes((size_t)triangle_count, sizeof(vk_world_batch_t),
+                             &batch_bytes, "mesh batch")) {
+        free(vertices);
+        return false;
+    }
+
+    vk_world_batch_t *batches = malloc(batch_bytes);
     if (!batches) {
         free(vertices);
         Com_SetLastError("Vulkan world: out of memory building draw batches");
         return false;
     }
 
-    qhandle_t *texture_handles = calloc((size_t)bsp->numtexinfo, sizeof(*texture_handles));
-    vec2_t *texture_inv_sizes = calloc((size_t)bsp->numtexinfo, sizeof(*texture_inv_sizes));
+    size_t texture_handle_bytes;
+    size_t texture_inv_size_bytes;
+    if (!VK_World_ArrayBytes((size_t)bsp->numtexinfo, sizeof(qhandle_t),
+                             &texture_handle_bytes, "texture handle map") ||
+        !VK_World_ArrayBytes((size_t)bsp->numtexinfo, sizeof(vec2_t),
+                             &texture_inv_size_bytes, "texture size map")) {
+        free(batches);
+        free(vertices);
+        return false;
+    }
+
+    qhandle_t *texture_handles = calloc(1, texture_handle_bytes);
+    vec2_t *texture_inv_sizes = calloc(1, texture_inv_size_bytes);
     if (!texture_handles || !texture_inv_sizes) {
         free(texture_handles);
         free(texture_inv_sizes);
@@ -1560,8 +1688,16 @@ static bool VK_World_BuildMesh(vk_world_vertex_t **out_vertices,
         free(vertices);
         vertices = NULL;
     } else if (out < vertex_count) {
+        size_t shrink_bytes;
+        if (!VK_World_ArrayBytes((size_t)out, sizeof(*vertices),
+                                 &shrink_bytes, "mesh vertex shrink")) {
+            free(vertices);
+            free(batches);
+            return false;
+        }
+
         vk_world_vertex_t *shrunk_vertices =
-            realloc(vertices, (size_t)out * sizeof(*vertices));
+            realloc(vertices, shrink_bytes);
         if (shrunk_vertices) {
             vertices = shrunk_vertices;
         }
@@ -1571,8 +1707,16 @@ static bool VK_World_BuildMesh(vk_world_vertex_t **out_vertices,
         free(batches);
         batches = NULL;
     } else if (batch_out < triangle_count) {
+        size_t shrink_bytes;
+        if (!VK_World_ArrayBytes((size_t)batch_out, sizeof(*batches),
+                                 &shrink_bytes, "mesh batch shrink")) {
+            free(vertices);
+            free(batches);
+            return false;
+        }
+
         vk_world_batch_t *shrunk_batches =
-            realloc(batches, (size_t)batch_out * sizeof(*batches));
+            realloc(batches, shrink_bytes);
         if (shrunk_batches) {
             batches = shrunk_batches;
         }
@@ -1678,7 +1822,12 @@ static bool VK_World_UpdateVertexLighting(void)
         }
     }
 
-    size_t bytes = (size_t)vk_world.vertex_count * sizeof(*vk_world.cpu_vertices);
+    size_t bytes;
+    if (!VK_World_ArrayBytes((size_t)vk_world.vertex_count, sizeof(*vk_world.cpu_vertices),
+                             &bytes, "dynamic vertex upload")) {
+        return false;
+    }
+
     if (!vk_world.vertex_mapped) {
         Com_SetLastError("Vulkan world: vertex buffer not mapped");
         return false;

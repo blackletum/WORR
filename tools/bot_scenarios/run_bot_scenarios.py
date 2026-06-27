@@ -318,7 +318,7 @@ class MarkerMetricCheck:
     marker: str
     metric: str
     op: str
-    expected: int | float | str
+    expected: int | float | str | tuple[int | float | str, ...]
     note: str = ""
 
 
@@ -2729,8 +2729,8 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
         ),
         extra_cvars=(
-            ("sv_bot_frame_command_smoke_map_repeat_cycles", "2"),
-            ("sv_bot_frame_command_smoke_map_repeat_restart", "1"),
+            ("bot_frame_command_smoke_map_repeat_cycles", "2"),
+            ("bot_frame_command_smoke_map_repeat_restart", "1"),
         ),
         selection_tags=("match", "restart"),
     ),
@@ -2745,7 +2745,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "DV-03-T05"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_warmup_smoke",
+        smoke_cvar="bot_warmup_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_warmup_smoke=begin",
@@ -2866,7 +2866,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "FR-07-T01", "DV-03-T05", "FR-04-T16"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_vote_smoke",
+        smoke_cvar="bot_vote_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_vote_smoke=begin",
@@ -3078,7 +3078,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "FR-07-T04", "DV-03-T05", "FR-04-T16"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_admin_audit_smoke",
+        smoke_cvar="bot_admin_audit_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_admin_audit_smoke=begin",
@@ -3367,7 +3367,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "FR-07-T02", "DV-03-T05", "FR-04-T16"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_tournament_smoke",
+        smoke_cvar="bot_tournament_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_tournament_smoke=begin",
@@ -3698,7 +3698,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "FR-07-T02", "DV-03-T05", "FR-04-T16"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_tournament_smoke",
+        smoke_cvar="bot_tournament_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_tournament_smoke=begin",
@@ -4008,7 +4008,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-07-T03", "DV-03-T05", "FR-04-T16"),
         budget_seconds=15,
-        smoke_cvar="sv_bot_matchlog_smoke",
+        smoke_cvar="bot_matchlog_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_matchlog_smoke=begin",
@@ -4262,7 +4262,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "FR-07-T01", "DV-03-T05", "FR-04-T16"),
         budget_seconds=25,
-        smoke_cvar="sv_bot_mapvote_smoke",
+        smoke_cvar="bot_mapvote_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_mapvote_smoke=begin",
@@ -4573,7 +4573,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "FR-07-T01", "DV-03-T05", "FR-04-T16"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_mymap_smoke",
+        smoke_cvar="bot_mymap_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_mymap_smoke=begin",
@@ -4862,7 +4862,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "FR-07-T01", "DV-03-T05", "FR-04-T16"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_scoreboard_smoke",
+        smoke_cvar="bot_scoreboard_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_scoreboard_smoke=begin",
@@ -5095,7 +5095,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "FR-07-T01", "DV-03-T05", "FR-04-T16"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_intermission_smoke",
+        smoke_cvar="bot_intermission_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_intermission_smoke=begin",
@@ -5342,7 +5342,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T06", "FR-07-T01", "DV-03-T05", "FR-04-T16"),
         budget_seconds=25,
-        smoke_cvar="sv_bot_nextmap_smoke",
+        smoke_cvar="bot_nextmap_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_nextmap_smoke=begin",
@@ -5728,7 +5728,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T04", "DV-03-T05", "FR-04-T16"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_team_policy_smoke",
+        smoke_cvar="bot_team_policy_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_team_policy_smoke_after_add_requests",
@@ -5833,7 +5833,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
         task_ids=("FR-04-T04", "DV-03-T05", "FR-04-T16"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_team_policy_smoke",
+        smoke_cvar="bot_team_policy_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_team_policy_smoke=begin",
@@ -6517,7 +6517,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="FFA roam route",
         smoke_mode=42,
         description=(
-            "Runs a four-bot FFA smoke with sg_bot_ffa_roam_route enabled "
+            "Runs a four-bot FFA smoke with bot_ffa_roam_route enabled "
             "and verifies live FFA roam/collect/engage policy can own timed "
             "route commands."
         ),
@@ -6526,7 +6526,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "1"),
-            ("sg_bot_ffa_roam_route", "1"),
+            ("bot_ffa_roam_route", "1"),
         ),
         selection_tags=("match", "ffa", "roles", "routing"),
         checks=(
@@ -6649,8 +6649,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="FFA spawn-camp avoidance",
         smoke_mode=45,
         description=(
-            "Runs a four-bot FFA smoke with sg_bot_ffa_roam_route and "
-            "sg_bot_ffa_spawn_camp_avoidance enabled, then verifies the FFA "
+            "Runs a four-bot FFA smoke with bot_ffa_roam_route and "
+            "bot_ffa_spawn_camp_avoidance enabled, then verifies the FFA "
             "anti-camping policy can choose a nearby player as the timed "
             "route source and route away from that source."
         ),
@@ -6659,8 +6659,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "1"),
-            ("sg_bot_ffa_roam_route", "1"),
-            ("sg_bot_ffa_spawn_camp_avoidance", "1"),
+            ("bot_ffa_roam_route", "1"),
+            ("bot_ffa_spawn_camp_avoidance", "1"),
         ),
         selection_tags=("match", "ffa", "roles", "routing", "anti-camp"),
         checks=(
@@ -6825,7 +6825,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Team role route",
         smoke_mode=32,
         description=(
-            "Runs a four-bot TDM smoke with sg_bot_team_role_route enabled "
+            "Runs a four-bot TDM smoke with bot_team_role_route enabled "
             "and verifies live match role/lane policy can own timed route "
             "commands."
         ),
@@ -6834,7 +6834,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_team_role_route", "1"),
+            ("bot_team_role_route", "1"),
         ),
         selection_tags=("match", "tdm", "roles", "routing"),
         checks=(
@@ -6950,7 +6950,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="CTF role route",
         smoke_mode=35,
         description=(
-            "Runs a four-bot CTF smoke with sg_bot_ctf_role_route enabled "
+            "Runs a four-bot CTF smoke with bot_ctf_role_route enabled "
             "and verifies CTF match role/lane policy can own timed route "
             "commands."
         ),
@@ -6959,7 +6959,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_ctf_role_route", "1"),
+            ("bot_ctf_role_route", "1"),
         ),
         selection_tags=("match", "ctf", "roles", "routing"),
         checks=(
@@ -7075,7 +7075,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Team role combat",
         smoke_mode=43,
         description=(
-            "Runs a four-bot TDM smoke with sg_bot_team_role_combat enabled "
+            "Runs a four-bot TDM smoke with bot_team_role_combat enabled "
             "and verifies TDM match role/lane policy can own a live attack "
             "decision from visible, shootable enemy facts."
         ),
@@ -7084,7 +7084,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_team_role_combat", "1"),
+            ("bot_team_role_combat", "1"),
         ),
         selection_tags=("match", "tdm", "roles", "combat"),
         checks=(
@@ -7221,8 +7221,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Team role combat avoidance",
         smoke_mode=44,
         description=(
-            "Runs a four-bot TDM smoke with sg_bot_team_role_combat and "
-            "sg_bot_team_fire_avoidance enabled together, verifies role/lane "
+            "Runs a four-bot TDM smoke with bot_team_role_combat and "
+            "bot_team_fire_avoidance enabled together, verifies role/lane "
             "policy owns a live attack decision, and verifies friendly-fire "
             "avoidance can suppress blocked BUTTON_ATTACK application."
         ),
@@ -7231,8 +7231,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_team_role_combat", "1"),
-            ("sg_bot_team_fire_avoidance", "1"),
+            ("bot_team_role_combat", "1"),
+            ("bot_team_fire_avoidance", "1"),
         ),
         selection_tags=("match", "tdm", "roles", "combat", "friendly-fire"),
         checks=(
@@ -7407,8 +7407,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sv_bot_frame_command_smoke_map_repeat_cycles", "2"),
-            ("sv_bot_frame_command_smoke_map_repeat_restart", "1"),
+            ("bot_frame_command_smoke_map_repeat_cycles", "2"),
+            ("bot_frame_command_smoke_map_repeat_restart", "1"),
         ),
         selection_tags=("match", "tdm", "roles", "routing", "combat", "restart", "stability"),
         checks=(
@@ -7659,7 +7659,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="CTF role combat",
         smoke_mode=36,
         description=(
-            "Runs a four-bot CTF smoke with sg_bot_ctf_role_combat enabled "
+            "Runs a four-bot CTF smoke with bot_ctf_role_combat enabled "
             "and verifies CTF match role/lane policy can own a live attack "
             "decision from visible, shootable enemy facts."
         ),
@@ -7668,7 +7668,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_ctf_role_combat", "1"),
+            ("bot_ctf_role_combat", "1"),
         ),
         selection_tags=("match", "ctf", "roles", "combat"),
         checks=(
@@ -7805,7 +7805,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="CTF dropped flag route",
         smoke_mode=37,
         description=(
-            "Runs a four-bot CTF smoke with sg_bot_ctf_dropped_flag_route "
+            "Runs a four-bot CTF smoke with bot_ctf_dropped_flag_route "
             "enabled and verifies the live objective bridge routes toward "
             "dropped enemy flags through the dropped-flag response lane."
         ),
@@ -7814,7 +7814,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_ctf_dropped_flag_route", "1"),
+            ("bot_ctf_dropped_flag_route", "1"),
         ),
         selection_tags=("match", "ctf", "objectives", "routing"),
         checks=(
@@ -7923,7 +7923,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="CTF carrier support route",
         smoke_mode=38,
         description=(
-            "Runs a four-bot CTF smoke with sg_bot_ctf_carrier_support_route "
+            "Runs a four-bot CTF smoke with bot_ctf_carrier_support_route "
             "enabled and verifies the live objective bridge routes toward a "
             "same-team flag carrier through the carrier-support lane."
         ),
@@ -7932,7 +7932,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_ctf_carrier_support_route", "1"),
+            ("bot_ctf_carrier_support_route", "1"),
         ),
         selection_tags=("match", "ctf", "objectives", "routing"),
         checks=(
@@ -8055,7 +8055,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="CTF base return route",
         smoke_mode=39,
         description=(
-            "Runs a four-bot CTF smoke with sg_bot_ctf_base_return_route "
+            "Runs a four-bot CTF smoke with bot_ctf_base_return_route "
             "enabled and verifies the live objective bridge routes toward an "
             "enemy carrier holding the bot team's own flag through the "
             "own-base-return lane."
@@ -8065,7 +8065,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_ctf_base_return_route", "1"),
+            ("bot_ctf_base_return_route", "1"),
         ),
         selection_tags=("match", "ctf", "objectives", "routing"),
         checks=(
@@ -8188,7 +8188,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="CTF objective route policy",
         smoke_mode=40,
         description=(
-            "Runs a four-bot CTF smoke with sg_bot_ctf_objective_route "
+            "Runs a four-bot CTF smoke with bot_ctf_objective_route "
             "enabled and verifies the combined objective policy reacts to "
             "multiple live flag-state sources by selecting base-return, "
             "carrier-support, and dropped-flag objectives in one run."
@@ -8198,7 +8198,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_ctf_objective_route", "1"),
+            ("bot_ctf_objective_route", "1"),
         ),
         selection_tags=("match", "ctf", "objectives", "routing"),
         checks=(
@@ -8366,8 +8366,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_ctf_objective_route", "1"),
-            ("sg_bot_ctf_objective_transitions", "1"),
+            ("bot_ctf_objective_route", "1"),
+            ("bot_ctf_objective_transitions", "1"),
         ),
         selection_tags=("match", "ctf", "objectives", "routing", "transitions"),
         checks=(
@@ -8497,8 +8497,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="CTF objective route precedence",
         smoke_mode=41,
         description=(
-            "Runs a four-bot CTF smoke with sg_bot_ctf_role_route and "
-            "sg_bot_ctf_objective_route enabled together, verifying the "
+            "Runs a four-bot CTF smoke with bot_ctf_role_route and "
+            "bot_ctf_objective_route enabled together, verifying the "
             "generic CTF role route defers while the objective route policy "
             "owns the selected flag route."
         ),
@@ -8507,8 +8507,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_ctf_role_route", "1"),
-            ("sg_bot_ctf_objective_route", "1"),
+            ("bot_ctf_role_route", "1"),
+            ("bot_ctf_objective_route", "1"),
         ),
         selection_tags=("match", "ctf", "objectives", "routing"),
         checks=(
@@ -8659,7 +8659,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="FFA item roles",
         smoke_mode=46,
         description=(
-            "Runs a four-bot FFA smoke with sg_bot_ffa_item_roles enabled "
+            "Runs a four-bot FFA smoke with bot_ffa_item_roles enabled "
             "and verifies free-for-all item-role policy shapes live "
             "pickup-goal selection."
         ),
@@ -8668,7 +8668,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "1"),
-            ("sg_bot_ffa_item_roles", "1"),
+            ("bot_ffa_item_roles", "1"),
         ),
         selection_tags=("match", "ffa", "items", "roles"),
         checks=(
@@ -8827,7 +8827,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="CTF item roles",
         smoke_mode=47,
         description=(
-            "Runs a four-bot CTF smoke with sg_bot_ctf_item_roles enabled "
+            "Runs a four-bot CTF smoke with bot_ctf_item_roles enabled "
             "and verifies capture-the-flag item-role policy shapes live "
             "pickup-goal selection."
         ),
@@ -8836,7 +8836,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_ctf_item_roles", "1"),
+            ("bot_ctf_item_roles", "1"),
         ),
         selection_tags=("match", "ctf", "items", "roles"),
         checks=(
@@ -8995,7 +8995,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="FFA role combat",
         smoke_mode=48,
         description=(
-            "Runs a four-bot FFA smoke with sg_bot_ffa_role_combat enabled "
+            "Runs a four-bot FFA smoke with bot_ffa_role_combat enabled "
             "and verifies free-for-all match role/lane policy can own a live "
             "attack decision from visible, shootable enemy facts."
         ),
@@ -9004,7 +9004,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "1"),
-            ("sg_bot_ffa_role_combat", "1"),
+            ("bot_ffa_role_combat", "1"),
         ),
         selection_tags=("match", "ffa", "roles", "combat"),
         checks=(
@@ -9141,9 +9141,9 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="FFA spawn-camp combat avoidance",
         smoke_mode=49,
         description=(
-            "Runs a four-bot FFA smoke with sg_bot_ffa_role_combat, "
-            "sg_bot_ffa_spawn_camp_avoidance, and "
-            "sg_bot_ffa_spawn_camp_combat_avoidance enabled together, "
+            "Runs a four-bot FFA smoke with bot_ffa_role_combat, "
+            "bot_ffa_spawn_camp_avoidance, and "
+            "bot_ffa_spawn_camp_combat_avoidance enabled together, "
             "then verifies role/lane combat can select a live attack target "
             "and FFA anti-camp policy can suppress the shot when that target "
             "is the nearby spawn-camp source."
@@ -9153,9 +9153,9 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "1"),
-            ("sg_bot_ffa_role_combat", "1"),
-            ("sg_bot_ffa_spawn_camp_avoidance", "1"),
-            ("sg_bot_ffa_spawn_camp_combat_avoidance", "1"),
+            ("bot_ffa_role_combat", "1"),
+            ("bot_ffa_spawn_camp_avoidance", "1"),
+            ("bot_ffa_spawn_camp_combat_avoidance", "1"),
         ),
         selection_tags=("match", "ffa", "roles", "combat", "anti-camp"),
         checks=(
@@ -9352,11 +9352,11 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "1"),
-            ("sg_bot_ffa_roam_route", "1"),
-            ("sg_bot_ffa_spawn_camp_avoidance", "1"),
-            ("sg_bot_ffa_item_roles", "1"),
-            ("sg_bot_ffa_role_combat", "1"),
-            ("sg_bot_ffa_spawn_camp_combat_avoidance", "1"),
+            ("bot_ffa_roam_route", "1"),
+            ("bot_ffa_spawn_camp_avoidance", "1"),
+            ("bot_ffa_item_roles", "1"),
+            ("bot_ffa_role_combat", "1"),
+            ("bot_ffa_spawn_camp_combat_avoidance", "1"),
         ),
         selection_tags=("match", "ffa", "roles", "routing", "items", "combat", "anti-camp", "pacing"),
         checks=(
@@ -9614,7 +9614,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Duel live pacing",
         smoke_mode=75,
         description=(
-            "Runs a two-bot Duel smoke with sg_bot_duel_live_pacing enabled "
+            "Runs a two-bot Duel smoke with bot_duel_live_pacing enabled "
             "and verifies Duel match policy can drive item denial, route "
             "pressure, live combat arbitration, and spawn-camp shot "
             "suppression without enabling the FFA proof cvars."
@@ -9624,7 +9624,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "2"),
-            ("sg_bot_duel_live_pacing", "1"),
+            ("bot_duel_live_pacing", "1"),
         ),
         selection_tags=("match", "duel", "roles", "routing", "items", "combat", "anti-camp", "pacing"),
         checks=(
@@ -9903,7 +9903,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Team item roles",
         smoke_mode=33,
         description=(
-            "Runs a four-bot TDM smoke with sg_bot_team_item_roles enabled "
+            "Runs a four-bot TDM smoke with bot_team_item_roles enabled "
             "and verifies match item-role policy shapes live pickup-goal "
             "selection."
         ),
@@ -9912,7 +9912,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_team_item_roles", "1"),
+            ("bot_team_item_roles", "1"),
         ),
         selection_tags=("match", "tdm", "items", "roles"),
         checks=(
@@ -10064,7 +10064,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Team resource denial",
         smoke_mode=50,
         description=(
-            "Runs a four-bot TDM smoke with sg_bot_team_resource_denial "
+            "Runs a four-bot TDM smoke with bot_team_resource_denial "
             "enabled and verifies deny-enemy resource policy boosts live "
             "pickup-goal scoring for contested weapons, powerups, tech, or "
             "utility items."
@@ -10074,7 +10074,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_team_resource_denial", "1"),
+            ("bot_team_resource_denial", "1"),
         ),
         selection_tags=("match", "tdm", "items", "resources"),
         checks=(
@@ -10233,7 +10233,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Match item policy",
         smoke_mode=51,
         description=(
-            "Runs a four-bot TDM smoke with sg_bot_match_item_policy enabled "
+            "Runs a four-bot TDM smoke with bot_match_item_policy enabled "
             "and verifies the umbrella policy activates both match item-role "
             "pickup scoring and deny-enemy resource scoring without setting "
             "the individual team item-role or resource-denial proof cvars."
@@ -10243,7 +10243,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_match_item_policy", "1"),
+            ("bot_match_item_policy", "1"),
         ),
         selection_tags=("match", "tdm", "items", "resources", "roles"),
         checks=(
@@ -10416,7 +10416,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Behavior policy umbrella",
         smoke_mode=52,
         description=(
-            "Runs a four-bot TDM smoke with sg_bot_behavior_enable enabled "
+            "Runs a four-bot TDM smoke with bot_behavior_enable enabled "
             "and verifies the integrated behavior switch composes role "
             "routing, role combat, friendly-fire avoidance, and match "
             "item-policy activation without setting the individual proof "
@@ -10429,7 +10429,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_behavior_enable", "1"),
+            ("bot_behavior_enable", "1"),
         ),
         selection_tags=("match", "tdm", "behavior", "combat", "items", "resources", "roles"),
         checks=(
@@ -10573,7 +10573,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Behavior arbitration",
         smoke_mode=63,
         description=(
-            "Runs a four-bot TDM smoke with the live sg_bot_behavior_enable "
+            "Runs a four-bot TDM smoke with the live bot_behavior_enable "
             "umbrella and verifies the bot brain records a single ordered "
             "behavior owner per frame while separately exposing route, item, "
             "combat, and objective candidates. The row also hard-gates the "
@@ -10585,7 +10585,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_behavior_enable", "1"),
+            ("bot_behavior_enable", "1"),
         ),
         selection_tags=("match", "tdm", "behavior", "arbitration", "combat", "items", "roles"),
         checks=(
@@ -11005,9 +11005,9 @@ SCENARIOS: tuple[Scenario, ...] = (
             MarkerMetricCheck(
                 ACTION_STATUS_MARKER,
                 "last_action_weapon_inventory_selected_range_band_name",
-                "any_eq",
-                "close",
-                "selected weapon status must report close range",
+                "any_in",
+                ("melee", "close"),
+                "selected weapon status must report close-quarters range",
             ),
             MarkerMetricCheck(
                 ACTION_STATUS_MARKER,
@@ -12787,8 +12787,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_match_item_policy", "1"),
-            ("sg_bot_profile_item_policy_smoke", "1"),
+            ("bot_match_item_policy", "1"),
+            ("bot_profile_item_policy_smoke", "1"),
         ),
         selection_tags=("profiles", "match", "tdm", "behavior", "items", "resources"),
         checks=(
@@ -13041,7 +13041,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_profile_movement_policy_smoke", "1"),
+            ("bot_profile_movement_policy_smoke", "1"),
         ),
         selection_tags=("profiles", "match", "tdm", "behavior", "movement"),
         checks=(
@@ -13186,7 +13186,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=57,
         description=(
             "Runs a four-bot TDM smoke with first-party bot profile IDs and "
-            "sg_bot_allow_chat enabled, then verifies chat metadata is visible "
+            "bot_allow_chat enabled, then verifies chat metadata is visible "
             "while the first conservative live chat consumer submits a "
             "rate-limited policy-gated utterance."
         ),
@@ -13195,7 +13195,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
+            ("bot_allow_chat", "1"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior"),
         checks=(
@@ -13312,7 +13312,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=58,
         description=(
             "Runs a four-bot TDM smoke with first-party bot profile IDs, "
-            "sg_bot_allow_chat enabled, and sg_bot_chat_team_only enabled, "
+            "bot_allow_chat enabled, and bot_chat_team_only enabled, "
             "then verifies the conservative live chat consumer dispatches "
             "through the team-only audience path."
         ),
@@ -13321,8 +13321,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_team_only", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_team_only", "1"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior"),
         checks=(
@@ -13467,7 +13467,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=59,
         description=(
             "Runs a four-bot TDM smoke with first-party bot profile IDs, "
-            "sg_bot_allow_chat enabled, and sg_bot_chat_min_interval_ms set "
+            "bot_allow_chat enabled, and bot_chat_min_interval_ms set "
             "to a high global interval, then verifies the conservative live "
             "chat consumer submits the first dispatch and rate-limits later "
             "bot attempts."
@@ -13477,8 +13477,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_min_interval_ms", "60000"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_min_interval_ms", "60000"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior"),
         checks=(
@@ -13630,7 +13630,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=60,
         description=(
             "Runs a four-bot TDM smoke with first-party bot profile IDs and "
-            "sg_bot_allow_chat enabled, then verifies profile chat "
+            "bot_allow_chat enabled, then verifies profile chat "
             "personalities select deterministic initial utterance buckets "
             "before live dispatch."
         ),
@@ -13639,7 +13639,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
+            ("bot_allow_chat", "1"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior"),
         checks=(
@@ -13819,7 +13819,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=61,
         description=(
             "Runs a four-bot TDM smoke with first-party bot profile IDs, "
-            "sg_bot_allow_chat enabled, and the reply-policy smoke gate set, "
+            "bot_allow_chat enabled, and the reply-policy smoke gate set, "
             "then verifies profile chat personalities select deterministic "
             "reply utterances for the first team-ready proof event."
         ),
@@ -13828,8 +13828,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_reply_policy_smoke", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_reply_policy_smoke", "1"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior"),
         checks=(
@@ -14030,7 +14030,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=62,
         description=(
             "Runs a four-bot TDM smoke with first-party bot profile IDs, "
-            "sg_bot_allow_chat enabled, and the event-policy smoke gate set, "
+            "bot_allow_chat enabled, and the event-policy smoke gate set, "
             "then verifies profile chat personalities select deterministic "
             "reply utterances for both team-ready and route-ready proof events."
         ),
@@ -14039,8 +14039,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_event_policy_smoke", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_event_policy_smoke", "1"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior"),
         checks=(
@@ -14248,7 +14248,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=79,
         description=(
             "Runs a four-bot TDM smoke with first-party bot profile IDs, "
-            "sg_bot_allow_chat enabled, and sg_bot_chat_live_events enabled, "
+            "bot_allow_chat enabled, and bot_chat_live_events enabled, "
             "then verifies live spawn and route-ready frame-command outcomes "
             "feed the safe chat event pipeline without the smoke-only event "
             "gate."
@@ -14258,8 +14258,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior", "live"),
         checks=(
@@ -14546,9 +14546,9 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
-            ("sg_bot_chat_min_interval_ms", "60000"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
+            ("bot_chat_min_interval_ms", "60000"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior", "live", "cooldown"),
         checks=(
@@ -14848,8 +14848,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior", "live", "combat"),
         checks=(
@@ -15177,8 +15177,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior", "live", "phrase"),
         checks=(
@@ -15472,9 +15472,9 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_event_policy_smoke", "1"),
-            ("sg_bot_chat_live_events", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_event_policy_smoke", "1"),
+            ("bot_chat_live_events", "1"),
         ),
         selection_tags=("profiles", "chat", "match", "tdm", "behavior", "live", "duplicate"),
         checks=(
@@ -15704,8 +15704,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "1"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
         ),
         selection_tags=("profiles", "chat", "survival", "health", "route", "live"),
         checks=(
@@ -16118,8 +16118,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "1"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
         ),
         selection_tags=("profiles", "chat", "items", "pickup", "live"),
         checks=(
@@ -16547,10 +16547,10 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
-            ("sg_bot_ctf_objective_route", "1"),
-            ("sg_bot_ctf_objective_transitions", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
+            ("bot_ctf_objective_route", "1"),
+            ("bot_ctf_objective_transitions", "1"),
         ),
         selection_tags=("profiles", "chat", "objectives", "ctf", "live"),
         checks=(
@@ -17020,10 +17020,10 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "5"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
-            ("sg_bot_ctf_objective_route", "1"),
-            ("sg_bot_ctf_objective_transitions", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
+            ("bot_ctf_objective_route", "1"),
+            ("bot_ctf_objective_transitions", "1"),
         ),
         selection_tags=("profiles", "chat", "objectives", "ctf", "live"),
         checks=(
@@ -17437,8 +17437,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "1"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
         ),
         selection_tags=("profiles", "chat", "navigation", "live"),
         checks=(
@@ -17930,9 +17930,9 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
-            ("sg_bot_team_resource_denial", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
+            ("bot_team_resource_denial", "1"),
         ),
         selection_tags=("profiles", "chat", "tdm", "items", "resources", "live"),
         checks=(
@@ -18347,8 +18347,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_allow_chat", "1"),
-            ("sg_bot_chat_live_events", "1"),
+            ("bot_allow_chat", "1"),
+            ("bot_chat_live_events", "1"),
         ),
         selection_tags=("profiles", "chat", "tdm", "match-flow", "intermission", "live"),
         checks=(
@@ -18744,7 +18744,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=34,
         description=(
             "Runs a four-bot TDM combat smoke with "
-            "sg_bot_team_fire_avoidance enabled and verifies friendly-line "
+            "bot_team_fire_avoidance enabled and verifies friendly-line "
             "policy can suppress live attack input before BUTTON_ATTACK is "
             "applied."
         ),
@@ -18753,7 +18753,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "1"),
             ("g_gametype", "3"),
-            ("sg_bot_team_fire_avoidance", "1"),
+            ("bot_team_fire_avoidance", "1"),
         ),
         selection_tags=("match", "tdm", "combat", "friendly-fire"),
         checks=(
@@ -18978,7 +18978,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=27,
         description=(
             "Runs a one-bot cooperative frame-command smoke with "
-            "sg_bot_coop_lead_advance enabled and verifies no-leader "
+            "bot_coop_lead_advance enabled and verifies no-leader "
             "LeadAdvance policy reaches timed route-goal ownership."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
@@ -18986,7 +18986,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_lead_advance", "1"),
+            ("bot_coop_lead_advance", "1"),
         ),
         selection_tags=("match", "coop", "leader", "progression"),
         checks=(
@@ -19082,7 +19082,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=28,
         description=(
             "Runs a two-bot cooperative frame-command smoke with "
-            "sg_bot_coop_resource_share enabled and verifies item routing "
+            "bot_coop_resource_share enabled and verifies item routing "
             "consumes reserve-for-teammate resource policy."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
@@ -19090,7 +19090,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_resource_share", "1"),
+            ("bot_coop_resource_share", "1"),
         ),
         selection_tags=("match", "coop", "resources"),
         checks=(
@@ -19158,7 +19158,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=29,
         description=(
             "Runs a two-bot cooperative frame-command smoke with "
-            "sg_bot_coop_anti_blocking enabled and verifies close-to-leader "
+            "bot_coop_anti_blocking enabled and verifies close-to-leader "
             "coop policy can own an anti-blocking movement command."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
@@ -19166,7 +19166,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_anti_blocking", "1"),
+            ("bot_coop_anti_blocking", "1"),
         ),
         selection_tags=("match", "coop", "movement"),
         checks=(
@@ -19241,7 +19241,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=30,
         description=(
             "Runs a two-bot cooperative frame-command smoke with "
-            "sg_bot_coop_target_share enabled and verifies a bot can adopt "
+            "bot_coop_target_share enabled and verifies a bot can adopt "
             "a teammate's hostile non-client target from the blackboard."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
@@ -19249,7 +19249,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_target_share", "1"),
+            ("bot_coop_target_share", "1"),
         ),
         selection_tags=("match", "coop", "combat", "targeting"),
         checks=(
@@ -19344,7 +19344,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=31,
         description=(
             "Runs a two-bot cooperative elevator travel-type smoke with "
-            "sg_bot_coop_door_elevator enabled and verifies one bot can "
+            "bot_coop_door_elevator enabled and verifies one bot can "
             "own the interaction while a teammate holds for it."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
@@ -19352,7 +19352,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_door_elevator", "1"),
+            ("bot_coop_door_elevator", "1"),
         ),
         selection_tags=("match", "coop", "interaction", "movement"),
         checks=(
@@ -19468,7 +19468,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=77,
         description=(
             "Runs a two-bot cooperative elevator travel-type smoke with "
-            "sg_bot_coop_live_loop enabled and verifies leader routing, "
+            "bot_coop_live_loop enabled and verifies leader routing, "
             "progress waiting, anti-blocking, route-interaction retry, and "
             "door/elevator source-hold cooperation in one live loop."
         ),
@@ -19477,7 +19477,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_live_loop", "1"),
+            ("bot_coop_live_loop", "1"),
         ),
         selection_tags=("match", "coop", "interaction", "movement", "live"),
         checks=(
@@ -19673,7 +19673,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_live_loop", "1"),
+            ("bot_coop_live_loop", "1"),
         ),
         map_name="base1",
         selection_tags=("match", "coop", "interaction", "movement", "maps", "campaign"),
@@ -19805,7 +19805,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=78,
         description=(
             "Runs a two-bot cooperative frame-command smoke with "
-            "sg_bot_coop_share_loop enabled and verifies coop target sharing "
+            "bot_coop_share_loop enabled and verifies coop target sharing "
             "and reserve-for-teammate resource sharing compose in one run."
         ),
         task_ids=("FR-04-T04", "FR-04-T05", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
@@ -19813,7 +19813,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_share_loop", "1"),
+            ("bot_coop_share_loop", "1"),
         ),
         selection_tags=("match", "coop", "combat", "resources", "targeting", "live"),
         checks=(
@@ -19930,7 +19930,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=3,
         description=(
             "Runs the frame-command smoke under cooperative cvars with "
-            "sg_bot_coop_progress_wait enabled and verifies WaitForLeader "
+            "bot_coop_progress_wait enabled and verifies WaitForLeader "
             "policy consumption reaches command ownership."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-07-T06"),
@@ -19938,7 +19938,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_progress_wait", "1"),
+            ("bot_coop_progress_wait", "1"),
         ),
         selection_tags=("match", "coop", "progression"),
         checks=(
@@ -20010,7 +20010,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=12,
         description=(
             "Runs the elevator travel-type smoke under cooperative cvars with "
-            "sg_bot_coop_interaction_retry enabled and verifies detected route "
+            "bot_coop_interaction_retry enabled and verifies detected route "
             "interactions can own wait/use command retry windows."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-07-T06"),
@@ -20018,7 +20018,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         extra_cvars=(
             ("deathmatch", "0"),
             ("coop", "1"),
-            ("sg_bot_coop_interaction_retry", "1"),
+            ("bot_coop_interaction_retry", "1"),
         ),
         selection_tags=("match", "coop", "interaction"),
         checks=(
@@ -20194,10 +20194,12 @@ def evaluate_check(check: MetricCheck, metrics: dict[str, int]) -> dict[str, Any
 def marker_value_passes(
     op: str,
     actual: int | float | str,
-    expected: int | float | str,
+    expected: int | float | str | tuple[int | float | str, ...],
 ) -> bool:
     if op == "eq":
         return actual == expected
+    if op == "in":
+        return isinstance(expected, tuple) and actual in expected
     if op == "ge":
         return (
             isinstance(actual, int | float)

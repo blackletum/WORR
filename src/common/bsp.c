@@ -349,6 +349,10 @@ static void BSP_BuildPvsMatrix(bsp_t *bsp)
     if (!bsp->vis)
         return;
 
+    if (bsp->visrowsize <= 0 || !bsp->vis->numclusters ||
+        (size_t)bsp->visrowsize > SIZE_MAX / (size_t)bsp->vis->numclusters)
+        return;
+
     size_t matrix_size = (size_t)bsp->visrowsize * (size_t)bsp->vis->numclusters;
     byte *pvs_matrix = Z_Mallocz(matrix_size);
     visrow_t row;
@@ -385,27 +389,58 @@ byte *BSP_GetPvs2(bsp_t *bsp, int cluster)
 
 static bool BSP_GetPatchedPVSFileName(const char *map_path, char pvs_path[MAX_QPATH])
 {
+    if (!map_path || !pvs_path)
+        return false;
+
     const size_t path_len = strlen(map_path);
     if (path_len < 5 || strcmp(map_path + path_len - 4, ".bsp") != 0)
         return false;
 
     const char *map_file = strrchr(map_path, '/');
     const size_t prefix_len = map_file ? (size_t)(map_file + 1 - map_path) : 0;
-    const size_t map_file_len = strlen(map_file ? map_file + 1 : map_path);
-    const size_t pvs_name_len = prefix_len + 4 + (map_file_len - 4) + 4;
-    if (pvs_name_len >= MAX_QPATH)
-        return false;
-
     map_file = map_file ? map_file + 1 : map_path;
+    const size_t map_file_len = strlen(map_file);
+    if (map_file_len < 5 || prefix_len >= MAX_QPATH)
+        return false;
 
     if (prefix_len)
         memcpy(pvs_path, map_path, prefix_len);
     pvs_path[prefix_len] = '\0';
-    Q_strlcat(pvs_path, "pvs/", MAX_QPATH);
-    Q_strlcat(pvs_path, map_file, MAX_QPATH);
-    pvs_path[prefix_len + 4 + (map_file_len - 4)] = '\0';
-    Q_strlcat(pvs_path, ".bin", MAX_QPATH);
 
+    if (Q_strlcat(pvs_path, "pvs/", MAX_QPATH) >= MAX_QPATH)
+        return false;
+
+    size_t len = strlen(pvs_path);
+    size_t stem_len = map_file_len - 4;
+    if (stem_len >= MAX_QPATH - len)
+        return false;
+    memcpy(pvs_path + len, map_file, stem_len);
+    pvs_path[len + stem_len] = '\0';
+
+    if (Q_strlcat(pvs_path, ".bin", MAX_QPATH) >= MAX_QPATH)
+        return false;
+
+    return true;
+}
+
+static bool BSP_GetPatchedPVSSize(const bsp_t *bsp, size_t *matrix_size, size_t *file_size)
+{
+    if (!bsp || !bsp->vis || bsp->visrowsize <= 0 || !bsp->vis->numclusters)
+        return false;
+
+    size_t rowsize = (size_t)bsp->visrowsize;
+    size_t clusters = (size_t)bsp->vis->numclusters;
+    if (rowsize > SIZE_MAX / clusters)
+        return false;
+
+    size_t matrix = rowsize * clusters;
+    if (matrix > SIZE_MAX / 2)
+        return false;
+
+    if (matrix_size)
+        *matrix_size = matrix;
+    if (file_size)
+        *file_size = matrix * 2;
     return true;
 }
 
@@ -421,8 +456,10 @@ static bool BSP_LoadPatchedPVS(bsp_t *bsp)
     if (!filebuf || filelen < 0)
         return false;
 
-    size_t matrix_size = (size_t)bsp->visrowsize * (size_t)bsp->vis->numclusters;
-    if (filelen != (int)(matrix_size * 2)) {
+    size_t matrix_size;
+    size_t file_size;
+    if (!BSP_GetPatchedPVSSize(bsp, &matrix_size, &file_size) ||
+        (size_t)filelen != file_size) {
         FS_FreeFile(filebuf);
         return false;
     }
@@ -447,13 +484,17 @@ bool BSP_SavePatchedPVS(bsp_t *bsp)
     if (!BSP_GetPatchedPVSFileName(bsp->name, pvs_path))
         return false;
 
-    size_t matrix_size = (size_t)bsp->visrowsize * (size_t)bsp->vis->numclusters;
-    unsigned char *filebuf = Z_Malloc(matrix_size * 2);
+    size_t matrix_size;
+    size_t file_size;
+    if (!BSP_GetPatchedPVSSize(bsp, &matrix_size, &file_size))
+        return false;
+
+    unsigned char *filebuf = Z_Malloc(file_size);
 
     memcpy(filebuf, bsp->pvs_matrix, matrix_size);
     memcpy(filebuf + matrix_size, bsp->pvs2_matrix, matrix_size);
 
-    int err = FS_WriteFile(pvs_path, filebuf, matrix_size * 2);
+    int err = FS_WriteFile(pvs_path, filebuf, file_size);
 
     Z_Free(filebuf);
 

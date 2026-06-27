@@ -1180,6 +1180,8 @@ BotActionContext BotActions_BuildContext(const gentity_t *bot) {
 	context.combat.preferredWeaponItem = preferredWeapon != nullptr ? preferredWeapon->id : IT_NULL;
 	context.combat.preferredWeaponAmmo = BotActions_WeaponAmmo(bot->client, preferredWeapon);
 	context.combat.preferredWeaponReady = BotActions_WeaponReady(bot->client, preferredWeapon);
+	context.combat.selfHealth = context.health;
+	context.combat.selfArmor = context.armor;
 
 	if (BotActions_EnemyAlive(bot->enemy)) {
 		context.combat.hasEnemy = true;

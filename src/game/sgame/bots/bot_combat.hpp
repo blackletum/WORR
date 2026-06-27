@@ -255,6 +255,8 @@ struct BotCombatContext {
 	int preferredWeaponItem = 0;
 	int currentWeaponAmmo = 0;
 	int preferredWeaponAmmo = 0;
+	int selfHealth = 0;
+	int selfArmor = 0;
 	int enemyDistanceSquared = 0;
 	int enemyClientIndex = -1;
 	int enemyHealthEstimate = 0;
@@ -437,5 +439,6 @@ BotWeaponRangeBand BotCombat_RangeBandForDistanceSquared(int distanceSquared);
 const BotWeaponMetadata *BotCombat_GetWeaponMetadata(int weaponItem);
 int BotCombat_ProjectileSpeedForWeapon(int weaponItem);
 BotWeaponSelectionResult BotCombat_SelectPreferredWeapon(const BotCombatContext &context);
+bool BotCombat_ShouldAvoidWeakUnderpoweredFight(const BotCombatContext &context);
 const char *BotCombat_RangeBandName(BotWeaponRangeBand band);
 const char *BotCombat_AttackModelName(BotWeaponAttackModel model);

@@ -2582,9 +2582,9 @@ struct BotChatPolicyDispatchStatus {
 BotChatPolicyDispatchStatus botChatPolicyDispatchStatus{};
 
 int BotChatPolicy_ConfiguredRateLimitMilliseconds() {
-	if (!sg_bot_chat_min_interval_ms)
+	if (!bot_chat_min_interval_ms)
 		return 0;
-	return std::max(0, sg_bot_chat_min_interval_ms->integer);
+	return std::max(0, bot_chat_min_interval_ms->integer);
 }
 
 bool BotChatPolicy_IsBotClient(const gentity_t* ent) {
@@ -2609,7 +2609,7 @@ bool BotChatPolicy_Dispatch(gentity_t* ent, const char* message, bool team) {
 		(ent && ent->client) ? static_cast<int>(ent->s.number) - 1 : -1;
 	botChatPolicyDispatchStatus.lastTeam = team ? 1 : 0;
 
-	if (!sg_bot_allow_chat || sg_bot_allow_chat->integer <= 0) {
+	if (!bot_allow_chat || bot_allow_chat->integer <= 0) {
 		botChatPolicyDispatchStatus.failures++;
 		return false;
 	}

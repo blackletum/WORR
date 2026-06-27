@@ -11,6 +11,7 @@ Copyright (C) 2026
 
 #include <stdlib.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #include <math.h>
 
@@ -21,6 +22,7 @@ Copyright (C) 2026
 #define VK_SHADOW_CONE_MIN_BIAS 0.000005f
 #define VK_SHADOW_CONE_NORMAL_OFFSET 0.05f
 #define VK_SHADOW_CONE_DEPTH_BIAS 0.25f
+#define VK_SHADOW_INITIAL_VERTEX_CAPACITY 4096u
 
 // EVSM warp exponent shared by the moment pass (push constant) and the world
 // receiver (shadow_moment_tuning UBO member). Moments are stored as (w, w*w)
@@ -230,6 +232,67 @@ static bool VK_Shadow_Check(VkResult result, const char *what)
     Com_EPrintf("%s failed: %d\n", what ? what : "Vulkan shadow operation",
                 result);
     return false;
+}
+
+static bool VK_Shadow_ArrayBytes(size_t count, size_t item_size, size_t *out_size,
+                                 const char *what)
+{
+    if (!out_size || (item_size && count > SIZE_MAX / item_size)) {
+        Com_EPrintf("Vulkan shadow: %s allocation size overflow\n",
+                    what ? what : "buffer");
+        return false;
+    }
+
+    *out_size = count * item_size;
+    return true;
+}
+
+static bool VK_Shadow_AddCount(uint32_t value, uint32_t delta, uint32_t *out_value,
+                               const char *what)
+{
+    if (!out_value || value > UINT32_MAX - delta) {
+        Com_EPrintf("Vulkan shadow: %s count overflow\n",
+                    what ? what : "vertex");
+        return false;
+    }
+
+    *out_value = value + delta;
+    return true;
+}
+
+static bool VK_Shadow_GrowCapacity(uint32_t current, uint32_t needed,
+                                   uint32_t *out_capacity, const char *what)
+{
+    if (!out_capacity) {
+        return false;
+    }
+
+    uint32_t new_capacity = current ? current : VK_SHADOW_INITIAL_VERTEX_CAPACITY;
+    while (new_capacity < needed) {
+        if (new_capacity > UINT32_MAX / 2u) {
+            Com_EPrintf("Vulkan shadow: %s capacity overflow\n",
+                        what ? what : "vertex");
+            return false;
+        }
+        new_capacity *= 2u;
+    }
+
+    *out_capacity = new_capacity;
+    return true;
+}
+
+static bool VK_Shadow_ValidStorageFamily(shadow_storage_family_t storage)
+{
+    return storage == SHADOW_STORAGE_DEPTH_COMPARE ||
+           storage == SHADOW_STORAGE_MOMENT;
+}
+
+static bool VK_Shadow_ValidView(const shadow_view_desc_t *view)
+{
+    return view &&
+           view->page.index < VK_SHADOW_MAX_PAGES &&
+           view->resolution > 0 &&
+           VK_Shadow_ValidStorageFamily(view->storage_family);
 }
 
 static uint32_t VK_Shadow_FindMemoryType(uint32_t type_filter,
@@ -673,6 +736,9 @@ static bool VK_Shadow_EnsureVertexBuffer(size_t bytes)
     if (bytes == 0) {
         return true;
     }
+    if (!vk_shadow.ctx || !vk_shadow.ctx->device) {
+        return false;
+    }
     if (vk_shadow.vertex_buffer && vk_shadow.vertex_buffer_bytes >= bytes) {
         return true;
     }
@@ -1053,6 +1119,9 @@ static bool VK_Shadow_EnsureResources(int requested_resolution,
     if (!vk_shadow.initialized || !vk_shadow.ctx || !vk_shadow.ctx->device) {
         return false;
     }
+    if (!VK_Shadow_ValidStorageFamily(storage)) {
+        return false;
+    }
 
     int resolution = VK_Shadow_ClampResolution(requested_resolution);
     VkFormat depth_format = vk_shadow.depth_format;
@@ -1345,12 +1414,21 @@ static bool VK_Shadow_EnsureCpuCapacity(uint32_t needed)
     if (needed <= vk_shadow.vertex_capacity) {
         return true;
     }
-    uint32_t new_capacity = vk_shadow.vertex_capacity ? vk_shadow.vertex_capacity : 4096;
-    while (new_capacity < needed) {
-        new_capacity *= 2;
+
+    uint32_t new_capacity;
+    if (!VK_Shadow_GrowCapacity(vk_shadow.vertex_capacity, needed,
+                                &new_capacity, "vertex")) {
+        return false;
     }
+
+    size_t vertex_bytes;
+    if (!VK_Shadow_ArrayBytes((size_t)new_capacity, sizeof(*vk_shadow.vertices),
+                              &vertex_bytes, "vertex")) {
+        return false;
+    }
+
     vk_shadow_vertex_t *new_vertices =
-        realloc(vk_shadow.vertices, sizeof(*vk_shadow.vertices) * new_capacity);
+        realloc(vk_shadow.vertices, vertex_bytes);
     if (!new_vertices) {
         Com_EPrintf("Vulkan shadow: out of memory for shadow vertices\n");
         return false;
@@ -1363,11 +1441,21 @@ static bool VK_Shadow_EnsureCpuCapacity(uint32_t needed)
 static bool VK_Shadow_AddTriangle(const vec3_t a, const vec3_t b,
                                   const vec3_t c)
 {
-    if (!VK_Shadow_EnsureCpuCapacity(vk_shadow.vertex_count + 3)) {
+    uint32_t needed_vertices;
+    if (!VK_Shadow_AddCount(vk_shadow.vertex_count, 3, &needed_vertices,
+                            "triangle vertex") ||
+        !VK_Shadow_EnsureCpuCapacity(needed_vertices)) {
         return false;
     }
+
+    size_t triangle_bytes;
+    if (!VK_Shadow_ArrayBytes(3, sizeof(*vk_shadow.vertices),
+                              &triangle_bytes, "triangle vertex")) {
+        return false;
+    }
+
     vk_shadow_vertex_t *v = &vk_shadow.vertices[vk_shadow.vertex_count];
-    memset(v, 0, sizeof(*v) * 3);
+    memset(v, 0, triangle_bytes);
     VectorCopy(a, v[0].pos);
     VectorCopy(b, v[1].pos);
     VectorCopy(c, v[2].pos);
@@ -1383,7 +1471,7 @@ static bool VK_Shadow_AddTriangle(const vec3_t a, const vec3_t b,
     VectorCopy(normal, v[2].normal);
     v[0].color = v[1].color = v[2].color = 0xffffffffu;
     v[0].base_alpha = v[1].base_alpha = v[2].base_alpha = 255;
-    vk_shadow.vertex_count += 3;
+    vk_shadow.vertex_count = needed_vertices;
     return true;
 }
 
@@ -1463,13 +1551,19 @@ static const vk_shadow_face_bounds_t *VK_Shadow_WorldFaceBounds(const bsp_t *bsp
     }
 
     VK_Shadow_FreeWorldCache();
-    if (!bsp || bsp->numfaces <= 0) {
+    if (!bsp || !bsp->faces || bsp->numfaces <= 0) {
         return NULL;
     }
 
-    vk_shadow_face_bounds_t *bounds =
-        malloc(sizeof(*bounds) * (size_t)bsp->numfaces);
+    size_t bounds_bytes;
+    if (!VK_Shadow_ArrayBytes((size_t)bsp->numfaces, sizeof(vk_shadow_face_bounds_t),
+                              &bounds_bytes, "world face bounds")) {
+        return NULL;
+    }
+
+    vk_shadow_face_bounds_t *bounds = malloc(bounds_bytes);
     if (!bounds) {
+        Com_EPrintf("Vulkan shadow: out of memory for world face bounds\n");
         return NULL;
     }
     for (int i = 0; i < bsp->numfaces; i++) {
@@ -1629,8 +1723,7 @@ static void VK_Shadow_RecordLightPage(const shadow_view_desc_t *view)
 
 static void VK_Shadow_RegisterView(const shadow_view_desc_t *view)
 {
-    if (!view || view->page.index >= VK_SHADOW_MAX_PAGES ||
-        !vk_shadow.resources_ok) {
+    if (!VK_Shadow_ValidView(view) || !vk_shadow.resources_ok) {
         return;
     }
 
@@ -1809,8 +1902,7 @@ void VK_Shadow_BeginFrame(void *userdata,
 bool VK_Shadow_EnsurePage(void *userdata, const shadow_view_desc_t *view)
 {
     (void)userdata;
-    if (!vk_shadow.frame_active || !view ||
-        view->page.index >= VK_SHADOW_MAX_PAGES) {
+    if (!vk_shadow.frame_active || !VK_Shadow_ValidView(view)) {
         return false;
     }
     bool allocated = false;
@@ -1828,13 +1920,13 @@ bool VK_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
                           const int *caster_indices, int caster_count)
 {
     (void)userdata;
-    if (!vk_shadow.frame_active || !vk_shadow.resources_ok || !view ||
-        view->page.index >= VK_SHADOW_MAX_PAGES ||
+    if (!vk_shadow.frame_active || !vk_shadow.resources_ok ||
+        !VK_Shadow_ValidView(view) || caster_count < 0 ||
         vk_shadow.job_count >= VK_SHADOW_MAX_PAGES) {
         return false;
     }
 
-    vk_shadow_job_t *job = &vk_shadow.jobs[vk_shadow.job_count++];
+    vk_shadow_job_t *job = &vk_shadow.jobs[vk_shadow.job_count];
     memset(job, 0, sizeof(*job));
     job->page = view->page.index;
     job->first_vertex = vk_shadow.vertex_count;
@@ -1846,6 +1938,8 @@ bool VK_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
     job->push.evsm_exponent = VK_SHADOW_EVSM_EXPONENT;
 
     if (!VK_Shadow_AddWorldDepth(view)) {
+        vk_shadow.vertex_count = job->first_vertex;
+        memset(job, 0, sizeof(*job));
         return false;
     }
     for (int i = 0; i < caster_count; i++) {
@@ -1865,16 +1959,27 @@ bool VK_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
         if (!VK_Entity_EmitShadowCaster(&caster->entity, NULL,
                                         world_bsp,
                                         VK_Shadow_EmitCasterTriangle, NULL)) {
+            vk_shadow.vertex_count = job->first_vertex;
+            memset(job, 0, sizeof(*job));
             return false;
         }
         if (vk_shadow.vertex_count == caster_first_vertex &&
             (caster->flags & RF_CASTSHADOW) &&
             !VK_Shadow_EmitBoundsCaster(caster)) {
+            vk_shadow.vertex_count = job->first_vertex;
+            memset(job, 0, sizeof(*job));
             return false;
         }
     }
     job->vertex_count = vk_shadow.vertex_count - job->first_vertex;
-    return job->vertex_count > 0;
+    if (!job->vertex_count) {
+        vk_shadow.vertex_count = job->first_vertex;
+        memset(job, 0, sizeof(*job));
+        return false;
+    }
+
+    vk_shadow.job_count++;
+    return true;
 }
 
 void VK_Shadow_EndFrame(void *userdata,
@@ -1909,7 +2014,16 @@ void VK_Shadow_EndFrame(void *userdata,
     if (!vk_shadow.vertex_count) {
         return;
     }
-    size_t bytes = (size_t)vk_shadow.vertex_count * sizeof(*vk_shadow.vertices);
+
+    size_t bytes;
+    if (!vk_shadow.vertices ||
+        !VK_Shadow_ArrayBytes((size_t)vk_shadow.vertex_count, sizeof(*vk_shadow.vertices),
+                              &bytes, "vertex upload")) {
+        vk_shadow.vertex_count = 0;
+        vk_shadow.job_count = 0;
+        return;
+    }
+
     if (!VK_Shadow_EnsureVertexBuffer(bytes) || !vk_shadow.vertex_mapped) {
         vk_shadow.vertex_count = 0;
         vk_shadow.job_count = 0;
@@ -2113,7 +2227,9 @@ static void VK_Shadow_GenerateMomentMips(VkCommandBuffer cmd)
 
 void VK_Shadow_Record(VkCommandBuffer cmd)
 {
-    if (!vk_shadow.initialized || !vk_shadow.resources_ok || !cmd) {
+    if (!vk_shadow.initialized || !vk_shadow.resources_ok || !cmd ||
+        vk_shadow.resolution <= 0 ||
+        !VK_Shadow_ValidStorageFamily(vk_shadow.storage_family)) {
         return;
     }
 

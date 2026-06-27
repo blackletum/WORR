@@ -146,20 +146,20 @@ cvar_t *ai_widow_roof_spawn;
 cvar_t *bob_pitch;
 cvar_t *bob_roll;
 cvar_t *bob_up;
-cvar_t *sg_bot_enable;
-cvar_t *sg_bot_debug;
-cvar_t *sg_bot_debug_aas;
-cvar_t *sg_bot_debug_route;
-cvar_t *sg_bot_debug_goal;
-cvar_t *sg_bot_debug_client;
-cvar_t *sg_bot_cpu_budget_ms;
-cvar_t *sg_bot_allow_chat;
-cvar_t *sg_bot_chat_team_only;
-cvar_t *sg_bot_chat_min_interval_ms;
-cvar_t *sg_bot_chat_reply_policy_smoke;
-cvar_t *sg_bot_chat_event_policy_smoke;
-cvar_t *sg_bot_chat_live_events;
-cvar_t *sg_bot_lifecycle_smoke;
+cvar_t *bot_enable;
+cvar_t *bot_debug;
+cvar_t *bot_debug_aas;
+cvar_t *bot_debug_route;
+cvar_t *bot_debug_goal;
+cvar_t *bot_debug_client;
+cvar_t *bot_cpu_budget_ms;
+cvar_t *bot_allow_chat;
+cvar_t *bot_chat_team_only;
+cvar_t *bot_chat_min_interval_ms;
+cvar_t *bot_chat_reply_policy_smoke;
+cvar_t *bot_chat_event_policy_smoke;
+cvar_t *bot_chat_live_events;
+cvar_t *bot_lifecycle_smoke;
 cvar_t *flood_msgs;
 cvar_t *flood_persecond;
 cvar_t *flood_waitdelay;
@@ -1387,7 +1387,7 @@ static void ShutdownGame() {
   gi.Com_Print("==== ShutdownGame ====\n");
 
   Bot_RuntimeEndLevel();
-  if (sg_bot_lifecycle_smoke != nullptr && sg_bot_lifecycle_smoke->integer != 0)
+  if (bot_lifecycle_smoke != nullptr && bot_lifecycle_smoke->integer != 0)
     Bot_RuntimePrintLifecycleStatus();
   Bot_RuntimeShutdown();
 
@@ -1667,9 +1667,8 @@ void QueueIntermission(const char *msg, bool boo, bool reset) {
       (!practice && level.matchState < MatchState::In_Progress))
     return;
 
-  std::strncpy(level.intermission.victorMessage.data(), msg,
-               level.intermission.victorMessage.size() - 1);
-  level.intermission.victorMessage.back() = '\0'; // Ensure null-termination
+  Q_strlcpy(level.intermission.victorMessage.data(), msg ? msg : "",
+            level.intermission.victorMessage.size());
 
   const char *reason = level.intermission.victorMessage[0]
                            ? level.intermission.victorMessage.data()

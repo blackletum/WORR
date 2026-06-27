@@ -47,9 +47,8 @@ set allow_download 1
 For bot-enabled practice servers, start with:
 
 ```text
-set sg_bot_enable 1
-set sg_bot_profile vanguard
-set sg_bot_min_players 4
+set bot_profile vanguard
+set bot_min_players 4
 ```
 
 Release and staged server installs keep botfiles under `basew/botfiles/` as
@@ -57,8 +56,8 @@ loose files beside `basew/pak0.pkz`. Operators can edit those loose files or add
 new complete profile families, then reload without restarting:
 
 ```text
-sg_bot_reload_profiles
-sg_bot_add vanguard
+bot_reload_profiles
+addbot vanguard
 ```
 
 Use [Bot Profiles](bot-profiles.md) for the full operator guide, including

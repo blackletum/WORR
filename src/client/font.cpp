@@ -21,6 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cctype>
 #include <climits>
 #include <cmath>
@@ -28,6 +29,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -175,6 +177,36 @@ static void font_ensure_fallback_cvars(void) {
 
 static const char *font_safe_str(const char *value) {
   return (value && *value) ? value : "<null>";
+}
+
+static bool font_size_mul(size_t a, size_t b, size_t *out, const char *what) {
+  if (!out)
+    return false;
+  if (b != 0 && a > std::numeric_limits<size_t>::max() / b) {
+    Com_WPrintf("Font: %s size overflow\n", what ? what : "buffer");
+    return false;
+  }
+  *out = a * b;
+  return true;
+}
+
+static bool font_size_add(size_t a, size_t b, size_t *out, const char *what) {
+  if (!out)
+    return false;
+  if (a > std::numeric_limits<size_t>::max() - b) {
+    Com_WPrintf("Font: %s size overflow\n", what ? what : "buffer");
+    return false;
+  }
+  *out = a + b;
+  return true;
+}
+
+static int font_advance_to_26_6(int advance) {
+  if (advance > INT_MAX / 64)
+    return INT_MAX;
+  if (advance < INT_MIN / 64)
+    return INT_MIN;
+  return advance * 64;
 }
 
 static bool font_debug_enabled(void) {
@@ -369,8 +401,10 @@ static bool font_parse_u32_token(const char *token, uint32_t *out) {
     return false;
 
   char *end = nullptr;
+  errno = 0;
   unsigned long value = strtoul(token, &end, 0);
-  if (end == token || *end != '\0')
+  if (end == token || *end != '\0' || errno == ERANGE ||
+      value > std::numeric_limits<uint32_t>::max())
     return false;
 
   *out = (uint32_t)value;
@@ -535,14 +569,27 @@ static TTF_HintingFlags font_ttf_hinting_flags(void) {
 static void font_ttf_blit_alpha(byte *dst, int dst_width, int dst_height, int x,
                                 int y, const byte *src, int src_pitch, int w,
                                 int h) {
-  if (!dst || !src || w <= 0 || h <= 0)
+  if (!dst || !src || dst_width <= 0 || dst_height <= 0 || src_pitch <= 0 ||
+      w <= 0 || h <= 0)
     return;
-  if (x < 0 || y < 0 || x + w > dst_width || y + h > dst_height)
+  if (x < 0 || y < 0 || x > dst_width || y > dst_height ||
+      w > dst_width - x || h > dst_height - y || src_pitch < w)
     return;
 
   for (int row = 0; row < h; ++row) {
-    byte *dst_row = dst + ((y + row) * dst_width) + x;
-    const byte *src_row = src + row * src_pitch;
+    size_t dst_offset = 0;
+    size_t src_offset = 0;
+    if (!font_size_mul((size_t)(y + row), (size_t)dst_width, &dst_offset,
+                       "TTF blit destination row") ||
+        !font_size_add(dst_offset, (size_t)x, &dst_offset,
+                       "TTF blit destination offset") ||
+        !font_size_mul((size_t)row, (size_t)src_pitch, &src_offset,
+                       "TTF blit source row")) {
+      return;
+    }
+
+    byte *dst_row = dst + dst_offset;
+    const byte *src_row = src + src_offset;
     memcpy(dst_row, src_row, (size_t)w);
   }
 }
@@ -592,13 +639,26 @@ static int font_ttf_store_page(font_t *font, const byte *alpha_pixels, int width
   if (!font || !alpha_pixels || width <= 0 || height <= 0)
     return -1;
 
-  const size_t pixel_count = (size_t)width * (size_t)height;
-  const size_t rgba_size = pixel_count * 4;
+  size_t pixel_count = 0;
+  size_t rgba_size = 0;
+  if (!font_size_mul((size_t)width, (size_t)height, &pixel_count,
+                     "TTF atlas pixels") ||
+      !font_size_mul(pixel_count, 4, &rgba_size, "TTF atlas RGBA")) {
+    return -1;
+  }
+
+  if (font->ttf.pages.size() >
+      (size_t)std::numeric_limits<int>::max()) {
+    Com_WPrintf("Font: too many TTF atlas pages\n");
+    return -1;
+  }
 
   font_ttf_page_t page;
   page.width = width;
   page.height = height;
   page.pixels = (byte *)Z_Malloc(rgba_size);
+  if (!page.pixels)
+    return -1;
 
   for (size_t i = 0; i < pixel_count; ++i) {
     const size_t j = i * 4;
@@ -609,6 +669,10 @@ static int font_ttf_store_page(font_t *font, const byte *alpha_pixels, int width
   }
 
   byte *upload = (byte *)Z_Malloc(rgba_size);
+  if (!upload) {
+    Z_Free(page.pixels);
+    return -1;
+  }
   memcpy(upload, page.pixels, rgba_size);
 
   int page_index = (int)font->ttf.pages.size();
@@ -666,7 +730,7 @@ static bool font_ttf_render_bitmap(font_t *font, uint32_t glyph_value,
   out_glyph->left = minx;
   out_glyph->top = maxy;
   out_glyph->bottom = miny;
-  out_glyph->advance_26_6 = advance << 6;
+  out_glyph->advance_26_6 = font_advance_to_26_6(advance);
   out_glyph->x_skip = std::max(0, advance);
   out_glyph->w = std::max(0, maxx - minx);
   out_glyph->h = std::max(0, maxy - miny);
@@ -700,21 +764,54 @@ static bool font_ttf_render_bitmap(font_t *font, uint32_t glyph_value,
     }
   }
 
+  if (surface->w <= 0 || surface->h <= 0 || !surface->pixels) {
+    SDL_DestroySurface(surface);
+    *out_pitch = 0;
+    out_bitmap->clear();
+    return true;
+  }
+  if (surface->w > INT_MAX / 64) {
+    SDL_DestroySurface(surface);
+    *out_pitch = 0;
+    out_bitmap->clear();
+    return true;
+  }
+  if (surface->pitch < 0 ||
+      (size_t)surface->pitch < (size_t)surface->w * sizeof(Uint32)) {
+    SDL_DestroySurface(surface);
+    *out_pitch = 0;
+    out_bitmap->clear();
+    return true;
+  }
+
   out_glyph->valid = true;
   out_glyph->w = surface->w;
   out_glyph->h = surface->h;
   if (!have_metrics && out_glyph->x_skip <= 0) {
     out_glyph->x_skip = surface->w;
-    out_glyph->advance_26_6 = surface->w << 6;
+    out_glyph->advance_26_6 = font_advance_to_26_6(surface->w);
   }
   *out_pitch = surface->w;
-  out_bitmap->assign((size_t)surface->w * (size_t)surface->h, 0);
+  size_t bitmap_size = 0;
+  if (!font_size_mul((size_t)surface->w, (size_t)surface->h, &bitmap_size,
+                     "TTF glyph bitmap")) {
+    SDL_DestroySurface(surface);
+    *out_pitch = 0;
+    out_bitmap->clear();
+    return true;
+  }
+  out_bitmap->assign(bitmap_size, 0);
 
-  SDL_LockSurface(surface);
+  if (!SDL_LockSurface(surface)) {
+    SDL_DestroySurface(surface);
+    *out_pitch = 0;
+    out_bitmap->clear();
+    return true;
+  }
   for (int y = 0; y < surface->h; ++y) {
     const Uint32 *src_row =
         (const Uint32 *)((const byte *)surface->pixels + y * surface->pitch);
-    byte *dst_row = out_bitmap->data() + y * (*out_pitch);
+    byte *dst_row = out_bitmap->data() + (size_t)y * (size_t)(*out_pitch);
     for (int x = 0; x < surface->w; ++x)
       dst_row[x] = (byte)(src_row[x] >> 24);
   }
@@ -734,8 +831,15 @@ static bool font_ttf_render_chunk(font_t *font, uint32_t chunk_index) {
   font_ttf_chunk_t *chunk = new font_ttf_chunk_t();
   bool any_glyph = false;
 
-  std::vector<byte> page_alpha((size_t)k_ttf_atlas_size *
-                               (size_t)k_ttf_atlas_size, 0);
+  size_t atlas_pixels = 0;
+  if (!font_size_mul((size_t)k_ttf_atlas_size, (size_t)k_ttf_atlas_size,
+                     &atlas_pixels, "TTF atlas alpha")) {
+    delete chunk;
+    font->ttf.chunks[chunk_index] = &g_ttf_null_chunk;
+    return false;
+  }
+
+  std::vector<byte> page_alpha(atlas_pixels, 0);
   std::vector<int> pending_slots;
   int pen_x = k_ttf_atlas_padding;
   int pen_y = k_ttf_atlas_padding;
@@ -783,22 +887,26 @@ static bool font_ttf_render_chunk(font_t *font, uint32_t chunk_index) {
       continue;
     }
 
-    if (glyph.w + (k_ttf_atlas_padding * 2) > k_ttf_atlas_size ||
-        glyph.h + (k_ttf_atlas_padding * 2) > k_ttf_atlas_size) {
+    const int padded_limit = k_ttf_atlas_size - (k_ttf_atlas_padding * 2);
+    if (glyph.w > padded_limit || glyph.h > padded_limit) {
       chunk->glyphs[(size_t)i] = glyph;
       continue;
     }
 
-    if (pen_x + glyph.w + k_ttf_atlas_padding > k_ttf_atlas_size) {
+    if (glyph.w > k_ttf_atlas_size - k_ttf_atlas_padding - pen_x) {
       pen_x = k_ttf_atlas_padding;
-      pen_y += row_height + k_ttf_atlas_padding;
+      if (row_height > k_ttf_atlas_size - k_ttf_atlas_padding - pen_y) {
+        flush_page();
+      } else {
+        pen_y += row_height + k_ttf_atlas_padding;
+      }
       row_height = 0;
     }
 
-    if (pen_y + glyph.h + k_ttf_atlas_padding > k_ttf_atlas_size)
+    if (glyph.h > k_ttf_atlas_size - k_ttf_atlas_padding - pen_y)
       flush_page();
 
-    if (pen_y + glyph.h + k_ttf_atlas_padding > k_ttf_atlas_size) {
+    if (glyph.h > k_ttf_atlas_size - k_ttf_atlas_padding - pen_y) {
       chunk->glyphs[(size_t)i] = glyph;
       continue;
     }
@@ -1004,19 +1112,24 @@ static bool font_read_disk_file(const std::filesystem::path &path, void **out_da
     return false;
 
   uintmax_t file_size = std::filesystem::file_size(path, ec);
-  if (ec || file_size == 0 || file_size > MAX_LOADFILE)
+  if (ec || file_size == 0 || file_size > MAX_LOADFILE ||
+      file_size > (uintmax_t)std::numeric_limits<int>::max() ||
+      file_size > (uintmax_t)std::numeric_limits<size_t>::max() ||
+      file_size > (uintmax_t)std::numeric_limits<std::streamsize>::max())
     return false;
 
   std::ifstream stream(path, std::ios::binary);
   if (!stream)
     return false;
 
-  void *data = Z_Malloc(static_cast<size_t>(file_size));
+  size_t alloc_size = static_cast<size_t>(file_size);
+  std::streamsize read_size = static_cast<std::streamsize>(file_size);
+  void *data = Z_Malloc(alloc_size);
   if (!data)
     return false;
 
-  stream.read(static_cast<char *>(data), static_cast<std::streamsize>(file_size));
-  if (!stream) {
+  stream.read(static_cast<char *>(data), read_size);
+  if (stream.bad() || stream.gcount() != read_size) {
     Z_Free(data);
     return false;
   }
@@ -1133,7 +1246,7 @@ static bool font_load_ttf(font_t *font, const char *path) {
     if (TTF_GetGlyphMetrics(sdl_font, 'M', &minx, &maxx, &miny, &maxy, &advance)) {
       int xskip = std::max(1, advance);
       font->ttf.fixed_advance_units = xskip;
-      font->ttf.fixed_advance_26_6 = xskip << 6;
+      font->ttf.fixed_advance_26_6 = font_advance_to_26_6(xskip);
       float vscale = (float)font->virtual_line_height / (float)font->ttf.extent;
       font->fixed_advance = std::max(1, Q_rint((float)xskip * vscale));
     }
@@ -1451,7 +1564,12 @@ static void Font_DumpGlyphs_f(void) {
   char out_path[MAX_OSPATH];
   qhandle_t file = 0;
   for (int i = 0; i < 1000; ++i) {
-    Q_snprintf(out_path, sizeof(out_path), "fontdump/glyphs_%03d.txt", i);
+    int path_len = Q_snprintf(out_path, sizeof(out_path),
+                              "fontdump/glyphs_%03d.txt", i);
+    if (path_len < 0 || (size_t)path_len >= sizeof(out_path)) {
+      Com_Printf("font_dump_glyphs: output path too long\n");
+      return;
+    }
     int ret = FS_OpenFile(out_path, &file,
                           FS_MODE_WRITE | FS_FLAG_TEXT | FS_FLAG_EXCL);
     if (file)

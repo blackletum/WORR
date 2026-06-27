@@ -15,6 +15,19 @@ import run_bot_scenarios as harness
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 LATEST_REPORT_FIXTURE = REPO_ROOT / ".tmp" / "bot_scenarios" / "latest_report.json"
+
+
+def command_cvar_index(command: list[str], name: str) -> int:
+    for index in range(len(command) - 2):
+        if command[index] == "+set" and command[index + 1] == name:
+            return index + 1
+    raise AssertionError(f"missing +set cvar {name!r} in command")
+
+
+def command_cvar_value(command: list[str], name: str) -> str:
+    return command[command_cvar_index(command, name) + 1]
+
+
 RESERVED_MODE_BEGIN_LINES = {
     20: (
         f"{harness.SCENARIO_BEGIN_MARKER} mode=20 combat=engage_enemy "
@@ -1562,8 +1575,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(
             row["extra_cvars"],
             [
-                {"name": "sv_bot_frame_command_smoke_map_repeat_cycles", "value": "2"},
-                {"name": "sv_bot_frame_command_smoke_map_repeat_restart", "value": "1"},
+                {"name": "bot_frame_command_smoke_map_repeat_cycles", "value": "2"},
+                {"name": "bot_frame_command_smoke_map_repeat_restart", "value": "1"},
             ],
         )
 
@@ -1641,8 +1654,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sv_bot_frame_command_smoke_map_repeat_cycles", "value": "2"},
-                {"name": "sv_bot_frame_command_smoke_map_repeat_restart", "value": "1"},
+                {"name": "bot_frame_command_smoke_map_repeat_cycles", "value": "2"},
+                {"name": "bot_frame_command_smoke_map_repeat_restart", "value": "1"},
             ],
         )
 
@@ -1712,11 +1725,11 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_ffa_roam_route", "value": "1"},
-                {"name": "sg_bot_ffa_spawn_camp_avoidance", "value": "1"},
-                {"name": "sg_bot_ffa_item_roles", "value": "1"},
-                {"name": "sg_bot_ffa_role_combat", "value": "1"},
-                {"name": "sg_bot_ffa_spawn_camp_combat_avoidance", "value": "1"},
+                {"name": "bot_ffa_roam_route", "value": "1"},
+                {"name": "bot_ffa_spawn_camp_avoidance", "value": "1"},
+                {"name": "bot_ffa_item_roles", "value": "1"},
+                {"name": "bot_ffa_role_combat", "value": "1"},
+                {"name": "bot_ffa_spawn_camp_combat_avoidance", "value": "1"},
             ],
         )
 
@@ -1772,7 +1785,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "2"},
-                {"name": "sg_bot_duel_live_pacing", "value": "1"},
+                {"name": "bot_duel_live_pacing", "value": "1"},
             ],
         )
 
@@ -1840,8 +1853,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_ctf_objective_route", "value": "1"},
-                {"name": "sg_bot_ctf_objective_transitions", "value": "1"},
+                {"name": "bot_ctf_objective_route", "value": "1"},
+                {"name": "bot_ctf_objective_transitions", "value": "1"},
             ],
         )
 
@@ -1897,7 +1910,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_live_loop", "value": "1"},
+                {"name": "bot_coop_live_loop", "value": "1"},
             ],
         )
 
@@ -1962,7 +1975,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_live_loop", "value": "1"},
+                {"name": "bot_coop_live_loop", "value": "1"},
             ],
         )
 
@@ -2038,7 +2051,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_share_loop", "value": "1"},
+                {"name": "bot_coop_share_loop", "value": "1"},
             ],
         )
 
@@ -2088,7 +2101,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_warmup_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_warmup_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "warmup"])
 
@@ -2138,7 +2151,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_vote_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_vote_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "votes"])
 
@@ -2197,7 +2210,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_admin_audit_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_admin_audit_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "admin"])
 
@@ -2277,7 +2290,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_tournament_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_tournament_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "tournament"])
 
@@ -2373,7 +2386,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_tournament_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_tournament_smoke")
         self.assertEqual(row["smoke_mode"], 3)
         self.assertEqual(row["selection_tags"], ["match", "tournament", "replay"])
 
@@ -2453,7 +2466,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_matchlog_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_matchlog_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "logging", "schema"])
 
@@ -2543,7 +2556,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_mapvote_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_mapvote_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "votes", "mapvote"])
 
@@ -2653,7 +2666,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_mymap_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_mymap_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "mymap"])
 
@@ -2724,7 +2737,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_scoreboard_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_scoreboard_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "scoreboard"])
 
@@ -2793,7 +2806,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_intermission_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_intermission_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "intermission"])
 
@@ -2869,7 +2882,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_nextmap_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_nextmap_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         self.assertEqual(row["selection_tags"], ["match", "nextmap"])
 
@@ -3335,7 +3348,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_team_policy_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_team_policy_smoke")
         self.assertEqual(row["smoke_mode"], 2)
         required_marker_metrics = {
             (check["source"], check["metric"], check["op"], check["expected"])
@@ -3391,7 +3404,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         row = report["scenarios"][0]
 
         self.assertEqual(row["status"], "implemented")
-        self.assertEqual(row["smoke_cvar"], "sv_bot_team_policy_smoke")
+        self.assertEqual(row["smoke_cvar"], "bot_team_policy_smoke")
         self.assertEqual(row["smoke_mode"], 3)
         required_marker_metrics = {
             (check["source"], check["metric"], check["op"], check["expected"])
@@ -3704,7 +3717,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_progress_wait", "value": "1"},
+                {"name": "bot_coop_progress_wait", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3712,7 +3725,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_lead_advance", "value": "1"},
+                {"name": "bot_coop_lead_advance", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3720,7 +3733,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_resource_share", "value": "1"},
+                {"name": "bot_coop_resource_share", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3728,7 +3741,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_anti_blocking", "value": "1"},
+                {"name": "bot_coop_anti_blocking", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3736,7 +3749,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_target_share", "value": "1"},
+                {"name": "bot_coop_target_share", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3744,7 +3757,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_door_elevator", "value": "1"},
+                {"name": "bot_coop_door_elevator", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3752,7 +3765,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_live_loop", "value": "1"},
+                {"name": "bot_coop_live_loop", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3760,7 +3773,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_live_loop", "value": "1"},
+                {"name": "bot_coop_live_loop", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3768,7 +3781,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_share_loop", "value": "1"},
+                {"name": "bot_coop_share_loop", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3776,7 +3789,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_ffa_roam_route", "value": "1"},
+                {"name": "bot_ffa_roam_route", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3784,8 +3797,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_ffa_roam_route", "value": "1"},
-                {"name": "sg_bot_ffa_spawn_camp_avoidance", "value": "1"},
+                {"name": "bot_ffa_roam_route", "value": "1"},
+                {"name": "bot_ffa_spawn_camp_avoidance", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3793,7 +3806,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_ffa_item_roles", "value": "1"},
+                {"name": "bot_ffa_item_roles", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3801,7 +3814,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_ffa_role_combat", "value": "1"},
+                {"name": "bot_ffa_role_combat", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3809,9 +3822,9 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_ffa_role_combat", "value": "1"},
-                {"name": "sg_bot_ffa_spawn_camp_avoidance", "value": "1"},
-                {"name": "sg_bot_ffa_spawn_camp_combat_avoidance", "value": "1"},
+                {"name": "bot_ffa_role_combat", "value": "1"},
+                {"name": "bot_ffa_spawn_camp_avoidance", "value": "1"},
+                {"name": "bot_ffa_spawn_camp_combat_avoidance", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3819,11 +3832,11 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_ffa_roam_route", "value": "1"},
-                {"name": "sg_bot_ffa_spawn_camp_avoidance", "value": "1"},
-                {"name": "sg_bot_ffa_item_roles", "value": "1"},
-                {"name": "sg_bot_ffa_role_combat", "value": "1"},
-                {"name": "sg_bot_ffa_spawn_camp_combat_avoidance", "value": "1"},
+                {"name": "bot_ffa_roam_route", "value": "1"},
+                {"name": "bot_ffa_spawn_camp_avoidance", "value": "1"},
+                {"name": "bot_ffa_item_roles", "value": "1"},
+                {"name": "bot_ffa_role_combat", "value": "1"},
+                {"name": "bot_ffa_spawn_camp_combat_avoidance", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3831,7 +3844,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "2"},
-                {"name": "sg_bot_duel_live_pacing", "value": "1"},
+                {"name": "bot_duel_live_pacing", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3839,7 +3852,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_team_role_route", "value": "1"},
+                {"name": "bot_team_role_route", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3847,7 +3860,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_team_role_combat", "value": "1"},
+                {"name": "bot_team_role_combat", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3855,8 +3868,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_team_role_combat", "value": "1"},
-                {"name": "sg_bot_team_fire_avoidance", "value": "1"},
+                {"name": "bot_team_role_combat", "value": "1"},
+                {"name": "bot_team_fire_avoidance", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3864,8 +3877,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sv_bot_frame_command_smoke_map_repeat_cycles", "value": "2"},
-                {"name": "sv_bot_frame_command_smoke_map_repeat_restart", "value": "1"},
+                {"name": "bot_frame_command_smoke_map_repeat_cycles", "value": "2"},
+                {"name": "bot_frame_command_smoke_map_repeat_restart", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3873,7 +3886,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_ctf_role_combat", "value": "1"},
+                {"name": "bot_ctf_role_combat", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3881,7 +3894,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_ctf_dropped_flag_route", "value": "1"},
+                {"name": "bot_ctf_dropped_flag_route", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3889,7 +3902,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_ctf_carrier_support_route", "value": "1"},
+                {"name": "bot_ctf_carrier_support_route", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3897,7 +3910,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_ctf_base_return_route", "value": "1"},
+                {"name": "bot_ctf_base_return_route", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3905,7 +3918,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_ctf_objective_route", "value": "1"},
+                {"name": "bot_ctf_objective_route", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3913,8 +3926,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_ctf_objective_route", "value": "1"},
-                {"name": "sg_bot_ctf_objective_transitions", "value": "1"},
+                {"name": "bot_ctf_objective_route", "value": "1"},
+                {"name": "bot_ctf_objective_transitions", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3922,8 +3935,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_ctf_role_route", "value": "1"},
-                {"name": "sg_bot_ctf_objective_route", "value": "1"},
+                {"name": "bot_ctf_role_route", "value": "1"},
+                {"name": "bot_ctf_objective_route", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3931,7 +3944,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_ctf_item_roles", "value": "1"},
+                {"name": "bot_ctf_item_roles", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3939,7 +3952,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_team_item_roles", "value": "1"},
+                {"name": "bot_team_item_roles", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3947,7 +3960,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_team_resource_denial", "value": "1"},
+                {"name": "bot_team_resource_denial", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3955,7 +3968,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_match_item_policy", "value": "1"},
+                {"name": "bot_match_item_policy", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3963,7 +3976,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_behavior_enable", "value": "1"},
+                {"name": "bot_behavior_enable", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -3971,7 +3984,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_behavior_enable", "value": "1"},
+                {"name": "bot_behavior_enable", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4007,8 +4020,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_match_item_policy", "value": "1"},
-                {"name": "sg_bot_profile_item_policy_smoke", "value": "1"},
+                {"name": "bot_match_item_policy", "value": "1"},
+                {"name": "bot_profile_item_policy_smoke", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4016,7 +4029,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_profile_movement_policy_smoke", "value": "1"},
+                {"name": "bot_profile_movement_policy_smoke", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4024,7 +4037,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4032,8 +4045,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_team_only", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_team_only", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4041,8 +4054,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_min_interval_ms", "value": "60000"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_min_interval_ms", "value": "60000"},
             ],
         )
         self.assertEqual(
@@ -4050,7 +4063,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4058,8 +4071,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_reply_policy_smoke", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_reply_policy_smoke", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4067,8 +4080,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_event_policy_smoke", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_event_policy_smoke", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4076,8 +4089,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4085,9 +4098,9 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
-                {"name": "sg_bot_chat_min_interval_ms", "value": "60000"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
+                {"name": "bot_chat_min_interval_ms", "value": "60000"},
             ],
         )
         self.assertEqual(
@@ -4095,8 +4108,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4104,8 +4117,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4113,9 +4126,9 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_event_policy_smoke", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_event_policy_smoke", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4123,8 +4136,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4132,8 +4145,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4141,10 +4154,10 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
-                {"name": "sg_bot_ctf_objective_route", "value": "1"},
-                {"name": "sg_bot_ctf_objective_transitions", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
+                {"name": "bot_ctf_objective_route", "value": "1"},
+                {"name": "bot_ctf_objective_transitions", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4152,10 +4165,10 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "5"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
-                {"name": "sg_bot_ctf_objective_route", "value": "1"},
-                {"name": "sg_bot_ctf_objective_transitions", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
+                {"name": "bot_ctf_objective_route", "value": "1"},
+                {"name": "bot_ctf_objective_transitions", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4163,8 +4176,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "1"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4172,9 +4185,9 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
-                {"name": "sg_bot_team_resource_denial", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
+                {"name": "bot_team_resource_denial", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4182,8 +4195,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "1"},
                 {"name": "g_gametype", "value": "3"},
-                {"name": "sg_bot_allow_chat", "value": "1"},
-                {"name": "sg_bot_chat_live_events", "value": "1"},
+                {"name": "bot_allow_chat", "value": "1"},
+                {"name": "bot_chat_live_events", "value": "1"},
             ],
         )
         self.assertEqual(
@@ -4191,7 +4204,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             [
                 {"name": "deathmatch", "value": "0"},
                 {"name": "coop", "value": "1"},
-                {"name": "sg_bot_coop_interaction_retry", "value": "1"},
+                {"name": "bot_coop_interaction_retry", "value": "1"},
             ],
         )
 
@@ -5799,8 +5812,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             (
                 harness.ACTION_STATUS_MARKER,
                 "last_action_weapon_inventory_selected_range_band_name",
-                "any_eq",
-                "close",
+                "any_in",
+                ("melee", "close"),
             ),
             weapon_scoring_marker_required,
         )
@@ -7515,7 +7528,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertGreaterEqual(len(deathmatch_indices), 2)
         self.assertEqual(command[deathmatch_indices[-1] + 1], "0")
         self.assertEqual(command[command.index("coop") + 1], "1")
-        self.assertLess(command.index("coop"), command.index("sv_bot_frame_command_smoke"))
+        self.assertLess(command.index("coop"), command.index("bot_frame_command_smoke"))
 
         leader_route_command = harness.build_command(
             pathlib.Path(".install/worr_ded_x86_64.exe"),
@@ -7527,7 +7540,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "coop_leader_route",
         )
         self.assertEqual(leader_route_command[leader_route_command.index("coop") + 1], "1")
-        self.assertLess(leader_route_command.index("coop"), leader_route_command.index("sv_bot_frame_command_smoke"))
+        self.assertLess(leader_route_command.index("coop"), leader_route_command.index("bot_frame_command_smoke"))
 
         lead_advance_command = harness.build_command(
             pathlib.Path(".install/worr_ded_x86_64.exe"),
@@ -7540,12 +7553,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(lead_advance_command[lead_advance_command.index("coop") + 1], "1")
         self.assertEqual(
-            lead_advance_command[lead_advance_command.index("sg_bot_coop_lead_advance") + 1],
+            lead_advance_command[lead_advance_command.index("bot_coop_lead_advance") + 1],
             "1",
         )
         self.assertLess(
-            lead_advance_command.index("sg_bot_coop_lead_advance"),
-            lead_advance_command.index("sv_bot_frame_command_smoke"),
+            lead_advance_command.index("bot_coop_lead_advance"),
+            lead_advance_command.index("bot_frame_command_smoke"),
         )
 
         resource_share_command = harness.build_command(
@@ -7559,12 +7572,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(resource_share_command[resource_share_command.index("coop") + 1], "1")
         self.assertEqual(
-            resource_share_command[resource_share_command.index("sg_bot_coop_resource_share") + 1],
+            resource_share_command[resource_share_command.index("bot_coop_resource_share") + 1],
             "1",
         )
         self.assertLess(
-            resource_share_command.index("sg_bot_coop_resource_share"),
-            resource_share_command.index("sv_bot_frame_command_smoke"),
+            resource_share_command.index("bot_coop_resource_share"),
+            resource_share_command.index("bot_frame_command_smoke"),
         )
 
         anti_block_command = harness.build_command(
@@ -7578,12 +7591,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(anti_block_command[anti_block_command.index("coop") + 1], "1")
         self.assertEqual(
-            anti_block_command[anti_block_command.index("sg_bot_coop_anti_blocking") + 1],
+            anti_block_command[anti_block_command.index("bot_coop_anti_blocking") + 1],
             "1",
         )
         self.assertLess(
-            anti_block_command.index("sg_bot_coop_anti_blocking"),
-            anti_block_command.index("sv_bot_frame_command_smoke"),
+            anti_block_command.index("bot_coop_anti_blocking"),
+            anti_block_command.index("bot_frame_command_smoke"),
         )
 
         target_share_command = harness.build_command(
@@ -7597,12 +7610,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(target_share_command[target_share_command.index("coop") + 1], "1")
         self.assertEqual(
-            target_share_command[target_share_command.index("sg_bot_coop_target_share") + 1],
+            target_share_command[target_share_command.index("bot_coop_target_share") + 1],
             "1",
         )
         self.assertLess(
-            target_share_command.index("sg_bot_coop_target_share"),
-            target_share_command.index("sv_bot_frame_command_smoke"),
+            target_share_command.index("bot_coop_target_share"),
+            target_share_command.index("bot_frame_command_smoke"),
         )
 
         door_elevator_command = harness.build_command(
@@ -7616,12 +7629,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(door_elevator_command[door_elevator_command.index("coop") + 1], "1")
         self.assertEqual(
-            door_elevator_command[door_elevator_command.index("sg_bot_coop_door_elevator") + 1],
+            door_elevator_command[door_elevator_command.index("bot_coop_door_elevator") + 1],
             "1",
         )
         self.assertLess(
-            door_elevator_command.index("sg_bot_coop_door_elevator"),
-            door_elevator_command.index("sv_bot_frame_command_smoke"),
+            door_elevator_command.index("bot_coop_door_elevator"),
+            door_elevator_command.index("bot_frame_command_smoke"),
         )
 
         coop_live_loop_command = harness.build_command(
@@ -7635,12 +7648,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(coop_live_loop_command[coop_live_loop_command.index("coop") + 1], "1")
         self.assertEqual(
-            coop_live_loop_command[coop_live_loop_command.index("sg_bot_coop_live_loop") + 1],
+            coop_live_loop_command[coop_live_loop_command.index("bot_coop_live_loop") + 1],
             "1",
         )
         self.assertLess(
-            coop_live_loop_command.index("sg_bot_coop_live_loop"),
-            coop_live_loop_command.index("sv_bot_frame_command_smoke"),
+            coop_live_loop_command.index("bot_coop_live_loop"),
+            coop_live_loop_command.index("bot_frame_command_smoke"),
         )
 
         coop_campaign_matrix_command = harness.build_command(
@@ -7654,7 +7667,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(coop_campaign_matrix_command[coop_campaign_matrix_command.index("coop") + 1], "1")
         self.assertEqual(
-            coop_campaign_matrix_command[coop_campaign_matrix_command.index("sg_bot_coop_live_loop") + 1],
+            coop_campaign_matrix_command[coop_campaign_matrix_command.index("bot_coop_live_loop") + 1],
             "1",
         )
         self.assertEqual(
@@ -7662,8 +7675,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "base1",
         )
         self.assertLess(
-            coop_campaign_matrix_command.index("sg_bot_coop_live_loop"),
-            coop_campaign_matrix_command.index("sv_bot_frame_command_smoke"),
+            coop_campaign_matrix_command.index("bot_coop_live_loop"),
+            coop_campaign_matrix_command.index("bot_frame_command_smoke"),
         )
 
         coop_share_loop_command = harness.build_command(
@@ -7677,12 +7690,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(coop_share_loop_command[coop_share_loop_command.index("coop") + 1], "1")
         self.assertEqual(
-            coop_share_loop_command[coop_share_loop_command.index("sg_bot_coop_share_loop") + 1],
+            coop_share_loop_command[coop_share_loop_command.index("bot_coop_share_loop") + 1],
             "1",
         )
         self.assertLess(
-            coop_share_loop_command.index("sg_bot_coop_share_loop"),
-            coop_share_loop_command.index("sv_bot_frame_command_smoke"),
+            coop_share_loop_command.index("bot_coop_share_loop"),
+            coop_share_loop_command.index("bot_frame_command_smoke"),
         )
 
         ffa_roam_route_command = harness.build_command(
@@ -7697,12 +7710,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(ffa_roam_route_command[ffa_roam_route_command.index("deathmatch") + 1], "1")
         self.assertEqual(ffa_roam_route_command[ffa_roam_route_command.index("g_gametype") + 1], "1")
         self.assertEqual(
-            ffa_roam_route_command[ffa_roam_route_command.index("sg_bot_ffa_roam_route") + 1],
+            ffa_roam_route_command[ffa_roam_route_command.index("bot_ffa_roam_route") + 1],
             "1",
         )
         self.assertLess(
-            ffa_roam_route_command.index("sg_bot_ffa_roam_route"),
-            ffa_roam_route_command.index("sv_bot_frame_command_smoke"),
+            ffa_roam_route_command.index("bot_ffa_roam_route"),
+            ffa_roam_route_command.index("bot_frame_command_smoke"),
         )
 
         ffa_spawn_camp_command = harness.build_command(
@@ -7717,18 +7730,18 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(ffa_spawn_camp_command[ffa_spawn_camp_command.index("deathmatch") + 1], "1")
         self.assertEqual(ffa_spawn_camp_command[ffa_spawn_camp_command.index("g_gametype") + 1], "1")
         self.assertEqual(
-            ffa_spawn_camp_command[ffa_spawn_camp_command.index("sg_bot_ffa_roam_route") + 1],
+            ffa_spawn_camp_command[ffa_spawn_camp_command.index("bot_ffa_roam_route") + 1],
             "1",
         )
         self.assertEqual(
             ffa_spawn_camp_command[
-                ffa_spawn_camp_command.index("sg_bot_ffa_spawn_camp_avoidance") + 1
+                ffa_spawn_camp_command.index("bot_ffa_spawn_camp_avoidance") + 1
             ],
             "1",
         )
         self.assertLess(
-            ffa_spawn_camp_command.index("sg_bot_ffa_spawn_camp_avoidance"),
-            ffa_spawn_camp_command.index("sv_bot_frame_command_smoke"),
+            ffa_spawn_camp_command.index("bot_ffa_spawn_camp_avoidance"),
+            ffa_spawn_camp_command.index("bot_frame_command_smoke"),
         )
 
         ffa_item_roles_command = harness.build_command(
@@ -7743,12 +7756,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(ffa_item_roles_command[ffa_item_roles_command.index("deathmatch") + 1], "1")
         self.assertEqual(ffa_item_roles_command[ffa_item_roles_command.index("g_gametype") + 1], "1")
         self.assertEqual(
-            ffa_item_roles_command[ffa_item_roles_command.index("sg_bot_ffa_item_roles") + 1],
+            ffa_item_roles_command[ffa_item_roles_command.index("bot_ffa_item_roles") + 1],
             "1",
         )
         self.assertLess(
-            ffa_item_roles_command.index("sg_bot_ffa_item_roles"),
-            ffa_item_roles_command.index("sv_bot_frame_command_smoke"),
+            ffa_item_roles_command.index("bot_ffa_item_roles"),
+            ffa_item_roles_command.index("bot_frame_command_smoke"),
         )
 
         ffa_role_combat_command = harness.build_command(
@@ -7769,12 +7782,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "1",
         )
         self.assertEqual(
-            ffa_role_combat_command[ffa_role_combat_command.index("sg_bot_ffa_role_combat") + 1],
+            ffa_role_combat_command[ffa_role_combat_command.index("bot_ffa_role_combat") + 1],
             "1",
         )
         self.assertLess(
-            ffa_role_combat_command.index("sg_bot_ffa_role_combat"),
-            ffa_role_combat_command.index("sv_bot_frame_command_smoke"),
+            ffa_role_combat_command.index("bot_ffa_role_combat"),
+            ffa_role_combat_command.index("bot_frame_command_smoke"),
         )
 
         ffa_spawn_camp_combat_avoidance_command = harness.build_command(
@@ -7800,37 +7813,37 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             ffa_spawn_camp_combat_avoidance_command[
-                ffa_spawn_camp_combat_avoidance_command.index("sg_bot_ffa_role_combat") + 1
+                ffa_spawn_camp_combat_avoidance_command.index("bot_ffa_role_combat") + 1
             ],
             "1",
         )
         self.assertEqual(
             ffa_spawn_camp_combat_avoidance_command[
-                ffa_spawn_camp_combat_avoidance_command.index("sg_bot_ffa_spawn_camp_avoidance") + 1
+                ffa_spawn_camp_combat_avoidance_command.index("bot_ffa_spawn_camp_avoidance") + 1
             ],
             "1",
         )
         self.assertEqual(
             ffa_spawn_camp_combat_avoidance_command[
                 ffa_spawn_camp_combat_avoidance_command.index(
-                    "sg_bot_ffa_spawn_camp_combat_avoidance"
+                    "bot_ffa_spawn_camp_combat_avoidance"
                 ) + 1
             ],
             "1",
         )
         self.assertLess(
-            ffa_spawn_camp_combat_avoidance_command.index("sg_bot_ffa_role_combat"),
-            ffa_spawn_camp_combat_avoidance_command.index("sv_bot_frame_command_smoke"),
+            ffa_spawn_camp_combat_avoidance_command.index("bot_ffa_role_combat"),
+            ffa_spawn_camp_combat_avoidance_command.index("bot_frame_command_smoke"),
         )
         self.assertLess(
-            ffa_spawn_camp_combat_avoidance_command.index("sg_bot_ffa_spawn_camp_avoidance"),
-            ffa_spawn_camp_combat_avoidance_command.index("sv_bot_frame_command_smoke"),
+            ffa_spawn_camp_combat_avoidance_command.index("bot_ffa_spawn_camp_avoidance"),
+            ffa_spawn_camp_combat_avoidance_command.index("bot_frame_command_smoke"),
         )
         self.assertLess(
             ffa_spawn_camp_combat_avoidance_command.index(
-                "sg_bot_ffa_spawn_camp_combat_avoidance"
+                "bot_ffa_spawn_camp_combat_avoidance"
             ),
-            ffa_spawn_camp_combat_avoidance_command.index("sv_bot_frame_command_smoke"),
+            ffa_spawn_camp_combat_avoidance_command.index("bot_frame_command_smoke"),
         )
 
         ffa_live_pacing_command = harness.build_command(
@@ -7851,11 +7864,11 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "1",
         )
         for cvar in (
-            "sg_bot_ffa_roam_route",
-            "sg_bot_ffa_spawn_camp_avoidance",
-            "sg_bot_ffa_item_roles",
-            "sg_bot_ffa_role_combat",
-            "sg_bot_ffa_spawn_camp_combat_avoidance",
+            "bot_ffa_roam_route",
+            "bot_ffa_spawn_camp_avoidance",
+            "bot_ffa_item_roles",
+            "bot_ffa_role_combat",
+            "bot_ffa_spawn_camp_combat_avoidance",
         ):
             self.assertEqual(
                 ffa_live_pacing_command[ffa_live_pacing_command.index(cvar) + 1],
@@ -7863,7 +7876,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
             )
             self.assertLess(
                 ffa_live_pacing_command.index(cvar),
-                ffa_live_pacing_command.index("sv_bot_frame_command_smoke"),
+                ffa_live_pacing_command.index("bot_frame_command_smoke"),
             )
 
         duel_live_pacing_command = harness.build_command(
@@ -7884,12 +7897,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "2",
         )
         self.assertEqual(
-            duel_live_pacing_command[duel_live_pacing_command.index("sg_bot_duel_live_pacing") + 1],
+            duel_live_pacing_command[duel_live_pacing_command.index("bot_duel_live_pacing") + 1],
             "1",
         )
         self.assertLess(
-            duel_live_pacing_command.index("sg_bot_duel_live_pacing"),
-            duel_live_pacing_command.index("sv_bot_frame_command_smoke"),
+            duel_live_pacing_command.index("bot_duel_live_pacing"),
+            duel_live_pacing_command.index("bot_frame_command_smoke"),
         )
 
         ctf_item_roles_command = harness.build_command(
@@ -7904,12 +7917,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(ctf_item_roles_command[ctf_item_roles_command.index("deathmatch") + 1], "1")
         self.assertEqual(ctf_item_roles_command[ctf_item_roles_command.index("g_gametype") + 1], "5")
         self.assertEqual(
-            ctf_item_roles_command[ctf_item_roles_command.index("sg_bot_ctf_item_roles") + 1],
+            ctf_item_roles_command[ctf_item_roles_command.index("bot_ctf_item_roles") + 1],
             "1",
         )
         self.assertLess(
-            ctf_item_roles_command.index("sg_bot_ctf_item_roles"),
-            ctf_item_roles_command.index("sv_bot_frame_command_smoke"),
+            ctf_item_roles_command.index("bot_ctf_item_roles"),
+            ctf_item_roles_command.index("bot_frame_command_smoke"),
         )
 
         team_role_route_command = harness.build_command(
@@ -7924,12 +7937,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(team_role_route_command[team_role_route_command.index("deathmatch") + 1], "1")
         self.assertEqual(team_role_route_command[team_role_route_command.index("g_gametype") + 1], "3")
         self.assertEqual(
-            team_role_route_command[team_role_route_command.index("sg_bot_team_role_route") + 1],
+            team_role_route_command[team_role_route_command.index("bot_team_role_route") + 1],
             "1",
         )
         self.assertLess(
-            team_role_route_command.index("sg_bot_team_role_route"),
-            team_role_route_command.index("sv_bot_frame_command_smoke"),
+            team_role_route_command.index("bot_team_role_route"),
+            team_role_route_command.index("bot_frame_command_smoke"),
         )
 
         team_role_combat_command = harness.build_command(
@@ -7944,12 +7957,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(team_role_combat_command[team_role_combat_command.index("deathmatch") + 1], "1")
         self.assertEqual(team_role_combat_command[team_role_combat_command.index("g_gametype") + 1], "3")
         self.assertEqual(
-            team_role_combat_command[team_role_combat_command.index("sg_bot_team_role_combat") + 1],
+            team_role_combat_command[team_role_combat_command.index("bot_team_role_combat") + 1],
             "1",
         )
         self.assertLess(
-            team_role_combat_command.index("sg_bot_team_role_combat"),
-            team_role_combat_command.index("sv_bot_frame_command_smoke"),
+            team_role_combat_command.index("bot_team_role_combat"),
+            team_role_combat_command.index("bot_frame_command_smoke"),
         )
 
         team_role_combat_avoidance_command = harness.build_command(
@@ -7975,23 +7988,23 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             team_role_combat_avoidance_command[
-                team_role_combat_avoidance_command.index("sg_bot_team_role_combat") + 1
+                team_role_combat_avoidance_command.index("bot_team_role_combat") + 1
             ],
             "1",
         )
         self.assertEqual(
             team_role_combat_avoidance_command[
-                team_role_combat_avoidance_command.index("sg_bot_team_fire_avoidance") + 1
+                team_role_combat_avoidance_command.index("bot_team_fire_avoidance") + 1
             ],
             "1",
         )
         self.assertLess(
-            team_role_combat_avoidance_command.index("sg_bot_team_role_combat"),
-            team_role_combat_avoidance_command.index("sv_bot_frame_command_smoke"),
+            team_role_combat_avoidance_command.index("bot_team_role_combat"),
+            team_role_combat_avoidance_command.index("bot_frame_command_smoke"),
         )
         self.assertLess(
-            team_role_combat_avoidance_command.index("sg_bot_team_fire_avoidance"),
-            team_role_combat_avoidance_command.index("sv_bot_frame_command_smoke"),
+            team_role_combat_avoidance_command.index("bot_team_fire_avoidance"),
+            team_role_combat_avoidance_command.index("bot_frame_command_smoke"),
         )
 
         tdm_role_spawn_command = harness.build_command(
@@ -8007,23 +8020,23 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(tdm_role_spawn_command[tdm_role_spawn_command.index("g_gametype") + 1], "3")
         self.assertEqual(
             tdm_role_spawn_command[
-                tdm_role_spawn_command.index("sv_bot_frame_command_smoke_map_repeat_cycles") + 1
+                tdm_role_spawn_command.index("bot_frame_command_smoke_map_repeat_cycles") + 1
             ],
             "2",
         )
         self.assertEqual(
             tdm_role_spawn_command[
-                tdm_role_spawn_command.index("sv_bot_frame_command_smoke_map_repeat_restart") + 1
+                tdm_role_spawn_command.index("bot_frame_command_smoke_map_repeat_restart") + 1
             ],
             "1",
         )
         self.assertLess(
-            tdm_role_spawn_command.index("sv_bot_frame_command_smoke_map_repeat_cycles"),
-            tdm_role_spawn_command.index("sv_bot_frame_command_smoke"),
+            tdm_role_spawn_command.index("bot_frame_command_smoke_map_repeat_cycles"),
+            tdm_role_spawn_command.index("bot_frame_command_smoke"),
         )
         self.assertLess(
-            tdm_role_spawn_command.index("sv_bot_frame_command_smoke_map_repeat_restart"),
-            tdm_role_spawn_command.index("sv_bot_frame_command_smoke"),
+            tdm_role_spawn_command.index("bot_frame_command_smoke_map_repeat_restart"),
+            tdm_role_spawn_command.index("bot_frame_command_smoke"),
         )
 
         team_item_roles_command = harness.build_command(
@@ -8038,12 +8051,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(team_item_roles_command[team_item_roles_command.index("deathmatch") + 1], "1")
         self.assertEqual(team_item_roles_command[team_item_roles_command.index("g_gametype") + 1], "3")
         self.assertEqual(
-            team_item_roles_command[team_item_roles_command.index("sg_bot_team_item_roles") + 1],
+            team_item_roles_command[team_item_roles_command.index("bot_team_item_roles") + 1],
             "1",
         )
         self.assertLess(
-            team_item_roles_command.index("sg_bot_team_item_roles"),
-            team_item_roles_command.index("sv_bot_frame_command_smoke"),
+            team_item_roles_command.index("bot_team_item_roles"),
+            team_item_roles_command.index("bot_frame_command_smoke"),
         )
 
         team_resource_denial_command = harness.build_command(
@@ -8065,13 +8078,13 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             team_resource_denial_command[
-                team_resource_denial_command.index("sg_bot_team_resource_denial") + 1
+                team_resource_denial_command.index("bot_team_resource_denial") + 1
             ],
             "1",
         )
         self.assertLess(
-            team_resource_denial_command.index("sg_bot_team_resource_denial"),
-            team_resource_denial_command.index("sv_bot_frame_command_smoke"),
+            team_resource_denial_command.index("bot_team_resource_denial"),
+            team_resource_denial_command.index("bot_frame_command_smoke"),
         )
 
         match_item_policy_command = harness.build_command(
@@ -8093,13 +8106,13 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             match_item_policy_command[
-                match_item_policy_command.index("sg_bot_match_item_policy") + 1
+                match_item_policy_command.index("bot_match_item_policy") + 1
             ],
             "1",
         )
         self.assertLess(
-            match_item_policy_command.index("sg_bot_match_item_policy"),
-            match_item_policy_command.index("sv_bot_frame_command_smoke"),
+            match_item_policy_command.index("bot_match_item_policy"),
+            match_item_policy_command.index("bot_frame_command_smoke"),
         )
 
         behavior_policy_command = harness.build_command(
@@ -8121,13 +8134,13 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             behavior_policy_command[
-                behavior_policy_command.index("sg_bot_behavior_enable") + 1
+                behavior_policy_command.index("bot_behavior_enable") + 1
             ],
             "1",
         )
         self.assertLess(
-            behavior_policy_command.index("sg_bot_behavior_enable"),
-            behavior_policy_command.index("sv_bot_frame_command_smoke"),
+            behavior_policy_command.index("bot_behavior_enable"),
+            behavior_policy_command.index("bot_frame_command_smoke"),
         )
 
         behavior_arbitration_command = harness.build_command(
@@ -8153,13 +8166,13 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             behavior_arbitration_command[
-                behavior_arbitration_command.index("sg_bot_behavior_enable") + 1
+                behavior_arbitration_command.index("bot_behavior_enable") + 1
             ],
             "1",
         )
         self.assertLess(
-            behavior_arbitration_command.index("sg_bot_behavior_enable"),
-            behavior_arbitration_command.index("sv_bot_frame_command_smoke"),
+            behavior_arbitration_command.index("bot_behavior_enable"),
+            behavior_arbitration_command.index("bot_frame_command_smoke"),
         )
 
         target_memory_command = harness.build_command(
@@ -8179,11 +8192,11 @@ class BotScenarioHarnessTests(unittest.TestCase):
             target_memory_command[target_memory_command.index("g_gametype") + 1],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", target_memory_command)
-        self.assertNotIn("sg_bot_frame_command_smoke_target_memory", target_memory_command)
+        self.assertNotIn("bot_behavior_enable", target_memory_command)
+        self.assertNotIn("bot_frame_command_smoke_target_memory", target_memory_command)
         self.assertLess(
             target_memory_command.index("g_gametype"),
-            target_memory_command.index("sv_bot_frame_command_smoke"),
+            target_memory_command.index("bot_frame_command_smoke"),
         )
 
         profile_role_policy_command = harness.build_command(
@@ -8207,11 +8220,11 @@ class BotScenarioHarnessTests(unittest.TestCase):
             ],
             "3",
         )
-        self.assertNotIn("sg_bot_behavior_enable", profile_role_policy_command)
-        self.assertNotIn("sg_bot_match_item_policy", profile_role_policy_command)
+        self.assertNotIn("bot_behavior_enable", profile_role_policy_command)
+        self.assertNotIn("bot_match_item_policy", profile_role_policy_command)
         self.assertLess(
             profile_role_policy_command.index("g_gametype"),
-            profile_role_policy_command.index("sv_bot_frame_command_smoke"),
+            profile_role_policy_command.index("bot_frame_command_smoke"),
         )
 
         profile_team_policy_command = harness.build_command(
@@ -8235,11 +8248,11 @@ class BotScenarioHarnessTests(unittest.TestCase):
             ],
             "5",
         )
-        self.assertNotIn("sg_bot_behavior_enable", profile_team_policy_command)
-        self.assertNotIn("sg_bot_ctf_role_route", profile_team_policy_command)
+        self.assertNotIn("bot_behavior_enable", profile_team_policy_command)
+        self.assertNotIn("bot_ctf_role_route", profile_team_policy_command)
         self.assertLess(
             profile_team_policy_command.index("g_gametype"),
-            profile_team_policy_command.index("sv_bot_frame_command_smoke"),
+            profile_team_policy_command.index("bot_frame_command_smoke"),
         )
 
         profile_item_policy_command = harness.build_command(
@@ -8265,26 +8278,26 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             profile_item_policy_command[
-                profile_item_policy_command.index("sg_bot_match_item_policy") + 1
+                profile_item_policy_command.index("bot_match_item_policy") + 1
             ],
             "1",
         )
         self.assertEqual(
             profile_item_policy_command[
-                profile_item_policy_command.index("sg_bot_profile_item_policy_smoke") + 1
+                profile_item_policy_command.index("bot_profile_item_policy_smoke") + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", profile_item_policy_command)
-        self.assertNotIn("sg_bot_team_item_roles", profile_item_policy_command)
-        self.assertNotIn("sg_bot_team_resource_denial", profile_item_policy_command)
+        self.assertNotIn("bot_behavior_enable", profile_item_policy_command)
+        self.assertNotIn("bot_team_item_roles", profile_item_policy_command)
+        self.assertNotIn("bot_team_resource_denial", profile_item_policy_command)
         self.assertLess(
-            profile_item_policy_command.index("sg_bot_match_item_policy"),
-            profile_item_policy_command.index("sv_bot_frame_command_smoke"),
+            profile_item_policy_command.index("bot_match_item_policy"),
+            profile_item_policy_command.index("bot_frame_command_smoke"),
         )
         self.assertLess(
-            profile_item_policy_command.index("sg_bot_profile_item_policy_smoke"),
-            profile_item_policy_command.index("sv_bot_frame_command_smoke"),
+            profile_item_policy_command.index("bot_profile_item_policy_smoke"),
+            profile_item_policy_command.index("bot_frame_command_smoke"),
         )
 
         profile_movement_policy_command = harness.build_command(
@@ -8311,16 +8324,16 @@ class BotScenarioHarnessTests(unittest.TestCase):
         self.assertEqual(
             profile_movement_policy_command[
                 profile_movement_policy_command.index(
-                    "sg_bot_profile_movement_policy_smoke"
+                    "bot_profile_movement_policy_smoke"
                 ) + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", profile_movement_policy_command)
-        self.assertNotIn("sg_bot_match_item_policy", profile_movement_policy_command)
+        self.assertNotIn("bot_behavior_enable", profile_movement_policy_command)
+        self.assertNotIn("bot_match_item_policy", profile_movement_policy_command)
         self.assertLess(
-            profile_movement_policy_command.index("sg_bot_profile_movement_policy_smoke"),
-            profile_movement_policy_command.index("sv_bot_frame_command_smoke"),
+            profile_movement_policy_command.index("bot_profile_movement_policy_smoke"),
+            profile_movement_policy_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_policy_command = harness.build_command(
@@ -8346,14 +8359,14 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_policy_command[
-                bot_chat_policy_command.index("sg_bot_allow_chat") + 1
+                bot_chat_policy_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_policy_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_policy_command)
         self.assertLess(
-            bot_chat_policy_command.index("sg_bot_allow_chat"),
-            bot_chat_policy_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_policy_command.index("bot_allow_chat"),
+            bot_chat_policy_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_team_policy_command = harness.build_command(
@@ -8379,20 +8392,20 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_team_policy_command[
-                bot_chat_team_policy_command.index("sg_bot_allow_chat") + 1
+                bot_chat_team_policy_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_team_policy_command[
-                bot_chat_team_policy_command.index("sg_bot_chat_team_only") + 1
+                bot_chat_team_policy_command.index("bot_chat_team_only") + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_team_policy_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_team_policy_command)
         self.assertLess(
-            bot_chat_team_policy_command.index("sg_bot_chat_team_only"),
-            bot_chat_team_policy_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_team_policy_command.index("bot_chat_team_only"),
+            bot_chat_team_policy_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_rate_policy_command = harness.build_command(
@@ -8418,20 +8431,20 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_rate_policy_command[
-                bot_chat_rate_policy_command.index("sg_bot_allow_chat") + 1
+                bot_chat_rate_policy_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_rate_policy_command[
-                bot_chat_rate_policy_command.index("sg_bot_chat_min_interval_ms") + 1
+                bot_chat_rate_policy_command.index("bot_chat_min_interval_ms") + 1
             ],
             "60000",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_rate_policy_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_rate_policy_command)
         self.assertLess(
-            bot_chat_rate_policy_command.index("sg_bot_chat_min_interval_ms"),
-            bot_chat_rate_policy_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_rate_policy_command.index("bot_chat_min_interval_ms"),
+            bot_chat_rate_policy_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_initial_policy_command = harness.build_command(
@@ -8457,15 +8470,15 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_initial_policy_command[
-                bot_chat_initial_policy_command.index("sg_bot_allow_chat") + 1
+                bot_chat_initial_policy_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_initial_policy_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_initial_policy_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_initial_policy_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_initial_policy_command)
         self.assertLess(
-            bot_chat_initial_policy_command.index("sg_bot_allow_chat"),
-            bot_chat_initial_policy_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_initial_policy_command.index("bot_allow_chat"),
+            bot_chat_initial_policy_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_reply_policy_command = harness.build_command(
@@ -8491,21 +8504,21 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_reply_policy_command[
-                bot_chat_reply_policy_command.index("sg_bot_allow_chat") + 1
+                bot_chat_reply_policy_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_reply_policy_command[
-                bot_chat_reply_policy_command.index("sg_bot_chat_reply_policy_smoke") + 1
+                bot_chat_reply_policy_command.index("bot_chat_reply_policy_smoke") + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_reply_policy_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_reply_policy_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_reply_policy_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_reply_policy_command)
         self.assertLess(
-            bot_chat_reply_policy_command.index("sg_bot_chat_reply_policy_smoke"),
-            bot_chat_reply_policy_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_reply_policy_command.index("bot_chat_reply_policy_smoke"),
+            bot_chat_reply_policy_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_event_policy_command = harness.build_command(
@@ -8531,22 +8544,22 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_event_policy_command[
-                bot_chat_event_policy_command.index("sg_bot_allow_chat") + 1
+                bot_chat_event_policy_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_event_policy_command[
-                bot_chat_event_policy_command.index("sg_bot_chat_event_policy_smoke") + 1
+                bot_chat_event_policy_command.index("bot_chat_event_policy_smoke") + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_event_policy_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_event_policy_command)
-        self.assertNotIn("sg_bot_chat_reply_policy_smoke", bot_chat_event_policy_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_event_policy_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_event_policy_command)
+        self.assertNotIn("bot_chat_reply_policy_smoke", bot_chat_event_policy_command)
         self.assertLess(
-            bot_chat_event_policy_command.index("sg_bot_chat_event_policy_smoke"),
-            bot_chat_event_policy_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_event_policy_command.index("bot_chat_event_policy_smoke"),
+            bot_chat_event_policy_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_live_events_command = harness.build_command(
@@ -8572,21 +8585,19 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_live_events_command[
-                bot_chat_live_events_command.index("sg_bot_allow_chat") + 1
+                bot_chat_live_events_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
-            bot_chat_live_events_command[
-                bot_chat_live_events_command.index("sg_bot_chat_live_events") + 1
-            ],
+            command_cvar_value(bot_chat_live_events_command, "bot_chat_live_events"),
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_live_events_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_live_events_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_live_events_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_live_events_command)
         self.assertLess(
-            bot_chat_live_events_command.index("sg_bot_chat_live_events"),
-            bot_chat_live_events_command.index("sv_bot_frame_command_smoke"),
+            command_cvar_index(bot_chat_live_events_command, "bot_chat_live_events"),
+            bot_chat_live_events_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_live_enemy_command = harness.build_command(
@@ -8612,22 +8623,22 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_live_enemy_command[
-                bot_chat_live_enemy_command.index("sg_bot_allow_chat") + 1
+                bot_chat_live_enemy_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_live_enemy_command[
-                bot_chat_live_enemy_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_live_enemy_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_live_enemy_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_live_enemy_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_live_enemy_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_live_enemy_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_live_enemy_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_live_enemy_command)
         self.assertLess(
-            bot_chat_live_enemy_command.index("sg_bot_chat_live_events"),
-            bot_chat_live_enemy_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_live_enemy_command.index("bot_chat_live_events"),
+            bot_chat_live_enemy_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_live_cooldown_command = harness.build_command(
@@ -8653,27 +8664,27 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_live_cooldown_command[
-                bot_chat_live_cooldown_command.index("sg_bot_allow_chat") + 1
+                bot_chat_live_cooldown_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_live_cooldown_command[
-                bot_chat_live_cooldown_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_live_cooldown_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_live_cooldown_command[
-                bot_chat_live_cooldown_command.index("sg_bot_chat_min_interval_ms") + 1
+                bot_chat_live_cooldown_command.index("bot_chat_min_interval_ms") + 1
             ],
             "60000",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_live_cooldown_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_live_cooldown_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_live_cooldown_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_live_cooldown_command)
         self.assertLess(
-            bot_chat_live_cooldown_command.index("sg_bot_chat_min_interval_ms"),
-            bot_chat_live_cooldown_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_live_cooldown_command.index("bot_chat_min_interval_ms"),
+            bot_chat_live_cooldown_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_phrase_command = harness.build_command(
@@ -8699,22 +8710,22 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_phrase_command[
-                bot_chat_phrase_command.index("sg_bot_allow_chat") + 1
+                bot_chat_phrase_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_phrase_command[
-                bot_chat_phrase_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_phrase_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_phrase_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_phrase_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_phrase_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_phrase_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_phrase_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_phrase_command)
         self.assertLess(
-            bot_chat_phrase_command.index("sg_bot_chat_live_events"),
-            bot_chat_phrase_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_phrase_command.index("bot_chat_live_events"),
+            bot_chat_phrase_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_duplicate_command = harness.build_command(
@@ -8740,31 +8751,31 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_duplicate_command[
-                bot_chat_duplicate_command.index("sg_bot_allow_chat") + 1
+                bot_chat_duplicate_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_duplicate_command[
-                bot_chat_duplicate_command.index("sg_bot_chat_event_policy_smoke") + 1
+                bot_chat_duplicate_command.index("bot_chat_event_policy_smoke") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_duplicate_command[
-                bot_chat_duplicate_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_duplicate_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_duplicate_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_duplicate_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_duplicate_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_duplicate_command)
         self.assertLess(
-            bot_chat_duplicate_command.index("sg_bot_chat_event_policy_smoke"),
-            bot_chat_duplicate_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_duplicate_command.index("bot_chat_event_policy_smoke"),
+            bot_chat_duplicate_command.index("bot_frame_command_smoke"),
         )
         self.assertLess(
-            bot_chat_duplicate_command.index("sg_bot_chat_live_events"),
-            bot_chat_duplicate_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_duplicate_command.index("bot_chat_live_events"),
+            bot_chat_duplicate_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_low_health_command = harness.build_command(
@@ -8790,28 +8801,28 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_low_health_command[
-                bot_chat_low_health_command.index("sg_bot_allow_chat") + 1
+                bot_chat_low_health_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_low_health_command[
-                bot_chat_low_health_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_low_health_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_low_health_command[
-                bot_chat_low_health_command.index("sv_bot_frame_command_smoke") + 1
+                bot_chat_low_health_command.index("bot_frame_command_smoke") + 1
             ],
             "84",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_low_health_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_low_health_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_low_health_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_low_health_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_low_health_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_low_health_command)
         self.assertLess(
-            bot_chat_low_health_command.index("sg_bot_chat_live_events"),
-            bot_chat_low_health_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_low_health_command.index("bot_chat_live_events"),
+            bot_chat_low_health_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_item_taken_command = harness.build_command(
@@ -8837,28 +8848,28 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_item_taken_command[
-                bot_chat_item_taken_command.index("sg_bot_allow_chat") + 1
+                bot_chat_item_taken_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_item_taken_command[
-                bot_chat_item_taken_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_item_taken_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_item_taken_command[
-                bot_chat_item_taken_command.index("sv_bot_frame_command_smoke") + 1
+                bot_chat_item_taken_command.index("bot_frame_command_smoke") + 1
             ],
             "85",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_item_taken_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_item_taken_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_item_taken_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_item_taken_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_item_taken_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_item_taken_command)
         self.assertLess(
-            bot_chat_item_taken_command.index("sg_bot_chat_live_events"),
-            bot_chat_item_taken_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_item_taken_command.index("bot_chat_live_events"),
+            bot_chat_item_taken_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_objective_changed_command = harness.build_command(
@@ -8884,40 +8895,40 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_objective_changed_command[
-                bot_chat_objective_changed_command.index("sg_bot_allow_chat") + 1
+                bot_chat_objective_changed_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_objective_changed_command[
-                bot_chat_objective_changed_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_objective_changed_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_objective_changed_command[
-                bot_chat_objective_changed_command.index("sg_bot_ctf_objective_route") + 1
+                bot_chat_objective_changed_command.index("bot_ctf_objective_route") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_objective_changed_command[
-                bot_chat_objective_changed_command.index("sg_bot_ctf_objective_transitions") + 1
+                bot_chat_objective_changed_command.index("bot_ctf_objective_transitions") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_objective_changed_command[
-                bot_chat_objective_changed_command.index("sv_bot_frame_command_smoke") + 1
+                bot_chat_objective_changed_command.index("bot_frame_command_smoke") + 1
             ],
             "86",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_objective_changed_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_objective_changed_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_objective_changed_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_objective_changed_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_objective_changed_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_objective_changed_command)
         self.assertLess(
-            bot_chat_objective_changed_command.index("sg_bot_ctf_objective_transitions"),
-            bot_chat_objective_changed_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_objective_changed_command.index("bot_ctf_objective_transitions"),
+            bot_chat_objective_changed_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_flag_state_command = harness.build_command(
@@ -8943,40 +8954,40 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_flag_state_command[
-                bot_chat_flag_state_command.index("sg_bot_allow_chat") + 1
+                bot_chat_flag_state_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_flag_state_command[
-                bot_chat_flag_state_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_flag_state_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_flag_state_command[
-                bot_chat_flag_state_command.index("sg_bot_ctf_objective_route") + 1
+                bot_chat_flag_state_command.index("bot_ctf_objective_route") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_flag_state_command[
-                bot_chat_flag_state_command.index("sg_bot_ctf_objective_transitions") + 1
+                bot_chat_flag_state_command.index("bot_ctf_objective_transitions") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_flag_state_command[
-                bot_chat_flag_state_command.index("sv_bot_frame_command_smoke") + 1
+                bot_chat_flag_state_command.index("bot_frame_command_smoke") + 1
             ],
             "87",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_flag_state_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_flag_state_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_flag_state_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_flag_state_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_flag_state_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_flag_state_command)
         self.assertLess(
-            bot_chat_flag_state_command.index("sg_bot_ctf_objective_transitions"),
-            bot_chat_flag_state_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_flag_state_command.index("bot_ctf_objective_transitions"),
+            bot_chat_flag_state_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_blocked_command = harness.build_command(
@@ -9002,28 +9013,28 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_blocked_command[
-                bot_chat_blocked_command.index("sg_bot_allow_chat") + 1
+                bot_chat_blocked_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_blocked_command[
-                bot_chat_blocked_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_blocked_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_blocked_command[
-                bot_chat_blocked_command.index("sv_bot_frame_command_smoke") + 1
+                bot_chat_blocked_command.index("bot_frame_command_smoke") + 1
             ],
             "88",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_blocked_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_blocked_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_blocked_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_blocked_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_blocked_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_blocked_command)
         self.assertLess(
-            bot_chat_blocked_command.index("sg_bot_chat_live_events"),
-            bot_chat_blocked_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_blocked_command.index("bot_chat_live_events"),
+            bot_chat_blocked_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_item_denied_command = harness.build_command(
@@ -9049,34 +9060,34 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_item_denied_command[
-                bot_chat_item_denied_command.index("sg_bot_allow_chat") + 1
+                bot_chat_item_denied_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_item_denied_command[
-                bot_chat_item_denied_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_item_denied_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_item_denied_command[
-                bot_chat_item_denied_command.index("sg_bot_team_resource_denial") + 1
+                bot_chat_item_denied_command.index("bot_team_resource_denial") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_item_denied_command[
-                bot_chat_item_denied_command.index("sv_bot_frame_command_smoke") + 1
+                bot_chat_item_denied_command.index("bot_frame_command_smoke") + 1
             ],
             "89",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_item_denied_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_item_denied_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_item_denied_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_item_denied_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_item_denied_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_item_denied_command)
         self.assertLess(
-            bot_chat_item_denied_command.index("sg_bot_team_resource_denial"),
-            bot_chat_item_denied_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_item_denied_command.index("bot_team_resource_denial"),
+            bot_chat_item_denied_command.index("bot_frame_command_smoke"),
         )
 
         bot_chat_match_result_command = harness.build_command(
@@ -9102,29 +9113,29 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(
             bot_chat_match_result_command[
-                bot_chat_match_result_command.index("sg_bot_allow_chat") + 1
+                bot_chat_match_result_command.index("bot_allow_chat") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_match_result_command[
-                bot_chat_match_result_command.index("sg_bot_chat_live_events") + 1
+                bot_chat_match_result_command.index("bot_chat_live_events") + 1
             ],
             "1",
         )
         self.assertEqual(
             bot_chat_match_result_command[
-                bot_chat_match_result_command.index("sv_bot_frame_command_smoke") + 1
+                bot_chat_match_result_command.index("bot_frame_command_smoke") + 1
             ],
             "90",
         )
-        self.assertNotIn("sg_bot_behavior_enable", bot_chat_match_result_command)
-        self.assertNotIn("sg_bot_chat_event_policy_smoke", bot_chat_match_result_command)
-        self.assertNotIn("sg_bot_chat_min_interval_ms", bot_chat_match_result_command)
-        self.assertNotIn("sg_bot_team_resource_denial", bot_chat_match_result_command)
+        self.assertNotIn("bot_behavior_enable", bot_chat_match_result_command)
+        self.assertNotIn("bot_chat_event_policy_smoke", bot_chat_match_result_command)
+        self.assertNotIn("bot_chat_min_interval_ms", bot_chat_match_result_command)
+        self.assertNotIn("bot_team_resource_denial", bot_chat_match_result_command)
         self.assertLess(
-            bot_chat_match_result_command.index("sg_bot_chat_live_events"),
-            bot_chat_match_result_command.index("sv_bot_frame_command_smoke"),
+            bot_chat_match_result_command.index("bot_chat_live_events"),
+            bot_chat_match_result_command.index("bot_frame_command_smoke"),
         )
 
         progress_wait_command = harness.build_command(
@@ -9138,12 +9149,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(progress_wait_command[progress_wait_command.index("coop") + 1], "1")
         self.assertEqual(
-            progress_wait_command[progress_wait_command.index("sg_bot_coop_progress_wait") + 1],
+            progress_wait_command[progress_wait_command.index("bot_coop_progress_wait") + 1],
             "1",
         )
         self.assertLess(
-            progress_wait_command.index("sg_bot_coop_progress_wait"),
-            progress_wait_command.index("sv_bot_frame_command_smoke"),
+            progress_wait_command.index("bot_coop_progress_wait"),
+            progress_wait_command.index("bot_frame_command_smoke"),
         )
 
         interaction_retry_command = harness.build_command(
@@ -9157,12 +9168,12 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
         self.assertEqual(interaction_retry_command[interaction_retry_command.index("coop") + 1], "1")
         self.assertEqual(
-            interaction_retry_command[interaction_retry_command.index("sg_bot_coop_interaction_retry") + 1],
+            interaction_retry_command[interaction_retry_command.index("bot_coop_interaction_retry") + 1],
             "1",
         )
         self.assertLess(
-            interaction_retry_command.index("sg_bot_coop_interaction_retry"),
-            interaction_retry_command.index("sv_bot_frame_command_smoke"),
+            interaction_retry_command.index("bot_coop_interaction_retry"),
+            interaction_retry_command.index("bot_frame_command_smoke"),
         )
 
         pending_names = {

@@ -16,7 +16,7 @@ A map is ready for route-driven bots when all of these are true:
 - route status, when enabled, shows route commands without repeated route
   failures
 
-`sg_bot_list` only proves that bot slots exist. Bots can spawn on a map without
+`botlist` only proves that bot slots exist. Bots can spawn on a map without
 AAS, but they will not have dependable route-driven behavior there.
 
 ## Where AAS Files Live
@@ -67,10 +67,10 @@ for local staging and troubleshooting.
 
 ## Server Log Check
 
-Start a bot-enabled dedicated server with AAS debug output:
+Start a dedicated server with AAS debug output:
 
 ```powershell
-.\worr_ded_x86_64.exe +set basedir . +set game basew +set deathmatch 1 +set sg_bot_enable 1 +set sg_bot_debug_aas 1 +map mm-rage
+.\worr_ded_x86_64.exe +set basedir . +set game basew +set deathmatch 1 +set bot_debug_aas 1 +map mm-rage
 ```
 
 A ready map prints a line like:
@@ -79,14 +79,14 @@ A ready map prints a line like:
 Bot AAS: loaded maps/mm-rage.aas (areas=428, reachability=562, clusters=4)
 ```
 
-With `sg_bot_debug_aas 2`, WORR also prints a longer `BotLib adapter:` status
+With `bot_debug_aas 2`, WORR also prints a longer `BotLib adapter:` status
 line. For practical server operation, the important parts are:
 
 - `q3a_aas=... passed`: the AAS file loaded into BotLib
 - `q3a_route=... passed`: a basic route query worked
 - `q3a_clusters=...` and `q3a_reachability=...`: the file contains route data
 
-Use `sg_bot_debug_aas 2` briefly while testing. It is noisy enough that public
+Use `bot_debug_aas 2` briefly while testing. It is noisy enough that public
 servers should normally run with it off.
 
 ## Status Commands
@@ -100,7 +100,7 @@ botlib_lifecycle_status
 
 Useful fields:
 
-- `sg_bot_enable=0`: bot runtime is disabled, so map readiness was not tested
+- `bot_enable=0`: bot runtime is disabled, so map readiness was not tested
 - `runtime_state=2`: current map AAS is loaded
 - `runtime_state=3`: current map AAS failed to load
 - `map=<name>` and `aas=maps/<name>.aas`: the map and AAS path being checked

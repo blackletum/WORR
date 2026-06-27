@@ -125,7 +125,7 @@ same file; entity trace ownership crosses `botlib_adapter.*` into
 for linked BBOX/BSP entities.
 
 The upstream `bot_*` LibVars remain internal to the imported Q3A AAS runtime.
-WORR-facing policy uses `sg_bot_*` cvars and native status fields. The only
+WORR-facing policy uses `bot_*` cvars and native status fields. The only
 LibVars seeded by WORR are movement/reachability inputs consumed by imported
 `be_aas_move.c`: `phys_*` values mirror the Q2/WORR movement hull/acceleration
 profile, and `rs_*` values tune travel-time costs for waterjump, teleport,

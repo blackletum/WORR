@@ -244,21 +244,51 @@ base85_context_bytes_remaining (struct base85_context_t *ctx)
 
 /// Increases the size of the context's output buffer.
 static b85_result_t
-base85_context_grow (struct base85_context_t *ctx)
+base85_context_grow (struct base85_context_t *ctx, size_t request)
 {
   // How much additional memory to request if an allocation fails.
   static const size_t SMALL_DELTA = 256;
 
-  // TODO: Refine size, and fallback strategy.
-  size_t size = ctx->out_cb * 2;
   ptrdiff_t offset = ctx->out_pos - ctx->out;
+  if (offset < 0)
+    return B85_E_LOGIC_ERROR;
+
+  size_t used = (size_t) offset;
+  if (request > SIZE_MAX - used)
+    return B85_E_OVERFLOW;
+
+  size_t minimum = used + request;
+  size_t size = ctx->out_cb ? ctx->out_cb : SMALL_DELTA;
+  while (size < minimum)
+  {
+    if (size > SIZE_MAX / 2)
+    {
+      size = minimum;
+      break;
+    }
+    size *= 2;
+  }
+
   uint8_t *buffer = realloc (ctx->out, size);
   if (!buffer)
   {
-    // Try a smaller allocation.
-    buffer = realloc (ctx->out, ctx->out_cb + SMALL_DELTA);
+    size_t fallback_size;
+    if (ctx->out_cb > SIZE_MAX - SMALL_DELTA)
+      fallback_size = minimum;
+    else
+    {
+      fallback_size = ctx->out_cb + SMALL_DELTA;
+      if (fallback_size < minimum)
+        fallback_size = minimum;
+    }
+
+    if (fallback_size == size)
+      return B85_E_BAD_ALLOC;
+
+    buffer = realloc (ctx->out, fallback_size);
     if (!buffer)
       return B85_E_BAD_ALLOC;
+    size = fallback_size;
   }
 
   ctx->out = buffer;
@@ -271,10 +301,17 @@ base85_context_grow (struct base85_context_t *ctx)
 static b85_result_t
 base85_context_request_memory (struct base85_context_t *ctx, size_t request)
 {
-  if (base85_context_bytes_remaining (ctx) >= request)
+  if (!ctx->out || !ctx->out_pos)
+    return B85_E_API_MISUSE;
+
+  ptrdiff_t remaining = base85_context_bytes_remaining (ctx);
+  if (remaining < 0)
+    return B85_E_LOGIC_ERROR;
+
+  if ((size_t) remaining >= request)
     return B85_E_OK;
 
-  return base85_context_grow (ctx);
+  return base85_context_grow (ctx, request);
 }
 
 uint8_t *

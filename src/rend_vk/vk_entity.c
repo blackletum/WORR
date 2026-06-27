@@ -14,6 +14,7 @@ Copyright (C) 2026
 
 #include <math.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #if USE_MD5
@@ -262,6 +263,130 @@ static bool VK_Entity_Check(VkResult result, const char *what)
     return false;
 }
 
+static bool VK_Entity_ArrayBytes(size_t count, size_t item_size, size_t *out_bytes,
+                                 const char *what)
+{
+    if (!out_bytes) {
+        Com_SetLastError("Vulkan entity: invalid allocation size output");
+        return false;
+    }
+
+    if (item_size && count > SIZE_MAX / item_size) {
+        Com_SetLastError(va("Vulkan entity: %s allocation size overflow", what));
+        return false;
+    }
+
+    *out_bytes = count * item_size;
+    return true;
+}
+
+static void *VK_Entity_CallocArray(size_t count, size_t item_size, const char *what)
+{
+    size_t bytes = 0;
+    if (!count || !item_size ||
+        !VK_Entity_ArrayBytes(count, item_size, &bytes, what)) {
+        return NULL;
+    }
+
+    void *memory = calloc(1, bytes);
+    if (!memory) {
+        Com_SetLastError(va("Vulkan entity: out of memory for %s", what));
+        return NULL;
+    }
+
+    return memory;
+}
+
+static void *VK_Entity_ReallocArray(void *ptr, size_t count, size_t item_size,
+                                    const char *what)
+{
+    size_t bytes = 0;
+    if (!count || !item_size ||
+        !VK_Entity_ArrayBytes(count, item_size, &bytes, what)) {
+        return NULL;
+    }
+
+    void *memory = realloc(ptr, bytes);
+    if (!memory) {
+        Com_SetLastError(va("Vulkan entity: out of memory for %s", what));
+        return NULL;
+    }
+
+    return memory;
+}
+
+static bool VK_Entity_BufferRangeAvailable(size_t len, int offset, int count,
+                                           size_t item_size, const char *what)
+{
+    if (offset < 0 || count < 0) {
+        Com_SetLastError(va("Vulkan entity: %s has negative range", what));
+        return false;
+    }
+
+    size_t bytes = 0;
+    if (!VK_Entity_ArrayBytes((size_t)count, item_size, &bytes, what)) {
+        return false;
+    }
+
+    size_t start = (size_t)offset;
+    if (start > len || bytes > len - start) {
+        Com_SetLastError(va("Vulkan entity: %s range exceeds file length", what));
+        return false;
+    }
+
+    return true;
+}
+
+static bool VK_Entity_MD2VectorOffset(const vk_md2_t *md2, uint32_t frame,
+                                      uint32_t vertex, size_t *out_offset)
+{
+    if (!md2 || !out_offset || frame >= md2->num_frames ||
+        vertex >= md2->num_vertices) {
+        Com_SetLastError("Vulkan entity: invalid MD2 vector offset");
+        return false;
+    }
+
+    size_t frame_base = 0;
+    if (!VK_Entity_ArrayBytes((size_t)frame, (size_t)md2->num_vertices,
+                              &frame_base, "MD2 frame vector offset")) {
+        return false;
+    }
+    if (frame_base > SIZE_MAX - (size_t)vertex) {
+        Com_SetLastError("Vulkan entity: MD2 vertex offset overflow");
+        return false;
+    }
+
+    return VK_Entity_ArrayBytes(frame_base + (size_t)vertex, 3, out_offset,
+                                "MD2 vector offset");
+}
+
+static bool VK_Entity_GrowCapacity(uint32_t current, uint32_t needed,
+                                   uint32_t initial, uint32_t *out_capacity,
+                                   const char *what)
+{
+    (void)what;
+
+    if (!out_capacity) {
+        Com_SetLastError("Vulkan entity: invalid capacity output");
+        return false;
+    }
+
+    uint32_t cap = current ? current : initial;
+    if (!cap) {
+        cap = needed;
+    }
+    while (cap < needed) {
+        if (cap > UINT32_MAX / 2) {
+            cap = needed;
+            break;
+        }
+        cap *= 2;
+    }
+
+    *out_capacity = cap;
+    return true;
+}
+
 #if USE_MD5
 typedef struct {
     int parent;
@@ -280,6 +405,31 @@ q_noreturn static void VK_MD5_ParseError(const char *text)
 {
     Com_SetLastError(va("MD5 parse line %u: %s", com_linenum, text));
     longjmp(vk_md5_jmpbuf, -1);
+}
+
+q_noreturn static void VK_MD5_AllocationError(const char *what, bool overflow)
+{
+    char message[128];
+    Q_snprintf(message, sizeof(message), overflow ?
+               "%s allocation size overflow" :
+               "out of memory allocating %s", what);
+    VK_MD5_ParseError(message);
+}
+
+static void *VK_MD5_CallocArray(size_t count, size_t item_size, const char *what)
+{
+    size_t bytes = 0;
+    if (!count || !item_size ||
+        !VK_Entity_ArrayBytes(count, item_size, &bytes, what)) {
+        VK_MD5_AllocationError(what, true);
+    }
+
+    void *memory = calloc(1, bytes);
+    if (!memory) {
+        VK_MD5_AllocationError(what, false);
+    }
+
+    return memory;
 }
 
 static void VK_MD5_ParseExpect(const char **buffer, const char *expect)
@@ -405,10 +555,8 @@ static bool VK_MD5_ParseMesh(vk_md5_t *out_md5, const char *source)
     }
     VK_MD5_ParseExpect(&s, "}");
 
-    parsed.meshes = calloc(parsed.num_meshes, sizeof(*parsed.meshes));
-    if (!parsed.meshes) {
-        VK_MD5_ParseError("out of memory allocating MD5 meshes");
-    }
+    parsed.meshes = VK_MD5_CallocArray(parsed.num_meshes, sizeof(*parsed.meshes),
+                                       "MD5 meshes");
 
     for (uint32_t i = 0; i < parsed.num_meshes; i++) {
         vk_md5_mesh_t *mesh = &parsed.meshes[i];
@@ -428,11 +576,12 @@ static bool VK_MD5_ParseMesh(vk_md5_t *out_md5, const char *source)
         VK_MD5_ParseExpect(&s, "numverts");
         mesh->num_verts = VK_MD5_ParseUint(&s, 0, VK_MD5_MAX_VERTICES);
         if (mesh->num_verts) {
-            mesh->vertices = calloc(mesh->num_verts, sizeof(*mesh->vertices));
-            mesh->tcoords = calloc(mesh->num_verts, sizeof(*mesh->tcoords));
-            if (!mesh->vertices || !mesh->tcoords) {
-                VK_MD5_ParseError("out of memory allocating MD5 vertices");
-            }
+            mesh->vertices = VK_MD5_CallocArray(mesh->num_verts,
+                                                sizeof(*mesh->vertices),
+                                                "MD5 vertices");
+            mesh->tcoords = VK_MD5_CallocArray(mesh->num_verts,
+                                               sizeof(*mesh->tcoords),
+                                               "MD5 texture coordinates");
         }
 
         for (uint32_t v = 0; v < mesh->num_verts; v++) {
@@ -455,10 +604,9 @@ static bool VK_MD5_ParseMesh(vk_md5_t *out_md5, const char *source)
         }
         mesh->num_indices = num_tris * 3;
         if (mesh->num_indices) {
-            mesh->indices = calloc(mesh->num_indices, sizeof(*mesh->indices));
-            if (!mesh->indices) {
-                VK_MD5_ParseError("out of memory allocating MD5 indices");
-            }
+            mesh->indices = VK_MD5_CallocArray(mesh->num_indices,
+                                               sizeof(*mesh->indices),
+                                               "MD5 indices");
         }
         for (uint32_t t = 0; t < num_tris; t++) {
             VK_MD5_ParseExpect(&s, "tri");
@@ -471,11 +619,12 @@ static bool VK_MD5_ParseMesh(vk_md5_t *out_md5, const char *source)
         VK_MD5_ParseExpect(&s, "numweights");
         mesh->num_weights = VK_MD5_ParseUint(&s, 0, VK_MD5_MAX_WEIGHTS);
         if (mesh->num_weights) {
-            mesh->weights = calloc(mesh->num_weights, sizeof(*mesh->weights));
-            mesh->jointnums = calloc(mesh->num_weights, sizeof(*mesh->jointnums));
-            if (!mesh->weights || !mesh->jointnums) {
-                VK_MD5_ParseError("out of memory allocating MD5 weights");
-            }
+            mesh->weights = VK_MD5_CallocArray(mesh->num_weights,
+                                               sizeof(*mesh->weights),
+                                               "MD5 weights");
+            mesh->jointnums = VK_MD5_CallocArray(mesh->num_weights,
+                                                 sizeof(*mesh->jointnums),
+                                                 "MD5 weight joints");
         }
         for (uint32_t w = 0; w < mesh->num_weights; w++) {
             VK_MD5_ParseExpect(&s, "weight");
@@ -737,13 +886,17 @@ static bool VK_MD5_ParseAnim(vk_md5_t *md5, const char *source, const char *path
     }
     VK_MD5_ParseExpect(&s, "}");
 
-    md5->skeleton_frames = calloc((size_t)md5->num_frames * (size_t)md5->num_joints,
-                                  sizeof(*md5->skeleton_frames));
-    if (!md5->skeleton_frames) {
-        VK_MD5_ParseError("out of memory allocating MD5 skeleton frames");
+    size_t skeleton_count = 0;
+    if (!VK_Entity_ArrayBytes((size_t)md5->num_frames, (size_t)md5->num_joints,
+                              &skeleton_count, "MD5 skeleton frames")) {
+        VK_MD5_AllocationError("MD5 skeleton frames", true);
     }
 
-    for (uint32_t i = 0; i < md5->num_frames * md5->num_joints; i++) {
+    md5->skeleton_frames = VK_MD5_CallocArray(skeleton_count,
+                                              sizeof(*md5->skeleton_frames),
+                                              "MD5 skeleton frames");
+
+    for (size_t i = 0; i < skeleton_count; i++) {
         md5->skeleton_frames[i].scale = 1.0f;
     }
 
@@ -828,29 +981,39 @@ static bool VK_Entity_LoadMD5Replacement(vk_model_t *model)
                     anim_path, model->name, parsed.num_frames, model->md2.num_frames);
     }
 
-    VK_MD5_Free(&model->md5);
-    model->md5 = parsed;
-    model->md5.loaded = true;
+    qhandle_t *replacement_skins = NULL;
+    uint32_t replacement_skin_count = 0;
 
     // Mirrors the GL renderer's MD5_LoadSkins: replacement skins live in an
     // "md5/" subdirectory next to the MD2 skin files they replace.
     if (model->md2.num_skins && model->md2.skin_names) {
-        model->md5.skins = calloc(model->md2.num_skins, sizeof(*model->md5.skins));
-        if (model->md5.skins) {
-            model->md5.num_skins = model->md2.num_skins;
-            for (uint32_t i = 0; i < model->md2.num_skins; i++) {
-                char skin_name[MAX_QPATH];
-                char skin_path[MAX_QPATH];
+        replacement_skins = VK_Entity_CallocArray(model->md2.num_skins,
+                                                  sizeof(*replacement_skins),
+                                                  "MD5 replacement skins");
+        if (!replacement_skins) {
+            VK_MD5_Free(&parsed);
+            return false;
+        }
 
-                COM_SplitPath(model->md2.skin_names[i], skin_name, sizeof(skin_name),
-                              skin_path, sizeof(skin_path), false);
-                if (Q_strlcat(skin_path, "md5/", sizeof(skin_path)) < sizeof(skin_path) &&
-                    Q_strlcat(skin_path, skin_name, sizeof(skin_path)) < sizeof(skin_path)) {
-                    model->md5.skins[i] = VK_UI_RegisterImage(skin_path, IT_SKIN, IF_NONE);
-                }
+        replacement_skin_count = model->md2.num_skins;
+        for (uint32_t i = 0; i < replacement_skin_count; i++) {
+            char skin_name[MAX_QPATH];
+            char skin_path[MAX_QPATH];
+
+            COM_SplitPath(model->md2.skin_names[i], skin_name, sizeof(skin_name),
+                          skin_path, sizeof(skin_path), false);
+            if (Q_strlcat(skin_path, "md5/", sizeof(skin_path)) < sizeof(skin_path) &&
+                Q_strlcat(skin_path, skin_name, sizeof(skin_path)) < sizeof(skin_path)) {
+                replacement_skins[i] = VK_UI_RegisterImage(skin_path, IT_SKIN, IF_NONE);
             }
         }
     }
+
+    VK_MD5_Free(&model->md5);
+    model->md5 = parsed;
+    model->md5.loaded = true;
+    model->md5.skins = replacement_skins;
+    model->md5.num_skins = replacement_skin_count;
 
     Com_DPrintf("Vulkan MD5 replacement loaded for %s (%u meshes, %u joints, %u frames)\n",
                 model->name, model->md5.num_meshes, model->md5.num_joints, model->md5.num_frames);
@@ -863,9 +1026,11 @@ static bool VK_Entity_EnsureTempSkeleton(uint32_t num_joints)
         return true;
     }
 
-    vk_md5_joint_t *new_skeleton = realloc(vk_entity.temp_skeleton, (size_t)num_joints * sizeof(*new_skeleton));
+    vk_md5_joint_t *new_skeleton = VK_Entity_ReallocArray(vk_entity.temp_skeleton,
+                                                          num_joints,
+                                                          sizeof(*new_skeleton),
+                                                          "temporary MD5 skeleton");
     if (!new_skeleton) {
-        Com_SetLastError("Vulkan entity: out of memory for temporary MD5 skeleton");
         return false;
     }
 
@@ -1178,13 +1343,16 @@ static bool VK_Entity_EnsureVertexCapacity(uint32_t needed)
     if (needed <= vk_entity.vertex_capacity) {
         return true;
     }
-    uint32_t cap = vk_entity.vertex_capacity ? vk_entity.vertex_capacity : 4096;
-    while (cap < needed) {
-        cap *= 2;
+
+    uint32_t cap = 0;
+    if (!VK_Entity_GrowCapacity(vk_entity.vertex_capacity, needed, 4096, &cap,
+                                "vertices")) {
+        return false;
     }
-    vk_vertex_t *new_buf = realloc(vk_entity.vertices, (size_t)cap * sizeof(*new_buf));
+
+    vk_vertex_t *new_buf = VK_Entity_ReallocArray(vk_entity.vertices, cap,
+                                                  sizeof(*new_buf), "vertices");
     if (!new_buf) {
-        Com_SetLastError("Vulkan entity: out of memory for vertices");
         return false;
     }
     vk_entity.vertices = new_buf;
@@ -1197,13 +1365,16 @@ static bool VK_Entity_EnsureBatchCapacity(uint32_t needed)
     if (needed <= vk_entity.batch_capacity) {
         return true;
     }
-    uint32_t cap = vk_entity.batch_capacity ? vk_entity.batch_capacity : 512;
-    while (cap < needed) {
-        cap *= 2;
+
+    uint32_t cap = 0;
+    if (!VK_Entity_GrowCapacity(vk_entity.batch_capacity, needed, 512, &cap,
+                                "batches")) {
+        return false;
     }
-    vk_batch_t *new_buf = realloc(vk_entity.batches, (size_t)cap * sizeof(*new_buf));
+
+    vk_batch_t *new_buf = VK_Entity_ReallocArray(vk_entity.batches, cap,
+                                                 sizeof(*new_buf), "batches");
     if (!new_buf) {
-        Com_SetLastError("Vulkan entity: out of memory for batches");
         return false;
     }
     vk_entity.batches = new_buf;
@@ -1485,14 +1656,23 @@ static bool VK_Entity_EnsureBspTextureCache(const bsp_t *bsp)
 
     VK_Entity_ClearBspTextureCache();
 
-    vk_entity.bmodel_texture_handles = calloc((size_t)bsp->numtexinfo, sizeof(*vk_entity.bmodel_texture_handles));
-    vk_entity.bmodel_texture_sets = calloc((size_t)bsp->numtexinfo, sizeof(*vk_entity.bmodel_texture_sets));
-    vk_entity.bmodel_texture_inv_sizes = calloc((size_t)bsp->numtexinfo, sizeof(*vk_entity.bmodel_texture_inv_sizes));
-    vk_entity.bmodel_texture_transparent = calloc((size_t)bsp->numtexinfo, sizeof(*vk_entity.bmodel_texture_transparent));
+    size_t texture_count = (size_t)bsp->numtexinfo;
+    vk_entity.bmodel_texture_handles =
+        VK_Entity_CallocArray(texture_count, sizeof(*vk_entity.bmodel_texture_handles),
+                              "BSP texture handles");
+    vk_entity.bmodel_texture_sets =
+        VK_Entity_CallocArray(texture_count, sizeof(*vk_entity.bmodel_texture_sets),
+                              "BSP texture descriptor sets");
+    vk_entity.bmodel_texture_inv_sizes =
+        VK_Entity_CallocArray(texture_count, sizeof(*vk_entity.bmodel_texture_inv_sizes),
+                              "BSP texture inverse sizes");
+    vk_entity.bmodel_texture_transparent =
+        VK_Entity_CallocArray(texture_count,
+                              sizeof(*vk_entity.bmodel_texture_transparent),
+                              "BSP texture transparency flags");
     if (!vk_entity.bmodel_texture_handles || !vk_entity.bmodel_texture_sets ||
         !vk_entity.bmodel_texture_inv_sizes || !vk_entity.bmodel_texture_transparent) {
         VK_Entity_ClearBspTextureCache();
-        Com_SetLastError("Vulkan entity: out of memory for BSP texture cache");
         return false;
     }
 
@@ -1649,10 +1829,13 @@ bool VK_Entity_ModelBounds(qhandle_t handle, const entity_t *ent,
     const uint32_t frames[2] = { frame, oldframe };
     int frame_count = oldframe != frame ? 2 : 1;
     for (int f = 0; f < frame_count; f++) {
-        const float *positions =
-            &model->md2.positions[(size_t)frames[f] * model->md2.num_vertices * 3];
         for (uint32_t i = 0; i < model->md2.num_vertices; i++) {
-            const float *pos = &positions[i * 3];
+            size_t pos_offset = 0;
+            if (!VK_Entity_MD2VectorOffset(&model->md2, frames[f], i, &pos_offset)) {
+                return false;
+            }
+
+            const float *pos = &model->md2.positions[pos_offset];
             VK_Entity_AddPointToBounds(pos, local_mins, local_maxs);
         }
     }
@@ -2210,10 +2393,20 @@ static bool VK_Entity_AddMD2(const entity_t *ent, const refdef_t *fd, const vk_m
                 valid_tri = false;
                 break;
             }
-            const float *p0 = &md2->positions[((size_t)frame * md2->num_vertices + idx) * 3];
-            const float *p1 = &md2->positions[((size_t)oldframe * md2->num_vertices + idx) * 3];
-            const float *n0 = &md2->normals[((size_t)frame * md2->num_vertices + idx) * 3];
-            const float *n1 = &md2->normals[((size_t)oldframe * md2->num_vertices + idx) * 3];
+            size_t frame_offset = 0;
+            size_t oldframe_offset = 0;
+            size_t uv_offset = 0;
+            if (!VK_Entity_MD2VectorOffset(md2, frame, idx, &frame_offset) ||
+                !VK_Entity_MD2VectorOffset(md2, oldframe, idx, &oldframe_offset) ||
+                !VK_Entity_ArrayBytes((size_t)idx, 2, &uv_offset, "MD2 UV offset")) {
+                valid_tri = false;
+                break;
+            }
+
+            const float *p0 = &md2->positions[frame_offset];
+            const float *p1 = &md2->positions[oldframe_offset];
+            const float *n0 = &md2->normals[frame_offset];
+            const float *n1 = &md2->normals[oldframe_offset];
             vec3_t local = {
                 p0[0] * frontlerp + p1[0] * backlerp,
                 p0[1] * frontlerp + p1[1] * backlerp,
@@ -2229,8 +2422,8 @@ static bool VK_Entity_AddMD2(const entity_t *ent, const refdef_t *fd, const vk_m
             }
             VK_Entity_TransformPointWithTransform(&transform, local, tri[j].pos);
             VK_Entity_TransformNormalWithTransform(&transform, local_normal, tri[j].normal);
-            tri[j].uv[0] = md2->uv[idx * 2 + 0];
-            tri[j].uv[1] = md2->uv[idx * 2 + 1];
+            tri[j].uv[0] = md2->uv[uv_offset + 0];
+            tri[j].uv[1] = md2->uv[uv_offset + 1];
             tri[j].color = color.u32;
             tri[j].flags = flags;
         }
@@ -2279,8 +2472,16 @@ static bool VK_Entity_EmitShadowMD2(const entity_t *ent, const refdef_t *fd,
                 valid_tri = false;
                 break;
             }
-            const float *p0 = &md2->positions[((size_t)frame * md2->num_vertices + idx) * 3];
-            const float *p1 = &md2->positions[((size_t)oldframe * md2->num_vertices + idx) * 3];
+            size_t frame_offset = 0;
+            size_t oldframe_offset = 0;
+            if (!VK_Entity_MD2VectorOffset(md2, frame, idx, &frame_offset) ||
+                !VK_Entity_MD2VectorOffset(md2, oldframe, idx, &oldframe_offset)) {
+                valid_tri = false;
+                break;
+            }
+
+            const float *p0 = &md2->positions[frame_offset];
+            const float *p1 = &md2->positions[oldframe_offset];
             vec3_t local = {
                 p0[0] * frontlerp + p1[0] * backlerp,
                 p0[1] * frontlerp + p1[1] * backlerp,
@@ -2493,11 +2694,17 @@ static bool VK_Entity_LoadSP2(vk_model_t *model, const byte *raw, size_t len)
         return false;
     }
 
-    if (sizeof(dsp2header_t) + (size_t)hdr.numframes * sizeof(dsp2frame_t) > len) {
+    size_t frame_bytes = 0;
+    if (!VK_Entity_ArrayBytes((size_t)hdr.numframes, sizeof(dsp2frame_t),
+                              &frame_bytes, "SP2 frames") ||
+        sizeof(dsp2header_t) > len ||
+        frame_bytes > len - sizeof(dsp2header_t)) {
         return false;
     }
 
-    vk_sprite_frame_t *frames = calloc((size_t)hdr.numframes, sizeof(*frames));
+    vk_sprite_frame_t *frames = VK_Entity_CallocArray((size_t)hdr.numframes,
+                                                      sizeof(*frames),
+                                                      "SP2 frames");
     if (!frames) {
         return false;
     }
@@ -2560,14 +2767,25 @@ static bool VK_Entity_LoadMD2(vk_model_t *model, const byte *raw, size_t len)
         return false;
     }
 
-    if ((uint64_t)hdr.ofs_tris + (uint64_t)hdr.num_tris * sizeof(dmd2triangle_t) > len ||
-        (uint64_t)hdr.ofs_st + (uint64_t)hdr.num_st * sizeof(dmd2stvert_t) > len ||
-        (uint64_t)hdr.ofs_frames + (uint64_t)hdr.num_frames * (uint64_t)hdr.framesize > len ||
-        (uint64_t)hdr.ofs_skins + (uint64_t)hdr.num_skins * MD2_MAX_SKINNAME > len) {
+    if (!VK_Entity_BufferRangeAvailable(len, hdr.ofs_tris, hdr.num_tris,
+                                        sizeof(dmd2triangle_t), "MD2 triangles") ||
+        !VK_Entity_BufferRangeAvailable(len, hdr.ofs_st, hdr.num_st,
+                                        sizeof(dmd2stvert_t), "MD2 texture coordinates") ||
+        !VK_Entity_BufferRangeAvailable(len, hdr.ofs_frames, hdr.num_frames,
+                                        (size_t)hdr.framesize, "MD2 frames") ||
+        !VK_Entity_BufferRangeAvailable(len, hdr.ofs_skins, hdr.num_skins,
+                                        MD2_MAX_SKINNAME, "MD2 skins")) {
         return false;
     }
 
-    uint32_t max_indices = (uint32_t)hdr.num_tris * 3;
+    size_t max_index_count = 0;
+    if (!VK_Entity_ArrayBytes((size_t)hdr.num_tris, 3, &max_index_count,
+                              "MD2 triangle indices") ||
+        max_index_count > UINT32_MAX) {
+        return false;
+    }
+
+    uint32_t max_indices = (uint32_t)max_index_count;
     uint32_t num_indices = 0;
     uint32_t num_vertices = 0;
     uint32_t num_frames = (uint32_t)hdr.num_frames;
@@ -2580,11 +2798,16 @@ static bool VK_Entity_LoadMD2(vk_model_t *model, const byte *raw, size_t len)
     uint16_t *remap = NULL;
     uint16_t *final_indices = NULL;
     qhandle_t *skins = NULL;
+    char (*skin_names)[MAX_QPATH] = NULL;
 
-    vert_indices = calloc((size_t)max_indices, sizeof(*vert_indices));
-    tc_indices = calloc((size_t)max_indices, sizeof(*tc_indices));
-    remap = calloc((size_t)max_indices, sizeof(*remap));
-    final_indices = calloc((size_t)max_indices, sizeof(*final_indices));
+    vert_indices = VK_Entity_CallocArray(max_indices, sizeof(*vert_indices),
+                                         "MD2 vertex index scratch");
+    tc_indices = VK_Entity_CallocArray(max_indices, sizeof(*tc_indices),
+                                       "MD2 texture coordinate scratch");
+    remap = VK_Entity_CallocArray(max_indices, sizeof(*remap),
+                                  "MD2 remap scratch");
+    final_indices = VK_Entity_CallocArray(max_indices, sizeof(*final_indices),
+                                          "MD2 final index scratch");
     if (!vert_indices || !tc_indices || !remap || !final_indices) {
         goto fail;
     }
@@ -2638,11 +2861,28 @@ static bool VK_Entity_LoadMD2(vk_model_t *model, const byte *raw, size_t len)
         final_indices[i] = (uint16_t)num_vertices++;
     }
 
-    positions = calloc((size_t)num_frames * num_vertices * 3, sizeof(float));
-    normals = calloc((size_t)num_frames * num_vertices * 3, sizeof(float));
-    uv = calloc((size_t)num_vertices * 2, sizeof(float));
-    indices = calloc((size_t)num_indices, sizeof(*indices));
-    skins = hdr.num_skins ? calloc((size_t)hdr.num_skins, sizeof(*skins)) : NULL;
+    size_t frame_vertices = 0;
+    size_t vector_components = 0;
+    size_t uv_components = 0;
+    if (!VK_Entity_ArrayBytes((size_t)num_frames, (size_t)num_vertices,
+                              &frame_vertices, "MD2 frame vertices") ||
+        !VK_Entity_ArrayBytes(frame_vertices, 3, &vector_components,
+                              "MD2 vector components") ||
+        !VK_Entity_ArrayBytes((size_t)num_vertices, 2, &uv_components,
+                              "MD2 texture coordinates")) {
+        goto fail;
+    }
+
+    positions = VK_Entity_CallocArray(vector_components, sizeof(*positions),
+                                      "MD2 positions");
+    normals = VK_Entity_CallocArray(vector_components, sizeof(*normals),
+                                    "MD2 normals");
+    uv = VK_Entity_CallocArray(uv_components, sizeof(*uv), "MD2 UVs");
+    indices = VK_Entity_CallocArray((size_t)num_indices, sizeof(*indices),
+                                    "MD2 indices");
+    skins = hdr.num_skins ?
+        VK_Entity_CallocArray((size_t)hdr.num_skins, sizeof(*skins), "MD2 skins") :
+        NULL;
     if (!positions || !normals || !uv || !indices || (hdr.num_skins && !skins)) {
         goto fail;
     }
@@ -2691,9 +2931,14 @@ static bool VK_Entity_LoadMD2(vk_model_t *model, const byte *raw, size_t len)
         }
     }
 
-    char (*skin_names)[MAX_QPATH] = NULL;
     if (skins) {
-        skin_names = calloc((size_t)hdr.num_skins, sizeof(*skin_names));
+        skin_names = VK_Entity_CallocArray((size_t)hdr.num_skins,
+                                           sizeof(*skin_names),
+                                           "MD2 skin names");
+        if (!skin_names) {
+            goto fail;
+        }
+
         const char *skin_data = (const char *)(raw + hdr.ofs_skins);
         for (int i = 0; i < hdr.num_skins; i++) {
             char name[MD2_MAX_SKINNAME];
@@ -2735,6 +2980,7 @@ fail:
     free(remap);
     free(final_indices);
     free(skins);
+    free(skin_names);
     return false;
 }
 
@@ -3218,7 +3464,13 @@ void VK_Entity_RenderFrame(const refdef_t *fd)
         return;
     }
 
-    size_t bytes = (size_t)vk_entity.vertex_count * sizeof(*vk_entity.vertices);
+    size_t bytes = 0;
+    if (!VK_Entity_ArrayBytes((size_t)vk_entity.vertex_count,
+                              sizeof(*vk_entity.vertices),
+                              &bytes, "frame entity vertices")) {
+        return;
+    }
+
     if (!VK_Entity_EnsureVertexBuffer(bytes)) {
         return;
     }

@@ -9,7 +9,7 @@
 #include <limits>
 
 namespace {
-constexpr int BOT_ITEM_LOW_HEALTH_PRIORITY_BOOST = 350;
+constexpr int BOT_ITEM_LOW_HEALTH_PRIORITY_BOOST = 1200;
 constexpr int BOT_ITEM_LOW_ARMOR_PRIORITY_BOOST = 65;
 constexpr int BOT_ITEM_FOCUS_PRIORITY_BOOST = 120;
 constexpr int BOT_ITEM_HIGH_VALUE_PRIORITY_BOOST = 250;
@@ -78,10 +78,10 @@ BotItemTimingPolicyConfig BotItems_TimingPolicyConfigFromCvars() {
 	static cvar_t *allowItemTimers = nullptr;
 	static cvar_t *timerFuzzMilliseconds = nullptr;
 	if (allowItemTimers == nullptr && gi.cvar != nullptr) {
-		allowItemTimers = gi.cvar("sg_bot_allow_item_timers", "1", CVAR_NOFLAGS);
+		allowItemTimers = gi.cvar("bot_allow_item_timers", "1", CVAR_NOFLAGS);
 	}
 	if (timerFuzzMilliseconds == nullptr && gi.cvar != nullptr) {
-		timerFuzzMilliseconds = gi.cvar("sg_bot_item_timer_fuzz_ms", "0", CVAR_NOFLAGS);
+		timerFuzzMilliseconds = gi.cvar("bot_item_timer_fuzz_ms", "0", CVAR_NOFLAGS);
 	}
 
 	BotItemTimingPolicyConfig config{};

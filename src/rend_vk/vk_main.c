@@ -27,6 +27,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "stb_image_write.h"
 
+#include <limits.h>
+#include <stdint.h>
 #include <string.h>
 #include <time.h>
 
@@ -232,6 +234,55 @@ static bool VK_Check(VkResult result, const char *what)
 
     Com_SetLastError(va("Vulkan %s failed: %s", what, VK_ResultString(result)));
     return false;
+}
+
+static bool VK_ArrayBytes(size_t count, size_t item_size, size_t *out_size,
+                          const char *what)
+{
+    if (!out_size) {
+        Com_SetLastError("Vulkan: invalid allocation size output");
+        return false;
+    }
+
+    if (item_size && count > SIZE_MAX / item_size) {
+        Com_SetLastError(va("Vulkan: %s allocation size overflow", what));
+        return false;
+    }
+
+    *out_size = count * item_size;
+    return true;
+}
+
+static bool VK_ImageBytes(uint32_t width, uint32_t height, size_t bytes_per_pixel,
+                          size_t *out_size, const char *what)
+{
+    if (!width || !height || !bytes_per_pixel) {
+        Com_SetLastError(va("Vulkan: %s has zero dimensions", what));
+        return false;
+    }
+
+    size_t pixel_count = 0;
+    if (!VK_ArrayBytes((size_t)width, (size_t)height, &pixel_count, what)) {
+        return false;
+    }
+
+    return VK_ArrayBytes(pixel_count, bytes_per_pixel, out_size, what);
+}
+
+static void *VK_AllocArray(size_t count, size_t item_size, const char *what)
+{
+    size_t bytes = 0;
+    if (!VK_ArrayBytes(count, item_size, &bytes, what)) {
+        return NULL;
+    }
+
+    void *memory = Z_TagMallocz(bytes, TAG_RENDERER);
+    if (!memory) {
+        Com_SetLastError(va("Vulkan: out of memory for %s", what));
+        return NULL;
+    }
+
+    return memory;
 }
 
 static uint32_t VK_ClampU32(uint32_t value, uint32_t min_value, uint32_t max_value)
@@ -445,7 +496,12 @@ static bool VK_CreateInstance(void)
         return false;
     }
 
-    VkExtensionProperties *exts = Z_TagMallocz(sizeof(*exts) * ext_count, TAG_RENDERER);
+    VkExtensionProperties *exts = VK_AllocArray(ext_count, sizeof(*exts),
+                                                "instance extensions");
+    if (!exts) {
+        return false;
+    }
+
     result = vkEnumerateInstanceExtensionProperties(NULL, &ext_count, exts);
     if (result != VK_SUCCESS) {
         Z_Free(exts);
@@ -553,7 +609,12 @@ static bool VK_DeviceHasExtension(VkPhysicalDevice device, const char *ext)
         return false;
     }
 
-    VkExtensionProperties *props = Z_TagMallocz(sizeof(*props) * count, TAG_RENDERER);
+    VkExtensionProperties *props = VK_AllocArray(count, sizeof(*props),
+                                                 "device extensions");
+    if (!props) {
+        return false;
+    }
+
     result = vkEnumerateDeviceExtensionProperties(device, NULL, &count, props);
     if (result != VK_SUCCESS) {
         Z_Free(props);
@@ -579,7 +640,12 @@ static bool VK_FindQueueFamily(VkPhysicalDevice device, uint32_t *out_index)
     if (!count)
         return false;
 
-    VkQueueFamilyProperties *props = Z_TagMallocz(sizeof(*props) * count, TAG_RENDERER);
+    VkQueueFamilyProperties *props = VK_AllocArray(count, sizeof(*props),
+                                                   "queue families");
+    if (!props) {
+        return false;
+    }
+
     vkGetPhysicalDeviceQueueFamilyProperties(device, &count, props);
 
     bool found = false;
@@ -588,8 +654,13 @@ static bool VK_FindQueueFamily(VkPhysicalDevice device, uint32_t *out_index)
             continue;
 
         VkBool32 present_supported = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, vk_state.ctx.surface,
-                                             &present_supported);
+        VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(device, i,
+                                                               vk_state.ctx.surface,
+                                                               &present_supported);
+        if (result != VK_SUCCESS) {
+            Z_Free(props);
+            return VK_Check(result, "vkGetPhysicalDeviceSurfaceSupportKHR");
+        }
         if (present_supported) {
             *out_index = i;
             found = true;
@@ -613,7 +684,12 @@ static bool VK_SelectPhysicalDevice(void)
         return false;
     }
 
-    VkPhysicalDevice *devices = Z_TagMallocz(sizeof(*devices) * count, TAG_RENDERER);
+    VkPhysicalDevice *devices = VK_AllocArray(count, sizeof(*devices),
+                                              "physical devices");
+    if (!devices) {
+        return false;
+    }
+
     result = vkEnumeratePhysicalDevices(vk_state.ctx.instance, &count, devices);
     if (result != VK_SUCCESS) {
         Z_Free(devices);
@@ -865,35 +941,64 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
     uint32_t format_count = 0;
     result = vkGetPhysicalDeviceSurfaceFormatsKHR(ctx->physical_device, ctx->surface,
                                                   &format_count, NULL);
-    if (result != VK_SUCCESS || !format_count) {
+    if (result != VK_SUCCESS) {
         return VK_Check(result, "vkGetPhysicalDeviceSurfaceFormatsKHR");
     }
+    if (!format_count) {
+        Com_SetLastError("Vulkan: no surface formats reported");
+        return false;
+    }
 
-    VkSurfaceFormatKHR *formats = Z_TagMallocz(sizeof(*formats) * format_count, TAG_RENDERER);
+    VkSurfaceFormatKHR *formats = VK_AllocArray(format_count, sizeof(*formats),
+                                                "surface formats");
+    if (!formats) {
+        return false;
+    }
+
     result = vkGetPhysicalDeviceSurfaceFormatsKHR(ctx->physical_device, ctx->surface,
                                                   &format_count, formats);
     if (result != VK_SUCCESS) {
         Z_Free(formats);
         return VK_Check(result, "vkGetPhysicalDeviceSurfaceFormatsKHR");
     }
+    if (!format_count) {
+        Z_Free(formats);
+        Com_SetLastError("Vulkan: no surface formats reported");
+        return false;
+    }
+
     VkSurfaceFormatKHR chosen_format = VK_ChooseSurfaceFormat(formats, format_count);
     Z_Free(formats);
 
     uint32_t present_count = 0;
     result = vkGetPhysicalDeviceSurfacePresentModesKHR(ctx->physical_device, ctx->surface,
                                                        &present_count, NULL);
-    if (result != VK_SUCCESS || !present_count) {
+    if (result != VK_SUCCESS) {
         return VK_Check(result, "vkGetPhysicalDeviceSurfacePresentModesKHR");
     }
+    if (!present_count) {
+        Com_SetLastError("Vulkan: no present modes reported");
+        return false;
+    }
 
-    VkPresentModeKHR *present_modes = Z_TagMallocz(sizeof(*present_modes) * present_count,
-                                                   TAG_RENDERER);
+    VkPresentModeKHR *present_modes = VK_AllocArray(present_count, sizeof(*present_modes),
+                                                    "present modes");
+    if (!present_modes) {
+        return false;
+    }
+
     result = vkGetPhysicalDeviceSurfacePresentModesKHR(ctx->physical_device, ctx->surface,
                                                        &present_count, present_modes);
     if (result != VK_SUCCESS) {
         Z_Free(present_modes);
         return VK_Check(result, "vkGetPhysicalDeviceSurfacePresentModesKHR");
     }
+    if (!present_count) {
+        Z_Free(present_modes);
+        Com_SetLastError("Vulkan: no present modes reported");
+        return false;
+    }
+
     VkPresentModeKHR present_mode = VK_ChoosePresentMode(present_modes, present_count);
     Z_Free(present_modes);
 
@@ -942,20 +1047,41 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
         VK_DestroySwapchain(ctx);
         return VK_Check(result, "vkGetSwapchainImagesKHR");
     }
+    if (!image_count) {
+        Com_SetLastError("Vulkan: no swapchain images reported");
+        VK_DestroySwapchain(ctx);
+        return false;
+    }
 
-    ctx->swapchain.images = Z_TagMallocz(sizeof(VkImage) * image_count, TAG_RENDERER);
+    ctx->swapchain.images = VK_AllocArray(image_count, sizeof(*ctx->swapchain.images),
+                                          "swapchain images");
+    if (!ctx->swapchain.images) {
+        VK_DestroySwapchain(ctx);
+        return false;
+    }
+
     result = vkGetSwapchainImagesKHR(ctx->device, ctx->swapchain.handle, &image_count,
                                      ctx->swapchain.images);
     if (result != VK_SUCCESS) {
         VK_DestroySwapchain(ctx);
         return VK_Check(result, "vkGetSwapchainImagesKHR");
     }
+    if (!image_count) {
+        Com_SetLastError("Vulkan: no swapchain images reported");
+        VK_DestroySwapchain(ctx);
+        return false;
+    }
 
     ctx->swapchain.image_count = image_count;
     ctx->swapchain.format = chosen_format.format;
     ctx->swapchain.extent = extent;
 
-    ctx->swapchain.views = Z_TagMallocz(sizeof(VkImageView) * image_count, TAG_RENDERER);
+    ctx->swapchain.views = VK_AllocArray(image_count, sizeof(*ctx->swapchain.views),
+                                         "swapchain image views");
+    if (!ctx->swapchain.views) {
+        VK_DestroySwapchain(ctx);
+        return false;
+    }
 
     for (uint32_t i = 0; i < image_count; ++i) {
         VkImageViewCreateInfo view_info = {
@@ -1145,8 +1271,13 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
         return VK_Check(result, "vkCreateRenderPass");
     }
 
-    ctx->swapchain.framebuffers = Z_TagMallocz(sizeof(VkFramebuffer) * image_count,
-                                               TAG_RENDERER);
+    ctx->swapchain.framebuffers = VK_AllocArray(image_count,
+                                                sizeof(*ctx->swapchain.framebuffers),
+                                                "swapchain framebuffers");
+    if (!ctx->swapchain.framebuffers) {
+        VK_DestroySwapchain(ctx);
+        return false;
+    }
 
     for (uint32_t i = 0; i < image_count; ++i) {
         VkImageView framebuffer_attachments[] = {
@@ -1177,8 +1308,13 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
         return false;
     }
 
-    ctx->swapchain.command_buffers = Z_TagMallocz(sizeof(VkCommandBuffer) * image_count,
-                                                  TAG_RENDERER);
+    ctx->swapchain.command_buffers = VK_AllocArray(image_count,
+                                                   sizeof(*ctx->swapchain.command_buffers),
+                                                   "swapchain command buffers");
+    if (!ctx->swapchain.command_buffers) {
+        VK_DestroySwapchain(ctx);
+        return false;
+    }
 
     VkCommandBufferAllocateInfo alloc_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -1277,6 +1413,11 @@ static void VK_Screenshot_DestroyBuffer(void)
 static bool VK_Screenshot_EnsureBuffer(VkDeviceSize size)
 {
     vk_context_t *ctx = &vk_state.ctx;
+
+    if (!size) {
+        Com_SetLastError("Vulkan: zero-sized screenshot readback buffer");
+        return false;
+    }
 
     if (vk_screenshot_buffer && vk_screenshot_capacity >= size) {
         return true;
@@ -1412,7 +1553,22 @@ static void VK_Screenshot_Complete(void)
 
     uint32_t width = ctx->swapchain.extent.width;
     uint32_t height = ctx->swapchain.extent.height;
-    size_t pixel_count = (size_t)width * height;
+    size_t rgba_bytes = 0;
+    size_t rgb_bytes = 0;
+    size_t row_stride = 0;
+    if (!VK_ImageBytes(width, height, 4, &rgba_bytes, "screenshot readback") ||
+        !VK_ImageBytes(width, height, 3, &rgb_bytes, "screenshot RGB conversion") ||
+        !VK_ArrayBytes((size_t)width, 3, &row_stride, "screenshot row stride")) {
+        Com_EPrintf("Vulkan screenshot: image dimensions are too large\n");
+        return;
+    }
+    if (width > (uint32_t)INT_MAX || height > (uint32_t)INT_MAX ||
+        row_stride > (size_t)INT_MAX) {
+        Com_EPrintf("Vulkan screenshot: image dimensions exceed PNG writer limits\n");
+        return;
+    }
+
+    size_t pixel_count = rgba_bytes / 4;
 
     bool swap_red_blue;
     switch (ctx->swapchain.format) {
@@ -1430,14 +1586,20 @@ static void VK_Screenshot_Complete(void)
         return;
     }
 
+    byte *rgb = Z_TagMalloc(rgb_bytes, TAG_RENDERER);
+    if (!rgb) {
+        Com_EPrintf("Vulkan screenshot: out of memory for RGB conversion\n");
+        return;
+    }
+
     void *mapped = NULL;
     if (!VK_Check(vkMapMemory(ctx->device, vk_screenshot_memory, 0,
                               VK_WHOLE_SIZE, 0, &mapped),
                   "vkMapMemory(screenshot)")) {
+        Z_Free(rgb);
         return;
     }
 
-    byte *rgb = Z_TagMalloc(pixel_count * 3, TAG_RENDERER);
     const byte *src = mapped;
     byte *dst = rgb;
     for (size_t i = 0; i < pixel_count; i++, src += 4, dst += 3) {
@@ -1454,7 +1616,7 @@ static void VK_Screenshot_Complete(void)
     vkUnmapMemory(ctx->device, vk_screenshot_memory);
 
     int ok = stbi_write_png(vk_screenshot_path, (int)width, (int)height, 3,
-                            rgb, (int)width * 3);
+                            rgb, (int)row_stride);
     Z_Free(rgb);
 
     if (!ok) {
@@ -1606,9 +1768,11 @@ static bool VK_DrawFrame(void)
 
     vk_screenshot_armed = false;
     if (vk_screenshot_pending) {
-        VkDeviceSize needed = (VkDeviceSize)ctx->swapchain.extent.width *
-                              ctx->swapchain.extent.height * 4;
-        if (vk_screenshot_supported && VK_Screenshot_EnsureBuffer(needed)) {
+        size_t needed_bytes = 0;
+        if (vk_screenshot_supported &&
+            VK_ImageBytes(ctx->swapchain.extent.width, ctx->swapchain.extent.height,
+                          4, &needed_bytes, "screenshot readback") &&
+            VK_Screenshot_EnsureBuffer((VkDeviceSize)needed_bytes)) {
             vk_screenshot_armed = true;
         } else {
             Com_EPrintf("Vulkan screenshot: readback unavailable\n");

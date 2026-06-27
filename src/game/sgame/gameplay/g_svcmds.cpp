@@ -1197,8 +1197,8 @@ namespace
 	{
 		BotChatPolicyStatus status{};
 
-		status.allowChat = sg_bot_allow_chat && sg_bot_allow_chat->integer > 0 ? 1 : 0;
-		status.teamOnly = sg_bot_chat_team_only && sg_bot_chat_team_only->integer > 0 ? 1 : 0;
+		status.allowChat = bot_allow_chat && bot_allow_chat->integer > 0 ? 1 : 0;
+		status.teamOnly = bot_chat_team_only && bot_chat_team_only->integer > 0 ? 1 : 0;
 		status.consumerReady = BotChatPolicy_ConsumerReady();
 		status.dispatchEnabled = status.allowChat && status.consumerReady ? 1 : 0;
 		status.dispatchAttempts = BotChatPolicy_DispatchAttempts();

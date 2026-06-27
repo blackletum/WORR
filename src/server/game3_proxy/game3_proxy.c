@@ -497,7 +497,8 @@ static void game_client_old_to_server(struct gclient_s *server_client, const str
     server_client->ps.fov = game_client->ps.fov;
     server_client->ps.rdflags = game_client->ps.rdflags;
     memset(&server_client->ps.stats, 0, sizeof(server_client->ps.stats));
-    memcpy(&server_client->ps.stats, &game_client->ps.stats, sizeof(game_client->ps.stats));
+    memcpy(&server_client->ps.stats, &game_client->ps.stats,
+           min(sizeof(server_client->ps.stats), sizeof(game_client->ps.stats)));
 
     server_client->ping = game_client->ping;
     // FIXME: Only copy if GMF_CLIENTNUM feature is set
@@ -519,7 +520,9 @@ static void game_client_new_to_server(struct gclient_s *server_client, const str
     Vector4Copy(game_client->ps.blend, server_client->ps.screen_blend);
     server_client->ps.fov = game_client->ps.fov;
     server_client->ps.rdflags = game_client->ps.rdflags;
-    memcpy(&server_client->ps.stats, &game_client->ps.stats, sizeof(game_client->ps.stats));
+    memset(&server_client->ps.stats, 0, sizeof(server_client->ps.stats));
+    memcpy(&server_client->ps.stats, &game_client->ps.stats,
+           min(sizeof(server_client->ps.stats), sizeof(game_client->ps.stats)));
 
     server_client->ping = game_client->ping;
     // FIXME: Only copy if GMF_CLIENTNUM feature is set
@@ -774,7 +777,12 @@ static char* read_as_base85(const char* filename, size_t* result_size)
         Com_Error(ERR_DROP, "Couldn't open %s", filename);
 
     struct base85_context_t ctx;
-    ascii85_context_init(&ctx);
+    b85_result_t rv = ascii85_context_init(&ctx);
+    if (rv) {
+        fclose(f);
+        Com_Error(ERR_DROP, "Error initializing base85 encoder for %s: %s",
+                  filename, ascii85_error_string(rv));
+    }
 
     uint8_t buf[1024];
     for (;;) {
@@ -787,14 +795,25 @@ static char* read_as_base85(const char* filename, size_t* result_size)
             }
             break;
         }
-        ascii85_encode(buf, num_read, &ctx);
+        rv = ascii85_encode(buf, num_read, &ctx);
+        if (rv) {
+            fclose(f);
+            ascii85_context_destroy(&ctx);
+            Com_Error(ERR_DROP, "Error encoding %s: %s", filename,
+                      ascii85_error_string(rv));
+        }
     }
     if (fclose(f)) {
         ascii85_context_destroy(&ctx);
         Com_Error(ERR_DROP, "Error closing %s", filename);
     }
 
-    ascii85_encode_last(&ctx);
+    rv = ascii85_encode_last(&ctx);
+    if (rv) {
+        ascii85_context_destroy(&ctx);
+        Com_Error(ERR_DROP, "Error finalizing base85 encode for %s: %s",
+                  filename, ascii85_error_string(rv));
+    }
 
     const char *encoded_data = (const char *)ascii85_get_output(&ctx, result_size);
     char *result = Z_CopyString(encoded_data);
@@ -810,10 +829,28 @@ static void write_as_base85(const char* filename, const char* base85)
         Com_Error(ERR_DROP, "Couldn't open %s", filename);
 
     struct base85_context_t ctx;
-    ascii85_context_init(&ctx);
+    b85_result_t rv = ascii85_context_init(&ctx);
+    if (rv) {
+        fclose(f);
+        Com_Error(ERR_DROP, "Error initializing base85 decoder for %s: %s",
+                  filename, ascii85_error_string(rv));
+    }
 
-    ascii85_decode((const uint8_t*)base85, strlen(base85), &ctx);
-    ascii85_decode_last(&ctx);
+    rv = ascii85_decode((const uint8_t*)base85, strlen(base85), &ctx);
+    if (rv) {
+        fclose(f);
+        ascii85_context_destroy(&ctx);
+        Com_Error(ERR_DROP, "Error decoding %s: %s", filename,
+                  ascii85_error_string(rv));
+    }
+
+    rv = ascii85_decode_last(&ctx);
+    if (rv) {
+        fclose(f);
+        ascii85_context_destroy(&ctx);
+        Com_Error(ERR_DROP, "Error finalizing base85 decode for %s: %s",
+                  filename, ascii85_error_string(rv));
+    }
 
     size_t data_size = 0;
     const uint8_t *data = ascii85_get_output(&ctx, &data_size);
