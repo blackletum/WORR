@@ -28,7 +28,21 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/prompt.h"
 
 static cvar_t   *com_completion_mode;
-static cvar_t   *com_completion_treshold;
+static cvar_t   *com_completion_threshold;
+static cvar_t   *com_completion_treshold_legacy;
+
+static int Prompt_CompletionThreshold(void)
+{
+    if (strcmp(com_completion_threshold->string, com_completion_threshold->default_string)) {
+        return Cvar_ClampInteger(com_completion_threshold, 1, MAX_MATCHES);
+    }
+
+    if (strcmp(com_completion_treshold_legacy->string, com_completion_treshold_legacy->default_string)) {
+        return Cvar_ClampInteger(com_completion_treshold_legacy, 1, MAX_MATCHES);
+    }
+
+    return Cvar_ClampInteger(com_completion_threshold, 1, MAX_MATCHES);
+}
 
 static void Prompt_ShowMatches(const commandPrompt_t *prompt, char **matches, int count)
 {
@@ -240,7 +254,7 @@ void Prompt_CompleteCommand(commandPrompt_t *prompt, bool backslash)
         goto finish; // nothing found
     }
 
-    if (ctx.count > Cvar_ClampInteger(com_completion_treshold, 1, MAX_MATCHES) && !prompt->tooMany) {
+    if (ctx.count > Prompt_CompletionThreshold() && !prompt->tooMany) {
         prompt->printf("Press TAB again to display all %d possibilities.\n", ctx.count);
         pos = strlen(inputLine->text);
         prompt->tooMany = true;
@@ -586,5 +600,8 @@ Prompt_Init
 void Prompt_Init(void)
 {
     com_completion_mode = Cvar_Get("com_completion_mode", "1", 0);
-    com_completion_treshold = Cvar_Get("com_completion_treshold", "50", 0);
+    com_completion_threshold = Cvar_Get("com_completion_threshold", "50", 0);
+    com_completion_treshold_legacy = Cvar_Get("com_completion_treshold",
+                                              com_completion_threshold->string,
+                                              CVAR_NOARCHIVE);
 }

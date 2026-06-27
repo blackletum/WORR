@@ -539,7 +539,7 @@ const char *qvk_result_to_string(VkResult result)
 }
 
 #ifdef VKPT_IMAGE_DUMPS
-float convert_half_to_float(uint16_t Value)
+static float convert_half_to_float(uint16_t Value)
 {
 	uint32_t Mantissa = (uint32_t)(Value & 0x03FF);
 
@@ -578,34 +578,60 @@ float convert_half_to_float(uint16_t Value)
 	return res[0];
 }
 
+static bool write_pfm_chunk(FILE* file, const void* data, size_t len, const char* fileName)
+{
+	if (fwrite(data, 1, len, file) == len)
+		return true;
+
+	Com_WPrintf("save_to_pfm_file: failed writing %s\n", fileName);
+	return false;
+}
+
 void save_to_pfm_file(char* prefix, uint64_t frame_counter, uint64_t width, uint64_t height, char* data, uint64_t rowPitch, int32_t type)
 {
 	if (frame_counter == 0) return;
+	if (width == 0 || height == 0) {
+		Com_WPrintf("save_to_pfm_file: invalid image dimensions %llu x %llu\n", width, height);
+		return;
+	}
+	if (width > (uint64_t)SIZE_MAX / height) {
+		Com_WPrintf("save_to_pfm_file: image dimensions overflow %llu x %llu\n", width, height);
+		return;
+	}
+
+	const uint64_t pixel_count = width * height;
+	if (pixel_count > (uint64_t)SIZE_MAX / (3 * sizeof(float))) {
+		Com_WPrintf("save_to_pfm_file: pixel buffer too large for %llu x %llu\n", width, height);
+		return;
+	}
 
 	char fileName[128];
-	sprintf(fileName, "%s_%04llu.pfm", prefix, frame_counter);
+	Q_snprintf(fileName, sizeof(fileName), "%s_%04llu.pfm", prefix, frame_counter);
 
 	FILE* file = fopen(fileName, "wb");
-	if (file)
-	{
-		{
-			char* buf = "PF\n";
-			fwrite(buf, 1, strlen(buf), file);
-		}
-		{
-			char resolutionData[256];
-			sprintf(resolutionData, "%llu %llu\n", width, height);
-			fwrite(resolutionData, 1, strlen(resolutionData), file);
-		}
-		{
-			char* buf = "-1.0\n";
-			fwrite(buf, 1, strlen(buf), file);
-		}
+	if (!file) {
+		Com_WPrintf("save_to_pfm_file: couldn't open %s for writing\n", fileName);
+		return;
+	}
 
-		size_t pixelDataSize = width * height * 3 * sizeof(float);
-		float* pixelData = malloc(pixelDataSize);
-		memset(pixelData, 0, pixelDataSize);
-		
+	const char* magic = "PF\n";
+	char resolutionData[256];
+	const char* scale = "-1.0\n";
+	Q_snprintf(resolutionData, sizeof(resolutionData), "%llu %llu\n", width, height);
+
+	bool ok = write_pfm_chunk(file, magic, strlen(magic), fileName);
+	ok = ok && write_pfm_chunk(file, resolutionData, strlen(resolutionData), fileName);
+	ok = ok && write_pfm_chunk(file, scale, strlen(scale), fileName);
+
+	const size_t pixelDataSize = (size_t)pixel_count * 3 * sizeof(float);
+	float* pixelData = calloc(1, pixelDataSize);
+	if (!pixelData) {
+		Com_WPrintf("save_to_pfm_file: failed allocating %zu bytes for %s\n", pixelDataSize, fileName);
+		ok = false;
+	}
+
+	if (ok)
+	{
 		if (type == 0) // input
 		{
 			for (size_t y = 0; y < height; ++y)
@@ -652,12 +678,15 @@ void save_to_pfm_file(char* prefix, uint64_t frame_counter, uint64_t width, uint
 			}
 		}
 
-		fwrite(pixelData, 1, pixelDataSize, file);
-
-		free(pixelData);
-		fclose(file);
-
-		Com_Printf("wrote image data to %s", fileName);
+		ok = write_pfm_chunk(file, pixelData, pixelDataSize, fileName);
 	}
+
+	free(pixelData);
+	if (fclose(file) != 0) {
+		Com_WPrintf("save_to_pfm_file: failed closing %s\n", fileName);
+		ok = false;
+	}
+	if (ok)
+		Com_Printf("wrote image data to %s", fileName);
 }
 #endif

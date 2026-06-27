@@ -154,9 +154,10 @@ void SV_SpawnServer(const mapcmd_t *cmd)
     Q_strlcpy(sv.mapcmd, cmd->buffer, sizeof(sv.mapcmd));
 
     if (Cvar_VariableInteger("deathmatch")) {
-        sprintf(sv.configstrings[svs.csr.airaccel], "%d", sv_airaccelerate->integer);
+        Q_snprintf(sv.configstrings[svs.csr.airaccel], CS_MAX_STRING_LENGTH,
+                   "%d", sv_airaccelerate->integer);
     } else {
-        strcpy(sv.configstrings[svs.csr.airaccel], "0");
+        Q_strlcpy(sv.configstrings[svs.csr.airaccel], "0", CS_MAX_STRING_LENGTH);
     }
 
     resolve_masters();
@@ -164,7 +165,8 @@ void SV_SpawnServer(const mapcmd_t *cmd)
     if (cmd->state == ss_game) {
         sv.cm = cmd->cm;
         Nav_Load(cmd->server);
-        sprintf(sv.configstrings[svs.csr.mapchecksum], "%d", sv.cm.checksum);
+        Q_snprintf(sv.configstrings[svs.csr.mapchecksum], CS_MAX_STRING_LENGTH,
+                   "%d", sv.cm.checksum);
 
         // model indices 0 and 255 are reserved
         if (sv.cm.cache->nummodels > svs.csr.max_models - 2)
@@ -175,11 +177,12 @@ void SV_SpawnServer(const mapcmd_t *cmd)
         for (i = 1, j = 2; i < sv.cm.cache->nummodels; i++, j++) {
             if (j == MODELINDEX_PLAYER)
                 j++;    // skip reserved index
-            sprintf(sv.configstrings[svs.csr.models + j], "*%d", i);
+            Q_snprintf(sv.configstrings[svs.csr.models + j], CS_MAX_STRING_LENGTH,
+                       "*%d", i);
         }
     } else {
         // no real map
-        strcpy(sv.configstrings[svs.csr.mapchecksum], "0");
+        Q_strlcpy(sv.configstrings[svs.csr.mapchecksum], "0", CS_MAX_STRING_LENGTH);
         sv.cm.entitystring = "";
     }
 
@@ -204,7 +207,8 @@ void SV_SpawnServer(const mapcmd_t *cmd)
         ge->RunFrame(false);
 
     // make sure maxclients string is correct
-    sprintf(sv.configstrings[svs.csr.maxclients], "%d", svs.maxclients);
+    Q_snprintf(sv.configstrings[svs.csr.maxclients], CS_MAX_STRING_LENGTH,
+               "%d", svs.maxclients);
 
     // check for a savegame
     SV_CheckForSavegame(cmd);

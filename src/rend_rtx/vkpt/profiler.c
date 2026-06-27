@@ -274,11 +274,11 @@ draw_query(int x, int y, qhandle_t font, const char *enum_name, int idx)
 	double avg_ms = ((double)profiler_data.samples[idx].accumulated / (profiler_data.samples[idx].num_samples * 1e6)) * qvk.timestampPeriod;
 
 	if(ms > 0.005)
-		snprintf(buf, sizeof buf, "%8.2f ms %8.2f ms", ms, avg_ms);
+		Q_snprintf(buf, sizeof(buf), "%8.2f ms %8.2f ms", ms, avg_ms);
 	else if(avg_ms > 0.005)
-		snprintf(buf, sizeof buf, "       N/A  %8.2f ms", avg_ms);
+		Q_snprintf(buf, sizeof(buf), "       N/A  %8.2f ms", avg_ms);
 	else
-		snprintf(buf, sizeof buf, "       N/A");
+		Q_snprintf(buf, sizeof(buf), "       N/A");
 
 	R_DrawString(x + 256, y, 0, 128, buf, COLOR_WHITE, font);
 }

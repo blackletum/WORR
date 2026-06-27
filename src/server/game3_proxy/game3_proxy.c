@@ -777,13 +777,22 @@ static char* read_as_base85(const char* filename, size_t* result_size)
     ascii85_context_init(&ctx);
 
     uint8_t buf[1024];
-    while(!feof(f)) {
+    for (;;) {
         size_t num_read = fread(buf, sizeof(char), sizeof(buf) / sizeof(buf[0]), f);
-        if (num_read == 0 && ferror(f))
-            Com_Error(ERR_DROP, "Error reading %s", filename);
+        if (num_read == 0) {
+            if (ferror(f)) {
+                fclose(f);
+                ascii85_context_destroy(&ctx);
+                Com_Error(ERR_DROP, "Error reading %s", filename);
+            }
+            break;
+        }
         ascii85_encode(buf, num_read, &ctx);
     }
-    fclose(f);
+    if (fclose(f)) {
+        ascii85_context_destroy(&ctx);
+        Com_Error(ERR_DROP, "Error closing %s", filename);
+    }
 
     ascii85_encode_last(&ctx);
 
@@ -808,11 +817,15 @@ static void write_as_base85(const char* filename, const char* base85)
 
     size_t data_size = 0;
     const uint8_t *data = ascii85_get_output(&ctx, &data_size);
-    if (fwrite(data, 1, data_size, f) != data_size)
-        Com_Error(ERR_DROP, "Error writing %s", filename);
-    fclose(f);
+    bool write_ok = fwrite(data, 1, data_size, f) == data_size;
+    bool close_ok = fclose(f) == 0;
 
     ascii85_context_destroy(&ctx);
+
+    if (!write_ok)
+        Com_Error(ERR_DROP, "Error writing %s", filename);
+    if (!close_ok)
+        Com_Error(ERR_DROP, "Error closing %s", filename);
 }
 
 static char* wrap_WriteGameJson(bool autosave, size_t* json_size)

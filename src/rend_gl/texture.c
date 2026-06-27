@@ -1226,7 +1226,7 @@ static void GL_InitDefaultTexture(void)
 
     // fill in notexture image
     ntx = R_NOTEXTURE;
-    strcpy(ntx->name, "NOTEXTURE");
+    Q_strlcpy(ntx->name, "NOTEXTURE", sizeof(ntx->name));
     ntx->width = ntx->upload_width = 32;
     ntx->height = ntx->upload_height = 32;
     ntx->type = IT_WALL;
@@ -1347,7 +1347,7 @@ static void GL_InitCubemaps(void)
 
     // init default sky texture
     image_t *sky = R_SKYTEXTURE;
-    strcpy(sky->name, "SKYTEXTURE");
+    Q_strlcpy(sky->name, "SKYTEXTURE", sizeof(sky->name));
     sky->type = IT_SKY;
     sky->flags = IF_CUBEMAP;
     sky->texnum = TEXNUM_CUBEMAP_DEFAULT;

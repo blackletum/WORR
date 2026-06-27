@@ -3155,7 +3155,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
 
         self.assertEqual(profile_spawn["status"], "implemented")
         self.assertEqual(profile_spawn["task_ids"], ["FR-04-T13", "DV-03-T05"])
-        self.assertEqual(profile_spawn["smoke_cvar"], "sv_bot_profile_smoke")
+        self.assertEqual(profile_spawn["smoke_cvar"], "bot_profile_smoke")
         self.assertEqual(profile_spawn["smoke_mode"], 2)
         self.assertEqual(profile_spawn["required_metrics"], [])
         required_marker_metrics = {
@@ -3181,8 +3181,8 @@ class BotScenarioHarnessTests(unittest.TestCase):
             "profile_smoke",
         )
 
-        self.assertIn("sv_bot_profile_smoke", command)
-        self.assertNotIn("sv_bot_frame_command_smoke", command)
+        self.assertIn("bot_profile_smoke", command)
+        self.assertNotIn("bot_frame_command_smoke", command)
         self.assertIn("mm-rage", command)
 
     def test_scenario_map_override_in_command(self) -> None:
@@ -13392,7 +13392,7 @@ class BotScenarioHarnessTests(unittest.TestCase):
 
         if "profile_backed_spawn" in scenarios:
             profile_spawn = scenarios["profile_backed_spawn"]
-            self.assertEqual(profile_spawn.get("smoke_cvar"), "sv_bot_profile_smoke")
+            self.assertEqual(profile_spawn.get("smoke_cvar"), "bot_profile_smoke")
             if profile_spawn["status"] == "passed":
                 markers = profile_spawn.get("markers", {})
                 after_add = markers["q3a_bot_profile_smoke_after_add"][-1]

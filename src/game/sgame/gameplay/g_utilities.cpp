@@ -1021,8 +1021,7 @@ const char *PlaceString(int rank) {
     suffix = suffixTable[rank % 10];
   }
 
-  snprintf(str, sizeof(str), "%s%d%s", prefix, rank, suffix);
-  str[sizeof(str) - 1] = '\0'; // Force null-termination
+  G_FmtTo(str, "{}{}{}", prefix, rank, suffix);
 
   return str;
 }
@@ -1136,23 +1135,22 @@ const char *TimeString(int msec, bool showMilliseconds, bool state) {
 
   if (showMilliseconds) {
     if (hours > 0) {
-      snprintf(timeString, sizeof(timeString), "%s%d:%02d:%02d.%03d",
-               (msec < 0 ? "-" : ""), hours, mins, seconds, milliseconds);
+      G_FmtTo(timeString, "{}{}:{:02}:{:02}.{:03}", (msec < 0 ? "-" : ""),
+              hours, mins, seconds, milliseconds);
     } else {
-      snprintf(timeString, sizeof(timeString), "%s%02d:%02d.%03d",
-               (msec < 0 ? "-" : ""), mins, seconds, milliseconds);
+      G_FmtTo(timeString, "{}{:02}:{:02}.{:03}", (msec < 0 ? "-" : ""),
+              mins, seconds, milliseconds);
     }
   } else {
     if (hours > 0) {
-      snprintf(timeString, sizeof(timeString), "%s%d:%02d:%02d",
-               (msec < 0 ? "-" : ""), hours, mins, seconds);
+      G_FmtTo(timeString, "{}{}:{:02}:{:02}", (msec < 0 ? "-" : ""),
+              hours, mins, seconds);
     } else {
-      snprintf(timeString, sizeof(timeString), "%s%02d:%02d",
-               (msec < 0 ? "-" : ""), mins, seconds);
+      G_FmtTo(timeString, "{}{:02}:{:02}", (msec < 0 ? "-" : ""), mins,
+              seconds);
     }
   }
 
-  timeString[sizeof(timeString) - 1] = '\0'; // Force null-termination
   return timeString;
 }
 
@@ -1758,10 +1756,8 @@ void GT_SetLongName() {
     longName = "Unknown Gametype";
   }
 
-  // Safely copy to level.gametype_name
-  std::strncpy(level.gametype_name.data(), longName.c_str(),
-               level.gametype_name.size() - 1);
-  level.gametype_name.back() = '\0';
+  Q_strlcpy(level.gametype_name.data(), longName.c_str(),
+            level.gametype_name.size());
 }
 
 /*

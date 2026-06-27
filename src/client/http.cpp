@@ -122,8 +122,10 @@ static size_t recv_func(void *ptr, size_t size, size_t nmemb, void *stream)
     if (!size || !nmemb)
         return 0;
 
-    assert(size <= SIZE_MAX / nmemb);
-    assert(dl->position < MAX_DLSIZE);
+    if (size > SIZE_MAX / nmemb)
+        return 0;
+    if (dl->position >= MAX_DLSIZE)
+        return 0;
 
     bytes = size * nmemb;
     if (bytes >= MAX_DLSIZE - dl->position)

@@ -133,19 +133,42 @@ static bool find_steam_app_path(const char *app_id, char *out_dir, size_t out_di
     if (!libraryfolders)
         return result;
 
-    fseek(libraryfolders, 0, SEEK_END);
+    if (fseek(libraryfolders, 0, SEEK_END) != 0) {
+        Com_EPrintf("Error seeking libraryfolders.vdf.\n");
+        fclose(libraryfolders);
+        return result;
+    }
     long len = ftell(libraryfolders);
-    fseek(libraryfolders, 0, SEEK_SET);
+    if (len < 0) {
+        Com_EPrintf("Error measuring libraryfolders.vdf.\n");
+        fclose(libraryfolders);
+        return result;
+    }
+    if ((unsigned long)len > (unsigned long)SIZE_MAX - 1) {
+        Com_EPrintf("libraryfolders.vdf is too large.\n");
+        fclose(libraryfolders);
+        return result;
+    }
+    if (fseek(libraryfolders, 0, SEEK_SET) != 0) {
+        Com_EPrintf("Error rewinding libraryfolders.vdf.\n");
+        fclose(libraryfolders);
+        return result;
+    }
 
-    char *file_contents = Z_Malloc(len + 1);
-    file_contents[len] = '\0';
+    size_t file_size = (size_t)len;
+    char *file_contents = Z_Malloc(file_size + 1);
+    file_contents[file_size] = '\0';
 
-    size_t file_read = fread((void *) file_contents, 1, len, libraryfolders);
+    size_t file_read = fread((void *) file_contents, 1, file_size, libraryfolders);
+    bool close_ok = fclose(libraryfolders) == 0;
 
-    fclose(libraryfolders);
-
-    if (file_read != len) {
+    if (file_read != file_size) {
         Com_EPrintf("Error reading libraryfolders.vdf.\n");
+        result = false;
+        goto exit;
+    }
+    if (!close_ok) {
+        Com_EPrintf("Error closing libraryfolders.vdf.\n");
         result = false;
         goto exit;
     }

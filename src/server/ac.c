@@ -455,11 +455,11 @@ static void AC_LoadChecks(void)
     if (!AC_ParseFile(AC_HASHES_NAME, AC_ParseHash, 0)) {
         Com_Printf("ANTICHEAT: Missing " AC_HASHES_NAME ", "
                    "not using any file checks.\n");
-        strcpy(acs.hashlist_name, "none");
+        Q_strlcpy(acs.hashlist_name, "none", sizeof(acs.hashlist_name));
     } else if (!acs.num_files) {
         Com_Printf("ANTICHEAT: No file hashes were loaded, "
                    "please check the " AC_HASHES_NAME ".\n");
-        strcpy(acs.hashlist_name, "none");
+        Q_strlcpy(acs.hashlist_name, "none", sizeof(acs.hashlist_name));
     } else if (!acs.hashlist_name[0]) {
         Q_snprintf(acs.hashlist_name, MAX_QPATH, "unknown (%d %s)",
                    acs.num_files, acs.num_files == 1 ? "entry" : "entries");
@@ -765,7 +765,7 @@ static void AC_ParseFileViolation(void)
     if (msg_read.readcount < msg_read.cursize) {
         MSG_ReadString(hash, sizeof(hash));
     } else {
-        strcpy(hash, "no hash?");
+        Q_strlcpy(hash, "no hash?", sizeof(hash));
     }
 
     cl->ac_file_failures++;

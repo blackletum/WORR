@@ -47,7 +47,24 @@ int load_img(const char *name, image_t *image);
 
 static void stbi_write(void *context, void *data, int size)
 {
-	fwrite(data, size, 1, ((screenshot_t *) context)->fp);
+	screenshot_t *s = (screenshot_t *)context;
+
+	if (s->status < 0 || size <= 0)
+		return;
+
+	if (fwrite(data, 1, (size_t)size, s->fp) != (size_t)size && !s->status)
+		s->status = Q_ERRNO;
+}
+
+static int stbi_write_status(screenshot_t *restrict s, int ret)
+{
+	if (s->status < 0)
+		return s->status;
+	if (ret)
+		return Q_ERR_SUCCESS;
+
+	Com_SetLastError(stbi_failure_reason());
+	return Q_ERR_LIBRARY_ERROR;
 }
 
 static void *img_alloc_pixels(size_t size)
@@ -447,11 +464,7 @@ static int IMG_SaveTGA(screenshot_t *restrict s)
 	stbi_flip_vertically_on_write(1);
 	int ret = stbi_write_tga_to_func(stbi_write, s, s->width, s->height, 3, s->pixels);
 
-	if (ret) 
-		return Q_ERR_SUCCESS;
-
-	Com_SetLastError(stbi_failure_reason());
-	return Q_ERR_LIBRARY_ERROR;
+	return stbi_write_status(s, ret);
 }
 
 static int IMG_SaveJPG(screenshot_t *restrict s)
@@ -459,11 +472,7 @@ static int IMG_SaveJPG(screenshot_t *restrict s)
 	stbi_flip_vertically_on_write(1);
 	int ret = stbi_write_jpg_to_func(stbi_write, s, s->width, s->height, 3, s->pixels, s->param);
 
-	if (ret)
-		return Q_ERR_SUCCESS;
-
-	Com_SetLastError(stbi_failure_reason());
-	return Q_ERR_LIBRARY_ERROR;
+	return stbi_write_status(s, ret);
 }
 
 
@@ -472,11 +481,7 @@ static int IMG_SavePNG(screenshot_t *restrict s)
 	stbi_flip_vertically_on_write(1);
 	int ret = stbi_write_png_to_func(stbi_write, s, s->width, s->height, 3, s->pixels, s->rowbytes);
 
-	if (ret)
-		return Q_ERR_SUCCESS;
-
-	Com_SetLastError(stbi_failure_reason());
-	return Q_ERR_LIBRARY_ERROR;
+	return stbi_write_status(s, ret);
 }
 
 static int IMG_SaveHDR(screenshot_t *restrict s)
@@ -485,11 +490,7 @@ static int IMG_SaveHDR(screenshot_t *restrict s)
 	// NOTE: The 'pixels' point is byte*, but HDR writing needs float*!
 	int ret = stbi_write_hdr_to_func(stbi_write, s, s->width, s->height, 3, (float*)s->pixels);
 
-	if (ret)
-		return Q_ERR_SUCCESS;
-
-	Com_SetLastError(stbi_failure_reason());
-	return Q_ERR_LIBRARY_ERROR;
+	return stbi_write_status(s, ret);
 }
 
 /*
@@ -1158,7 +1159,7 @@ static void IMG_List_f(void)
 
         if (f) {
             char fmt[MAX_QPATH];
-            sprintf(fmt, "%%-%ds, %%-%ds, (%% 5d %% 5d), sRGB:%%d\n", MAX_QPATH, MAX_QPATH);
+            Q_snprintf(fmt, sizeof(fmt), "%%-%ds, %%-%ds, (%% 5d %% 5d), sRGB:%%d\n", MAX_QPATH, MAX_QPATH);
 
             FS_FPrintf(f, fmt,
                 image->name,
@@ -1268,7 +1269,7 @@ static int _try_image_format(imageformat_t fmt, image_t *image, int try_src, byt
 
     image->filepath[0] = 0;
     if (ret >= 0) {
-        strcpy(image->filepath, image->name);
+        Q_strlcpy(image->filepath, image->name, sizeof(image->filepath));
         // record last modified time (skips reload when invoking IMG_ReloadAll)
         image->last_modified = 0;
         FS_LastModified(image->filepath, &image->last_modified);
@@ -1739,8 +1740,7 @@ static image_t *find_or_load_image(const char *name, size_t len,
         else
             last_slash += 1;
 
-        strcpy(image->name, "overrides/");
-        strcat(image->name, last_slash);
+        Q_concat(image->name, sizeof(image->name), "overrides/", last_slash);
         image->baselen = strlen(image->name) - 4;
         ret = try_load_image_candidate(image, name, len, &pic, type, flags, true, -1);
         memcpy(image->name, name, len + 1);

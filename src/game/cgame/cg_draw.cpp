@@ -2283,7 +2283,7 @@ static void CG_UpdateCrosshairPic(cg_crosshair_state_t &state)
     state.crosshair_raw_h = 0;
 
     if (index > 0) {
-        std::snprintf(state.crosshair_name, sizeof(state.crosshair_name), "ch%i", index);
+        G_FmtTo(state.crosshair_name, "ch{}", index);
         if (cgi.Draw_GetPicSize)
             cgi.Draw_GetPicSize(&state.crosshair_raw_w, &state.crosshair_raw_h, state.crosshair_name);
     } else {

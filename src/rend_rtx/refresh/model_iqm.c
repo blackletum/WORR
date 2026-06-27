@@ -391,7 +391,7 @@ int MOD_LoadIQM_Base(model_t* model, const void* rawdata, size_t length, const c
 		{
 			if (mesh->name < header->num_text)
 			{
-				strncpy(meshName, (const char*)header + header->ofs_text + mesh->name, sizeof(meshName) - 1);
+				Q_strlcpy(meshName, (const char*)header + header->ofs_text + mesh->name, sizeof(meshName));
 			}
 			else
 			{
@@ -542,9 +542,9 @@ int MOD_LoadIQM_Base(model_t* model, const void* rawdata, size_t length, const c
 		const char* str = (const char*)header + header->ofs_text;
 		for (uint32_t mesh_idx = 0; mesh_idx < header->num_meshes; mesh_idx++, mesh++, surface++)
 		{
-			strncpy(surface->name, str + mesh->name, sizeof(surface->name) - 1);
+			Q_strlcpy(surface->name, str + mesh->name, sizeof(surface->name));
 			Q_strlwr(surface->name); // lowercase the surface name so skin compares are faster
-			strncpy(surface->material, str + mesh->material, sizeof(surface->material) - 1);
+			Q_strlcpy(surface->material, str + mesh->material, sizeof(surface->material));
 			Q_strlwr(surface->material);
 			surface->data = iqmData;
 			surface->first_vertex = mesh->first_vertex;
@@ -781,8 +781,7 @@ int MOD_LoadIQM_Base(model_t* model, const void* rawdata, size_t length, const c
 		for (uint32_t anim_idx = 0; anim_idx < header->num_anims; anim_idx++, src++, dst++)
 		{
 			const char* name = (const char*)header + header->ofs_text + src->name;
-			strncpy(dst->name, name, sizeof(dst->name));
-			dst->name[sizeof(dst->name) - 1] = 0;
+			Q_strlcpy(dst->name, name, sizeof(dst->name));
 			
 			dst->first_frame = src->first_frame;
 			dst->num_frames = src->num_frames;

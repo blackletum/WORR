@@ -1188,7 +1188,11 @@ static void stbi_write_gl(void *context, void *data, int size)
 {
     screenshot_t *s = context;
 
-    fwrite(data, size, 1, s->fp);
+    if (s->status < 0 || size <= 0)
+        return;
+
+    if (fwrite(data, 1, (size_t)size, s->fp) != (size_t)size && !s->status)
+        s->status = Q_ERRNO;
 }
 
 IMG_LOAD(PNG)
@@ -1248,7 +1252,15 @@ static int IMG_SavePNG(const screenshot_t *s)
     int ret;
 
     if (s->bpp == 4) {
+        if (s->width <= 0 || s->height <= 0)
+            return Q_ERR_INVALID_FORMAT;
+        if (s->width > INT_MAX / 3)
+            return Q_ERR(ENOMEM);
+
         rowbytes = s->width * 3;
+        if ((size_t)rowbytes > SIZE_MAX / (size_t)s->height)
+            return Q_ERR(ENOMEM);
+
         converted = malloc((size_t)rowbytes * (size_t)s->height);
         if (!converted)
             return Q_ERR(ENOMEM);
@@ -1278,6 +1290,9 @@ static int IMG_SavePNG(const screenshot_t *s)
 
     if (converted)
         free(converted);
+
+    if (s->status < 0)
+        return s->status;
 
     if (ret)
         return Q_ERR_SUCCESS;

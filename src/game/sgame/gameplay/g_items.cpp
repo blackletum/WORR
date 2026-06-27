@@ -4256,7 +4256,7 @@ bool SpawnItem(gentity_t* ent, Item* item) {
 			(ent->count < 50) ? "l" : "m";
 
 		std::array<char, 32> path{};
-		std::snprintf(path.data(), path.size(), "items/%s_health.wav", sizeCode);
+		G_FmtTo(path, "items/{}_health.wav", sizeCode);
 		ent->noiseIndex = gi.soundIndex(path.data());
 	}
 
@@ -4282,7 +4282,7 @@ void P_ToggleFlashlight(gentity_t* ent, bool state) {
         // Choose sound based on new state
         const char* suffix = (ent->flags & FL_FLASHLIGHT) ? "on" : "off";
         std::array<char, 32> path{};
-        std::snprintf(path.data(), path.size(), "items/flashlight_%s.wav", suffix);
+        G_FmtTo(path, "items/flashlight_{}.wav", suffix);
 
         gi.sound(ent, CHAN_AUTO, gi.soundIndex(path.data()), 1.0f, ATTN_STATIC, 0);
 }

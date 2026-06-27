@@ -348,6 +348,7 @@ static int dummy_create(void)
 {
     client_t *newcl;
     char userinfo[MAX_INFO_STRING * 2];
+    size_t userinfo_len;
     const char *s;
     qboolean allow;
     int number;
@@ -384,12 +385,17 @@ static int dummy_create(void)
     List_Init(&newcl->entry);
 
     if (g_features->integer & GMF_EXTRA_USERINFO) {
-        strcpy(userinfo, MVD_USERINFO1);
-        strcpy(userinfo + strlen(userinfo) + 1, MVD_USERINFO2);
+        userinfo_len = Q_strlcpy(userinfo, MVD_USERINFO1, sizeof(userinfo));
+        if (userinfo_len + 1 < sizeof(userinfo)) {
+            Q_strlcpy(userinfo + userinfo_len + 1, MVD_USERINFO2,
+                      sizeof(userinfo) - userinfo_len - 1);
+        }
     } else {
-        strcpy(userinfo, MVD_USERINFO1);
-        strcat(userinfo, MVD_USERINFO2);
-        userinfo[strlen(userinfo) + 1] = 0;
+        Q_concat(userinfo, sizeof(userinfo), MVD_USERINFO1, MVD_USERINFO2);
+        userinfo_len = strlen(userinfo);
+        if (userinfo_len + 1 < sizeof(userinfo)) {
+            userinfo[userinfo_len + 1] = 0;
+        }
     }
 
     mvd.dummy = newcl;

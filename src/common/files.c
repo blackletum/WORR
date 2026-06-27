@@ -982,26 +982,28 @@ static int64_t open_file_write(file_t *file, const char *name)
 
     switch (file->mode & FS_MODE_MASK) {
     case FS_MODE_APPEND:
-        strcpy(mode_str, "a");
+        Q_strlcpy(mode_str, "a", sizeof(mode_str));
         break;
     case FS_MODE_WRITE:
-        strcpy(mode_str, "w");
-        if (file->mode & FS_FLAG_EXCL)
-            strcat(mode_str, "x");
+        Q_strlcpy(mode_str, "w", sizeof(mode_str));
+        if (file->mode & FS_FLAG_EXCL) {
+            Q_strlcat(mode_str, "x", sizeof(mode_str));
+        }
         break;
     case FS_MODE_RDWR:
         // this mode is only used by client downloading code
         // similar to FS_MODE_APPEND, but does not create
         // the file if it does not exist
-        strcpy(mode_str, "r+");
+        Q_strlcpy(mode_str, "r+", sizeof(mode_str));
         break;
     default:
         Q_assert(!"bad mode");
     }
 
     // open in binary mode by default
-    if (!(file->mode & FS_FLAG_TEXT))
-        strcat(mode_str, "b");
+    if (!(file->mode & FS_FLAG_TEXT)) {
+        Q_strlcat(mode_str, "b", sizeof(mode_str));
+    }
 
     if (file->mode & FS_FLAG_GZIP)
         pos = open_file_write_gzip(file, fullpath, mode_str);

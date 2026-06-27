@@ -507,7 +507,7 @@ bool BotRuntimeBuildEntitySnapshot(gentity_t *ent, BotLibAdapterEntitySnapshot &
 	snapshot.type = BotRuntimeEntityType(ent);
 	snapshot.flags = static_cast<int>(static_cast<uint64_t>(ent->sv.entFlags) & 0x7fffffff);
 	CopyVectorToBotLib(snapshot.origin, ent->s.origin);
-	CopyVectorToBotLib(snapshot.angles, ent->client != nullptr ? ent->sv.viewAngles : ent->s.angles);
+	CopyVectorToBotLib(snapshot.angles, ent->client != nullptr ? ent->client->vAngle : ent->s.angles);
 	CopyVectorToBotLib(snapshot.oldOrigin, ent->s.oldOrigin);
 	CopyVectorToBotLib(snapshot.mins, ent->mins);
 	CopyVectorToBotLib(snapshot.maxs, ent->maxs);

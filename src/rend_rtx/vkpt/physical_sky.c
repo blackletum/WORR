@@ -809,7 +809,7 @@ void InitialiseSkyCVars(void)
     for (int i = 0; i < 3; ++i)
     {
         char buff[32]; 
-        snprintf(buff, 32, "sun_color_%c", _rgb[i]);
+        Q_snprintf(buff, sizeof(buff), "sun_color_%c", _rgb[i]);
         sun_color[i] = Cvar_Get(buff, "1.0", 0);
         sun_color[i]->changed = physical_sky_cvar_changed;
     }

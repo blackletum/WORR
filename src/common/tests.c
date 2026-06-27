@@ -314,7 +314,7 @@ static void Com_TestNorm_f(void)
                 ret = FS_NormalizePathBuffer(buffer, n->in, sizeof(buffer));
             } else {
                 // test in place operation
-                strcpy(buffer, n->in);
+                Q_strlcpy(buffer, n->in, sizeof(buffer));
                 ret = FS_NormalizePath(buffer);
             }
             if (ret != strlen(n->out) || strcmp(n->out, buffer)) {

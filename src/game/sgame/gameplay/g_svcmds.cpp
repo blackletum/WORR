@@ -218,7 +218,7 @@ namespace
 	static std::string FormatIP(const std::array<uint8_t, 4>& b)
 	{
 		char buffer[sizeof("255.255.255.255")];
-		std::snprintf(buffer, sizeof(buffer), "%u.%u.%u.%u",
+		G_FmtTo(buffer, "{}.{}.{}.{}",
 			static_cast<unsigned>(b[0]),
 			static_cast<unsigned>(b[1]),
 			static_cast<unsigned>(b[2]),

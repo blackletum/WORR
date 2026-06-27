@@ -1787,7 +1787,7 @@ static void MVD_GameInit(void)
         Com_EPrintf("Couldn't load %s for the Waiting Room: %s\n",
                     buffer, BSP_ErrorString(ret));
         Cvar_Reset(mvd_default_map);
-        strcpy(buffer, "maps/q2dm1.bsp");
+        Q_strlcpy(buffer, "maps/q2dm1.bsp", sizeof(buffer));
         checksum = 80717714;
         VectorSet(mvd->spawnOrigin, 984, 192, 784);
         VectorSet(mvd->spawnAngles, 25, 72, 0);
@@ -1798,17 +1798,18 @@ static void MVD_GameInit(void)
         BSP_Free(bsp);
     }
 
-    strcpy(mvd->name, "Waiting Room");
+    Q_strlcpy(mvd->name, "Waiting Room", sizeof(mvd->name));
     Cvar_VariableStringBuffer("game", mvd->gamedir, sizeof(mvd->gamedir));
     Q_strlcpy(mvd->mapname, mvd_default_map->string, sizeof(mvd->mapname));
     List_Init(&mvd->clients);
 
-    strcpy(mvd->configstrings[CS_NAME], "Waiting Room");
-    strcpy(mvd->configstrings[CS_SKY], "unit1_");
-    strcpy(mvd->configstrings[CS_MAXCLIENTS_OLD], "8");
-    sprintf(mvd->configstrings[CS_MAPCHECKSUM_OLD], "%d", checksum);
-    strcpy(mvd->configstrings[CS_MODELS_OLD + 1], buffer);
-    strcpy(mvd->configstrings[CS_LIGHTS_OLD], "m");
+    Q_strlcpy(mvd->configstrings[CS_NAME], "Waiting Room", CS_MAX_STRING_LENGTH);
+    Q_strlcpy(mvd->configstrings[CS_SKY], "unit1_", CS_MAX_STRING_LENGTH);
+    Q_strlcpy(mvd->configstrings[CS_MAXCLIENTS_OLD], "8", CS_MAX_STRING_LENGTH);
+    Q_snprintf(mvd->configstrings[CS_MAPCHECKSUM_OLD], CS_MAX_STRING_LENGTH,
+               "%d", checksum);
+    Q_strlcpy(mvd->configstrings[CS_MODELS_OLD + 1], buffer, CS_MAX_STRING_LENGTH);
+    Q_strlcpy(mvd->configstrings[CS_LIGHTS_OLD], "m", CS_MAX_STRING_LENGTH);
 
     mvd->dummy = &mvd_dummy;
     mvd->pm_type = PM_FREEZE;

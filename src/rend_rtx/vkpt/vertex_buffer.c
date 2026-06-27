@@ -873,7 +873,7 @@ stage_mesh_primitives(uint8_t* staging_data, int* p_write_ptr, float** p_vertex_
 
 #if 0
 	char buf[1024];
-	snprintf(buf, sizeof buf, "model_%04d.obj", i);
+	Q_snprintf(buf, sizeof(buf), "model_%04d.obj", i);
 	FILE* f = fopen(buf, "wb+");
 	assert(f);
 	for (int j = 0; j < m->numverts; j++) {

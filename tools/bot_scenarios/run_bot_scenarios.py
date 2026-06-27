@@ -302,6 +302,7 @@ KEY_METRICS = (
     "duration_seconds",
     "pass",
 )
+DEFAULT_SMOKE_CVAR = "bot_frame_command_smoke"
 
 
 @dataclass(frozen=True)
@@ -342,7 +343,7 @@ class Scenario:
     description: str
     task_ids: tuple[str, ...]
     budget_seconds: int
-    smoke_cvar: str = "sv_bot_frame_command_smoke"
+    smoke_cvar: str = DEFAULT_SMOKE_CVAR
     checks: tuple[MetricCheck, ...] = field(default_factory=tuple)
     marker_checks: tuple[MarkerMetricCheck, ...] = field(default_factory=tuple)
     pending_reason: str = ""
@@ -2525,7 +2526,7 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "long soak should emit regular progress reports",
             ),
         ),
-        extra_cvars=(("sv_bot_frame_command_smoke_soak_ms", "600000"),),
+        extra_cvars=(("bot_frame_command_smoke_soak_ms", "600000"),),
         manual_only=True,
         selection_tags=("soak", "high_bot", "degradation"),
         degradation_policy=DegradationPolicy(
@@ -2616,7 +2617,7 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "bots must be removed after the final repeat cycle",
             ),
         ),
-        extra_cvars=(("sv_bot_frame_command_smoke_map_repeat_cycles", "2"),),
+        extra_cvars=(("bot_frame_command_smoke_map_repeat_cycles", "2"),),
     ),
     Scenario(
         name="map_restart_cleanup",
@@ -5582,12 +5583,12 @@ SCENARIOS: tuple[Scenario, ...] = (
         title="Profile-backed bot spawn",
         smoke_mode=2,
         description=(
-            "Loads the staged smoke profile, spawns it through sg_bot_add, "
+            "Loads the staged smoke profile, spawns it through the addbot path, "
             "and verifies the bridged profile/userinfo fields."
         ),
         task_ids=("FR-04-T13", "DV-03-T05"),
         budget_seconds=20,
-        smoke_cvar="sv_bot_profile_smoke",
+        smoke_cvar="bot_profile_smoke",
         marker_checks=(
             MarkerMetricCheck(
                 "q3a_bot_profile_smoke=begin",
@@ -20656,7 +20657,7 @@ def smoke_display(row: dict[str, Any]) -> str:
     if mode is None:
         return "-"
     cvar = row.get("smoke_cvar")
-    if cvar and cvar != "sv_bot_frame_command_smoke":
+    if cvar and cvar != DEFAULT_SMOKE_CVAR:
         return f"{cvar}={mode}"
     return str(mode)
 
@@ -21585,13 +21586,13 @@ def build_command(
         "deathmatch",
         "1",
         "+set",
-        "sg_bot_enable",
+        "bot_enable",
         "1",
         "+set",
-        "sg_bot_debug_route",
+        "bot_debug_route",
         "1",
         "+set",
-        "sg_bot_debug_goal",
+        "bot_debug_goal",
         "1",
     ]
 

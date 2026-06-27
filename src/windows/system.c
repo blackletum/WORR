@@ -747,6 +747,7 @@ static void Sys_InstallService_f(void)
     char serviceName[256];
     SC_HANDLE scm, service;
     DWORD length;
+    size_t path_len;
     char *commandline;
 
     if (Cmd_Argc() < 2) {
@@ -764,18 +765,26 @@ static void Sys_InstallService_f(void)
 
     Q_concat(serviceName, sizeof(serviceName), PRODUCT " - ", Cmd_Argv(1));
 
-    length = GetModuleFileNameA(NULL, servicePath, sizeof(servicePath) - 1);
+    length = GetModuleFileNameA(NULL, servicePath, sizeof(servicePath));
     if (!length) {
         Com_EPrintf("Couldn't get module file name: %s\n", Sys_ErrorString(GetLastError()));
         goto fail;
     }
+    if (length >= sizeof(servicePath) - 1) {
+        Com_Printf("Oversize service module path.\n");
+        goto fail;
+    }
     commandline = Cmd_RawArgsFrom(2);
-    if (length + strlen(commandline) + 10 > sizeof(servicePath) - 1) {
+    path_len = Q_strlcat(servicePath, " -service ", sizeof(servicePath));
+    if (path_len >= sizeof(servicePath)) {
         Com_Printf("Oversize service command line.\n");
         goto fail;
     }
-    strcpy(servicePath + length, " -service ");
-    strcpy(servicePath + length + 10, commandline);
+    path_len = Q_strlcat(servicePath, commandline, sizeof(servicePath));
+    if (path_len >= sizeof(servicePath)) {
+        Com_Printf("Oversize service command line.\n");
+        goto fail;
+    }
 
     service = CreateServiceA(scm, serviceName, serviceName, SERVICE_START,
                              SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START,

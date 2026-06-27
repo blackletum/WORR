@@ -1120,28 +1120,43 @@ static void SV_ServerCommand_f(void)
     ge->ServerCommand();
 }
 
+static const char *SV_BotAddTeamArg(void)
+{
+    int argc = Cmd_Argc();
+
+    if (argc < 3) {
+        return NULL;
+    }
+
+    if (COM_IsUint(Cmd_Argv(2))) {
+        return argc >= 4 ? Cmd_Argv(3) : NULL;
+    }
+
+    return Cmd_Argv(2);
+}
+
 static void SV_BotAdd_f(void)
 {
     const char *name = NULL;
-    const char *team = NULL;
+    const char *team;
 
     if (!svs.initialized) {
         Com_Printf("No server running.\n");
         return;
     }
 
-    if (Cmd_Argc() > 3) {
-        Com_Printf("Usage: %s [name] [team]\n", Cmd_Argv(0));
+    if (Cmd_Argc() > 6) {
+        Com_Printf("Usage: %s [name] [skill] [team] [delay] [altname]\n",
+                   Cmd_Argv(0));
         return;
     }
 
     if (Cmd_Argc() >= 2) {
         name = Cmd_Argv(1);
     }
-    if (Cmd_Argc() >= 3) {
-        team = Cmd_Argv(2);
-    }
+    team = SV_BotAddTeamArg();
 
+    Cvar_Set("bot_enable", "1");
     SV_BotAdd(name, team);
 }
 
@@ -1930,11 +1945,11 @@ static const cmdreg_t c_server[] = {
     { "listmasters", SV_ListMasters_f },
     { "killserver", SV_KillServer_f },
     { "sv", SV_ServerCommand_f },
-    { "sg_bot_add", SV_BotAdd_f },
-    { "sg_bot_remove", SV_BotRemove_f },
-    { "sg_bot_kick_all", SV_BotKickAll_f },
-    { "sg_bot_list", SV_BotList_f },
-    { "sg_bot_reload_profiles", SV_BotReloadProfiles_f },
+    { "addbot", SV_BotAdd_f },
+    { "removebot", SV_BotRemove_f },
+    { "kickbots", SV_BotKickAll_f },
+    { "botlist", SV_BotList_f },
+    { "bot_reload_profiles", SV_BotReloadProfiles_f },
     { "pickclient", SV_PickClient_f },
     { "addban", SV_AddBan_f },
     { "delban", SV_DelBan_f },

@@ -899,7 +899,7 @@ gentity_t* ent, const char* userInfo) {
 
 	// fov
 	if (!gi.Info_ValueForKey(userInfo, "fov", value.data(), value.size())) {
-		std::snprintf(value.data(), value.size(), "%.0f", ent->client->ps.fov);
+		G_FmtTo(value, "{:.0f}", ent->client->ps.fov);
 	}
 	ent->client->ps.fov = std::clamp(static_cast<float>(strtoul(value.data(), nullptr, 10)), 1.f, 160.f);
 

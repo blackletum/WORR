@@ -41,6 +41,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #endif
 
 #include <vulkan/vulkan.h>
+#include <stdint.h>
+#include <stdlib.h>
 #if !defined(HAVE_M_PI)
 #define HAVE_M_PI
 #endif // !defined(HAVE_M_PI)
@@ -66,6 +68,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "shader/vertex_buffer.h"
 
 #define LENGTH(a) ((sizeof (a)) / (sizeof(*(a))))
+
+static inline bool vkpt_array_allocation_size(size_t count, size_t element_size, size_t *out_size)
+{
+	if (!out_size)
+		return false;
+	if (count != 0 && element_size > SIZE_MAX / count)
+		return false;
+
+	*out_size = count * element_size;
+	return true;
+}
 
 static inline void vkpt_freep(void **ptr)
 {

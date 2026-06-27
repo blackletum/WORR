@@ -707,25 +707,153 @@ static bool vk_create_surface(void)
 /* use this to override file names */
 static const char *shader_module_file_names[NUM_QVK_SHADER_MODULES];
 
-static void
+static bool
 get_vk_extension_list(
 		const char *layer,
 		uint32_t *num_extensions,
 		VkExtensionProperties **ext)
 {
-	_VK(vkEnumerateInstanceExtensionProperties(layer, num_extensions, NULL));
-	*ext = malloc(sizeof(**ext) * *num_extensions);
-	_VK(vkEnumerateInstanceExtensionProperties(layer, num_extensions, *ext));
+	VkResult result;
+	size_t list_size;
+
+	*num_extensions = 0;
+	*ext = NULL;
+
+	result = vkEnumerateInstanceExtensionProperties(layer, num_extensions, NULL);
+	if (result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: extension enumeration failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return false;
+	}
+
+	if (!vkpt_array_allocation_size(*num_extensions, sizeof(**ext), &list_size)) {
+		Com_SetLastError("Vulkan: extension list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		*num_extensions = 0;
+		return false;
+	}
+
+	if (list_size == 0)
+		return true;
+
+	*ext = malloc(list_size);
+	if (!*ext) {
+		Com_SetLastError("Vulkan: out of memory allocating extension list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		*num_extensions = 0;
+		return false;
+	}
+
+	result = vkEnumerateInstanceExtensionProperties(layer, num_extensions, *ext);
+	if (result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: extension list read failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(*ext);
+		*ext = NULL;
+		*num_extensions = 0;
+		return false;
+	}
+
+	return true;
 }
 
-static void
+static bool
 get_vk_layer_list(
 		uint32_t *num_layers,
 		VkLayerProperties **ext)
 {
-	_VK(vkEnumerateInstanceLayerProperties(num_layers, NULL));
-	*ext = malloc(sizeof(**ext) * *num_layers);
-	_VK(vkEnumerateInstanceLayerProperties(num_layers, *ext));
+	VkResult result;
+	size_t list_size;
+
+	*num_layers = 0;
+	*ext = NULL;
+
+	result = vkEnumerateInstanceLayerProperties(num_layers, NULL);
+	if (result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: layer enumeration failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return false;
+	}
+
+	if (!vkpt_array_allocation_size(*num_layers, sizeof(**ext), &list_size)) {
+		Com_SetLastError("Vulkan: layer list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		*num_layers = 0;
+		return false;
+	}
+
+	if (list_size == 0)
+		return true;
+
+	*ext = malloc(list_size);
+	if (!*ext) {
+		Com_SetLastError("Vulkan: out of memory allocating layer list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		*num_layers = 0;
+		return false;
+	}
+
+	result = vkEnumerateInstanceLayerProperties(num_layers, *ext);
+	if (result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: layer list read failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(*ext);
+		*ext = NULL;
+		*num_layers = 0;
+		return false;
+	}
+
+	return true;
+}
+
+static bool
+get_vk_device_extension_list(
+		VkPhysicalDevice device,
+		uint32_t *num_extensions,
+		VkExtensionProperties **ext)
+{
+	VkResult result;
+	size_t list_size;
+
+	*num_extensions = 0;
+	*ext = NULL;
+
+	result = vkEnumerateDeviceExtensionProperties(device, NULL, num_extensions, NULL);
+	if (result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: device extension enumeration failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return false;
+	}
+
+	if (!vkpt_array_allocation_size(*num_extensions, sizeof(**ext), &list_size)) {
+		Com_SetLastError("Vulkan: device extension list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		*num_extensions = 0;
+		return false;
+	}
+
+	if (list_size == 0)
+		return true;
+
+	*ext = malloc(list_size);
+	if (!*ext) {
+		Com_SetLastError("Vulkan: out of memory allocating device extension list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		*num_extensions = 0;
+		return false;
+	}
+
+	result = vkEnumerateDeviceExtensionProperties(device, NULL, num_extensions, *ext);
+	if (result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: device extension list read failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(*ext);
+		*ext = NULL;
+		*num_extensions = 0;
+		return false;
+	}
+
+	return true;
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -837,19 +965,55 @@ static bool pick_surface_format_sdr(picked_surface_format_t* picked_fmt, const V
 static VkResult
 create_swapchain(void)
 {
+	VkResult result;
+	size_t array_size;
+
 	num_accumulated_frames = 0;
 
 	/* create swapchain (query details and ignore them afterwards :-) )*/
 	VkSurfaceCapabilitiesKHR surf_capabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(qvk.physical_device, qvk.surface, &surf_capabilities);
+	result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(qvk.physical_device, qvk.surface, &surf_capabilities);
+	if (result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: surface capability query failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return result;
+	}
 
 	if (surf_capabilities.currentExtent.width == 0 || surf_capabilities.currentExtent.height == 0)
 		return VK_SUCCESS;
 
 	uint32_t num_formats = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(qvk.physical_device, qvk.surface, &num_formats, NULL);
-	VkSurfaceFormatKHR *avail_surface_formats = alloca(sizeof(VkSurfaceFormatKHR) * num_formats);
-	vkGetPhysicalDeviceSurfaceFormatsKHR(qvk.physical_device, qvk.surface, &num_formats, avail_surface_formats);
+	result = vkGetPhysicalDeviceSurfaceFormatsKHR(qvk.physical_device, qvk.surface, &num_formats, NULL);
+	if (result != VK_SUCCESS || num_formats == 0) {
+		Com_SetLastError(result == VK_SUCCESS ?
+			"Vulkan: surface format query returned no formats" :
+			va("Vulkan: surface format count query failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return result == VK_SUCCESS ? VK_ERROR_FORMAT_NOT_SUPPORTED : result;
+	}
+
+	if (!vkpt_array_allocation_size(num_formats, sizeof(VkSurfaceFormatKHR), &array_size)) {
+		Com_SetLastError("Vulkan: surface format list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	VkSurfaceFormatKHR *avail_surface_formats = malloc(array_size);
+	if (!avail_surface_formats) {
+		Com_SetLastError("Vulkan: out of memory allocating surface format list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	result = vkGetPhysicalDeviceSurfaceFormatsKHR(qvk.physical_device, qvk.surface, &num_formats, avail_surface_formats);
+	if (result != VK_SUCCESS || num_formats == 0) {
+		Com_SetLastError(result == VK_SUCCESS ?
+			"Vulkan: surface format list read returned no formats" :
+			va("Vulkan: surface format list read failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(avail_surface_formats);
+		return result == VK_SUCCESS ? VK_ERROR_FORMAT_NOT_SUPPORTED : result;
+	}
 	/* Com_Printf("num surface formats: %d\n", num_formats);
 
 	Com_Printf("available surface formats:\n");
@@ -875,22 +1039,56 @@ create_swapchain(void)
 	}
 	if(!surface_format_found) {
 		Com_EPrintf("no acceptable surface format available!\n");
-		return 1;
+		free(avail_surface_formats);
+		return VK_ERROR_FORMAT_NOT_SUPPORTED;
 	}
 	qvk.surf_format = picked_format.surface_fmt;
+	free(avail_surface_formats);
 
 	uint32_t num_present_modes = 0;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(qvk.physical_device, qvk.surface, &num_present_modes, NULL);
-	VkPresentModeKHR *avail_present_modes = alloca(sizeof(VkPresentModeKHR) * num_present_modes);
-	vkGetPhysicalDeviceSurfacePresentModesKHR(qvk.physical_device, qvk.surface, &num_present_modes, avail_present_modes);
+	result = vkGetPhysicalDeviceSurfacePresentModesKHR(qvk.physical_device, qvk.surface, &num_present_modes, NULL);
+	if (result != VK_SUCCESS || num_present_modes == 0) {
+		Com_SetLastError(result == VK_SUCCESS ?
+			"Vulkan: present mode query returned no modes" :
+			va("Vulkan: present mode count query failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return result == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : result;
+	}
+
+	if (!vkpt_array_allocation_size(num_present_modes, sizeof(VkPresentModeKHR), &array_size)) {
+		Com_SetLastError("Vulkan: present mode list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	VkPresentModeKHR *avail_present_modes = malloc(array_size);
+	if (!avail_present_modes) {
+		Com_SetLastError("Vulkan: out of memory allocating present mode list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	result = vkGetPhysicalDeviceSurfacePresentModesKHR(qvk.physical_device, qvk.surface, &num_present_modes, avail_present_modes);
+	if (result != VK_SUCCESS || num_present_modes == 0) {
+		Com_SetLastError(result == VK_SUCCESS ?
+			"Vulkan: present mode list read returned no modes" :
+			va("Vulkan: present mode list read failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(avail_present_modes);
+		return result == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : result;
+	}
+
 	bool immediate_mode_available = false;
+	bool mailbox_mode_available = false;
 
 	for (int i = 0; i < num_present_modes; i++) {
 		if (avail_present_modes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR) {
 			immediate_mode_available = true;
-			break;
+		} else if (avail_present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+			mailbox_mode_available = true;
 		}
 	}
+	free(avail_present_modes);
 
 	qvk.surf_vsync = (cvar_vsync->integer != 0);
 
@@ -898,8 +1096,10 @@ create_swapchain(void)
 		qvk.present_mode = VK_PRESENT_MODE_FIFO_KHR;
 	} else if (immediate_mode_available) {
 		qvk.present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-	} else {
+	} else if (mailbox_mode_available) {
 		qvk.present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+	} else {
+		qvk.present_mode = VK_PRESENT_MODE_FIFO_KHR;
 	}
 
 	if(surf_capabilities.currentExtent.width != ~0u) {
@@ -939,17 +1139,72 @@ create_swapchain(void)
 		.oldSwapchain          = VK_NULL_HANDLE, /* need to provide previous swapchain in case of window resize */
 	};
 
-	if(vkCreateSwapchainKHR(qvk.device, &swpch_create_info, NULL, &qvk.swap_chain) != VK_SUCCESS) {
-		Com_EPrintf("error creating swapchain\n");
-		return 1;
+	result = vkCreateSwapchainKHR(qvk.device, &swpch_create_info, NULL, &qvk.swap_chain);
+	if(result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: swapchain creation failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return result;
 	}
 
-	vkGetSwapchainImagesKHR(qvk.device, qvk.swap_chain, &qvk.num_swap_chain_images, NULL);
-	assert(qvk.num_swap_chain_images);
-	qvk.swap_chain_images = malloc(qvk.num_swap_chain_images * sizeof(*qvk.swap_chain_images));
-	vkGetSwapchainImagesKHR(qvk.device, qvk.swap_chain, &qvk.num_swap_chain_images, qvk.swap_chain_images);
+	result = vkGetSwapchainImagesKHR(qvk.device, qvk.swap_chain, &qvk.num_swap_chain_images, NULL);
+	if (result != VK_SUCCESS || qvk.num_swap_chain_images == 0) {
+		Com_SetLastError(result == VK_SUCCESS ?
+			"Vulkan: swapchain did not expose any images" :
+			va("Vulkan: swapchain image count query failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		qvk.num_swap_chain_images = 0;
+		return result == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : result;
+	}
 
-	qvk.swap_chain_image_views = malloc(qvk.num_swap_chain_images * sizeof(*qvk.swap_chain_image_views));
+	if (!vkpt_array_allocation_size(qvk.num_swap_chain_images, sizeof(*qvk.swap_chain_images), &array_size)) {
+		Com_SetLastError("Vulkan: swapchain image list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		qvk.num_swap_chain_images = 0;
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	qvk.swap_chain_images = malloc(array_size);
+	if (!qvk.swap_chain_images) {
+		Com_SetLastError("Vulkan: out of memory allocating swapchain image list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		qvk.num_swap_chain_images = 0;
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	uint32_t image_count = qvk.num_swap_chain_images;
+	result = vkGetSwapchainImagesKHR(qvk.device, qvk.swap_chain, &image_count, qvk.swap_chain_images);
+	if (result != VK_SUCCESS || image_count == 0) {
+		Com_SetLastError(result == VK_SUCCESS ?
+			"Vulkan: swapchain image list read returned no images" :
+			va("Vulkan: swapchain image list read failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(qvk.swap_chain_images);
+		qvk.swap_chain_images = NULL;
+		qvk.num_swap_chain_images = 0;
+		return result == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : result;
+	}
+	qvk.num_swap_chain_images = image_count;
+
+	if (!vkpt_array_allocation_size(qvk.num_swap_chain_images, sizeof(*qvk.swap_chain_image_views), &array_size)) {
+		Com_SetLastError("Vulkan: swapchain image view list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(qvk.swap_chain_images);
+		qvk.swap_chain_images = NULL;
+		qvk.num_swap_chain_images = 0;
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	qvk.swap_chain_image_views = malloc(array_size);
+	if (!qvk.swap_chain_image_views) {
+		Com_SetLastError("Vulkan: out of memory allocating swapchain image view list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(qvk.swap_chain_images);
+		qvk.swap_chain_images = NULL;
+		qvk.num_swap_chain_images = 0;
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+	memset(qvk.swap_chain_image_views, 0, array_size);
+
 	for(int i = 0; i < qvk.num_swap_chain_images; i++) {
 		VkImageViewCreateInfo img_create_info = {
 			.sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -973,8 +1228,14 @@ create_swapchain(void)
 			}
 		};
 
-		if(vkCreateImageView(qvk.device, &img_create_info, NULL, qvk.swap_chain_image_views + i) != VK_SUCCESS) {
-			Com_EPrintf("error creating image view!");
+		result = vkCreateImageView(qvk.device, &img_create_info, NULL, qvk.swap_chain_image_views + i);
+		if(result != VK_SUCCESS) {
+			Com_SetLastError(va("Vulkan: swapchain image view creation failed (%s)", qvk_result_to_string(result)));
+			Com_EPrintf("%s\n", Com_GetLastError());
+
+			for (int j = 0; j < i; j++) {
+				vkDestroyImageView(qvk.device, qvk.swap_chain_image_views[j], NULL);
+			}
 
 			free(qvk.swap_chain_image_views);
 			qvk.swap_chain_image_views = NULL;
@@ -983,7 +1244,7 @@ create_swapchain(void)
 			qvk.swap_chain_images = NULL;
 
 			qvk.num_swap_chain_images = 0;
-			return 1;
+			return result;
 		}
 	}
 
@@ -1077,9 +1338,11 @@ static bool
 init_vulkan(void)
 {
 	Com_Printf("----- init_vulkan -----\n");
+	size_t array_size;
 
 	/* layers */
-	get_vk_layer_list(&qvk.num_layers, &qvk.layers);
+	if (!get_vk_layer_list(&qvk.num_layers, &qvk.layers))
+		return false;
 	Com_Printf("Available Vulkan layers: \n");
 	for(int i = 0; i < qvk.num_layers; i++) {
 		Com_Printf("  %s\n", qvk.layers[i].layerName);
@@ -1112,7 +1375,8 @@ init_vulkan(void)
 
 	bool available_optional_instance_extensions[NUM_OPTIONAL_INSTANCE_EXTENSIONS] = { false };
 
-	get_vk_extension_list(NULL, &qvk.num_extensions, &qvk.extensions); /* valid here? */
+	if (!get_vk_extension_list(NULL, &qvk.num_extensions, &qvk.extensions))
+		return false;
 	int num_inst_ext_required = num_inst_ext_combined;
 	Com_Printf("Supported Vulkan instance extensions: \n");
 	for(int i = 0; i < qvk.num_extensions; i++) {
@@ -1205,11 +1469,37 @@ init_vulkan(void)
 
 	/* pick physical device (iterate over all but pick device 0 anyways) */
 	uint32_t num_devices = 0;
-	_VK(vkEnumeratePhysicalDevices(qvk.instance, &num_devices, NULL));
-	if(num_devices == 0)
+	result = vkEnumeratePhysicalDevices(qvk.instance, &num_devices, NULL);
+	if(result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: physical device count query failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
 		return false;
-	VkPhysicalDevice *devices = alloca(sizeof(VkPhysicalDevice) *num_devices);
-	_VK(vkEnumeratePhysicalDevices(qvk.instance, &num_devices, devices));
+	}
+	if(num_devices == 0) {
+		Com_SetLastError("Vulkan: no physical devices found");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return false;
+	}
+	if (!vkpt_array_allocation_size(num_devices, sizeof(VkPhysicalDevice), &array_size)) {
+		Com_SetLastError("Vulkan: physical device list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return false;
+	}
+	VkPhysicalDevice *devices = malloc(array_size);
+	if (!devices) {
+		Com_SetLastError("Vulkan: out of memory allocating physical device list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return false;
+	}
+	result = vkEnumeratePhysicalDevices(qvk.instance, &num_devices, devices);
+	if(result != VK_SUCCESS || num_devices == 0) {
+		Com_SetLastError(result == VK_SUCCESS ?
+			"Vulkan: physical device list read returned no devices" :
+			va("Vulkan: physical device list read failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(devices);
+		return false;
+	}
 
 #ifdef VKPT_DEVICE_GROUPS
 	uint32_t num_device_groups = 0;
@@ -1231,6 +1521,7 @@ init_vulkan(void)
 		{
 			Com_EPrintf("SLI: device group 0 has %d devices, which is more than maximum supported count (%d).\n",
 				device_group_info.physicalDeviceCount, VKPT_MAX_GPUS);
+			free(devices);
 			return false;
 		}
 
@@ -1275,16 +1566,14 @@ init_vulkan(void)
 		};
 		vkGetPhysicalDeviceProperties2(devices[i], &dev_properties2);
 
-		VkPhysicalDeviceFeatures dev_features;
-		vkGetPhysicalDeviceFeatures(devices[i], &dev_features);
-
 		Com_Printf("Physical device %d: %s\n", i, dev_properties2.properties.deviceName);
 
 		uint32_t num_ext;
-		vkEnumerateDeviceExtensionProperties(devices[i], NULL, &num_ext, NULL);
-
-		VkExtensionProperties *ext_properties = alloca(sizeof(VkExtensionProperties) * num_ext);
-		vkEnumerateDeviceExtensionProperties(devices[i], NULL, &num_ext, ext_properties);
+		VkExtensionProperties *ext_properties;
+		if (!get_vk_device_extension_list(devices[i], &num_ext, &ext_properties)) {
+			free(devices);
+			return false;
+		}
 
 		Com_Printf("Supported Vulkan device extensions:\n");
 		for(int j = 0; j < num_ext; j++) 
@@ -1308,6 +1597,7 @@ init_vulkan(void)
 				}
 			}
 		}
+		free(ext_properties);
 	}
 
 	int picked_device = -1;
@@ -1351,6 +1641,7 @@ init_vulkan(void)
 
 	if (picked_device < 0)
 	{
+		free(devices);
 		Com_Error(ERR_FATAL, "No ray tracing capable GPU found.");
 	}
 
@@ -1424,15 +1715,15 @@ init_vulkan(void)
 		}
 #endif
 	}
+	free(devices);
 
 	// Collect available "optional" extensions
 	bool available_optional_device_extensions[NUM_OPTIONAL_DEVICE_EXTENSIONS] = { false };
 	{
 		uint32_t num_ext;
-		vkEnumerateDeviceExtensionProperties(qvk.physical_device, NULL, &num_ext, NULL);
-
-		VkExtensionProperties *ext_properties = alloca(sizeof(VkExtensionProperties) * num_ext);
-		vkEnumerateDeviceExtensionProperties(qvk.physical_device, NULL, &num_ext, ext_properties);
+		VkExtensionProperties *ext_properties;
+		if (!get_vk_device_extension_list(qvk.physical_device, &num_ext, &ext_properties))
+			return false;
 
 		for (int test_ext = 0; test_ext < NUM_OPTIONAL_DEVICE_EXTENSIONS; test_ext++) {
 			for (uint32_t dev_ext = 0; dev_ext < num_ext; dev_ext++) {
@@ -1442,6 +1733,7 @@ init_vulkan(void)
 				}
 			}
 		}
+		free(ext_properties);
 	}
 
 	// Query device 16-bit float capabilities
@@ -1477,8 +1769,29 @@ init_vulkan(void)
 	/* queue family and create physical device */
 	uint32_t num_queue_families = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(qvk.physical_device, &num_queue_families, NULL);
-	VkQueueFamilyProperties *queue_families = alloca(sizeof(VkQueueFamilyProperties) * num_queue_families);
+	if (num_queue_families == 0) {
+		Com_SetLastError("Vulkan: physical device exposes no queue families");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return false;
+	}
+	if (!vkpt_array_allocation_size(num_queue_families, sizeof(VkQueueFamilyProperties), &array_size)) {
+		Com_SetLastError("Vulkan: queue family list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return false;
+	}
+	VkQueueFamilyProperties *queue_families = malloc(array_size);
+	if (!queue_families) {
+		Com_SetLastError("Vulkan: out of memory allocating queue family list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return false;
+	}
 	vkGetPhysicalDeviceQueueFamilyProperties(qvk.physical_device, &num_queue_families, queue_families);
+	if (num_queue_families == 0) {
+		Com_SetLastError("Vulkan: queue family list read returned no families");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		free(queue_families);
+		return false;
+	}
 
 	// Com_Printf("num queue families: %d\n", num_queue_families);
 
@@ -1489,7 +1802,13 @@ init_vulkan(void)
 		if(!queue_families[i].queueCount)
 			continue;
 		VkBool32 present_support = 0;
-		vkGetPhysicalDeviceSurfaceSupportKHR(qvk.physical_device, i, qvk.surface, &present_support);
+		result = vkGetPhysicalDeviceSurfaceSupportKHR(qvk.physical_device, i, qvk.surface, &present_support);
+		if (result != VK_SUCCESS) {
+			Com_SetLastError(va("Vulkan: queue family present-support query failed (%s)", qvk_result_to_string(result)));
+			Com_EPrintf("%s\n", Com_GetLastError());
+			free(queue_families);
+			return false;
+		}
 
 		const int supports_graphics = queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT;
 		const int supports_compute = queue_families[i].queueFlags & VK_QUEUE_COMPUTE_BIT;
@@ -1506,9 +1825,12 @@ init_vulkan(void)
 	}
 
 	if(qvk.queue_idx_graphics < 0 || qvk.queue_idx_transfer < 0) {
+		Com_SetLastError("Vulkan: suitable queue family unavailable");
+		free(queue_families);
 		Com_Error(ERR_FATAL, "Could not find a suitable Vulkan queue family!\n");
 		return false;
 	}
+	free(queue_families);
 	
 	float queue_priorities = 1.0f;
 	int num_create_queues = 0;
@@ -1771,16 +2093,20 @@ vkpt_load_shader_from_basedir(const char *basedir, const char *path, char **data
 		return false;
 	}
 
+	if ((size_t)len > SIZE_MAX - 1) {
+		fclose(fp);
+		return false;
+	}
+
 	buf = Z_TagMalloc((size_t)len + 1, TAG_FILESYSTEM);
 	read_len = fread(buf, 1, (size_t)len, fp);
-	fclose(fp);
 
-	if (read_len != (size_t)len) {
+	if (fclose(fp) != 0 || read_len != (size_t)len) {
 		Z_Free(buf);
 		return false;
 	}
 
-	buf[len] = 0;
+	buf[(size_t)len] = 0;
 	*data = (char *)buf;
 	*size = (size_t)len;
 	return true;
@@ -1824,7 +2150,7 @@ create_shader_module_from_file(const char *name, const char *enum_name, bool is_
 	}
 
 	char path[1024];
-	snprintf(path, sizeof path, "shader_vkpt/%s%s.spv", name ? name : (enum_name + 8), suffix);
+	Q_snprintf(path, sizeof(path), "shader_vkpt/%s%s.spv", name ? name : (enum_name + 8), suffix);
 	if(!name) {
 		int len = 0;
 		for(len = 0; path[len]; len++)
@@ -1903,9 +2229,13 @@ vkpt_destroy_shader_modules(void)
 static VkResult
 destroy_swapchain(void)
 {
-	for(int i = 0; i < qvk.num_swap_chain_images; i++) {
-		vkDestroyImageView  (qvk.device, qvk.swap_chain_image_views[i], NULL);
-		qvk.swap_chain_image_views[i] = VK_NULL_HANDLE;
+	if (qvk.swap_chain_image_views) {
+		for(int i = 0; i < qvk.num_swap_chain_images; i++) {
+			if (qvk.swap_chain_image_views[i] != VK_NULL_HANDLE) {
+				vkDestroyImageView(qvk.device, qvk.swap_chain_image_views[i], NULL);
+				qvk.swap_chain_image_views[i] = VK_NULL_HANDLE;
+			}
+		}
 	}
 	free(qvk.swap_chain_image_views);
 	qvk.swap_chain_image_views = NULL;
@@ -3020,8 +3350,8 @@ process_render_feedback(ref_feedback_t *feedback, const mleaf_t* viewleaf,
 		}
 		else
 			feedback->view_material_index = -1;
-		strcpy(feedback->view_material, view_material);
-		strcpy(feedback->view_material_override, view_material_override);
+		Q_strlcpy(feedback->view_material, view_material, sizeof(feedback->view_material));
+		Q_strlcpy(feedback->view_material_override, view_material_override, sizeof(feedback->view_material_override));
 
 		feedback->lookatcluster = readback.cluster;
 		feedback->num_light_polys = 0;
@@ -3931,12 +4261,19 @@ static void temporal_cvar_changed(cvar_t *self)
 static void
 recreate_swapchain(void)
 {
+	VkResult result;
+
 	vkDeviceWaitIdle(qvk.device);
 	vkpt_destroy_all(VKPT_INIT_SWAPCHAIN_RECREATE);
 	destroy_swapchain();
 	qvk.draw_width = r_config.width;
 	qvk.draw_height = r_config.height;
-	create_swapchain();
+	result = create_swapchain();
+	if (result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: swapchain recreation failed (%s)", qvk_result_to_string(result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return;
+	}
 	vkpt_initialize_all(VKPT_INIT_SWAPCHAIN_RECREATE);
 
 	qvk.wait_for_idle_frames = MAX_FRAMES_IN_FLIGHT * 2;
@@ -4079,7 +4416,12 @@ R_BeginFrame(void)
 	if (!qvk.swap_chain || mode_changed)
 	{
 		VkSurfaceCapabilitiesKHR surf_capabilities;
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(qvk.physical_device, qvk.surface, &surf_capabilities);
+		VkResult surface_result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(qvk.physical_device, qvk.surface, &surf_capabilities);
+		if (surface_result != VK_SUCCESS) {
+			Com_SetLastError(va("Vulkan: surface capability query failed (%s)", qvk_result_to_string(surface_result)));
+			Com_EPrintf("%s\n", Com_GetLastError());
+			return;
+		}
 
 		// see if we're un-minimized again
 		if (surf_capabilities.currentExtent.width != 0 && surf_capabilities.currentExtent.height != 0)
@@ -4559,7 +4901,16 @@ R_Init(bool total)
 	}
 
 	_VK(create_command_pool_and_fences());
-	_VK(create_swapchain());
+
+	VkResult swapchain_result = create_swapchain();
+	if (swapchain_result != VK_SUCCESS) {
+		Com_EPrintf("Vulkan: swapchain initialization failed: %s\n", Com_GetLastError());
+		destroy_vulkan();
+		if (total && vid && vid->shutdown) {
+			vid->shutdown();
+		}
+		return false;
+	}
 
 	if (vkpt_load_shader_modules() != VK_SUCCESS) {
 		Com_EPrintf("Vulkan: failed to load shader modules. Ensure shader_vkpt/*.spv exists.\n");
@@ -5273,7 +5624,7 @@ void debug_output(const char* format, ...)
 
 	va_list args;
 	va_start(args, format);
-	vsnprintf(buffer, sizeof(buffer), format, args);
+	Q_vsnprintf(buffer, sizeof(buffer), format, args);
 	va_end(args);
 
 #if _WIN32

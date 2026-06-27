@@ -23,7 +23,7 @@ Run the manual ten-minute high-bot soak through the scenario harness with enough
 python tools\bot_scenarios\run_bot_scenarios.py --scenario high_bot_soak_degradation --timeout 720 --base-port 28000 --format text --json-out .tmp\bot_scenarios\high_bot_soak_report.json
 ```
 
-The soak itself is configured for `sv_bot_frame_command_smoke 18` with `sv_bot_frame_command_smoke_soak_ms=600000`. The `720` second timeout leaves room for startup, staged bot joins, shutdown, and slower local machines.
+The soak itself is configured for `bot_frame_command_smoke 18` with `bot_frame_command_smoke_soak_ms=600000`. The `720` second timeout leaves room for startup, staged bot joins, shutdown, and slower local machines.
 
 ## Common Commands
 

@@ -1756,7 +1756,7 @@ static void list_recordings(void)
         if (mvd->demorecording) {
             Com_FormatSize(buffer, sizeof(buffer), FS_Tell(mvd->demorecording));
         } else {
-            strcpy(buffer, "-");
+            Q_strlcpy(buffer, "-", sizeof(buffer));
         }
         Com_Printf("%2d %-12.12s %-8.8s %-4s %s\n",
                    mvd->id, mvd->name, mvd->mapname,
@@ -2351,7 +2351,7 @@ static void MVD_Seek_f(void)
                     continue;
 
                 Q_SetBit(mvd->dcs, i);
-                strcpy(to, from);
+                Q_strlcpy(to, from, sizeof(mvd->configstrings[i]));
             }
 
             // set player names

@@ -3114,7 +3114,7 @@ static TOUCH(tesla_touch)(gentity_t *ent, gentity_t *other, const trace_t &tr,
     const char variant = (frandom() > 0.5f) ? '1' : '2';
 
     std::array<char, 32> path{};
-    std::snprintf(path.data(), path.size(), "weapons/hgrenb%ca.wav", variant);
+    G_FmtTo(path, "weapons/hgrenb{}a.wav", variant);
 
     gi.sound(ent, CHAN_VOICE, gi.soundIndex(path.data()), 1.0f, ATTN_NORM, 0);
   }

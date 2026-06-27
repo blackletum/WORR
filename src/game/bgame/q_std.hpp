@@ -243,4 +243,9 @@ inline char* COM_Parse(const char** data_p, char* buffer = nullptr, size_t buffe
 size_t Q_strlcpy(char* dst, const char* src, size_t siz);
 size_t Q_strlcat(char* dst, const char* src, size_t siz);
 
+extern "C" {
+size_t Q_vsnprintf(char* dest, size_t size, const char* fmt, va_list argptr);
+size_t Q_vscnprintf(char* dest, size_t size, const char* fmt, va_list argptr);
+}
+
 // EOF

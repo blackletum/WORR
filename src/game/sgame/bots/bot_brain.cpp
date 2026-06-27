@@ -11102,6 +11102,29 @@ Vector3 Bot_CommandAnglesToPoint(const gentity_t *bot, const Vector3 &target) {
 	return angles;
 }
 
+float Bot_CommandNormalizeSignedAngle(float angle) {
+	angle = anglemod(angle);
+	if (angle > 180.0f) {
+		angle -= 360.0f;
+	}
+	return angle;
+}
+
+Vector3 Bot_CommandNormalizeDesiredViewAngles(Vector3 angles) {
+	angles[PITCH] = std::clamp(Bot_CommandNormalizeSignedAngle(angles[PITCH]), -89.0f, 89.0f);
+	angles[YAW] = anglemod(angles[YAW]);
+	angles[ROLL] = 0.0f;
+	return angles;
+}
+
+Vector3 Bot_CommandAnglesToUserCommand(const gentity_t *bot, Vector3 desiredAngles) {
+	desiredAngles = Bot_CommandNormalizeDesiredViewAngles(desiredAngles);
+	if (bot == nullptr || bot->client == nullptr) {
+		return desiredAngles;
+	}
+	return desiredAngles - bot->client->ps.pmove.deltaAngles;
+}
+
 gentity_t *Bot_CommandKnownVisibleEnemy(gentity_t *bot) {
 	const int clientIndex = Bot_PerceptionClientIndex(bot);
 	if (clientIndex < 0 || clientIndex >= static_cast<int>(botBrainBlackboardSlots.size())) {
@@ -13642,7 +13665,9 @@ bool BotBrain_BuildFrameCommand( gentity_t * bot, usercmd_t * cmd ) {
 		route);
 
 	cmd->msec = Bot_CommandMsec();
-	cmd->angles = Bot_CommandAnglesForDecision(bot, route, commandDecision);
+	cmd->angles = Bot_CommandAnglesToUserCommand(
+		bot,
+		Bot_CommandAnglesForDecision(bot, route, commandDecision));
 	cmd->forwardMove = 180.0f;
 	cmd->serverFrame = gi.ServerFrame();
 	Bot_CommandApplyMovementState(bot, route, cmd);

@@ -53,13 +53,19 @@ void Com_BootstrapSignalReady(void)
     char token_utf8[512];
     int utf8_len = WideCharToMultiByte(CP_UTF8, 0, token, -1, token_utf8, sizeof(token_utf8), NULL, NULL);
     if (utf8_len <= 1 || utf8_len >= (int)sizeof(token_utf8)) {
-        CloseHandle(file);
+        bool close_ok = CloseHandle(file);
+        (void)close_ok;
+        DeleteFileW(path);
         return;
     }
 
+    DWORD bytes_to_write = (DWORD)(utf8_len - 1);
     DWORD written = 0;
-    WriteFile(file, token_utf8, (DWORD)(utf8_len - 1), &written, NULL);
-    CloseHandle(file);
+    bool write_ok = WriteFile(file, token_utf8, bytes_to_write, &written, NULL) && written == bytes_to_write;
+    bool close_ok = CloseHandle(file);
+    if (!write_ok || !close_ok) {
+        DeleteFileW(path);
+    }
 #else
     const char *path = getenv("WORR_BOOTSTRAP_READY_FILE");
     const char *token = getenv("WORR_BOOTSTRAP_READY_TOKEN");
@@ -72,8 +78,12 @@ void Com_BootstrapSignalReady(void)
         return;
     }
 
-    fwrite(token, 1, strlen(token), file);
-    fclose(file);
+    size_t token_len = strlen(token);
+    bool write_ok = fwrite(token, 1, token_len, file) == token_len;
+    bool close_ok = fclose(file) == 0;
+    if (!write_ok || !close_ok) {
+        remove(path);
+    }
 #endif
 
 }

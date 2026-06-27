@@ -202,10 +202,16 @@ static int copy_file(const char *src, const char *dst, const char *name)
     if (!ofp)
         goto fail1;
 
-    do {
+    for (;;) {
         len = fread(buf, 1, sizeof(buf), ifp);
+        if (len == 0)
+            break;
         res = fwrite(buf, 1, len, ofp);
-    } while (len == sizeof(buf) && res == len);
+        if (res != len)
+            goto fail2;
+        if (len < sizeof(buf))
+            break;
+    }
 
     if (ferror(ifp))
         goto fail2;
@@ -215,9 +221,11 @@ static int copy_file(const char *src, const char *dst, const char *name)
 
     ret = 0;
 fail2:
-    ret |= fclose(ofp);
+    if (fclose(ofp))
+        ret = -1;
 fail1:
-    ret |= fclose(ifp);
+    if (fclose(ifp))
+        ret = -1;
 fail0:
     return ret;
 }
@@ -400,7 +408,7 @@ char *SV_GetSaveInfo(const char *dir)
             len = strftime(date, sizeof(date), "%b %d  %Y", tm);
     }
     if (!len)
-        strcpy(date, "???");
+        Q_strlcpy(date, "???", sizeof(date));
 
     return Z_CopyString(va("%s %s", date, name));
 }

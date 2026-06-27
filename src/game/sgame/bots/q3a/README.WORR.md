@@ -41,7 +41,7 @@ Current state:
   bridge seeds WORR/Q2-oriented movement LibVars before imported Q3A AAS setup
   and smoke-tests imported floor-drop, jump-velocity, and client-movement
   prediction helpers. Imported Q3A `AAS_InitClustering` now replaces the
-  temporary clustering no-op, and `sg_bot_debug_aas 2` reports the sampled
+  temporary clustering no-op, and `bot_debug_aas 2` reports the sampled
   cluster, cluster area count, and reachability-area count through
   `q3a_cluster`. Imported Q3A alternative routing now replaces the temporary
   `AAS_InitAlternativeRouting` / `AAS_ShutdownAlternativeRouting` lifecycle
@@ -51,7 +51,7 @@ Current state:
   default loaded-AAS smoke keeps `aasoptimize=0` because the Q3A optimization
   path mutates AAS geometry/index arrays for save/forcewrite flows. Imported Q3A
   `botimport.Print` now forwards warnings/errors/fatals into WORR logging and
-  exposes message-level chatter when `sg_bot_debug_aas >= 3`. Imported Q3A
+  exposes message-level chatter when `bot_debug_aas >= 3`. Imported Q3A
   `botimport.BotClientCommand` now crosses the adapter into a WORR runtime
   safety gate that validates bot clients and rejects command execution until a
   dedicated bot command dispatcher exists. Q3A `botimport.GetMemory`,
@@ -59,17 +59,17 @@ Current state:
   grouped hunk release after AAS shutdown. Q3A `botimport.FS_FOpenFile`,
   `FS_Read`, `FS_Seek`, and `FS_FCloseFile` now use a tracked read-only
   file-handle table that loads through WORR's filesystem extension and reports
-  callback/read/fallback counters through `sg_bot_debug_aas 2`; optional `.rcd`
+  callback/read/fallback counters through `bot_debug_aas 2`; optional `.rcd`
   route-cache read probes are counted separately from filesystem open failures.
   The bridge also reports BotLib lifecycle counters for init/load/unload/shutdown
   and separates persistent LibVar zone bytes from transient AAS unload residue.
   Imported Q3A
   debug line/cross/arrow helpers now call WORR debug-line create/show/delete
-  callbacks gated by `sg_bot_debug_aas >= 3`,
-  `sg_bot_debug_route`, or `sg_bot_debug_goal`. `sg_bot_debug_route` /
-  `sg_bot_debug_goal` now draw native cached `bot_nav` route/goal state once a
+  callbacks gated by `bot_debug_aas >= 3`,
+  `bot_debug_route`, or `bot_debug_goal`. `bot_debug_route` /
+  `bot_debug_goal` now draw native cached `bot_nav` route/goal state once a
   bot route exists, including current-area labels, next-reachability labels, and
-  a bounded sampled route polyline. `sg_bot_debug_client` filters the native
+  a bounded sampled route polyline. `bot_debug_client` filters the native
   cached route/goal overlay by zero-based client slot, with `-1` retaining the
   all-bots mode. Active-pickup route goals, the first item reservation policy,
   route-point look-ahead command steering, velocity-aware command steering,
@@ -83,7 +83,7 @@ Current state:
   existing callers. The imported Q3A route-overlay smoke is retained as an
   early fallback. Q3A debug polygon create/delete callbacks route through
   WORR debug-line outline rendering, and
-  imported `AAS_ShowArea` / `AAS_ShowAreaPolygons` now have a `sg_bot_debug_aas
+  imported `AAS_ShowArea` / `AAS_ShowAreaPolygons` now have a `bot_debug_aas
   3` smoke path.
 - The full Quake III Arena BotLib runtime has not been copied into this
   directory yet.

@@ -363,7 +363,7 @@ load_blue_noise(void)
 		int w, h, n;
 		char buf[1024];
 
-		snprintf(buf, sizeof buf, "blue_noise/%d_%d/HDR_RGBA_%04d.png", res, res, i);
+		Q_snprintf(buf, sizeof(buf), "blue_noise/%d_%d/HDR_RGBA_%04d.png", res, res, i);
 
 		byte* filedata = 0;
 		uint16_t *data = 0;

@@ -3,6 +3,8 @@
 
 #include "cg_wheel.h"
 
+#include <climits>
+
 constexpr int32_t CONCHAR_WIDTH = 8;
 constexpr int32_t CONCHAR_HEIGHT = 8;
 
@@ -15,16 +17,10 @@ static int CG_Snprintf(char *dest, size_t size, const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    int ret = std::vsnprintf(dest, size, fmt, args);
+    size_t ret = Q_vsnprintf(dest, size, fmt, args);
     va_end(args);
 
-    if (ret < 0) {
-        if (size)
-            dest[0] = '\0';
-        return 0;
-    }
-
-    return ret;
+    return static_cast<int>(min(ret, static_cast<size_t>(INT_MAX)));
 }
 
 static int CG_Scnprintf(char *dest, size_t size, const char *fmt, ...)
@@ -34,15 +30,10 @@ static int CG_Scnprintf(char *dest, size_t size, const char *fmt, ...)
 
     va_list args;
     va_start(args, fmt);
-    int ret = std::vsnprintf(dest, size, fmt, args);
+    size_t ret = Q_vscnprintf(dest, size, fmt, args);
     va_end(args);
 
-    if (ret < 0) {
-        dest[0] = '\0';
-        return 0;
-    }
-
-    return min(ret, static_cast<int>(size - 1));
+    return static_cast<int>(ret);
 }
 
 static inline void Vector2Clear(vec2_t &v)

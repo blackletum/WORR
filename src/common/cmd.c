@@ -962,6 +962,7 @@ char *Cmd_ArgsFrom(int from)
 char *Cmd_ArgsRange(int from, int to)
 {
     int i;
+    size_t len;
 
     if (from < 0 || from >= cmd_argc) {
         return cmd_null_string;
@@ -971,12 +972,23 @@ char *Cmd_ArgsRange(int from, int to)
         to = cmd_argc - 1;
     }
 
-    cmd_args[0] = 0;
-    for (i = from; i < to; i++) {
-        strcat(cmd_args, cmd_argv[i]);
-        strcat(cmd_args, " ");
+    if (to < from) {
+        return cmd_null_string;
     }
-    strcat(cmd_args, cmd_argv[i]);
+
+    cmd_args[0] = 0;
+    for (i = from; i <= to; i++) {
+        len = Q_strlcat(cmd_args, cmd_argv[i], sizeof(cmd_args));
+        if (len >= sizeof(cmd_args)) {
+            break;
+        }
+        if (i < to) {
+            len = Q_strlcat(cmd_args, " ", sizeof(cmd_args));
+            if (len >= sizeof(cmd_args)) {
+                break;
+            }
+        }
+    }
 
     return cmd_args;
 }
@@ -1239,13 +1251,18 @@ static char *expand_normal(char *buf, int remaining)
         return var->string;
 
     // then keywords
-    if (!strcmp(buf, "qt"))
-        return strcpy(buf, "\"");
+    if (!strcmp(buf, "qt")) {
+        Q_strlcpy(buf, "\"", remaining);
+        return buf;
+    }
 
-    if (!strcmp(buf, "sc"))
-        return strcpy(buf, ";");
+    if (!strcmp(buf, "sc")) {
+        Q_strlcpy(buf, ";", remaining);
+        return buf;
+    }
 
-    return strcpy(buf, "");
+    buf[0] = 0;
+    return buf;
 }
 
 /*
@@ -1721,9 +1738,12 @@ static void Cmd_Exec_f(void)
     ret = Cmd_ExecuteFile(buffer, 0);
 
     // try with .cfg extension
-    if (ret == Q_ERR(ENOENT) && COM_CompareExtension(buffer, ".cfg") && strlen(buffer) < sizeof(buffer) - 4) {
-        strcat(buffer, ".cfg");
-        ret = Cmd_ExecuteFile(buffer, 0);
+    if (ret == Q_ERR(ENOENT) && COM_CompareExtension(buffer, ".cfg")) {
+        if (Q_strlcat(buffer, ".cfg", sizeof(buffer)) >= sizeof(buffer)) {
+            ret = Q_ERR(ENAMETOOLONG);
+        } else {
+            ret = Cmd_ExecuteFile(buffer, 0);
+        }
     }
 
 fail:

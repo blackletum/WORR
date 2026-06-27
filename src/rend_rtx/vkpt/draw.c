@@ -26,6 +26,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <math.h>
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "vkpt.h"
 #include "shader/global_textures.h"
@@ -1063,7 +1065,22 @@ vkpt_draw_create_pipelines(void)
 		ATTACH_LABEL_VARIABLE(pipeline_final_blit[i], PIPELINE);
 	}
 
-	framebuffer_stretch_pic = malloc(qvk.num_swap_chain_images * sizeof(*framebuffer_stretch_pic));
+	size_t framebuffer_size;
+	if (!vkpt_array_allocation_size(qvk.num_swap_chain_images, sizeof(*framebuffer_stretch_pic), &framebuffer_size)) {
+		Com_SetLastError("Vulkan: stretch pic framebuffer list allocation overflow");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+
+	framebuffer_stretch_pic = malloc(framebuffer_size);
+	if (framebuffer_size != 0 && !framebuffer_stretch_pic) {
+		Com_SetLastError("Vulkan: out of memory allocating stretch pic framebuffer list");
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return VK_ERROR_OUT_OF_HOST_MEMORY;
+	}
+	if (framebuffer_size != 0)
+		memset(framebuffer_stretch_pic, 0, framebuffer_size);
+
 	for(int i = 0; i < qvk.num_swap_chain_images; i++) {
 		VkImageView attachments[] = {
 			qvk.swap_chain_image_views[i]
@@ -1079,7 +1096,17 @@ vkpt_draw_create_pipelines(void)
 			.layers          = 1,
 		};
 
-		_VK(vkCreateFramebuffer(qvk.device, &fb_create_info, NULL, framebuffer_stretch_pic + i));
+		VkResult result = vkCreateFramebuffer(qvk.device, &fb_create_info, NULL, framebuffer_stretch_pic + i);
+		if (result != VK_SUCCESS) {
+			Com_SetLastError(va("Vulkan: stretch pic framebuffer creation failed (%s)", qvk_result_to_string(result)));
+			Com_EPrintf("%s\n", Com_GetLastError());
+			for (int j = 0; j < i; j++) {
+				vkDestroyFramebuffer(qvk.device, framebuffer_stretch_pic[j], NULL);
+			}
+			free(framebuffer_stretch_pic);
+			framebuffer_stretch_pic = NULL;
+			return result;
+		}
 		ATTACH_LABEL_VARIABLE(framebuffer_stretch_pic[i], FRAMEBUFFER);
 	}
 

@@ -2829,9 +2829,7 @@ Only used for the world.
 void SP_worldspawn(gentity_t *ent) {
   std::string name = fmt::format("{} v{}", worr::version::kGameTitle,
                                  worr::version::kGameVersion);
-  std::strncpy(level.gamemod_name.data(), name.c_str(),
-               level.gamemod_name.size() - 1);
-  level.gamemod_name.back() = '\0'; // Ensure null-termination
+  Q_strlcpy(level.gamemod_name.data(), name.c_str(), level.gamemod_name.size());
 
   ent->moveType = MoveType::Push;
   ent->solid = SOLID_BSP;
