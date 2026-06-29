@@ -360,6 +360,14 @@ class Budget:
     status: dict[str, dict[str, Any]]
 
 
+@dataclass(frozen=True)
+class VarianceBudget:
+    path: pathlib.Path
+    metrics: dict[str, dict[str, Any]]
+    min_runs: int
+    require_like_for_like: bool
+
+
 def parse_number(value: str) -> int | float:
     if "." in value:
         return float(value)
@@ -378,8 +386,8 @@ def marker_payload(line: str, marker: str) -> str | None:
 
 
 def parse_log(path: pathlib.Path) -> ParsedLog:
-    status: dict[str, int | float] | None = None
-    source_status: dict[str, int | float] | None = None
+    status: dict[str, int | float] = {}
+    source_status: dict[str, int | float] = {}
     soak_begin: dict[str, int | float] | None = None
     soak_complete: dict[str, int | float] | None = None
     progress: list[dict[str, int | float]] = []
@@ -408,18 +416,18 @@ def parse_log(path: pathlib.Path) -> ParsedLog:
 
         payload = marker_payload(line, STATUS_MARKER)
         if payload is not None:
-            status = parse_key_values(payload)
+            status.update(parse_key_values(payload))
             status_lines += 1
             continue
 
         payload = marker_payload(line, SOURCE_STATUS_MARKER)
         if payload is not None:
-            source_status = parse_key_values(payload)
+            source_status.update(parse_key_values(payload))
 
-    if status is None:
+    if not status:
         raise SystemExit(f"No {STATUS_MARKER} line found in {path}")
 
-    if source_status is not None:
+    if source_status:
         status = {**status, **source_status}
 
     return ParsedLog(
@@ -1030,6 +1038,43 @@ def load_budget(path: pathlib.Path) -> Budget:
     return Budget(path=path, metrics=metrics, status=status)
 
 
+def load_variance_budget(path: pathlib.Path) -> VarianceBudget:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise SystemExit(f"Unable to read variance budget {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid variance budget JSON {path}: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise SystemExit(f"Invalid variance budget {path}: expected JSON object")
+
+    min_runs = payload.get("min_runs", 2)
+    if not isinstance(min_runs, int) or min_runs < 2:
+        raise SystemExit(f"Invalid variance budget {path}: min_runs must be an integer >= 2")
+
+    require_like_for_like = payload.get("require_like_for_like", True)
+    if not isinstance(require_like_for_like, bool):
+        raise SystemExit(
+            f"Invalid variance budget {path}: require_like_for_like must be boolean"
+        )
+
+    checks = payload.get("checks")
+    if not isinstance(checks, dict):
+        raise SystemExit(f"Invalid variance budget {path}: expected checks object")
+
+    metrics = load_variance_budget_namespace(path, checks, "metrics")
+    if not metrics:
+        raise SystemExit(f"Invalid variance budget {path}: expected checks.metrics thresholds")
+
+    return VarianceBudget(
+        path=path,
+        metrics=metrics,
+        min_runs=min_runs,
+        require_like_for_like=require_like_for_like,
+    )
+
+
 def load_scenario_report(path: pathlib.Path) -> dict[str, dict[str, Any]]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -1117,6 +1162,82 @@ def load_budget_namespace(
         if "description" in threshold and not isinstance(threshold["description"], str):
             raise SystemExit(
                 f"Invalid budget {path}: checks.{namespace}.{metric}.description must be a string"
+            )
+
+        result[metric] = dict(threshold)
+
+    return result
+
+
+def load_variance_budget_namespace(
+    path: pathlib.Path,
+    checks: dict[str, Any],
+    namespace: str,
+) -> dict[str, dict[str, Any]]:
+    payload = checks.get(namespace, {})
+    if payload is None:
+        return {}
+    if not isinstance(payload, dict):
+        raise SystemExit(f"Invalid variance budget {path}: checks.{namespace} must be an object")
+
+    result: dict[str, dict[str, Any]] = {}
+    for metric, threshold in payload.items():
+        if not isinstance(metric, str) or not metric:
+            raise SystemExit(
+                f"Invalid variance budget {path}: checks.{namespace} has a non-string metric name"
+            )
+        if not isinstance(threshold, dict):
+            raise SystemExit(
+                f"Invalid variance budget {path}: checks.{namespace}.{metric} must be an object"
+            )
+
+        allowed = {
+            "max_delta",
+            "max_relative_range",
+            "max_relative_range_pct",
+            "required",
+            "description",
+        }
+        unknown = sorted(set(threshold) - allowed)
+        if unknown:
+            raise SystemExit(
+                f"Invalid variance budget {path}: checks.{namespace}.{metric} has unknown keys: "
+                + ", ".join(unknown)
+            )
+
+        if not any(key in threshold for key in (
+            "max_delta",
+            "max_relative_range",
+            "max_relative_range_pct",
+        )):
+            raise SystemExit(
+                f"Invalid variance budget {path}: checks.{namespace}.{metric} must define "
+                "max_delta, max_relative_range, or max_relative_range_pct"
+            )
+
+        for key in ("max_delta", "max_relative_range", "max_relative_range_pct"):
+            if key in threshold and not isinstance(threshold[key], (int, float)):
+                raise SystemExit(
+                    f"Invalid variance budget {path}: checks.{namespace}.{metric}.{key} "
+                    "must be numeric"
+                )
+            if key in threshold and threshold[key] < 0:
+                raise SystemExit(
+                    f"Invalid variance budget {path}: checks.{namespace}.{metric}.{key} "
+                    "must be non-negative"
+                )
+
+        required = threshold.get("required", True)
+        if not isinstance(required, bool):
+            raise SystemExit(
+                f"Invalid variance budget {path}: checks.{namespace}.{metric}.required "
+                "must be boolean"
+            )
+
+        if "description" in threshold and not isinstance(threshold["description"], str):
+            raise SystemExit(
+                f"Invalid variance budget {path}: checks.{namespace}.{metric}.description "
+                "must be a string"
             )
 
         result[metric] = dict(threshold)
@@ -1249,6 +1370,197 @@ def attach_budget_result(report: dict[str, Any], budget_result: dict[str, Any]) 
 
 def is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def evaluate_variance_budget(
+    reports: list[dict[str, Any]],
+    comparison: dict[str, Any],
+    budget: VarianceBudget,
+) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+    failures: list[str] = []
+    warnings: list[str] = []
+    guard_failures: list[str] = []
+
+    if len(reports) < budget.min_runs:
+        failures.append(
+            f"variance budget requires at least {budget.min_runs} runs; got {len(reports)}"
+        )
+
+    if budget.require_like_for_like:
+        for guard in comparison.get("guards", []):
+            message = f"comparison guard {guard.get('code')}: {guard.get('message')}"
+            guard_failures.append(message)
+            failures.append(message)
+
+    for metric, threshold in budget.metrics.items():
+        result = evaluate_variance_budget_check(
+            reports,
+            metric,
+            threshold,
+            budget.min_runs,
+        )
+        checks.append(result)
+        if result["result"] == "fail":
+            failures.append(result["message"])
+        elif result["result"] == "missing_optional":
+            warnings.append(result["message"])
+
+    required_checks = [check for check in checks if check.get("required", True)]
+    optional_checks = [check for check in checks if not check.get("required", True)]
+    failed_checks = [check for check in checks if check.get("result") == "fail"]
+    passed_checks = [check for check in checks if check.get("result") == "pass"]
+    missing_optional_checks = [
+        check for check in checks if check.get("result") == "missing_optional"
+    ]
+    required_failed = [
+        check for check in required_checks if check.get("result") == "fail"
+    ]
+    variance_pass = not failures
+
+    return {
+        "path": str(budget.path),
+        "pass": variance_pass,
+        "pass_int": 1 if variance_pass else 0,
+        "status": "pass" if variance_pass else "fail",
+        "run_count": len(reports),
+        "min_runs": budget.min_runs,
+        "require_like_for_like": budget.require_like_for_like,
+        "failures": failures,
+        "warnings": warnings,
+        "guard_failures": guard_failures,
+        "checks": checks,
+        "check_count": len(checks),
+        "passed": len(passed_checks),
+        "failed": len(failed_checks),
+        "warning_count": len(warnings),
+        "required": len(required_checks),
+        "optional": len(optional_checks),
+        "required_passed": len(required_checks) - len(required_failed),
+        "required_failed": len(required_failed),
+        "optional_missing": len(missing_optional_checks),
+    }
+
+
+def evaluate_variance_budget_check(
+    reports: list[dict[str, Any]],
+    metric: str,
+    threshold: dict[str, Any],
+    min_runs: int,
+) -> dict[str, Any]:
+    required = threshold.get("required", True)
+    max_delta = threshold.get("max_delta")
+    max_relative_range = threshold.get("max_relative_range")
+    max_relative_range_pct = threshold.get("max_relative_range_pct")
+    label = f"metrics.{metric}"
+
+    values: list[dict[str, Any]] = []
+    missing_runs: list[dict[str, Any]] = []
+    for index, report in enumerate(reports):
+        value = report.get(metric)
+        if is_number(value):
+            values.append({
+                "run": index + 1,
+                "file": report.get("file"),
+                "value": float(value),
+            })
+        else:
+            missing_runs.append({
+                "run": index + 1,
+                "file": report.get("file"),
+                "value": value,
+            })
+
+    numeric_values = [float(item["value"]) for item in values]
+    value_min = min(numeric_values) if numeric_values else None
+    value_max = max(numeric_values) if numeric_values else None
+    delta = (value_max - value_min) if value_min is not None and value_max is not None else None
+    mean_abs = (
+        sum(abs(value) for value in numeric_values) / len(numeric_values)
+        if numeric_values else None
+    )
+    if delta == 0:
+        relative_range = 0.0
+    elif delta is not None and mean_abs and mean_abs > 0:
+        relative_range = delta / mean_abs
+    else:
+        relative_range = None
+    relative_range_pct = (
+        relative_range * 100.0 if relative_range is not None else None
+    )
+
+    result: dict[str, Any] = {
+        "namespace": "metrics",
+        "metric": metric,
+        "required": required,
+        "max_delta": max_delta,
+        "max_relative_range": max_relative_range,
+        "max_relative_range_pct": max_relative_range_pct,
+        "values": values,
+        "missing_runs": missing_runs,
+        "value_count": len(values),
+        "missing_count": len(missing_runs),
+        "min": round_metric(value_min),
+        "max": round_metric(value_max),
+        "delta": round_metric(delta),
+        "relative_range": round_metric(relative_range, 6),
+        "relative_range_pct": round_metric(relative_range_pct),
+        "result": "pass",
+        "message": "",
+    }
+
+    if missing_runs:
+        state = "fail" if required else "missing_optional"
+        message = (
+            f"{label} missing in {len(missing_runs)} of {len(reports)} runs"
+        )
+        if not required:
+            message += " (optional)"
+        result.update({"result": state, "message": message})
+        return result
+
+    if len(values) < min_runs:
+        state = "fail" if required else "missing_optional"
+        message = (
+            f"{label} has {len(values)} numeric runs; expected at least {min_runs}"
+        )
+        if not required:
+            message += " (optional)"
+        result.update({"result": state, "message": message})
+        return result
+
+    failures: list[str] = []
+    if isinstance(max_delta, (int, float)) and delta is not None and delta > max_delta:
+        failures.append(f"delta={round_metric(delta)} is above max_delta {max_delta}")
+    if isinstance(max_relative_range, (int, float)):
+        if relative_range is None:
+            failures.append("relative_range is undefined")
+        elif relative_range > max_relative_range:
+            failures.append(
+                f"relative_range={round_metric(relative_range, 6)} "
+                f"is above max_relative_range {max_relative_range}"
+            )
+    if isinstance(max_relative_range_pct, (int, float)):
+        if relative_range_pct is None:
+            failures.append("relative_range_pct is undefined")
+        elif relative_range_pct > max_relative_range_pct:
+            failures.append(
+                f"relative_range_pct={round_metric(relative_range_pct)} "
+                f"is above max_relative_range_pct {max_relative_range_pct}"
+            )
+
+    if failures:
+        result.update({
+            "result": "fail",
+            "message": f"{label} variance failed: " + "; ".join(failures),
+        })
+    else:
+        result["message"] = (
+            f"{label} variance delta={format_value(round_metric(delta))} "
+            f"relative_range_pct={format_value(round_metric(relative_range_pct))} "
+            "within budget"
+        )
+    return result
 
 
 def format_value(value: Any) -> str:
@@ -1459,6 +1771,22 @@ def print_comparison_text(comparison: dict[str, Any]) -> None:
                 f"file={run.get('file')}"
             )
 
+    variance_budget = comparison.get("variance_budget")
+    if isinstance(variance_budget, dict):
+        state = "pass" if variance_budget.get("pass") else "fail"
+        print(
+            "  variance_budget: "
+            f"state={state} "
+            f"checks={variance_budget.get('check_count')} "
+            f"failures={len(variance_budget.get('failures', []))} "
+            f"warnings={len(variance_budget.get('warnings', []))} "
+            f"path={variance_budget.get('path')}"
+        )
+        for failure in variance_budget.get("failures", []):
+            print(f"    failure: {failure}")
+        for warning in variance_budget.get("warnings", []):
+            print(f"    warning: {warning}")
+
     for metric in comparison.get("metrics", []):
         best_run = metric.get("best_run")
         worst_run = metric.get("worst_run")
@@ -1618,6 +1946,48 @@ def markdown_report(reports: list[dict[str, Any]], comparison: dict[str, Any]) -
                     run.get("file"),
                 ]
                 for run in budget.get("runs", [])
+            ],
+        ))
+
+    variance_budget = comparison.get("variance_budget")
+    if isinstance(variance_budget, dict):
+        lines.extend(["", "## Variance Budget", ""])
+        lines.append(
+            f"Status: `{'pass' if variance_budget.get('pass') else 'fail'}`; "
+            f"checks: `{variance_budget.get('check_count')}`; "
+            f"failures: `{len(variance_budget.get('failures', []))}`; "
+            f"warnings: `{len(variance_budget.get('warnings', []))}`."
+        )
+        lines.append("")
+        lines.extend(markdown_table(
+            [
+                "Metric",
+                "Result",
+                "Values",
+                "Delta",
+                "Relative Range %",
+                "Limits",
+                "Message",
+            ],
+            [
+                [
+                    check.get("metric"),
+                    check.get("result"),
+                    check.get("value_count"),
+                    check.get("delta"),
+                    check.get("relative_range_pct"),
+                    ", ".join(
+                        f"{key}={format_value(check.get(key))}"
+                        for key in (
+                            "max_delta",
+                            "max_relative_range",
+                            "max_relative_range_pct",
+                        )
+                        if check.get(key) is not None
+                    ),
+                    check.get("message"),
+                ]
+                for check in variance_budget.get("checks", [])
             ],
         ))
 
@@ -1929,6 +2299,13 @@ def main(argv: list[str]) -> int:
         help="Optional JSON budget file with checks.metrics and checks.status thresholds.",
     )
     parser.add_argument(
+        "--variance-budget",
+        help=(
+            "Optional JSON comparison budget with checks.metrics variance thresholds "
+            "across two or more like-for-like logs."
+        ),
+    )
+    parser.add_argument(
         "--markdown-out",
         help="Optional path for a Markdown comparison report.",
     )
@@ -1952,12 +2329,19 @@ def main(argv: list[str]) -> int:
             attach_budget_result(report, evaluate_budget(report, parsed.status, budget))
 
     comparison = build_comparison(reports)
+    if args.variance_budget:
+        variance_budget = load_variance_budget(pathlib.Path(args.variance_budget))
+        comparison["variance_budget"] = evaluate_variance_budget(
+            reports,
+            comparison,
+            variance_budget,
+        )
     if args.markdown_out:
         write_markdown_report(pathlib.Path(args.markdown_out), reports, comparison)
 
     if args.format == "json":
         output: Any = reports
-        if len(reports) > 1:
+        if len(reports) > 1 or "variance_budget" in comparison:
             output = {
                 "runs": reports,
                 "comparison": comparison,
@@ -1967,10 +2351,13 @@ def main(argv: list[str]) -> int:
         print_csv(reports)
     else:
         print_text(reports)
-        if len(reports) > 1:
+        if len(reports) > 1 or "variance_budget" in comparison:
             print_comparison_text(comparison)
 
     if any(isinstance(report.get("budget"), dict) and not report["budget"]["pass"] for report in reports):
+        return 1
+    variance_result = comparison.get("variance_budget")
+    if isinstance(variance_result, dict) and not variance_result["pass"]:
         return 1
     return 0
 

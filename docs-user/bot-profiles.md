@@ -140,8 +140,9 @@ set bot_min_players 4
 ```
 
 If `bot_profile` names a loaded profile, auto-filled bots use that profile.
-If it is empty or does not match a loaded profile, WORR uses generated bot names
-such as `bot1`, `bot2`, and `bot3`.
+If it is empty or does not match a loaded profile, WORR rotates through the
+loaded first-party profiles and prefers gameplay profiles such as `vanguard`,
+`vector`, `bulwark`, and `relay` over the validation-only `smoke` profile.
 
 To stop auto-fill without kicking manually added bots, lower the target:
 

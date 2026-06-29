@@ -1053,6 +1053,7 @@ static bot_profile_t bot_profiles[MAX_BOT_PROFILES];
 static int bot_profile_count;
 static bool bot_profiles_scanned;
 static int bot_profile_reload_count;
+static int bot_autofill_profile_cursor;
 static bot_profile_scan_status_t bot_profile_last_scan;
 
 static const bot_profile_source_t bot_profile_sources[] = {
@@ -1458,6 +1459,7 @@ int SV_BotReloadProfiles(void)
     memset(bot_profiles, 0, sizeof(bot_profiles));
     bot_profile_count = 0;
     bot_profiles_scanned = true;
+    bot_autofill_profile_cursor = 0;
     status.reload = ++bot_profile_reload_count;
 
     Com_Printf("q3a_bot_profile_scan=begin reload=%d max=%d sources=%zu\n",
@@ -1553,6 +1555,58 @@ static const bot_profile_t *bot_find_profile(const char *profile_name)
     }
 
     return NULL;
+}
+
+static bool bot_profile_is_smoke(const bot_profile_t *profile)
+{
+    if (!profile) {
+        return false;
+    }
+
+    return !Q_stricmp(profile->id, "smoke") ||
+           !Q_stricmp(profile->name, "Smoke");
+}
+
+static const bot_profile_t *bot_select_autofill_profile(void)
+{
+    const bot_profile_t *fallback = NULL;
+    int start;
+
+    if (bot_profile && bot_profile->string[0]) {
+        const bot_profile_t *forced = bot_find_profile(bot_profile->string);
+        if (forced) {
+            return forced;
+        }
+    }
+
+    bot_ensure_profiles_scanned();
+    if (bot_profile_count <= 0) {
+        return NULL;
+    }
+
+    start = bot_autofill_profile_cursor % bot_profile_count;
+    for (int attempt = 0; attempt < bot_profile_count; attempt++) {
+        int index = (start + attempt) % bot_profile_count;
+        const bot_profile_t *candidate = &bot_profiles[index];
+
+        if (!candidate->id[0]) {
+            continue;
+        }
+
+        if (!fallback) {
+            fallback = candidate;
+        }
+
+        if (bot_profile_is_smoke(candidate)) {
+            continue;
+        }
+
+        bot_autofill_profile_cursor = (index + 1) % bot_profile_count;
+        return candidate;
+    }
+
+    bot_autofill_profile_cursor = (start + 1) % bot_profile_count;
+    return fallback ? fallback : &bot_profiles[start];
 }
 
 static bool bot_name_matches(const char *existing, const char *name)
@@ -1716,8 +1770,12 @@ static bool bot_processing_queue;
 
 static void bot_update_add_frame(void)
 {
-    if (bot_add_frame != sv.framenum) {
-        bot_add_frame = sv.framenum;
+    int add_frame = svs.realtime > 0 ?
+        svs.realtime / SV_FRAMETIME :
+        sv.framenum;
+
+    if (bot_add_frame != add_frame) {
+        bot_add_frame = add_frame;
         bot_adds_this_frame = 0;
     }
 }
@@ -1931,19 +1989,16 @@ static void SV_BotProcessAddQueue(void)
 
 static bool SV_BotAddAutofill(void)
 {
-    const char *profile = NULL;
+    const bot_profile_t *profile;
 
     bot_update_add_frame();
     if (bot_adds_this_frame > 0) {
         return false;
     }
 
-    if (bot_profile && bot_profile->string[0] &&
-        bot_find_profile(bot_profile->string)) {
-        profile = bot_profile->string;
-    }
+    profile = bot_select_autofill_profile();
 
-    return SV_BotAddImmediate(profile, NULL, true);
+    return SV_BotAddImmediate(profile ? profile->id : NULL, NULL, true);
 }
 
 bool SV_BotRemove(client_t *client)
@@ -2119,6 +2174,37 @@ static int SV_BotAutofillCount(void)
     return count;
 }
 
+static int SV_BotAutofillProfileCount(char *first_profile, size_t size)
+{
+    int count = 0;
+    int limit = bot_client_pool_limit();
+
+    if (first_profile && size > 0) {
+        first_profile[0] = 0;
+    }
+
+    for (int i = 0; i < limit; i++) {
+        client_t *cl = &svs.client_pool[i];
+        const char *profile;
+
+        if (!cl->bot || !cl->bot_autofill || cl->state <= cs_zombie) {
+            continue;
+        }
+
+        profile = Info_ValueForKey(cl->userinfo, "bot_profile");
+        if (!profile[0]) {
+            continue;
+        }
+
+        if (first_profile && size > 0 && !first_profile[0]) {
+            Q_strlcpy(first_profile, profile, size);
+        }
+        count++;
+    }
+
+    return count;
+}
+
 static client_t *SV_BotFindAutofill(void)
 {
     int limit = bot_client_pool_limit();
@@ -2216,13 +2302,19 @@ static void SV_BotMinPlayersSmokeFrame(void)
     }
 
     if (stage == 1) {
+        char first_profile[MAX_QPATH];
+        int profiled;
+
         if (SV_BotAutofillCount() < fill_target) {
             return;
         }
 
-        Com_Printf("q3a_bot_min_players_smoke_after_fill count=%d auto=%d humans=%d target=%d\n",
+        profiled = SV_BotAutofillProfileCount(first_profile,
+                                              sizeof(first_profile));
+        Com_Printf("q3a_bot_min_players_smoke_after_fill count=%d auto=%d humans=%d target=%d profiled=%d first_profile=%s\n",
                    SV_BotCount(), SV_BotAutofillCount(), SV_CountClients(),
-                   bot_min_players->integer);
+                   bot_min_players->integer, profiled,
+                   first_profile[0] ? first_profile : "<none>");
         Cvar_Set("bot_min_players", "1");
         stage = 2;
         return;
@@ -4404,7 +4496,7 @@ static void SV_BotChatPolicySmokeStatus(int expected_bots,
 }
 
 #define bot_FRAME_COMMAND_STATUS_CAPTURE_TARGET 19
-#define bot_FRAME_COMMAND_STATUS_CAPTURE_SIZE 32768
+#define bot_FRAME_COMMAND_STATUS_CAPTURE_SIZE 262144
 
 static char bot_frame_command_status_capture[
     bot_FRAME_COMMAND_STATUS_CAPTURE_SIZE];
@@ -5017,6 +5109,11 @@ static bool SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence(void)
     return SV_BotFrameCommandSmokeMode() == 41;
 }
 
+static bool SV_BotFrameCommandSmokeIsHazardContextGap(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 96;
+}
+
 static bool SV_BotFrameCommandSmokeUsesScenarioCvars(void)
 {
     return SV_BotFrameCommandSmokeIsEngageEnemy() ||
@@ -5064,7 +5161,8 @@ static bool SV_BotFrameCommandSmokeUsesScenarioCvars(void)
         SV_BotFrameCommandSmokeIsCtfObjectiveRoute() ||
         SV_BotFrameCommandSmokeIsCtfObjectiveTransitions() ||
         SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence() ||
-        SV_BotFrameCommandSmokeIsCtfItemRoles();
+        SV_BotFrameCommandSmokeIsCtfItemRoles() ||
+        SV_BotFrameCommandSmokeIsHazardContextGap();
 }
 
 static int SV_BotFrameCommandSmokeSoakMilliseconds(void)
@@ -5184,6 +5282,10 @@ static bool SV_BotFrameCommandSmokeUsesTravelTypeGoal(void)
     case 77:
     case 91:
     case 88:
+    case 92:
+    case 93:
+    case 94:
+    case 95:
         return true;
     default:
         return false;
@@ -5316,6 +5418,7 @@ static int SV_BotFrameCommandSmokeTargetBots(void)
         SV_BotFrameCommandSmokeIsSurvivalInventory() ||
         SV_BotFrameCommandSmokeIsSurvivalRoute() ||
         SV_BotFrameCommandSmokeIsItemTimer() ||
+        SV_BotFrameCommandSmokeIsHazardContextGap() ||
         SV_BotFrameCommandSmokeIsCoopLeadAdvance()) {
         return 1;
     }
@@ -5418,6 +5521,14 @@ static int SV_BotFrameCommandSmokeTravelTypeGoal(void)
     case 15:
     case 88:
         return 12; /* TRAVEL_ROCKETJUMP */
+    case 92:
+        return 3; /* TRAVEL_CROUCH */
+    case 93:
+        return 8; /* TRAVEL_SWIM */
+    case 94:
+        return 9; /* TRAVEL_WATERJUMP */
+    case 95:
+        return 10; /* TRAVEL_TELEPORT */
     default:
         return 0;
     }
@@ -5431,6 +5542,7 @@ static bool SV_BotFrameCommandSmokeAllowsRocketJump(void)
 static bool SV_BotFrameCommandSmokeExpectsBlockedTravelTypeGoal(void)
 {
     return SV_BotFrameCommandSmokeMode() == 15 ||
+        SV_BotFrameCommandSmokeMode() == 92 ||
         SV_BotFrameCommandSmokeIsBotChatLiveBlocked();
 }
 
@@ -7650,6 +7762,13 @@ unsigned SV_Frame(unsigned msec)
         return SV_FRAMETIME - sv.frameresidual;
     }
 
+    if (svs.initialized) {
+        // Bot slot lifecycle is server-owned and should react to console/cvar
+        // changes even while the local game simulation is paused.
+        SV_BotProcessAddQueue();
+        SV_BotMaintainMinPlayers();
+    }
+
     if (svs.initialized && !check_paused()) {
         // check timeouts
         SV_CheckTimeouts();
@@ -7659,12 +7778,6 @@ unsigned SV_Frame(unsigned msec)
 
         // give the clients some timeslices
         SV_GiveMsec();
-
-        // process at most one queued bot begin per frame
-        SV_BotProcessAddQueue();
-
-        // maintain automatic local bot population after explicit add requests
-        SV_BotMaintainMinPlayers();
 
         // feed game-authored commands to spawned local bot clients
         SV_BotRunFrameCommands();

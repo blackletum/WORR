@@ -43,6 +43,7 @@ constexpr int BOT_NAV_TRAVEL_WALK = 2;
 constexpr int BOT_NAV_TRAVEL_CROUCH = 3;
 constexpr int BOT_NAV_TRAVEL_SWIM = 8;
 constexpr int BOT_NAV_TRAVEL_WATER_JUMP = 9;
+constexpr int BOT_NAV_TRAVEL_TELEPORT = 10;
 constexpr int BOT_NAV_TRAVEL_ELEVATOR = 11;
 constexpr int BOT_NAV_NATURAL_CROUCH_MASK = 1 << 0;
 constexpr int BOT_NAV_NATURAL_SWIM_MASK = 1 << 1;
@@ -96,6 +97,8 @@ enum class BotNavInteractionKind {
 	Water = 5,
 	Trigger = 6,
 	Mover = 7,
+	Teleporter = 8,
+	Hazard = 9,
 };
 
 enum class BotNavNaturalMovementSupportReason {
@@ -225,6 +228,9 @@ struct BotNavRouteSlot {
 
 struct BotNavPositionGoalCandidate {
 	int area = 0;
+	int entityNumber = -1;
+	int action = 0;
+	int distanceSquared = 0;
 	Vector3 origin = vec3_origin;
 };
 
@@ -874,6 +880,20 @@ int BotNavInteractionKindForEntity(const gentity_t *ent) {
 		BotNavClassIs(ent, "func_bobbingwater")) {
 		return static_cast<int>(BotNavInteractionKind::Water);
 	}
+	if (BotNavClassIs(ent, "misc_teleporter") ||
+		BotNavClassIs(ent, "teleporter_touch") ||
+		BotNavClassIs(ent, "misc_teleporter_dest") ||
+		BotNavClassIs(ent, "target_teleporter") ||
+		BotNavClassIs(ent, "trigger_teleport")) {
+		return static_cast<int>(BotNavInteractionKind::Teleporter);
+	}
+	if (BotNavClassIs(ent, "trigger_hurt") ||
+		BotNavClassIs(ent, "trigger_lava") ||
+		BotNavClassIs(ent, "trigger_slime") ||
+		BotNavClassIs(ent, "target_laser") ||
+		BotNavClassIs(ent, "misc_lavaball")) {
+		return static_cast<int>(BotNavInteractionKind::Hazard);
+	}
 	if (BotNavClassIs(ent, "trigger_once") ||
 		BotNavClassIs(ent, "trigger_multiple")) {
 		return static_cast<int>(BotNavInteractionKind::Trigger);
@@ -943,6 +963,12 @@ void BotNavIncrementInteractionKindCount(int kind) {
 	case BotNavInteractionKind::Mover:
 		botNavRouteStatus.interactionWorldMovers++;
 		break;
+	case BotNavInteractionKind::Teleporter:
+		botNavRouteStatus.interactionWorldTeleporters++;
+		break;
+	case BotNavInteractionKind::Hazard:
+		botNavRouteStatus.interactionWorldHazards++;
+		break;
 	case BotNavInteractionKind::None:
 	default:
 		break;
@@ -958,6 +984,8 @@ void BotNavUpdateInteractionWorldContextStatus() {
 	botNavRouteStatus.interactionWorldWaters = 0;
 	botNavRouteStatus.interactionWorldTriggers = 0;
 	botNavRouteStatus.interactionWorldMovers = 0;
+	botNavRouteStatus.interactionWorldTeleporters = 0;
+	botNavRouteStatus.interactionWorldHazards = 0;
 	botNavRouteStatus.interactionWorldUseEntities = 0;
 	botNavRouteStatus.interactionWorldTouchEntities = 0;
 	if (g_entities == nullptr) {
@@ -1902,6 +1930,119 @@ bool BotNavFindPositionGoal(const BotNavRouteRequest *request, BotNavPositionGoa
 	return true;
 }
 
+bool BotNavTeleporterEntityCanRouteTo(const gentity_t *ent, int *action) {
+	if (action != nullptr) {
+		*action = static_cast<int>(BotNavInteractionAction::None);
+	}
+	if (ent == nullptr ||
+		!ent->inUse ||
+		(ent->flags & FL_NO_BOTS) != 0 ||
+		BotNavInteractionKindForEntity(ent) != static_cast<int>(BotNavInteractionKind::Teleporter) ||
+		BotNavClassIs(ent, "misc_teleporter_dest") ||
+		BotNavClassIs(ent, "target_teleporter")) {
+		return false;
+	}
+
+	if (BotNavClassIs(ent, "teleporter_touch") ||
+		BotNavClassIs(ent, "trigger_teleport")) {
+		if (ent->target == nullptr || ent->target[0] == '\0' || !ent->touch) {
+			return false;
+		}
+		if (BotNavClassIs(ent, "trigger_teleport") && ent->delay) {
+			return false;
+		}
+		if (action != nullptr) {
+			*action = BotNavInteractionActionForEntity(ent);
+		}
+		return true;
+	}
+
+	if (BotNavClassIs(ent, "misc_teleporter") &&
+		ent->target != nullptr &&
+		ent->target[0] != '\0' &&
+		ent->solid != SOLID_NOT) {
+		if (action != nullptr) {
+			*action = static_cast<int>(BotNavInteractionAction::Wait);
+		}
+		return true;
+	}
+
+	return false;
+}
+
+Vector3 BotNavTeleporterEntityRouteOrigin(const gentity_t *ent) {
+	if (ent == nullptr) {
+		return vec3_origin;
+	}
+	if (!ent->linked) {
+		return ent->s.origin;
+	}
+	return (ent->absMin + ent->absMax) * 0.5f;
+}
+
+void BotNavRecordTeleporterEntityGoal(const BotNavPositionGoalCandidate &candidate) {
+	botNavRouteStatus.lastTeleporterEntityGoalEntity = candidate.entityNumber;
+	botNavRouteStatus.lastTeleporterEntityGoalArea = candidate.area;
+	botNavRouteStatus.lastTeleporterEntityGoalX = static_cast<int>(candidate.origin.x);
+	botNavRouteStatus.lastTeleporterEntityGoalY = static_cast<int>(candidate.origin.y);
+	botNavRouteStatus.lastTeleporterEntityGoalZ = static_cast<int>(candidate.origin.z);
+	botNavRouteStatus.lastTeleporterEntityGoalDistanceSq = candidate.distanceSquared;
+	botNavRouteStatus.lastTeleporterEntityGoalAction = candidate.action;
+}
+
+bool BotNavFindTeleporterEntityGoal(const gentity_t *bot, BotNavPositionGoalCandidate *candidate) {
+	botNavRouteStatus.teleporterEntityGoalRequests++;
+	if (bot == nullptr || g_entities == nullptr) {
+		botNavRouteStatus.teleporterEntityGoalInvalidSkips++;
+		return false;
+	}
+
+	BotNavApplyRoutePolicy();
+	BotNavPositionGoalCandidate best{};
+	best.distanceSquared = 0x7fffffff;
+	for (uint32_t entnum = game.maxClients + 1; entnum < globals.numEntities; ++entnum) {
+		const gentity_t *ent = &g_entities[entnum];
+		int action = static_cast<int>(BotNavInteractionAction::None);
+		if (!BotNavTeleporterEntityCanRouteTo(ent, &action)) {
+			continue;
+		}
+
+		const Vector3 routePoint = BotNavTeleporterEntityRouteOrigin(ent);
+		const float point[3] = { routePoint.x, routePoint.y, routePoint.z };
+		float routeOrigin[3] = {};
+		int area = 0;
+		botNavRouteStatus.teleporterEntityGoalCandidates++;
+		if (!BotLibAdapter_FindRouteAreaForPoint(point, &area, routeOrigin) || area <= 0) {
+			botNavRouteStatus.teleporterEntityGoalInvalidSkips++;
+			continue;
+		}
+
+		const Vector3 candidateOrigin = { routeOrigin[0], routeOrigin[1], routeOrigin[2] };
+		const int distanceSquared =
+			BotNavStatusDistance(BotNavHorizontalDistanceSquared(bot->s.origin, candidateOrigin));
+		if (distanceSquared >= best.distanceSquared) {
+			continue;
+		}
+
+		best.area = area;
+		best.entityNumber = static_cast<int>(entnum);
+		best.action = action;
+		best.distanceSquared = distanceSquared;
+		best.origin = candidateOrigin;
+	}
+
+	if (best.area <= 0) {
+		return false;
+	}
+
+	botNavRouteStatus.teleporterEntityGoalResolved++;
+	BotNavRecordTeleporterEntityGoal(best);
+	if (candidate != nullptr) {
+		*candidate = best;
+	}
+	return true;
+}
+
 BotNavRefreshReason BotNavRefreshReasonFor(
 	BotNavRouteSlot &slot,
 	const gentity_t *bot,
@@ -2016,10 +2157,6 @@ void BotNavClearItemGoal(BotNavRouteSlot &slot) {
 	slot.persistentGoalItem = IT_NULL;
 	slot.persistentGoalHealthAtAssignment = 0;
 	slot.persistentGoalArmorAtAssignment = 0;
-	botNavRouteStatus.lastItemGoalEntity = -1;
-	botNavRouteStatus.lastItemGoalArea = 0;
-	botNavRouteStatus.lastItemGoalItem = 0;
-	botNavRouteStatus.lastItemGoalScore = 0;
 	BotNavUpdateActiveReservations();
 }
 
@@ -2220,6 +2357,26 @@ bool BotNavBuildRouteWithFallback(
 			botNavRouteStatus.lastTravelTypeGoalArea = refreshedRoute->goalArea;
 			return true;
 		}
+		if (travelTypeGoal == BOT_NAV_TRAVEL_TELEPORT &&
+			positionGoal != nullptr &&
+			preferredGoalArea > 0) {
+			const float goalOrigin[3] = {
+				positionGoal->origin.x,
+				positionGoal->origin.y,
+				positionGoal->origin.z
+			};
+			botNavRouteStatus.teleporterEntityGoalFallbacks++;
+			routed = BotLibAdapter_BuildRouteSteerTowardGoal(
+				origin,
+				preferredGoalArea,
+				goalOrigin,
+				refreshedRoute);
+			if (routed &&
+				refreshedRoute != nullptr &&
+				refreshedRoute->success) {
+				return true;
+			}
+		}
 		return false;
 	} else if (positionGoal != nullptr && preferredGoalArea > 0) {
 		const float goalOrigin[3] = {
@@ -2286,6 +2443,23 @@ void BotNavAssignPositionGoal(BotNavRouteSlot &slot, const BotNavPositionGoalCan
 	botNavRouteStatus.lastPositionGoalY = static_cast<int>(candidate.origin.y);
 	botNavRouteStatus.lastPositionGoalZ = static_cast<int>(candidate.origin.z);
 	BotNavClearItemGoal(slot);
+}
+
+void BotNavAssignTeleporterEntityGoal(BotNavRouteSlot &slot, const BotNavPositionGoalCandidate &candidate) {
+	if (candidate.area <= 0 || candidate.entityNumber < 0) {
+		return;
+	}
+
+	const bool newAssignment =
+		!slot.persistentGoalIsPosition ||
+		slot.persistentGoalTravelType != BOT_NAV_TRAVEL_TELEPORT ||
+		slot.persistentGoalArea != candidate.area;
+	BotNavAssignPositionGoal(slot, candidate);
+	slot.persistentGoalTravelType = BOT_NAV_TRAVEL_TELEPORT;
+	if (newAssignment) {
+		botNavRouteStatus.teleporterEntityGoalAssignments++;
+	}
+	BotNavRecordTeleporterEntityGoal(candidate);
 }
 
 void BotNavAssignTravelTypeGoal(BotNavRouteSlot &slot, int travelTypeGoal, const BotLibAdapterRouteSteer &route) {
@@ -2551,6 +2725,10 @@ bool BotNavRefreshRoute(
 	BotNavAssignPersistentGoal(slot, refreshedRoute);
 	if (requestedTravelTypeGoal > 0 && refreshedRoute.reachabilityTravelType == requestedTravelTypeGoal) {
 		BotNavAssignTravelTypeGoal(slot, requestedTravelTypeGoal, refreshedRoute);
+	} else if (requestedTravelTypeGoal == BOT_NAV_TRAVEL_TELEPORT &&
+		requestedPositionGoal != nullptr &&
+		refreshedRoute.goalArea == requestedPositionGoal->area) {
+		BotNavAssignTeleporterEntityGoal(slot, *requestedPositionGoal);
 	} else if (requestedTravelTypeGoal > 0) {
 		BotNavClearTravelTypeGoal(slot);
 	} else if (requestedPositionGoal != nullptr && refreshedRoute.goalArea == requestedPositionGoal->area) {
@@ -2639,15 +2817,26 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 	int preferredGoalArea = slot.persistentGoalArea;
 	BotNavItemGoalCandidate selectedItemGoal{};
 	BotNavPositionGoalCandidate selectedPositionGoal{};
+	BotNavPositionGoalCandidate selectedTeleporterEntityGoal{};
 	bool hasSelectedItemGoal = false;
 	const bool hasSelectedPositionGoal = BotNavFindPositionGoal(request, &selectedPositionGoal);
 	const int requestedTravelTypeGoal =
 		request != nullptr && request->hasTravelTypeGoal && request->travelTypeGoal > 0 ?
 			request->travelTypeGoal :
 			0;
+	const bool hasSelectedTeleporterEntityGoal =
+		!hasSelectedPositionGoal &&
+		requestedTravelTypeGoal == BOT_NAV_TRAVEL_TELEPORT &&
+		BotNavFindTeleporterEntityGoal(bot, &selectedTeleporterEntityGoal);
+	const bool hasSelectedRoutePositionGoal =
+		hasSelectedPositionGoal || hasSelectedTeleporterEntityGoal;
+	const BotNavPositionGoalCandidate *selectedRoutePositionGoal =
+		hasSelectedPositionGoal ?
+			&selectedPositionGoal :
+			(hasSelectedTeleporterEntityGoal ? &selectedTeleporterEntityGoal : nullptr);
 	const bool hasSelectedTravelTypeGoal = !hasSelectedPositionGoal && requestedTravelTypeGoal > 0;
-	if (hasSelectedPositionGoal) {
-		preferredGoalArea = selectedPositionGoal.area;
+	if (hasSelectedRoutePositionGoal && selectedRoutePositionGoal != nullptr) {
+		preferredGoalArea = selectedRoutePositionGoal->area;
 		hasSelectedItemGoal = false;
 	} else if (slot.persistentGoalIsPosition) {
 		BotNavClearPersistentGoal(slot, BotNavGoalClearReason::Reset, clientIndex);
@@ -2656,9 +2845,13 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 	}
 
 	if (hasSelectedTravelTypeGoal) {
-		preferredGoalArea = slot.persistentGoalTravelType == requestedTravelTypeGoal ?
-			slot.persistentGoalArea :
-			0;
+		if (hasSelectedTeleporterEntityGoal) {
+			preferredGoalArea = selectedTeleporterEntityGoal.area;
+		} else {
+			preferredGoalArea = slot.persistentGoalTravelType == requestedTravelTypeGoal ?
+				slot.persistentGoalArea :
+				0;
+		}
 		hasSelectedItemGoal = false;
 	} else if (slot.persistentGoalTravelType > 0) {
 		BotNavClearPersistentGoal(slot, BotNavGoalClearReason::Reset, clientIndex);
@@ -2666,12 +2859,12 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 		preferredGoalArea = 0;
 	}
 
-	if (!hasSelectedPositionGoal && !hasSelectedTravelTypeGoal && preferredGoalArea <= 0) {
+	if (!hasSelectedRoutePositionGoal && !hasSelectedTravelTypeGoal && preferredGoalArea <= 0) {
 		hasSelectedItemGoal = BotNavFindPickupGoal(bot, clientIndex, frame, &selectedItemGoal);
 		if (hasSelectedItemGoal) {
 			preferredGoalArea = selectedItemGoal.area;
 		}
-	} else if (!hasSelectedPositionGoal && !hasSelectedTravelTypeGoal && slot.persistentGoalEntityNumber >= 0) {
+	} else if (!hasSelectedRoutePositionGoal && !hasSelectedTravelTypeGoal && slot.persistentGoalEntityNumber >= 0) {
 		botNavRouteStatus.itemGoalReuses++;
 	}
 
@@ -2679,7 +2872,7 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 		slot,
 		bot,
 		preferredGoalArea,
-		hasSelectedPositionGoal,
+		hasSelectedRoutePositionGoal,
 		hasSelectedTravelTypeGoal ? requestedTravelTypeGoal : 0,
 		clientIndex,
 		frame);
@@ -2687,18 +2880,19 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 		BotNavRecordPotentialPickup(slot, bot);
 		BotNavClearPersistentGoal(slot, BotNavGoalClearReason::Reached, clientIndex);
 		preferredGoalArea = 0;
-		if (hasSelectedPositionGoal) {
-			preferredGoalArea = selectedPositionGoal.area;
+		if (hasSelectedRoutePositionGoal && selectedRoutePositionGoal != nullptr) {
+			preferredGoalArea = selectedRoutePositionGoal->area;
 		} else if (!hasSelectedTravelTypeGoal) {
 			hasSelectedItemGoal = BotNavFindPickupGoal(bot, clientIndex, frame, &selectedItemGoal);
 		}
-		if (!hasSelectedPositionGoal && !hasSelectedTravelTypeGoal && hasSelectedItemGoal) {
+		if (!hasSelectedRoutePositionGoal && !hasSelectedTravelTypeGoal && hasSelectedItemGoal) {
 			preferredGoalArea = selectedItemGoal.area;
 		}
 	} else if (reason == BotNavRefreshReason::Stuck && BotNavCurrentItemGoalIsBlacklisted(slot, frame)) {
 		BotNavClearPersistentGoal(slot, BotNavGoalClearReason::Blacklisted, clientIndex);
 		preferredGoalArea = 0;
-		hasSelectedItemGoal = !hasSelectedTravelTypeGoal &&
+		hasSelectedItemGoal = !hasSelectedRoutePositionGoal &&
+			!hasSelectedTravelTypeGoal &&
 			BotNavFindPickupGoal(bot, clientIndex, frame, &selectedItemGoal);
 		if (hasSelectedItemGoal) {
 			preferredGoalArea = selectedItemGoal.area;
@@ -2742,7 +2936,7 @@ bool BotNav_GetRouteSteer(const gentity_t *bot, const BotNavRouteRequest *reques
 		clientIndex,
 		preferredGoalArea,
 		hasSelectedItemGoal ? &selectedItemGoal : nullptr,
-		hasSelectedPositionGoal ? &selectedPositionGoal : nullptr,
+		selectedRoutePositionGoal,
 		hasSelectedTravelTypeGoal ? requestedTravelTypeGoal : 0,
 		reason,
 		route);

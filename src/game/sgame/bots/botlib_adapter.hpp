@@ -447,6 +447,11 @@ bool BotLibAdapter_BuildRouteSteerToGoal(
 	int preferredGoalArea,
 	const float preferredGoalOrigin[3],
 	BotLibAdapterRouteSteer *result);
+bool BotLibAdapter_BuildRouteSteerTowardGoal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	BotLibAdapterRouteSteer *result);
 bool BotLibAdapter_BuildRouteSteerForTravelType(
 	const float origin[3],
 	int travelType,

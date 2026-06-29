@@ -117,6 +117,12 @@ struct BotNavRouteStatus {
 	int travelTypeGoalSupportChecks = 0;
 	int travelTypeGoalSupported = 0;
 	int travelTypeGoalUnsupported = 0;
+	int teleporterEntityGoalRequests = 0;
+	int teleporterEntityGoalCandidates = 0;
+	int teleporterEntityGoalResolved = 0;
+	int teleporterEntityGoalAssignments = 0;
+	int teleporterEntityGoalFallbacks = 0;
+	int teleporterEntityGoalInvalidSkips = 0;
 	int naturalMovementSupportAasLoaded = 0;
 	int naturalMovementSupportChecks = 0;
 	int naturalMovementSupported = 0;
@@ -162,6 +168,8 @@ struct BotNavRouteStatus {
 	int interactionWorldWaters = 0;
 	int interactionWorldTriggers = 0;
 	int interactionWorldMovers = 0;
+	int interactionWorldTeleporters = 0;
+	int interactionWorldHazards = 0;
 	int interactionWorldUseEntities = 0;
 	int interactionWorldTouchEntities = 0;
 	int debugOverlayFrames = 0;
@@ -248,6 +256,13 @@ struct BotNavRouteStatus {
 	int lastTravelTypeGoalSupportType = 0;
 	int lastTravelTypeGoalSupportArea = 0;
 	int lastTravelTypeGoalSupportGoalArea = 0;
+	int lastTeleporterEntityGoalEntity = -1;
+	int lastTeleporterEntityGoalArea = 0;
+	int lastTeleporterEntityGoalX = 0;
+	int lastTeleporterEntityGoalY = 0;
+	int lastTeleporterEntityGoalZ = 0;
+	int lastTeleporterEntityGoalDistanceSq = 0;
+	int lastTeleporterEntityGoalAction = 0;
 	int lastInteractionAction = 0;
 	int lastInteractionKind = 0;
 	int lastInteractionEntity = -1;

@@ -29,16 +29,16 @@
         "description": "High-bot invariant: route-steered command throughput should track overall command throughput."
       },
       "route_queries_per_bot_sec": {
-        "max": 25,
-        "description": "Pressure budget: derived route-query rate from the current baseline plus slack."
+        "max": 30,
+        "description": "Pressure budget: derived route-query rate from the 2026-06-28 source-counter baseline plus slack."
       },
       "route_refresh_ratio": {
-        "max": 0.55,
-        "description": "Pressure budget: route refreshes should remain well below total route requests."
+        "max": 0.65,
+        "description": "Pressure budget: route refreshes should stay within the 2026-06-28 source-counter baseline plus slack."
       },
       "route_reuse_ratio": {
-        "min": 0.4,
-        "description": "Pressure budget: route cache reuse should remain a meaningful share of route requests."
+        "min": 0.35,
+        "description": "Pressure budget: route cache reuse should remain a meaningful share of route requests after the 2026-06-28 source-counter baseline."
       },
       "debug_work_units_per_bot_sec": {
         "max": 1500,
@@ -54,9 +54,9 @@
         "description": "High-bot invariant: ten-minute soak should report roughly once per minute."
       },
       "bot_frame_cpu_ms_per_bot_sec": {
-        "max": 5.0,
+        "max": 8.0,
         "required": false,
-        "description": "Optional source-counter budget: bot frame CPU is not required until long-soak CPU baselines are stable."
+        "description": "Optional source-counter budget: bot frame CPU is not required until long-soak CPU baselines are stable; the cap carries headroom for normal local scheduler and combat-state variance above the 2026-06-29 post-change soak samples."
       },
       "route_query_cpu_ms_per_bot_sec": {
         "max": 2.0,

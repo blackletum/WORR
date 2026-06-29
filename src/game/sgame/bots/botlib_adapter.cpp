@@ -783,6 +783,27 @@ bool BotLibAdapter_BuildRouteSteerToGoal(
 	return routed;
 }
 
+bool BotLibAdapter_BuildRouteSteerTowardGoal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	BotLibAdapterRouteSteer *result) {
+	Q3ABotLibImportRouteSteerResult q3aResult{};
+
+	if (!botLibAdapterStatus.initialized) {
+		BotLibAdapter_Init();
+	}
+
+	const bool routed = Q3A_BotLibImport_BuildRouteSteerTowardGoal(
+		origin,
+		preferredGoalArea,
+		preferredGoalOrigin,
+		&q3aResult) != 0;
+	CopyRouteSteerResult(q3aResult, result);
+	CopyImportStatus();
+	return routed;
+}
+
 bool BotLibAdapter_BuildRouteSteerForTravelType(
 	const float origin[3],
 	int travelType,

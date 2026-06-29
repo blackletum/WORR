@@ -10,6 +10,7 @@ import zipfile
 
 
 BOTFILE_SUPPORT_MEMBERS = (
+    'botfiles/bots.txt',
     'botfiles/chars.h',
     'botfiles/fw_items.c',
     'botfiles/fw_weap.c',

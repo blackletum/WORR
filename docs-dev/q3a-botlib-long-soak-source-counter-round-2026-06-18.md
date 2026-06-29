@@ -40,7 +40,11 @@ Budget output now includes flat pass/fail fields on each report row when `--budg
 
 The nested `budget.missing_current_counters` list maps missing budget metrics back to the raw source-counter inputs that would satisfy them. For example, a missing `route_query_cpu_ms_per_bot_sec` check now points at `route_query_cpu_ns` or `bot_route_cpu_ms` instead of only saying the derived metric is absent.
 
-Text, CSV, JSON, and Markdown outputs all expose the new fields. Future strict source-counter soak budgets can gate `source_counter_pass_int` with `min=1` and `max=1` once legacy pre-counter fixtures are no longer accepted for that validation lane.
+Text, CSV, JSON, and Markdown outputs all expose the new fields. The later
+2026-06-29 strict source-counter soak budget now gates
+`source_counter_pass_int` with `min=1` and `max=1` for the current-source
+high-bot validation lane while the default budget remains compatible with
+legacy pre-counter fixtures.
 
 ## Current Fixture Read
 

@@ -10021,6 +10021,24 @@ bool Bot_CommandApplyTimedRouteGoal(
 		return false;
 	}
 
+	if (Bot_CommandSmokeScenarioMode() <= 0 &&
+		state.kind == BotTimedRouteGoalKind::FfaRoam &&
+		BotNav_ProbePickupGoal(bot)) {
+		const BotTimedRouteGoalState deferredState = state;
+		Bot_CommandClearTimedRouteGoal(&state);
+		Bot_CommandRecordTimedRouteGoalDeferral(
+			BotTimedRouteGoalKind::FfaRoam);
+		Bot_CommandRecordTimedRouteGoalOwnerLast(
+			BotTimedRouteGoalKind::FfaRoam,
+			clientIndex,
+			remainingMilliseconds,
+			deferredState.source,
+			deferredState.goal,
+			(bot->s.origin - deferredState.source).lengthSquared(),
+			&deferredState);
+		return false;
+	}
+
 	Vector3 away = bot->s.origin - state.source;
 	away.z = 0.0f;
 	const float minDirectionSquared = state.minDirectionSquared > 0.0f ?
@@ -10666,7 +10684,8 @@ gentity_t *Bot_CommandFfaSpawnCampAvoidanceSource(
 
 void Bot_CommandActivateFfaRoamRoute(
 	gentity_t *bot,
-	const BotObjectiveMatchPolicy &policy) {
+	const BotObjectiveMatchPolicy &policy,
+	const BotActionDecision &actionDecision) {
 	const bool spawnCampAvoidance = Bot_CommandFfaSpawnCampAvoidanceEnabled();
 	if (!Bot_CommandFfaRoamRouteEnabled() && !spawnCampAvoidance) {
 		return;
@@ -10716,6 +10735,30 @@ void Bot_CommandActivateFfaRoamRoute(
 
 	const int nowMilliseconds = Bot_CommandCurrentTimeMilliseconds();
 	BotTimedRouteGoalState &state = slot->timedRouteGoal;
+	if (Bot_CommandSmokeScenarioMode() <= 0 &&
+		actionDecision.intent == BotActionIntent::MoveToItem &&
+		actionDecision.item > IT_NULL) {
+		if (state.kind == BotTimedRouteGoalKind::FfaRoam &&
+			state.untilMilliseconds > nowMilliseconds) {
+			Bot_CommandClearTimedRouteGoal(&state);
+		}
+		botFrameCommandStatus.ffaRoamRouteOwnerDeferrals++;
+		if (spawnCampAvoidance) {
+			Bot_CommandRecordFfaSpawnCampAvoidanceLast(
+				clientIndex,
+				policy,
+				nullptr,
+				0.0f,
+				0.0f,
+				"item_decision");
+		}
+		Bot_CommandRecordFfaRoamRouteLast(
+			clientIndex,
+			policy,
+			0,
+			0.0f);
+		return;
+	}
 	if (state.kind != BotTimedRouteGoalKind::None &&
 		state.kind != BotTimedRouteGoalKind::FfaRoam &&
 		state.untilMilliseconds > nowMilliseconds) {
@@ -10739,6 +10782,12 @@ void Bot_CommandActivateFfaRoamRoute(
 	if (state.kind == BotTimedRouteGoalKind::FfaRoam &&
 		state.untilMilliseconds > nowMilliseconds) {
 		botFrameCommandStatus.ffaRoamRouteRefreshes++;
+		Bot_CommandRecordFfaRoamRouteLast(
+			clientIndex,
+			policy,
+			state.untilMilliseconds - nowMilliseconds,
+			(bot->s.origin - state.source).lengthSquared());
+		return;
 	}
 
 	Vector3 direction = Bot_CommandFfaRoamRouteDirection(bot, policy);
@@ -11381,7 +11430,7 @@ BotFrameObjectivePolicyResult Bot_CommandEvaluateFrameObjectivePolicies(
 		BotObjectives_EvaluateMatchPolicy(matchContext);
 	result.matchPolicy = matchPolicy;
 	Bot_CommandActivateThreatRetreat(bot, actionDecision);
-	Bot_CommandActivateFfaRoamRoute(bot, matchPolicy);
+	Bot_CommandActivateFfaRoamRoute(bot, matchPolicy, actionDecision);
 	Bot_CommandActivateTeamRoleRoute(bot, matchPolicy);
 	Bot_CommandActivateCtfRoleRoute(bot, matchPolicy);
 	const bool coopProgressWaitRequested =
@@ -11514,19 +11563,24 @@ bool Bot_CommandRoleCombatShouldDefer(
 	}
 
 	BotActionContext context = BotActions_BuildContext(bot);
-	if (!context.valid || !context.alive) {
-		return false;
+	if (context.valid && context.alive) {
+		Bot_PerceptionEnrichActionContext(bot, clientIndex, &context);
+		if (BotCombat_ShouldAvoidWeakUnderpoweredFight(context.combat)) {
+			if (reasonOut != nullptr) {
+				*reasonOut = "weak_underpowered";
+			}
+			return true;
+		}
 	}
 
-	Bot_PerceptionEnrichActionContext(bot, clientIndex, &context);
-	if (!BotCombat_ShouldAvoidWeakUnderpoweredFight(context.combat)) {
-		return false;
+	if (decision.intent != BotActionIntent::Attack || !decision.pressAttack) {
+		if (reasonOut != nullptr) {
+			*reasonOut = "base_combat_not_attacking";
+		}
+		return true;
 	}
 
-	if (reasonOut != nullptr) {
-		*reasonOut = "weak_underpowered";
-	}
-	return true;
+	return false;
 }
 
 BotActionDecision Bot_CommandApplyFfaRoleCombat(
@@ -12662,6 +12716,20 @@ bool Bot_CommandTravelTypeGoalPass(
 	if (botFrameCommandStatus.lastMovementStateForcedTravelType != 0) {
 		return false;
 	}
+	if (!expectBlocked &&
+		travelTypeGoal == BOT_COMMAND_TRAVEL_TELEPORT &&
+		routeStatus.travelTypeGoalRequests > 0 &&
+		routeStatus.travelTypeGoalResolved == 0 &&
+		routeStatus.travelTypeGoalAssignments == 0 &&
+		routeStatus.travelTypeGoalUnsupported > 0 &&
+		routeStatus.teleporterEntityGoalRequests > 0 &&
+		routeStatus.teleporterEntityGoalResolved > 0 &&
+		routeStatus.teleporterEntityGoalAssignments > 0 &&
+		routeStatus.teleporterEntityGoalFallbacks > 0 &&
+		routeStatus.lastTeleporterEntityGoalEntity >= 0 &&
+		routeStatus.lastTeleporterEntityGoalArea > 0) {
+		return botFrameCommandStatus.routeCommands >= expectedMinCommands;
+	}
 	if (routeStatus.travelTypeGoalAssignments <= 0 ||
 		routeStatus.travelTypeGoalResolved <= 0 ||
 		routeStatus.lastTravelTypeGoalType != travelTypeGoal ||
@@ -12739,8 +12807,10 @@ Vector3 Bot_CommandAnglesForDecision(
 		}
 	}
 
-	if (gentity_t *enemy = Bot_CommandKnownVisibleEnemy(bot)) {
-		return Bot_CommandAnglesToPoint(bot, Bot_CommandAimPointForKnownEnemy(bot, enemy));
+	if (decision.intent == BotActionIntent::Attack && decision.pressAttack) {
+		if (gentity_t *enemy = Bot_CommandKnownVisibleEnemy(bot)) {
+			return Bot_CommandAnglesToPoint(bot, Bot_CommandAimPointForKnownEnemy(bot, enemy));
+		}
 	}
 
 	return Bot_CommandAnglesToTarget(bot, route);
@@ -13362,6 +13432,61 @@ void BotBrain_PrintCtfObjectiveRouteStatus() {
 			  botFrameCommandStatus.lastCtfObjectiveRouteItem,
 			  botFrameCommandStatus.lastCtfObjectiveRoutePriority,
 			  botFrameCommandStatus.lastCtfObjectiveRouteGoalDistanceSquared);
+}
+
+void BotBrain_PrintNavInteractionContextStatus(
+	const BotNavRouteStatus &routeStatus) {
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_nav_interaction_context_status "
+			  "interaction_world_entities={} interaction_world_doors={} "
+			  "interaction_world_buttons={} interaction_world_platforms={} "
+			  "interaction_world_trains={} interaction_world_waters={} "
+			  "interaction_world_triggers={} interaction_world_movers={} "
+			  "interaction_world_teleporters={} "
+			  "interaction_world_hazards={} "
+			  "interaction_world_use_entities={} "
+			  "interaction_world_touch_entities={} "
+			  "last_nav_interaction_entity={} "
+			  "last_nav_interaction_spawn_count={} "
+			  "last_nav_interaction_origin_x={} "
+			  "last_nav_interaction_origin_y={} "
+			  "last_nav_interaction_origin_z={} "
+			  "last_nav_interaction_bounds_min_x={} "
+			  "last_nav_interaction_bounds_min_y={} "
+			  "last_nav_interaction_bounds_min_z={} "
+			  "last_nav_interaction_bounds_max_x={} "
+			  "last_nav_interaction_bounds_max_y={} "
+			  "last_nav_interaction_bounds_max_z={} "
+			  "last_nav_interaction_use={} last_nav_interaction_touch={} "
+			  "last_nav_interaction_solid={} "
+			  "last_nav_interaction_movetype={}\n",
+			  routeStatus.interactionWorldEntities,
+			  routeStatus.interactionWorldDoors,
+			  routeStatus.interactionWorldButtons,
+			  routeStatus.interactionWorldPlatforms,
+			  routeStatus.interactionWorldTrains,
+			  routeStatus.interactionWorldWaters,
+			  routeStatus.interactionWorldTriggers,
+			  routeStatus.interactionWorldMovers,
+			  routeStatus.interactionWorldTeleporters,
+			  routeStatus.interactionWorldHazards,
+			  routeStatus.interactionWorldUseEntities,
+			  routeStatus.interactionWorldTouchEntities,
+			  routeStatus.lastInteractionEntity,
+			  routeStatus.lastInteractionSpawnCount,
+			  routeStatus.lastInteractionOriginX,
+			  routeStatus.lastInteractionOriginY,
+			  routeStatus.lastInteractionOriginZ,
+			  routeStatus.lastInteractionBoundsMinX,
+			  routeStatus.lastInteractionBoundsMinY,
+			  routeStatus.lastInteractionBoundsMinZ,
+			  routeStatus.lastInteractionBoundsMaxX,
+			  routeStatus.lastInteractionBoundsMaxY,
+			  routeStatus.lastInteractionBoundsMaxZ,
+			  routeStatus.lastInteractionUse,
+			  routeStatus.lastInteractionTouch,
+			  routeStatus.lastInteractionSolid,
+			  routeStatus.lastInteractionMoveType);
 }
 
 } // namespace
@@ -14034,8 +14159,13 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 	const BotBrainBotPopulationStatus botPopulation = BotBrain_CountBotPopulationStatus();
 	const int travelTypeGoal = Bot_CommandTravelTypeGoal();
 	const bool scenarioSmokePass = Bot_CommandRawFrameCommandSmokeMode() >= 20;
+	const bool coopFrameCommandSmokePass =
+		coop != nullptr &&
+		coop->integer != 0 &&
+		Bot_CommandRawFrameCommandSmokeMode() == 3;
 	const bool reservationPass = Bot_CommandSmokeSoak() ||
 		scenarioSmokePass ||
+		coopFrameCommandSmokePass ||
 		expectedMinCommands <= 1 ||
 		Bot_CommandPositionGoalEnabled() ||
 		travelTypeGoal > 0 ||
@@ -14081,6 +14211,7 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 	BotBrain_PrintCtfCarrierSupportRouteStatus();
 	BotBrain_PrintCtfBaseReturnRouteStatus();
 	BotBrain_PrintCtfObjectiveRouteStatus();
+	BotBrain_PrintNavInteractionContextStatus(routeStatus);
 
 	BotBrain_PrintStatusFmt(
 		"q3a_bot_behavior_policy_status "
@@ -15085,6 +15216,7 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  "last_velocity_lead_offset_sq={} movement_state_attempts={} "
 			  "movement_state_commands={} movement_state_jump_commands={} "
 			  "movement_state_crouch_commands={} movement_state_swim_commands={} "
+			  "movement_state_waterjump_commands={} "
 			  "movement_state_ladder_commands={} movement_state_unsupported={} "
 			  "last_movement_state_travel_type={} "
 			  "last_movement_state_forced_travel_type={} "
@@ -15345,6 +15477,7 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  botFrameCommandStatus.movementStateJumpCommands,
 			  botFrameCommandStatus.movementStateCrouchCommands,
 			  botFrameCommandStatus.movementStateSwimCommands,
+			  botFrameCommandStatus.movementStateWaterJumpCommands,
 			  botFrameCommandStatus.movementStateLadderCommands,
 			  botFrameCommandStatus.movementStateUnsupported,
 			  botFrameCommandStatus.lastMovementStateTravelType,
@@ -15354,6 +15487,35 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  botFrameCommandStatus.lastRecoveryForwardMove,
 			  botFrameCommandStatus.lastRecoverySideMove,
 			  botFrameCommandStatus.lastRecoveryFramesRemaining);
+
+	BotBrain_PrintStatusFmt(
+		"q3a_bot_frame_command_status "
+			  "teleporter_entity_goal_requests={} "
+			  "teleporter_entity_goal_candidates={} "
+			  "teleporter_entity_goal_resolved={} "
+			  "teleporter_entity_goal_assignments={} "
+			  "teleporter_entity_goal_fallbacks={} "
+			  "teleporter_entity_goal_invalid_skips={} "
+			  "last_teleporter_entity_goal_entity={} "
+			  "last_teleporter_entity_goal_area={} "
+			  "last_teleporter_entity_goal_x={} "
+			  "last_teleporter_entity_goal_y={} "
+			  "last_teleporter_entity_goal_z={} "
+			  "last_teleporter_entity_goal_distance_sq={} "
+			  "last_teleporter_entity_goal_action={}\n",
+			  routeStatus.teleporterEntityGoalRequests,
+			  routeStatus.teleporterEntityGoalCandidates,
+			  routeStatus.teleporterEntityGoalResolved,
+			  routeStatus.teleporterEntityGoalAssignments,
+			  routeStatus.teleporterEntityGoalFallbacks,
+			  routeStatus.teleporterEntityGoalInvalidSkips,
+			  routeStatus.lastTeleporterEntityGoalEntity,
+			  routeStatus.lastTeleporterEntityGoalArea,
+			  routeStatus.lastTeleporterEntityGoalX,
+			  routeStatus.lastTeleporterEntityGoalY,
+			  routeStatus.lastTeleporterEntityGoalZ,
+			  routeStatus.lastTeleporterEntityGoalDistanceSq,
+			  routeStatus.lastTeleporterEntityGoalAction);
 
 	BotBrain_PrintStatusFmt(
 		"q3a_bot_blackboard_status "
@@ -16672,54 +16834,6 @@ void BotBrain_PrintFrameCommandStatus( int expectedMinFrames, int expectedMinCom
 			  routeStatus.naturalMovementWaterJumpOriginX,
 			  routeStatus.naturalMovementWaterJumpOriginY,
 			  routeStatus.naturalMovementWaterJumpOriginZ);
-
-	BotBrain_PrintStatusFmt(
-		"q3a_bot_nav_interaction_context_status "
-			  "interaction_world_entities={} interaction_world_doors={} "
-			  "interaction_world_buttons={} interaction_world_platforms={} "
-			  "interaction_world_trains={} interaction_world_waters={} "
-			  "interaction_world_triggers={} interaction_world_movers={} "
-			  "interaction_world_use_entities={} "
-			  "interaction_world_touch_entities={} "
-			  "last_nav_interaction_entity={} "
-			  "last_nav_interaction_spawn_count={} "
-			  "last_nav_interaction_origin_x={} "
-			  "last_nav_interaction_origin_y={} "
-			  "last_nav_interaction_origin_z={} "
-			  "last_nav_interaction_bounds_min_x={} "
-			  "last_nav_interaction_bounds_min_y={} "
-			  "last_nav_interaction_bounds_min_z={} "
-			  "last_nav_interaction_bounds_max_x={} "
-			  "last_nav_interaction_bounds_max_y={} "
-			  "last_nav_interaction_bounds_max_z={} "
-			  "last_nav_interaction_use={} last_nav_interaction_touch={} "
-			  "last_nav_interaction_solid={} "
-			  "last_nav_interaction_movetype={}\n",
-			  routeStatus.interactionWorldEntities,
-			  routeStatus.interactionWorldDoors,
-			  routeStatus.interactionWorldButtons,
-			  routeStatus.interactionWorldPlatforms,
-			  routeStatus.interactionWorldTrains,
-			  routeStatus.interactionWorldWaters,
-			  routeStatus.interactionWorldTriggers,
-			  routeStatus.interactionWorldMovers,
-			  routeStatus.interactionWorldUseEntities,
-			  routeStatus.interactionWorldTouchEntities,
-			  routeStatus.lastInteractionEntity,
-			  routeStatus.lastInteractionSpawnCount,
-			  routeStatus.lastInteractionOriginX,
-			  routeStatus.lastInteractionOriginY,
-			  routeStatus.lastInteractionOriginZ,
-			  routeStatus.lastInteractionBoundsMinX,
-			  routeStatus.lastInteractionBoundsMinY,
-			  routeStatus.lastInteractionBoundsMinZ,
-			  routeStatus.lastInteractionBoundsMaxX,
-			  routeStatus.lastInteractionBoundsMaxY,
-			  routeStatus.lastInteractionBoundsMaxZ,
-			  routeStatus.lastInteractionUse,
-			  routeStatus.lastInteractionTouch,
-			  routeStatus.lastInteractionSolid,
-			  routeStatus.lastInteractionMoveType);
 
 	BotBrain_PrintCompactActionStatus(actionStatus, itemStatus, combatStatus);
 

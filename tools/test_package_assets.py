@@ -22,6 +22,7 @@ import refresh_install  # noqa: E402
 
 
 BOTFILE_SUPPORT_MEMBERS = (
+    "botfiles/bots.txt",
     "botfiles/chars.h",
     "botfiles/fw_items.c",
     "botfiles/fw_weap.c",
@@ -105,7 +106,7 @@ class PackageAssetsTest(unittest.TestCase):
             loose_script_path = install_dir / "basew" / "botfiles" / "scripts" / "smoke_s.c"
             profile = assets_dir / "botfiles" / "bots" / "smoke_c.c"
             script = assets_dir / "botfiles" / "scripts" / "smoke_s.c"
-            self.assertIn("Validated botfile release payload: 10 package/loose file(s)", result.stdout)
+            self.assertIn("Validated botfile release payload: 11 package/loose file(s)", result.stdout)
             self.assertIn("Mirrored loose asset paths: botfiles", result.stdout)
             self.assertTrue(loose_path.is_file())
             self.assertTrue(loose_script_path.is_file())

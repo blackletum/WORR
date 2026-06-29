@@ -236,6 +236,31 @@ class BotPerfAnalyzerTests(unittest.TestCase):
             self.assertEqual(report["source_counter_groups_missing"], [])
             self.assertEqual(report["aas_inpvs_checks_per_bot_sec"], 20.0)
 
+    def test_status_lines_merge_detail_and_summary_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            text = (
+                f"{perf.SOAK_BEGIN_MARKER} target=2 duration_ms=2000 "
+                "progress_ms=1000 count=2\n"
+                f"{perf.SOAK_COMPLETE_MARKER} elapsed_ms=2000 duration_ms=2000 "
+                "count=2 reports=1\n"
+                f"{perf.STATUS_MARKER} frames=40 commands=40 route_requests=20 "
+                "route_queries=5 route_refreshes=5 route_reuses=15 "
+                "route_commands=40 route_failures=0 skipped_inactive=1 pass=0\n"
+                f"{perf.STATUS_MARKER} pass=1 frames=40 commands=40 "
+                "expected_min_commands=2 skipped_inactive=0\n"
+            )
+            path = self.write_text(pathlib.Path(temp), "merged-status.log", text)
+
+            parsed = perf.parse_log(path)
+            report = perf.analyze(parsed)
+
+            self.assertEqual(parsed.status_lines, 2)
+            self.assertEqual(parsed.status["pass"], 1)
+            self.assertEqual(parsed.status["skipped_inactive"], 0)
+            self.assertEqual(parsed.status["route_queries"], 5)
+            self.assertEqual(report["route_queries_per_bot_sec"], 1.25)
+            self.assertEqual(report["route_reuse_ratio"], 0.75)
+
     def test_source_counter_marker_cpu_fields_report_without_false_missing_entries(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = self.write_text(
@@ -420,6 +445,116 @@ class BotPerfAnalyzerTests(unittest.TestCase):
 
             self.assertEqual(exit_code, 1)
             self.assertIn("failure:", stdout.getvalue())
+
+    def test_variance_budget_passes_and_fails_comparison_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            first = perf.analyze(perf.parse_log(
+                self.write_text(root, "first.log", synthetic_log(commands=40))
+            ))
+            second = perf.analyze(perf.parse_log(
+                self.write_text(root, "second.log", synthetic_log(commands=42))
+            ))
+            comparison = perf.build_comparison([first, second])
+
+            pass_budget = perf.VarianceBudget(
+                path=pathlib.Path("variance-pass.json"),
+                metrics={"commands_per_bot_sec": {"max_relative_range_pct": 6.0}},
+                min_runs=2,
+                require_like_for_like=True,
+            )
+            fail_budget = perf.VarianceBudget(
+                path=pathlib.Path("variance-fail.json"),
+                metrics={"commands_per_bot_sec": {"max_relative_range_pct": 2.0}},
+                min_runs=2,
+                require_like_for_like=True,
+            )
+
+            passed = perf.evaluate_variance_budget([first, second], comparison, pass_budget)
+            failed = perf.evaluate_variance_budget([first, second], comparison, fail_budget)
+
+            self.assertTrue(passed["pass"])
+            self.assertEqual("pass", passed["checks"][0]["result"])
+            self.assertEqual(4.878, passed["checks"][0]["relative_range_pct"])
+            self.assertFalse(failed["pass"])
+            self.assertIn("commands_per_bot_sec", failed["failures"][0])
+
+    def test_variance_budget_can_require_like_for_like_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            first = perf.analyze(
+                perf.parse_log(self.write_text(root, "first.log", synthetic_log(bots=1))),
+                {"name": "first_scenario"},
+            )
+            second = perf.analyze(
+                perf.parse_log(self.write_text(root, "second.log", synthetic_log(bots=2))),
+                {"name": "second_scenario"},
+            )
+            comparison = perf.build_comparison([first, second])
+            budget = perf.VarianceBudget(
+                path=pathlib.Path("variance.json"),
+                metrics={"commands_per_bot_sec": {"max_relative_range_pct": 100.0}},
+                min_runs=2,
+                require_like_for_like=True,
+            )
+
+            result = perf.evaluate_variance_budget([first, second], comparison, budget)
+
+            self.assertFalse(result["pass"])
+            self.assertTrue(result["guard_failures"])
+            self.assertTrue(any("mixed_scenarios" in item for item in result["failures"]))
+
+    def test_variance_budget_failure_exit_code(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            first = self.write_text(root, "first.log", synthetic_log(commands=40))
+            second = self.write_text(root, "second.log", synthetic_log(commands=80))
+            budget_path = self.write_text(
+                root,
+                "variance.json",
+                json.dumps({
+                    "checks": {
+                        "metrics": {
+                            "commands_per_bot_sec": {"max_relative_range_pct": 10.0}
+                        }
+                    }
+                }),
+            )
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = perf.main([
+                    "--variance-budget",
+                    str(budget_path),
+                    str(first),
+                    str(second),
+                ])
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("variance_budget: state=fail", stdout.getvalue())
+
+    def test_load_variance_budget_validates_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            budget_path = self.write_text(
+                root,
+                "variance.json",
+                json.dumps({
+                    "min_runs": 2,
+                    "require_like_for_like": False,
+                    "checks": {
+                        "metrics": {
+                            "commands_per_bot_sec": {"max_delta": 1.0}
+                        }
+                    }
+                }),
+            )
+
+            budget = perf.load_variance_budget(budget_path)
+
+            self.assertEqual(2, budget.min_runs)
+            self.assertFalse(budget.require_like_for_like)
+            self.assertEqual(1.0, budget.metrics["commands_per_bot_sec"]["max_delta"])
 
     def test_multi_run_comparison_shape(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

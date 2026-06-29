@@ -23,7 +23,11 @@ map q2dm1
 ```
 
 `bot_min_players` keeps the server filled to that population. Humans count
-toward the target, so auto-filled bots leave as humans join.
+toward the target, so auto-filled bots leave as humans join. If `bot_profile`
+is empty, auto-fill rotates through the loaded first-party bot profiles.
+
+Public bot controls use the `bot_` prefix and the commands below. Older
+server- or game-prefixed bot aliases are not the supported operator surface.
 
 ## Useful Commands
 
@@ -46,6 +50,12 @@ removebot all
 
 Use [Bot Profiles](bot-profiles.md) for profile editing, installed botfile
 layout, and safe profile examples.
+
+Use [Bot Cvars](bot-cvars.md) for the complete public bot cvar/default table.
+
+Use [Bot Multiplayer Playtest](bot-playtest.md) for a repeatable FFA, Duel,
+TDM, and CTF checklist when validating roaming, close-range combat, retreating,
+and objective behavior.
 
 ## Recommended Cvars
 
@@ -145,7 +155,8 @@ spawned with, so remove and re-add a bot to see identity changes immediately.
 
 Bots need AAS navigation data for a map. WORR packages validated generated AAS
 files when they are available. Current development builds stage and package the
-validated `mm-rage` AAS file; more reference maps are being added over time.
+validated reference set for `mm-rage`, `q2dm1`, `q2dm2`, `q2dm8`, `q2ctf1`,
+`base1`, `base2`, and `train`.
 
 If a map has no AAS data, bots may still spawn, but route-driven behavior will
 be limited or unavailable. Check the server console for AAS or bot route

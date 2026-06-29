@@ -4858,6 +4858,94 @@ static int Q3A_BotLibImport_BuildDirectReachRouteSteer(
 	const vec3_t startOrigin,
 	int reachNum,
 	const aas_reachability_t *reach,
+	Q3ABotLibImportRouteSteerResult *result);
+
+static int Q3A_BotLibImport_BuildRouteSteerTowardGoalInternal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	Q3ABotLibImportRouteSteerResult *result) {
+	int startArea = 0;
+	int goalArea = 0;
+	int travelTime = 0;
+	int reachability = 0;
+	vec3_t startOrigin;
+	vec3_t goalOrigin;
+	aas_reachability_t reach;
+	Q3ABotLibImportRouteSteerResult exactRoute;
+
+	if (result == NULL) {
+		return qfalse;
+	}
+
+	Com_Memset(result, 0, sizeof(*result));
+	VectorClear(startOrigin);
+	VectorClear(goalOrigin);
+	Com_Memset(&reach, 0, sizeof(reach));
+	Com_Memset(&exactRoute, 0, sizeof(exactRoute));
+
+	if (!aasworld.loaded ||
+		!aasworld.initialized ||
+		origin == NULL ||
+		preferredGoalArea <= 0 ||
+		preferredGoalArea >= aasworld.numareas) {
+		return qfalse;
+	}
+
+	if (!Q3A_BotLibImport_FindRouteAreaForPoint(origin, &startArea, startOrigin)) {
+		return qfalse;
+	}
+
+	if (Q3A_BotLibImport_BuildRouteSteerFromArea(
+			startArea,
+			startOrigin,
+			preferredGoalArea,
+			preferredGoalOrigin,
+			&exactRoute) &&
+		exactRoute.success &&
+		exactRoute.goalArea == preferredGoalArea) {
+		*result = exactRoute;
+		return qtrue;
+	}
+
+	if (!Q3A_BotLibImport_TryRouteGoalArea(
+			startArea,
+			startOrigin,
+			preferredGoalArea,
+			preferredGoalOrigin,
+			&goalArea,
+			goalOrigin,
+			&travelTime,
+			&reachability)) {
+		return qfalse;
+	}
+
+	if (reachability <= 0 || reachability >= aasworld.reachabilitysize) {
+		return qfalse;
+	}
+
+	AAS_ReachabilityFromNum(reachability, &reach);
+	if (!Q3A_BotLibImport_BuildDirectReachRouteSteer(
+			startArea,
+			startOrigin,
+			reachability,
+			&reach,
+			result) ||
+		!result->success) {
+		return qfalse;
+	}
+
+	result->goalArea = goalArea;
+	result->travelTime = travelTime;
+	VectorCopy(goalOrigin, result->goalOrigin);
+	return qtrue;
+}
+
+static int Q3A_BotLibImport_BuildDirectReachRouteSteer(
+	int startArea,
+	const vec3_t startOrigin,
+	int reachNum,
+	const aas_reachability_t *reach,
 	Q3ABotLibImportRouteSteerResult *result) {
 	int travelTime;
 	vec3_t localStartOrigin;
@@ -5085,6 +5173,21 @@ int Q3A_BotLibImport_BuildRouteSteerToGoal(
 	Q3ABotLibImportRouteSteerResult *result) {
 	const uint64_t startNs = Q3A_BotLibImport_NowNanoseconds();
 	const int routed = Q3A_BotLibImport_BuildRouteSteerInternal(
+		origin,
+		preferredGoalArea,
+		preferredGoalOrigin,
+		result);
+	Q3A_BotLibImport_RecordRouteBuildAndCpu(startNs, routed, result);
+	return routed;
+}
+
+int Q3A_BotLibImport_BuildRouteSteerTowardGoal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	Q3ABotLibImportRouteSteerResult *result) {
+	const uint64_t startNs = Q3A_BotLibImport_NowNanoseconds();
+	const int routed = Q3A_BotLibImport_BuildRouteSteerTowardGoalInternal(
 		origin,
 		preferredGoalArea,
 		preferredGoalOrigin,

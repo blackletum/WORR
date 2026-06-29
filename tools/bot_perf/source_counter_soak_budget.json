@@ -1,0 +1,130 @@
+{
+  "schema": "worr-bot-perf-budget-v1",
+  "description": "Strict source-counter budget for the current manual high_bot_soak_degradation policy. Unlike default_soak_budget.json, this lane requires current source-counter completeness and current CPU/source-derived metrics, so it is intended for fresh modern logs rather than legacy pre-counter fixtures.",
+  "checks": {
+    "metrics": {
+      "pass": {
+        "min": 1,
+        "max": 1,
+        "description": "Strict high-bot invariant: the smoke harness must pass."
+      },
+      "duration_sec": {
+        "min": 540,
+        "max": 720,
+        "description": "Strict high-bot invariant: expected ten-minute soak with startup/shutdown timing slack."
+      },
+      "bot_count": {
+        "min": 8,
+        "max": 8,
+        "description": "Strict high-bot invariant: this budget is scoped to the eight-bot soak."
+      },
+      "source_counter_pass_int": {
+        "min": 1,
+        "max": 1,
+        "description": "Strict source-counter invariant: every expected source-counter group must be present."
+      },
+      "source_counter_groups_present_count": {
+        "min": 7,
+        "description": "Strict source-counter invariant: all currently known source-counter groups should be represented."
+      },
+      "source_counter_groups_missing_count": {
+        "max": 0,
+        "description": "Strict source-counter invariant: no known source-counter group may be absent."
+      },
+      "commands_per_bot_sec": {
+        "min": 20,
+        "max": 80,
+        "description": "Strict high-bot invariant: detects severe command starvation or runaway duplicate command submission."
+      },
+      "route_commands_per_bot_sec": {
+        "min": 20,
+        "max": 80,
+        "description": "Strict high-bot invariant: route-steered command throughput should track overall command throughput."
+      },
+      "route_queries_per_bot_sec": {
+        "max": 30,
+        "description": "Strict pressure budget: route-query rate from the 2026-06-28 source-counter baseline plus slack."
+      },
+      "route_refresh_ratio": {
+        "max": 0.65,
+        "description": "Strict pressure budget: route refreshes should stay within the 2026-06-28 source-counter baseline plus slack."
+      },
+      "route_reuse_ratio": {
+        "min": 0.35,
+        "description": "Strict pressure budget: route cache reuse should remain a meaningful share of route requests."
+      },
+      "debug_work_units_per_bot_sec": {
+        "max": 1500,
+        "description": "Strict pressure budget: debug overlay work proxy while route and goal debug are enabled."
+      },
+      "recovery_command_uses_per_bot_sec": {
+        "max": 45,
+        "description": "Strict pressure budget: recovery command churn budget with headroom over the source-counter baseline."
+      },
+      "progress_reports": {
+        "min": 8,
+        "max": 12,
+        "description": "Strict high-bot invariant: ten-minute soak should report roughly once per minute."
+      },
+      "bot_frame_cpu_ms_per_bot_sec": {
+        "max": 8.0,
+        "description": "Strict source-counter CPU budget: bot frame CPU must be present and within the source-counter baseline plus real repeated-soak scheduler and combat-state headroom."
+      },
+      "route_query_cpu_ms_per_bot_sec": {
+        "max": 2.0,
+        "description": "Strict source-counter CPU budget: WORR route-query CPU must be present and within budget."
+      },
+      "route_reuse_cpu_ms_per_bot_sec": {
+        "max": 0.5,
+        "description": "Strict source-counter CPU budget: route-reuse timing must be present and within budget."
+      },
+      "q3a_route_cpu_ms_per_bot_sec": {
+        "max": 2.0,
+        "description": "Strict source-counter CPU budget: Q3A route CPU must be present and within budget."
+      },
+      "q3a_memory_failures": {
+        "max": 0,
+        "description": "Strict source-counter memory budget: BotLib memory accounting must not report allocation failures."
+      },
+      "visibility_decompress_failures": {
+        "max": 0,
+        "description": "Strict source-counter visibility budget: visibility decompression must not fail."
+      },
+      "entity_trace_failures": {
+        "max": 0,
+        "description": "Strict source-counter trace budget: entity trace accounting must not report failures."
+      }
+    },
+    "status": {
+      "expected_min_commands": {
+        "min": 8,
+        "max": 8,
+        "description": "Strict high-bot invariant: the final status should still identify the eight-bot target."
+      },
+      "commands": {
+        "min": 120000,
+        "description": "Strict high-bot invariant: raw final status command count should show sustained bot command throughput."
+      },
+      "route_commands": {
+        "min": 120000,
+        "description": "Strict high-bot invariant: raw final status route command count should show sustained route steering."
+      },
+      "route_failures": {
+        "max": 0,
+        "description": "Strict high-bot invariant: no route failures are acceptable for this baseline smoke."
+      },
+      "route_invalid_slots": {
+        "max": 0,
+        "description": "Strict high-bot invariant: no invalid route slots should be observed."
+      },
+      "route_debug_missing_frames": {
+        "max": 0,
+        "description": "Strict high-bot invariant: route debug output should keep pace with route command frames."
+      },
+      "skipped_inactive": {
+        "max": 0,
+        "description": "Strict high-bot invariant: all eight bots should stay active through the soak."
+      }
+    }
+  }
+}

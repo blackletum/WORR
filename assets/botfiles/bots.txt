@@ -1,0 +1,39 @@
+{
+	name		vanguard
+	funname		Vanguard
+	model		male/major
+	skin		male/major
+	aifile		bots/vanguard_c.c
+}
+
+{
+	name		vector
+	funname		Vector
+	model		male/grunt
+	skin		male/grunt
+	aifile		bots/vector_c.c
+}
+
+{
+	name		bulwark
+	funname		Bulwark
+	model		male/pointman
+	skin		male/pointman
+	aifile		bots/bulwark_c.c
+}
+
+{
+	name		relay
+	funname		Relay
+	model		female/athena
+	skin		female/athena
+	aifile		bots/relay_c.c
+}
+
+{
+	name		smoke
+	funname		Smoke
+	model		male/grunt
+	skin		male/grunt
+	aifile		bots/smoke_c.c
+}

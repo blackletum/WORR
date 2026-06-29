@@ -1,0 +1,66 @@
+{
+  "schema": "worr-bot-perf-variance-budget-v1",
+  "description": "Comparison-level variance budget for repeated current-source high_bot_soak_degradation runs. Use this with two or more like-for-like source-counter soak logs after each individual run passes source_counter_soak_budget.json.",
+  "min_runs": 2,
+  "require_like_for_like": true,
+  "checks": {
+    "metrics": {
+      "commands_per_bot_sec": {
+        "max_relative_range_pct": 8.0,
+        "description": "Repeated soaks should keep command throughput stable once normalized by bot count and duration."
+      },
+      "route_commands_per_bot_sec": {
+        "max_relative_range_pct": 8.0,
+        "description": "Route-steered command throughput should track overall command throughput across repeated soaks."
+      },
+      "route_queries_per_bot_sec": {
+        "max_relative_range_pct": 35.0,
+        "description": "Route-query pressure is expected to vary with item/goal churn, but large swings indicate route-cache instability."
+      },
+      "route_refresh_ratio": {
+        "max_delta": 0.18,
+        "description": "Route refresh share should not oscillate sharply across repeated like-for-like soaks."
+      },
+      "route_reuse_ratio": {
+        "max_delta": 0.18,
+        "description": "Route reuse share should remain broadly stable across repeated like-for-like soaks."
+      },
+      "debug_work_units_per_bot_sec": {
+        "max_relative_range_pct": 25.0,
+        "description": "Route/goal debug work proxy should not swing wildly when debug settings and bot count are unchanged."
+      },
+      "recovery_command_uses_per_bot_sec": {
+        "max_relative_range_pct": 40.0,
+        "description": "Recovery churn can vary with item fights, but repeated soaks should not alternate between clean travel and heavy stuck recovery."
+      },
+      "bot_frame_cpu_ms_per_bot_sec": {
+        "max_relative_range_pct": 25.0,
+        "description": "Bot frame CPU source counter should be repeatable enough to use as a regression signal."
+      },
+      "route_query_cpu_ms_per_bot_sec": {
+        "max_relative_range_pct": 35.0,
+        "description": "WORR route-query CPU should remain within a broad repeated-run variance band."
+      },
+      "route_reuse_cpu_ms_per_bot_sec": {
+        "max_delta": 0.01,
+        "description": "Route-reuse CPU is close to zero in current soaks, so an absolute delta is more stable than a relative percentage gate."
+      },
+      "q3a_route_cpu_ms_per_bot_sec": {
+        "max_relative_range_pct": 35.0,
+        "description": "Q3A route CPU should remain within a broad repeated-run variance band."
+      },
+      "aas_inpvs_checks_per_bot_sec": {
+        "max_relative_range_pct": 30.0,
+        "description": "Visibility query pressure should remain stable for the same map, bot count, and soak policy."
+      },
+      "bsp_trace_calls_per_bot_sec": {
+        "max_relative_range_pct": 30.0,
+        "description": "Static BSP trace pressure should remain stable for the same map, bot count, and soak policy."
+      },
+      "entity_trace_clip_calls_per_bot_sec": {
+        "max_relative_range_pct": 30.0,
+        "description": "Entity trace clip pressure should remain stable for the same map, bot count, and soak policy."
+      }
+    }
+  }
+}

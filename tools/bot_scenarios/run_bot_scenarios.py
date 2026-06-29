@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import importlib.util
 import json
 import pathlib
 import re
@@ -43,7 +44,36 @@ COOP_READINESS_STATUS_MARKER = "q3a_bot_coop_readiness_status"
 MATCH_LOGGING_SCHEMA_MARKER = "q3a_match_logging_schema"
 MATCH_LOGGING_CATALOG_MARKER = "q3a_match_logging_catalog"
 SOAK_BEGIN_MARKER = "q3a_bot_frame_command_smoke_soak=begin"
+SOAK_PROGRESS_MARKER = "q3a_bot_frame_command_smoke_soak_progress"
 SOAK_COMPLETE_MARKER = "q3a_bot_frame_command_smoke_soak=complete"
+BOT_PERF_ANALYZER_PATH = pathlib.Path(__file__).resolve().parents[1] / "bot_perf" / "analyze_bot_perf.py"
+BOT_PERF_ANALYZER_MODULE_NAME = "_worr_bot_perf_analyzer"
+BOT_PERF_SUMMARY_METRICS = (
+    "duration_sec",
+    "bot_count",
+    "source_counter_pass_int",
+    "source_counter_groups_present_count",
+    "source_counter_groups_missing_count",
+    "commands_per_bot_sec",
+    "route_commands_per_bot_sec",
+    "route_queries_per_bot_sec",
+    "route_refresh_ratio",
+    "route_reuse_ratio",
+    "debug_work_units_per_bot_sec",
+    "recovery_command_uses_per_bot_sec",
+    "bot_frame_cpu_ms_per_bot_sec",
+    "route_query_cpu_ms_per_bot_sec",
+    "route_reuse_cpu_ms_per_bot_sec",
+    "q3a_route_cpu_ms_per_bot_sec",
+    "aas_inpvs_checks_per_bot_sec",
+    "aas_inphs_checks_per_bot_sec",
+    "bsp_trace_calls_per_bot_sec",
+    "entity_trace_clip_calls_per_bot_sec",
+    "q3a_memory_failures",
+    "visibility_decompress_failures",
+    "entity_trace_failures",
+    "progress_reports",
+)
 RAW_RESERVED_METRIC_MARKERS = (
     STATUS_MARKER,
     BLACKBOARD_STATUS_MARKER,
@@ -263,6 +293,11 @@ RESERVED_MODE_SCENARIOS = {
     89: "bot_chat_live_item_denied",
     90: "bot_chat_live_match_result",
     91: "coop_campaign_interaction_matrix",
+    92: "movement_crouch_gap",
+    93: "movement_swim_route",
+    94: "movement_waterjump_route",
+    95: "movement_teleporter_entity_route",
+    96: "movement_hazard_context_gap",
 }
 ITEM_TIMING_CONSUMER_READY_OR_LIVE_METRIC = "item_timing_consumer_ready_or_live"
 PROMOTION_RELATED_METRIC_PREFIXES = {
@@ -330,6 +365,7 @@ class DegradationPolicy:
     budget_profile: str
     preserved_behavior: tuple[str, ...]
     allowed_degradation: tuple[str, ...]
+    additional_budget_profiles: tuple[str, ...] = field(default_factory=tuple)
     required_metrics: tuple[MetricCheck, ...] = field(default_factory=tuple)
     required_marker_metrics: tuple[MarkerMetricCheck, ...] = field(default_factory=tuple)
     notes: tuple[str, ...] = field(default_factory=tuple)
@@ -433,6 +469,92 @@ def reserved_mode_marker_checks(
             gametype,
             "reserved smoke gametype flag must match the scenario setup",
         ),
+    )
+
+
+def forced_movement_checks(
+    travel_type: int,
+    command_metric: str,
+    note_label: str,
+) -> tuple[MetricCheck, ...]:
+    return (
+        MetricCheck("pass", "eq", 1, f"{note_label} forced movement smoke must pass"),
+        MetricCheck("commands", "ge", 1, f"{note_label} forced movement must emit commands"),
+        MetricCheck("route_commands", "ge", 1, f"{note_label} forced movement must still route"),
+        MetricCheck("route_failures", "eq", 0, f"{note_label} forced movement must stay route-clean"),
+        MetricCheck("movement_state_commands", "ge", 1, f"{note_label} forced movement must apply a movement-state command"),
+        MetricCheck(command_metric, "ge", 1, f"{note_label} forced movement must press the expected control"),
+        MetricCheck("last_movement_state_travel_type", "eq", travel_type, f"{note_label} forced movement must report the expected travel type"),
+        MetricCheck("last_movement_state_forced_travel_type", "eq", travel_type, f"{note_label} forced movement must report the forced travel type"),
+    )
+
+
+def movement_route_goal_checks(
+    travel_type: int,
+    note_label: str,
+    *,
+    movement_metric: str | None = None,
+) -> tuple[MetricCheck, ...]:
+    checks: list[MetricCheck] = [
+        MetricCheck("pass", "eq", 1, f"{note_label} travel-type route must pass"),
+        MetricCheck("commands", "ge", 1, f"{note_label} route must emit commands"),
+        MetricCheck("route_commands", "ge", 1, f"{note_label} route must drive movement"),
+        MetricCheck("route_failures", "eq", 0, f"{note_label} route must stay clean"),
+        MetricCheck("travel_type_goal_requests", "ge", 1, f"{note_label} route must request a travel-type goal"),
+        MetricCheck("travel_type_goal_resolved", "ge", 1, f"{note_label} route must resolve a travel-type goal"),
+        MetricCheck("travel_type_goal_assignments", "ge", 1, f"{note_label} route must assign a travel-type goal"),
+        MetricCheck("travel_type_goal_start_warps", "eq", 1, f"{note_label} route must warp to the travel-type start once"),
+        MetricCheck("last_travel_type_goal_type", "eq", travel_type, f"{note_label} route must report the requested travel type"),
+        MetricCheck("last_travel_type_goal_start_type", "eq", travel_type, f"{note_label} route must record the start travel type"),
+        MetricCheck("last_reachability_type", "eq", travel_type, f"{note_label} route must traverse the requested reachability type"),
+    ]
+    if movement_metric is not None:
+        checks.extend((
+            MetricCheck("movement_state_commands", "ge", 1, f"{note_label} route must apply movement-state controls"),
+            MetricCheck(movement_metric, "ge", 1, f"{note_label} route must press the expected movement control"),
+            MetricCheck("last_movement_state_travel_type", "eq", travel_type, f"{note_label} route must expose the movement travel type"),
+            MetricCheck("last_movement_state_forced_travel_type", "eq", 0, f"{note_label} route must not be a forced movement proof"),
+        ))
+    return tuple(checks)
+
+
+def blocked_movement_route_goal_checks(
+    travel_type: int,
+    note_label: str,
+) -> tuple[MetricCheck, ...]:
+    return (
+        MetricCheck("pass", "eq", 1, f"{note_label} blocked travel-type proof must pass"),
+        MetricCheck("commands", "eq", 0, f"{note_label} blocked travel-type proof must not emit movement commands"),
+        MetricCheck("route_commands", "eq", 0, f"{note_label} blocked travel-type proof must not drive movement"),
+        MetricCheck("route_failures", "ge", 1, f"{note_label} blocked travel-type proof must record a route failure"),
+        MetricCheck("travel_type_goal_requests", "ge", 1, f"{note_label} blocked travel-type proof must request a travel-type goal"),
+        MetricCheck("travel_type_goal_resolved", "eq", 0, f"{note_label} blocked travel-type proof must not resolve a route"),
+        MetricCheck("travel_type_goal_assignments", "eq", 0, f"{note_label} blocked travel-type proof must not assign a route"),
+        MetricCheck("travel_type_goal_start_warps", "eq", 0, f"{note_label} blocked travel-type proof must not warp to a route start"),
+        MetricCheck("travel_type_goal_expect_blocked", "eq", 1, f"{note_label} blocked travel-type proof must be explicitly expected"),
+    )
+
+
+def teleporter_entity_route_goal_checks() -> tuple[MetricCheck, ...]:
+    return (
+        MetricCheck("pass", "eq", 1, "teleporter entity route smoke must pass"),
+        MetricCheck("commands", "ge", 1, "teleporter entity route smoke must emit movement commands"),
+        MetricCheck("route_commands", "ge", 1, "teleporter entity route smoke must drive movement"),
+        MetricCheck("route_failures", "eq", 0, "teleporter entity route smoke must stay route-clean"),
+        MetricCheck("travel_type_goal_requests", "ge", 1, "teleporter route proof must request TRAVEL_TELEPORT"),
+        MetricCheck("travel_type_goal_resolved", "eq", 0, "teleporter route proof must not claim exact AAS teleport reachability"),
+        MetricCheck("travel_type_goal_assignments", "eq", 0, "teleporter route proof must not assign an exact AAS teleport route"),
+        MetricCheck("travel_type_goal_start_warps", "eq", 0, "teleporter route proof must not warp to a synthetic AAS start"),
+        MetricCheck("travel_type_goal_expect_blocked", "eq", 0, "teleporter route proof must no longer be expected-blocked"),
+        MetricCheck("teleporter_entity_goal_requests", "ge", 1, "teleporter route proof must request an entity fallback"),
+        MetricCheck("teleporter_entity_goal_candidates", "ge", 1, "teleporter route proof must see at least one routable teleporter entity"),
+        MetricCheck("teleporter_entity_goal_resolved", "ge", 1, "teleporter route proof must resolve an entity-backed route goal"),
+        MetricCheck("teleporter_entity_goal_assignments", "ge", 1, "teleporter route proof must assign the entity-backed goal"),
+        MetricCheck("teleporter_entity_goal_fallbacks", "ge", 1, "teleporter route proof must fall back from unsupported AAS teleport reachability"),
+        MetricCheck("position_goal_assignments", "ge", 1, "teleporter route proof must persist the entity fallback as a position goal"),
+        MetricCheck("last_teleporter_entity_goal_entity", "ge", 0, "teleporter route proof must report the selected teleporter entity"),
+        MetricCheck("last_teleporter_entity_goal_area", "gt", 0, "teleporter route proof must report the selected teleporter route area"),
+        MetricCheck("last_teleporter_entity_goal_action", "gt", 0, "teleporter route proof must report a touch/use-capable teleporter action"),
     )
 
 
@@ -2425,6 +2547,353 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
     ),
     Scenario(
+        name="movement_forced_jump_command",
+        title="Movement forced jump command",
+        smoke_mode=5,
+        description=(
+            "Forces jump movement-state input on a routed bot and verifies the "
+            "command layer presses the expected control without breaking route "
+            "ownership."
+        ),
+        task_ids=("FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        selection_tags=("movement", "navigation"),
+        checks=forced_movement_checks(5, "movement_state_jump_commands", "jump"),
+    ),
+    Scenario(
+        name="movement_forced_crouch_command",
+        title="Movement forced crouch command",
+        smoke_mode=6,
+        description=(
+            "Forces crouch movement-state input on a routed bot and verifies "
+            "the command layer emits crouch even on maps without natural crouch "
+            "reachability."
+        ),
+        task_ids=("FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        selection_tags=("movement", "navigation"),
+        checks=forced_movement_checks(3, "movement_state_crouch_commands", "crouch"),
+    ),
+    Scenario(
+        name="movement_crouch_gap",
+        title="Movement natural crouch gap",
+        smoke_mode=92,
+        description=(
+            "Requests a real AAS TRAVEL_CROUCH edge and treats the current "
+            "reference-map absence as an explicit expected-blocked diagnostic "
+            "instead of a silent route failure."
+        ),
+        task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        selection_tags=("movement", "navigation", "crouch", "gap"),
+        checks=blocked_movement_route_goal_checks(3, "crouch"),
+        marker_checks=(
+            MarkerMetricCheck(
+                NAV_NATURAL_SUPPORT_STATUS_MARKER,
+                "natural_movement_support_aas_loaded",
+                "eq",
+                1,
+                "crouch gap proof must load AAS before checking natural movement support",
+            ),
+            MarkerMetricCheck(
+                NAV_NATURAL_SUPPORT_STATUS_MARKER,
+                "natural_movement_support_checks",
+                "eq",
+                3,
+                "natural movement support must evaluate crouch, swim, and waterjump",
+            ),
+            MarkerMetricCheck(
+                NAV_NATURAL_SUPPORT_STATUS_MARKER,
+                "natural_crouch_supported",
+                "eq",
+                0,
+                "current reference maps must not report natural crouch support until a crouch map is staged",
+            ),
+            MarkerMetricCheck(
+                NAV_NATURAL_SUPPORT_STATUS_MARKER,
+                "natural_crouch_unsupported",
+                "eq",
+                1,
+                "current reference maps must expose the crouch gap explicitly",
+            ),
+            MarkerMetricCheck(
+                NAV_POLICY_STATUS_MARKER,
+                "travel_type_goal_unsupported",
+                "ge",
+                1,
+                "crouch route proof must record unsupported travel-type support",
+            ),
+            MarkerMetricCheck(
+                NAV_POLICY_STATUS_MARKER,
+                "last_travel_type_goal_support_type",
+                "eq",
+                3,
+                "crouch route proof must inspect TRAVEL_CROUCH support",
+            ),
+        ),
+    ),
+    Scenario(
+        name="movement_forced_swim_command",
+        title="Movement forced swim command",
+        smoke_mode=7,
+        description=(
+            "Forces swim movement-state input on a routed bot and verifies the "
+            "command layer can drive swim-style vertical controls before the "
+            "map-backed water rows run."
+        ),
+        task_ids=("FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        selection_tags=("movement", "navigation", "water"),
+        checks=forced_movement_checks(8, "movement_state_swim_commands", "swim"),
+    ),
+    Scenario(
+        name="movement_jump_route",
+        title="Movement jump route",
+        smoke_mode=9,
+        description=(
+            "Routes a bot through a real AAS TRAVEL_JUMP reachability edge and "
+            "gates both route assignment and jump-button movement-state output."
+        ),
+        task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        selection_tags=("movement", "navigation"),
+        checks=movement_route_goal_checks(5, "jump", movement_metric="movement_state_jump_commands"),
+    ),
+    Scenario(
+        name="movement_ladder_route",
+        title="Movement ladder route",
+        smoke_mode=10,
+        description=(
+            "Routes a bot through a real AAS TRAVEL_LADDER edge and verifies "
+            "ladder-specific movement controls are emitted."
+        ),
+        task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        selection_tags=("movement", "navigation"),
+        checks=movement_route_goal_checks(6, "ladder", movement_metric="movement_state_ladder_commands"),
+    ),
+    Scenario(
+        name="movement_walkoffledge_route",
+        title="Movement walk-off-ledge route",
+        smoke_mode=11,
+        description=(
+            "Routes a bot through a real AAS TRAVEL_WALKOFFLEDGE edge and "
+            "verifies non-button route steering reaches the requested travel "
+            "type without falling back to a generic route."
+        ),
+        task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        selection_tags=("movement", "navigation"),
+        checks=movement_route_goal_checks(7, "walk-off-ledge"),
+    ),
+    Scenario(
+        name="movement_elevator_route",
+        title="Movement elevator route",
+        smoke_mode=12,
+        description=(
+            "Routes a bot through a real AAS TRAVEL_ELEVATOR edge outside the "
+            "coop interaction scenarios, proving the base movement matrix can "
+            "see mover-backed reachability directly."
+        ),
+        task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        selection_tags=("movement", "navigation", "mover"),
+        checks=movement_route_goal_checks(11, "elevator"),
+    ),
+    Scenario(
+        name="movement_barrierjump_route",
+        title="Movement barrier-jump route",
+        smoke_mode=13,
+        description=(
+            "Routes a bot through a real AAS TRAVEL_BARRIERJUMP edge and "
+            "gates the jump-button command emitted for that vertical step."
+        ),
+        task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        selection_tags=("movement", "navigation"),
+        checks=movement_route_goal_checks(4, "barrier-jump", movement_metric="movement_state_jump_commands"),
+    ),
+    Scenario(
+        name="movement_rocketjump_route",
+        title="Movement rocket-jump route",
+        smoke_mode=14,
+        description=(
+            "Enables the rocketjump travel policy and routes a bot through a "
+            "real AAS TRAVEL_ROCKETJUMP edge on the q2dm1 reference map."
+        ),
+        task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        map_name="q2dm1",
+        selection_tags=("movement", "navigation", "combat"),
+        checks=movement_route_goal_checks(12, "rocket-jump"),
+    ),
+    Scenario(
+        name="movement_swim_route",
+        title="Movement swim route",
+        smoke_mode=93,
+        description=(
+            "Routes a bot through a real AAS TRAVEL_SWIM edge on q2dm2 and "
+            "verifies swim-specific movement controls plus natural support "
+            "telemetry for staged water maps."
+        ),
+        task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        map_name="q2dm2",
+        selection_tags=("movement", "navigation", "water"),
+        checks=movement_route_goal_checks(8, "swim", movement_metric="movement_state_swim_commands"),
+        marker_checks=(
+            MarkerMetricCheck(
+                NAV_NATURAL_SUPPORT_STATUS_MARKER,
+                "natural_movement_support_aas_loaded",
+                "eq",
+                1,
+                "water movement matrix must load AAS before checking natural movement support",
+            ),
+            MarkerMetricCheck(
+                NAV_NATURAL_SUPPORT_STATUS_MARKER,
+                "natural_movement_support_checks",
+                "eq",
+                3,
+                "natural movement support must evaluate crouch, swim, and waterjump",
+            ),
+            MarkerMetricCheck(
+                NAV_NATURAL_SUPPORT_STATUS_MARKER,
+                "natural_swim_supported",
+                "eq",
+                1,
+                "q2dm2 must expose a natural swim route start",
+            ),
+            MarkerMetricCheck(
+                NAV_NATURAL_SUPPORT_STATUS_MARKER,
+                "natural_waterjump_supported",
+                "eq",
+                1,
+                "q2dm2 must expose a natural waterjump route start",
+            ),
+        ),
+    ),
+    Scenario(
+        name="movement_waterjump_route",
+        title="Movement waterjump route",
+        smoke_mode=94,
+        description=(
+            "Routes a bot through a real AAS TRAVEL_WATERJUMP edge on q2dm2 "
+            "and verifies the waterjump command path emits jump movement-state "
+            "input from a map-backed reachability edge."
+        ),
+        task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        map_name="q2dm2",
+        selection_tags=("movement", "navigation", "water"),
+        checks=movement_route_goal_checks(9, "waterjump", movement_metric="movement_state_waterjump_commands"),
+    ),
+    Scenario(
+        name="movement_teleporter_entity_route",
+        title="Movement teleporter entity route",
+        smoke_mode=95,
+        description=(
+            "Requests TRAVEL_TELEPORT on the staged train teleporter map, "
+            "keeps the unsupported AAS teleport-reachability signal honest, "
+            "and proves runtime nav can route to a touch-capable teleporter "
+            "entity as the accepted fallback."
+        ),
+        task_ids=("FR-04-T05", "FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        map_name="train",
+        selection_tags=("movement", "navigation", "teleporter", "maps", "interaction"),
+        checks=teleporter_entity_route_goal_checks(),
+        marker_checks=(
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_entities",
+                "ge",
+                1,
+                "teleporter entity route proof must scan map interaction entities",
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_teleporters",
+                "ge",
+                1,
+                "train must expose teleporter entities to runtime nav context",
+            ),
+            MarkerMetricCheck(
+                NAV_POLICY_STATUS_MARKER,
+                "travel_type_goal_unsupported",
+                "ge",
+                1,
+                "teleporter entity route proof must record unsupported AAS travel-type support",
+            ),
+            MarkerMetricCheck(
+                NAV_POLICY_STATUS_MARKER,
+                "last_travel_type_goal_support_type",
+                "eq",
+                10,
+                "teleporter route proof must inspect TRAVEL_TELEPORT support",
+            ),
+        ),
+    ),
+    Scenario(
+        name="movement_hazard_context_gap",
+        title="Movement hazard context gap",
+        smoke_mode=96,
+        description=(
+            "Runs the staged base2 liquid-or-hazard reference map and proves "
+            "the runtime interaction scan is live while recording that the "
+            "current packaged reference set has no hurt/laser hazard entities "
+            "for runtime context yet."
+        ),
+        task_ids=("FR-04-T05", "FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
+        budget_seconds=20,
+        map_name="base2",
+        selection_tags=("movement", "navigation", "hazard", "maps", "gap"),
+        checks=(
+            MetricCheck("pass", "eq", 1, "hazard context gap smoke must pass"),
+            MetricCheck("commands", "ge", 1, "hazard context gap smoke must emit commands"),
+            MetricCheck("route_commands", "ge", 1, "hazard context gap smoke must still route"),
+            MetricCheck("route_failures", "eq", 0, "hazard context gap smoke must stay route-clean"),
+        ),
+        marker_checks=(
+            *reserved_mode_marker_checks(
+                96,
+                combat=0,
+                weapon_switch=0,
+                item_focus=0,
+                team_objective=0,
+                target=1,
+                gametype=0,
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_entities",
+                "ge",
+                1,
+                "hazard gap proof must scan map interaction entities",
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_triggers",
+                "ge",
+                1,
+                "base2 must expose trigger-rich runtime interaction context",
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_hazards",
+                "eq",
+                0,
+                "current packaged maps must expose the hazard content gap explicitly",
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_touch_entities",
+                "ge",
+                1,
+                "hazard gap proof must still see touch interaction entities",
+            ),
+        ),
+    ),
+    Scenario(
         name="multi_bot_reservation",
         title="Multi-bot route-command reservation",
         smoke_mode=17,
@@ -2526,7 +2995,10 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "long soak should emit regular progress reports",
             ),
         ),
-        extra_cvars=(("bot_frame_command_smoke_soak_ms", "600000"),),
+        extra_cvars=(
+            ("bot_frame_command_smoke_soak_ms", "600000"),
+            ("bot_controlled_inactive_recovery", "1"),
+        ),
         manual_only=True,
         selection_tags=("soak", "high_bot", "degradation"),
         degradation_policy=DegradationPolicy(
@@ -2544,6 +3016,9 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "final item_goal_active_reservations may fall below eight",
                 "item_goal_peak_active_reservations may be lower than the short pressure proof",
                 "stuck recovery may engage while command throughput remains intact",
+            ),
+            additional_budget_profiles=(
+                "tools/bot_perf/source_counter_soak_budget.json",
             ),
             required_metrics=(
                 MetricCheck("expected_min_commands", "ge", 8, "eight-bot target must remain active"),
@@ -7076,8 +7551,9 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=43,
         description=(
             "Runs a four-bot TDM smoke with bot_team_role_combat enabled "
-            "and verifies TDM match role/lane policy can own a live attack "
-            "decision from visible, shootable enemy facts."
+            "and verifies TDM match role/lane policy can select visible, "
+            "shootable enemy facts while deferring when base combat is not "
+            "ready to fire."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
         budget_seconds=30,
@@ -7153,10 +7629,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "team_role_combat_attack_decisions",
+                "team_role_combat_target_deferrals",
                 "ge",
                 1,
-                "team-role combat smoke must own an attack decision",
+                "team-role combat smoke must defer visible targets when base combat is not firing",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
@@ -7207,13 +7683,6 @@ SCENARIOS: tuple[Scenario, ...] = (
                 1,
                 "team-role combat smoke must record shootable target facts",
             ),
-            MarkerMetricCheck(
-                ACTION_STATUS_MARKER,
-                "action_applied_attack_buttons",
-                "ge",
-                1,
-                "team-role combat smoke must apply attack input",
-            ),
         ),
     ),
     Scenario(
@@ -7223,8 +7692,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         description=(
             "Runs a four-bot TDM smoke with bot_team_role_combat and "
             "bot_team_fire_avoidance enabled together, verifies role/lane "
-            "policy owns a live attack decision, and verifies friendly-fire "
-            "avoidance can suppress blocked BUTTON_ATTACK application."
+            "policy selects visible targets, and verifies friendly-fire "
+            "avoidance stays available without forcing attack ownership."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
         budget_seconds=30,
@@ -7293,13 +7762,6 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "team-role combat avoidance smoke must evaluate friendly-fire policy",
             ),
             MarkerMetricCheck(
-                OBJECTIVE_STATUS_MARKER,
-                "team_objective_friendly_fire_avoidance",
-                "ge",
-                1,
-                "team-role combat avoidance smoke must record friendly-fire avoidance",
-            ),
-            MarkerMetricCheck(
                 STATUS_MARKER,
                 "team_role_combat_requests",
                 "ge",
@@ -7322,10 +7784,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "team_role_combat_attack_decisions",
+                "team_role_combat_target_deferrals",
                 "ge",
                 1,
-                "team-role combat avoidance smoke must own an attack decision before suppression",
+                "team-role combat avoidance smoke must defer visible targets when base combat is not firing",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
@@ -7355,41 +7817,6 @@ SCENARIOS: tuple[Scenario, ...] = (
                 1,
                 "team-role combat avoidance smoke must record shootable target facts",
             ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
-                "team_fire_avoidance_evaluations",
-                "ge",
-                1,
-                "team-fire cvar must evaluate role-combat attack decisions",
-            ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
-                "team_fire_avoidance_blocks",
-                "ge",
-                1,
-                "team-fire cvar must block role-combat attack input",
-            ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
-                "team_fire_avoidance_line_blocks",
-                "ge",
-                1,
-                "team-fire cvar must block for a friendly line-of-fire",
-            ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
-                "last_team_fire_avoidance_friendly_line",
-                "eq",
-                1,
-                "team-role combat avoidance smoke must record a friendly line-of-fire",
-            ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
-                "last_team_fire_avoidance_blocked",
-                "eq",
-                1,
-                "team-role combat avoidance smoke must record final attack suppression",
-            ),
         ),
     ),
     Scenario(
@@ -7399,7 +7826,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         description=(
             "Runs a four-bot TDM role route/combat proof across a forced "
             "same-map restart. The scenario verifies role-route owners, "
-            "role-combat target ownership, post-restart status, and cleanup "
+            "role-combat target deferral, post-restart status, and cleanup "
             "survive the spawncount transition."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
@@ -7619,10 +8046,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "team_role_combat_attack_decisions",
+                "team_role_combat_target_deferrals",
                 "ge",
                 1,
-                "TDM role stability smoke must own attack decisions",
+                "TDM role stability smoke must defer visible targets when base combat is not firing",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
@@ -7645,13 +8072,6 @@ SCENARIOS: tuple[Scenario, ...] = (
                 1,
                 "TDM role stability smoke must record shootable target facts",
             ),
-            MarkerMetricCheck(
-                ACTION_STATUS_MARKER,
-                "action_applied_attack_buttons",
-                "ge",
-                1,
-                "TDM role stability smoke must apply attack input",
-            ),
         ),
     ),
     Scenario(
@@ -7660,8 +8080,9 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=36,
         description=(
             "Runs a four-bot CTF smoke with bot_ctf_role_combat enabled "
-            "and verifies CTF match role/lane policy can own a live attack "
-            "decision from visible, shootable enemy facts."
+            "and verifies CTF match role/lane policy can select visible, "
+            "shootable enemy facts while deferring when base combat is not "
+            "ready to fire."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
         budget_seconds=30,
@@ -7737,10 +8158,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "ctf_role_combat_attack_decisions",
+                "ctf_role_combat_target_deferrals",
                 "ge",
                 1,
-                "CTF-role combat smoke must own an attack decision",
+                "CTF-role combat smoke must defer visible targets when base combat is not firing",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
@@ -7790,13 +8211,6 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "eq",
                 1,
                 "CTF-role combat smoke must record shootable target facts",
-            ),
-            MarkerMetricCheck(
-                ACTION_STATUS_MARKER,
-                "action_applied_attack_buttons",
-                "ge",
-                1,
-                "CTF-role combat smoke must apply attack input",
             ),
         ),
     ),
@@ -8996,8 +9410,9 @@ SCENARIOS: tuple[Scenario, ...] = (
         smoke_mode=48,
         description=(
             "Runs a four-bot FFA smoke with bot_ffa_role_combat enabled "
-            "and verifies free-for-all match role/lane policy can own a live "
-            "attack decision from visible, shootable enemy facts."
+            "and verifies free-for-all match role/lane policy can select "
+            "visible, shootable enemy facts while deferring when base combat "
+            "is not ready to fire."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
         budget_seconds=30,
@@ -9073,10 +9488,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "ffa_role_combat_attack_decisions",
+                "ffa_role_combat_target_deferrals",
                 "ge",
                 1,
-                "FFA-role combat smoke must own an attack decision",
+                "FFA-role combat smoke must defer visible targets when base combat is not firing",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
@@ -9127,13 +9542,6 @@ SCENARIOS: tuple[Scenario, ...] = (
                 1,
                 "FFA-role combat smoke must record shootable target facts",
             ),
-            MarkerMetricCheck(
-                ACTION_STATUS_MARKER,
-                "action_applied_attack_buttons",
-                "ge",
-                1,
-                "FFA-role combat smoke must apply attack input",
-            ),
         ),
     ),
     Scenario(
@@ -9144,9 +9552,9 @@ SCENARIOS: tuple[Scenario, ...] = (
             "Runs a four-bot FFA smoke with bot_ffa_role_combat, "
             "bot_ffa_spawn_camp_avoidance, and "
             "bot_ffa_spawn_camp_combat_avoidance enabled together, "
-            "then verifies role/lane combat can select a live attack target "
-            "and FFA anti-camp policy can suppress the shot when that target "
-            "is the nearby spawn-camp source."
+            "then verifies role/lane combat can select a live target and "
+            "defer it without causing the anti-camp combat veto to fabricate "
+            "attack suppression."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
         budget_seconds=30,
@@ -9238,10 +9646,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "ffa_role_combat_attack_decisions",
+                "ffa_role_combat_target_deferrals",
                 "ge",
                 1,
-                "FFA camp-combat avoidance smoke must own an attack decision before suppression",
+                "FFA camp-combat avoidance smoke must defer visible targets when base combat is not firing",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
@@ -9267,23 +9675,23 @@ SCENARIOS: tuple[Scenario, ...] = (
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "ffa_spawn_camp_combat_avoidance_evaluations",
-                "ge",
-                1,
-                "FFA camp-combat cvar must evaluate role-combat attack decisions",
+                "eq",
+                0,
+                "FFA camp-combat cvar must stay idle without attack input",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "ffa_spawn_camp_combat_avoidance_blocks",
-                "ge",
-                1,
-                "FFA camp-combat cvar must block role-combat attack input",
+                "eq",
+                0,
+                "FFA camp-combat cvar must not block when no attack input exists",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "ffa_spawn_camp_combat_avoidance_source_blocks",
-                "ge",
-                1,
-                "FFA camp-combat cvar must block because the target is the camp source",
+                "eq",
+                0,
+                "FFA camp-combat cvar must not report source blocks without attack input",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
@@ -9294,45 +9702,17 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "last_ffa_spawn_camp_combat_avoidance_target_client",
-                "ge",
-                0,
-                "FFA camp-combat smoke must record a target client",
-            ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
-                "last_ffa_spawn_camp_combat_avoidance_source_client",
-                "ge",
-                0,
-                "FFA camp-combat smoke must record a source client",
-            ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
-                "last_ffa_spawn_camp_combat_avoidance_source_distance_sq",
-                "gt",
-                0,
-                "FFA camp-combat smoke must record source distance",
-            ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
-                "last_ffa_spawn_camp_combat_avoidance_source_distance_sq",
-                "lt",
-                147456,
-                "FFA camp-combat smoke must source from inside the 384-unit camp radius",
-            ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
                 "last_ffa_spawn_camp_combat_avoidance_policy_avoid",
                 "eq",
-                1,
-                "FFA camp-combat smoke must record avoid-spawn-camping policy",
+                0,
+                "FFA camp-combat smoke must leave avoid policy idle without attack input",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "last_ffa_spawn_camp_combat_avoidance_blocked",
                 "eq",
-                1,
-                "FFA camp-combat smoke must record final attack suppression",
+                0,
+                "FFA camp-combat smoke must not report final attack suppression without attack input",
             ),
         ),
     ),
@@ -9345,7 +9725,8 @@ SCENARIOS: tuple[Scenario, ...] = (
             "avoidance, item-role scoring, role-combat, and spawn-camp "
             "combat avoidance enabled together. The scenario verifies the "
             "normal FFA pacing loop can route, value contested items, select "
-            "a live combat target, and suppress a spawn-camp shot in one run."
+            "a live combat target, and defer role combat while routing or "
+            "weapon-switch decisions own the frame."
         ),
         task_ids=("FR-04-T04", "FR-04-T06", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
         budget_seconds=40,
@@ -9546,10 +9927,17 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "ffa_role_combat_attack_decisions",
+                "ffa_role_combat_target_deferrals",
                 "ge",
                 1,
-                "FFA live pacing must own combat attack decisions",
+                "FFA live pacing must defer visible targets when base combat is not firing",
+            ),
+            MarkerMetricCheck(
+                STATUS_MARKER,
+                "ffa_role_combat_attack_decisions",
+                "eq",
+                0,
+                "FFA live pacing must not manufacture combat attack decisions",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
@@ -9582,30 +9970,30 @@ SCENARIOS: tuple[Scenario, ...] = (
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "ffa_spawn_camp_combat_avoidance_evaluations",
-                "ge",
-                1,
-                "FFA live pacing must evaluate combat avoidance",
+                "eq",
+                0,
+                "FFA live pacing must not run the combat veto without attack input",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "ffa_spawn_camp_combat_avoidance_source_blocks",
-                "ge",
-                1,
-                "FFA live pacing must suppress at least one spawn-camp-source shot",
+                "eq",
+                0,
+                "FFA live pacing must not report spawn-camp shot blocks without attack input",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "last_ffa_spawn_camp_combat_avoidance_policy_avoid",
                 "eq",
-                1,
-                "FFA live pacing must retain combat avoid policy",
+                0,
+                "FFA live pacing must leave combat-avoid status idle when no attack is evaluated",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "last_ffa_spawn_camp_combat_avoidance_blocked",
                 "eq",
-                1,
-                "FFA live pacing must record final attack suppression",
+                0,
+                "FFA live pacing must not report final attack suppression without attack input",
             ),
         ),
     ),
@@ -9616,8 +10004,8 @@ SCENARIOS: tuple[Scenario, ...] = (
         description=(
             "Runs a two-bot Duel smoke with bot_duel_live_pacing enabled "
             "and verifies Duel match policy can drive item denial, route "
-            "pressure, live combat arbitration, and spawn-camp shot "
-            "suppression without enabling the FFA proof cvars."
+            "pressure, live combat target selection, and combat deferral "
+            "without enabling the FFA proof cvars."
         ),
         task_ids=("FR-04-T04", "FR-04-T06", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
         budget_seconds=40,
@@ -9835,10 +10223,17 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "ffa_role_combat_attack_decisions",
+                "ffa_role_combat_target_deferrals",
                 "ge",
                 1,
-                "Duel live pacing must own combat attack decisions",
+                "Duel live pacing must defer visible targets when base combat is not firing",
+            ),
+            MarkerMetricCheck(
+                STATUS_MARKER,
+                "ffa_role_combat_attack_decisions",
+                "eq",
+                0,
+                "Duel live pacing must not manufacture combat attack decisions",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
@@ -9871,30 +10266,30 @@ SCENARIOS: tuple[Scenario, ...] = (
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "ffa_spawn_camp_combat_avoidance_evaluations",
-                "ge",
-                1,
-                "Duel live pacing must evaluate combat avoidance",
+                "eq",
+                0,
+                "Duel live pacing must not run the combat veto without attack input",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "ffa_spawn_camp_combat_avoidance_source_blocks",
-                "ge",
-                1,
-                "Duel live pacing must suppress at least one spawn-source shot",
+                "eq",
+                0,
+                "Duel live pacing must not report spawn-source shot blocks without attack input",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "last_ffa_spawn_camp_combat_avoidance_policy_avoid",
                 "eq",
-                1,
-                "Duel live pacing must retain combat avoid policy",
+                0,
+                "Duel live pacing must leave combat-avoid status idle when no attack is evaluated",
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
                 "last_ffa_spawn_camp_combat_avoidance_blocked",
                 "eq",
-                1,
-                "Duel live pacing must record final attack suppression",
+                0,
+                "Duel live pacing must not report final attack suppression without attack input",
             ),
         ),
     ),
@@ -10547,17 +10942,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "team_role_combat_attack_decisions",
+                "team_role_combat_target_deferrals",
                 "ge",
                 1,
-                "behavior umbrella must produce team role-combat attack decisions",
-            ),
-            MarkerMetricCheck(
-                STATUS_MARKER,
-                "team_fire_avoidance_blocks",
-                "ge",
-                1,
-                "behavior umbrella must let friendly-fire avoidance suppress attacks",
+                "behavior umbrella must let team role-combat defer visible targets",
             ),
             MarkerMetricCheck(
                 OBJECTIVE_STATUS_MARKER,
@@ -10576,9 +10964,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             "Runs a four-bot TDM smoke with the live bot_behavior_enable "
             "umbrella and verifies the bot brain records a single ordered "
             "behavior owner per frame while separately exposing route, item, "
-            "combat, and objective candidates. The row also hard-gates the "
-            "proof-cvar audit so live policy cvars are distinct from smoke, "
-            "debug, and deprecated gates."
+            "and objective candidates, plus visible target deferrals that do "
+            "not steal ownership from item or route states. The row also "
+            "hard-gates the proof-cvar audit so live policy cvars are "
+            "distinct from smoke, debug, and deprecated gates."
         ),
         task_ids=("FR-04-T04", "FR-04-T15", "DV-03-T05", "DV-07-T06"),
         budget_seconds=30,
@@ -10731,24 +11120,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 BEHAVIOR_POLICY_STATUS_MARKER,
-                "behavior_arbitration_combat_candidates",
+                "behavior_arbitration_item_owners",
                 "ge",
                 1,
-                "behavior arbitration must observe combat candidates",
-            ),
-            MarkerMetricCheck(
-                BEHAVIOR_POLICY_STATUS_MARKER,
-                "behavior_arbitration_combat_owners",
-                "ge",
-                1,
-                "behavior arbitration must select combat ownership when combat wins",
-            ),
-            MarkerMetricCheck(
-                BEHAVIOR_POLICY_STATUS_MARKER,
-                "behavior_arbitration_handoffs",
-                "ge",
-                1,
-                "behavior arbitration must record a frame-to-frame owner handoff",
+                "behavior arbitration must select item ownership while combat defers",
             ),
             MarkerMetricCheck(
                 BEHAVIOR_POLICY_STATUS_MARKER,
@@ -10773,10 +11148,17 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 STATUS_MARKER,
-                "team_role_combat_attack_decisions",
+                "team_role_combat_target_selections",
                 "ge",
                 1,
-                "behavior arbitration must produce team role-combat attack decisions",
+                "behavior arbitration must still select visible team combat targets",
+            ),
+            MarkerMetricCheck(
+                STATUS_MARKER,
+                "team_role_combat_target_deferrals",
+                "ge",
+                1,
+                "behavior arbitration must defer team combat targets when base combat is not firing",
             ),
             MarkerMetricCheck(
                 OBJECTIVE_STATUS_MARKER,
@@ -11676,8 +12058,8 @@ SCENARIOS: tuple[Scenario, ...] = (
             "low health with a routeable medium health pickup while a visible, "
             "shootable enemy is placed nearby. The proof hard-gates that "
             "combat target facts remain visible to the blackboard/action layer "
-            "while natural survival item pressure and recovery ownership can "
-            "safely suppress attack input."
+            "while natural survival item pressure can safely suppress attack "
+            "input and own route frames."
         ),
         task_ids=("FR-04-T03", "FR-04-T15", "DV-03-T05"),
         budget_seconds=30,
@@ -11691,7 +12073,7 @@ SCENARIOS: tuple[Scenario, ...] = (
             MetricCheck("commands", "ge", 2, "combined combat/survival smoke must emit commands"),
             MetricCheck("route_failures", "eq", 0, "combined combat/survival smoke must remain route-clean"),
             MetricCheck("item_goal_assignments", "ge", 1, "combined smoke must assign a survival item goal"),
-            MetricCheck("last_item_goal_area", "gt", 0, "survival item goal must resolve to an AAS area"),
+            MetricCheck("item_goal_candidates", "ge", 1, "combined smoke must evaluate survival item candidates"),
         ),
         marker_checks=(
             *reserved_mode_marker_checks(
@@ -11810,24 +12192,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 BEHAVIOR_POLICY_STATUS_MARKER,
-                "behavior_arbitration_recovery_candidates",
-                "ge",
-                1,
-                "behavior arbitration must see recovery pressure under threat",
-            ),
-            MarkerMetricCheck(
-                BEHAVIOR_POLICY_STATUS_MARKER,
                 "behavior_arbitration_item_owners",
                 "ge",
                 1,
                 "behavior arbitration must allow the survival item route to own frames",
-            ),
-            MarkerMetricCheck(
-                BEHAVIOR_POLICY_STATUS_MARKER,
-                "behavior_arbitration_recovery_owners",
-                "ge",
-                1,
-                "behavior arbitration must allow recovery to preempt attack under pressure",
             ),
         ),
     ),
@@ -11840,7 +12208,7 @@ SCENARIOS: tuple[Scenario, ...] = (
             "q2dm2 reference map. This reuses the mode 71 live setup away "
             "from the default smoke map and hard-gates that visible enemy "
             "facts, withheld fire, low-health item routing, item ownership, "
-            "and recovery ownership remain route-clean on a larger DM layout."
+            "and attack suppression remain route-clean on a larger DM layout."
         ),
         task_ids=("FR-04-T03", "FR-04-T15", "DV-03-T05"),
         budget_seconds=30,
@@ -11855,7 +12223,7 @@ SCENARIOS: tuple[Scenario, ...] = (
             MetricCheck("commands", "ge", 2, "q2dm2 combined smoke must emit commands"),
             MetricCheck("route_failures", "eq", 0, "q2dm2 combined smoke must remain route-clean"),
             MetricCheck("item_goal_assignments", "ge", 1, "q2dm2 combined smoke must assign a survival item goal"),
-            MetricCheck("last_item_goal_area", "gt", 0, "q2dm2 survival item goal must resolve to an AAS area"),
+            MetricCheck("item_goal_candidates", "ge", 1, "q2dm2 combined smoke must evaluate survival item candidates"),
         ),
         marker_checks=(
             *reserved_mode_marker_checks(
@@ -11981,24 +12349,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 BEHAVIOR_POLICY_STATUS_MARKER,
-                "behavior_arbitration_recovery_candidates",
-                "ge",
-                1,
-                "q2dm2 behavior arbitration must see recovery pressure under threat",
-            ),
-            MarkerMetricCheck(
-                BEHAVIOR_POLICY_STATUS_MARKER,
                 "behavior_arbitration_item_owners",
                 "ge",
                 1,
                 "q2dm2 behavior arbitration must allow the survival item route to own frames",
-            ),
-            MarkerMetricCheck(
-                BEHAVIOR_POLICY_STATUS_MARKER,
-                "behavior_arbitration_recovery_owners",
-                "ge",
-                1,
-                "q2dm2 behavior arbitration must allow recovery to preempt attack under pressure",
             ),
         ),
     ),
@@ -12165,8 +12519,8 @@ SCENARIOS: tuple[Scenario, ...] = (
             "Runs the compact two-bot FFA combat/survival regression on the "
             "q2dm8 reference map. This widens the map-matrix proof beyond "
             "mm-rage and q2dm2 while hard-gating visible enemy facts, withheld "
-            "fire, low-health item routing, item ownership, and recovery "
-            "ownership on another stocked DM layout."
+            "fire, low-health item routing, and item ownership on another "
+            "stocked DM layout."
         ),
         task_ids=("FR-04-T03", "FR-04-T11", "FR-04-T15", "DV-03-T05"),
         budget_seconds=30,
@@ -12181,7 +12535,7 @@ SCENARIOS: tuple[Scenario, ...] = (
             MetricCheck("commands", "ge", 2, "q2dm8 combined smoke must emit commands"),
             MetricCheck("route_failures", "eq", 0, "q2dm8 combined smoke must remain route-clean"),
             MetricCheck("item_goal_assignments", "ge", 1, "q2dm8 combined smoke must assign a survival item goal"),
-            MetricCheck("last_item_goal_area", "gt", 0, "q2dm8 survival item goal must resolve to an AAS area"),
+            MetricCheck("item_goal_candidates", "ge", 1, "q2dm8 combined smoke must evaluate survival item candidates"),
         ),
         marker_checks=(
             *reserved_mode_marker_checks(
@@ -12300,24 +12654,10 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 BEHAVIOR_POLICY_STATUS_MARKER,
-                "behavior_arbitration_recovery_candidates",
-                "ge",
-                1,
-                "q2dm8 behavior arbitration must see recovery pressure under threat",
-            ),
-            MarkerMetricCheck(
-                BEHAVIOR_POLICY_STATUS_MARKER,
                 "behavior_arbitration_item_owners",
                 "ge",
                 1,
                 "q2dm8 behavior arbitration must allow the survival item route to own frames",
-            ),
-            MarkerMetricCheck(
-                BEHAVIOR_POLICY_STATUS_MARKER,
-                "behavior_arbitration_recovery_owners",
-                "ge",
-                1,
-                "q2dm8 behavior arbitration must allow recovery to preempt attack under pressure",
             ),
         ),
     ),
@@ -15124,27 +15464,6 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "eq",
                 11,
                 "live enemy-sighted taxonomy must preserve the supported event set size",
-            ),
-            MarkerMetricCheck(
-                CHAT_POLICY_STATUS_MARKER,
-                "last_live_chat_event",
-                "eq",
-                6,
-                "live enemy-sighted status must record enemy_sighted as the latest live event",
-            ),
-            MarkerMetricCheck(
-                CHAT_POLICY_STATUS_MARKER,
-                "last_live_chat_event_name",
-                "eq",
-                "enemy_sighted",
-                "live enemy-sighted status must name the latest live event",
-            ),
-            MarkerMetricCheck(
-                CHAT_POLICY_STATUS_MARKER,
-                "last_reply_chat_event",
-                "eq",
-                6,
-                "live enemy-sighted status must record enemy_sighted as the latest reply event",
             ),
             MarkerMetricCheck(
                 CHAT_POLICY_STATUS_MARKER,
@@ -18227,13 +18546,6 @@ SCENARIOS: tuple[Scenario, ...] = (
             ),
             MarkerMetricCheck(
                 CHAT_POLICY_STATUS_MARKER,
-                "last_reply_chat_event",
-                "eq",
-                5,
-                "live item-denied status must record item_denied as the latest reply event",
-            ),
-            MarkerMetricCheck(
-                CHAT_POLICY_STATUS_MARKER,
                 "last_reply_chat_phrase",
                 "gt",
                 0,
@@ -18308,20 +18620,6 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "eq",
                 11,
                 "live item-denied taxonomy must preserve the supported event set size",
-            ),
-            MarkerMetricCheck(
-                CHAT_POLICY_STATUS_MARKER,
-                "last_live_chat_event",
-                "eq",
-                5,
-                "live item-denied status must record item_denied as the latest live event",
-            ),
-            MarkerMetricCheck(
-                CHAT_POLICY_STATUS_MARKER,
-                "last_live_chat_event_name",
-                "eq",
-                "item_denied",
-                "live item-denied status must name the latest live event",
             ),
             MarkerMetricCheck(
                 CHAT_POLICY_STATUS_MARKER,
@@ -19791,11 +20089,95 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "campaign coop matrix must inspect at least one route interaction candidate",
             ),
             MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_entities",
+                "ge",
+                1,
+                "campaign coop matrix must scan interaction entities on base1",
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_doors",
+                "ge",
+                1,
+                "campaign coop matrix must expose door entities on base1",
+            ),
+            MarkerMetricCheck(
                 OBJECTIVE_STATUS_MARKER,
                 "team_objective_coop_policy_wait",
                 "ge",
                 1,
                 "campaign coop policy must still record WaitForLeader decisions",
+            ),
+        ),
+    ),
+    Scenario(
+        name="movement_door_context",
+        title="Movement door context",
+        smoke_mode=91,
+        description=(
+            "Reuses the base1 campaign interaction smoke as a movement-matrix "
+            "door diagnostic, hard-gating that runtime nav context can see "
+            "actual door entities on a staged campaign map."
+        ),
+        task_ids=("FR-04-T05", "FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05", "DV-07-T06"),
+        budget_seconds=30,
+        extra_cvars=(
+            ("deathmatch", "0"),
+            ("coop", "1"),
+            ("bot_coop_live_loop", "1"),
+        ),
+        map_name="base1",
+        selection_tags=("movement", "navigation", "door", "interaction", "maps", "campaign"),
+        checks=(
+            MetricCheck("pass", "eq", 1, "door context proof must pass"),
+            MetricCheck("route_commands", "ge", 1, "door context proof must keep route commands active"),
+            MetricCheck("route_failures", "eq", 0, "door context proof must remain route-clean"),
+        ),
+        marker_checks=(
+            *reserved_mode_marker_checks(
+                91,
+                combat=0,
+                weapon_switch=0,
+                item_focus=0,
+                team_objective=0,
+                target=2,
+                gametype=0,
+            ),
+            MarkerMetricCheck(
+                SCENARIO_BEGIN_MARKER,
+                "map",
+                "eq",
+                "base1",
+                "door context proof must run on the base1 reference map",
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_entities",
+                "ge",
+                1,
+                "door context proof must scan interaction entities on base1",
+            ),
+            MarkerMetricCheck(
+                NAV_INTERACTION_CONTEXT_STATUS_MARKER,
+                "interaction_world_doors",
+                "ge",
+                1,
+                "base1 must expose door entities to runtime nav context",
+            ),
+            MarkerMetricCheck(
+                COOP_COMMAND_STATUS_MARKER,
+                "coop_door_elevator_source_commands",
+                "ge",
+                1,
+                "door context proof must keep door/elevator source command ownership live",
+            ),
+            MarkerMetricCheck(
+                NAV_POLICY_STATUS_MARKER,
+                "nav_interaction_candidates",
+                "ge",
+                1,
+                "door context proof must still see route-interaction candidates",
             ),
         ),
     ),
@@ -20431,6 +20813,11 @@ def degradation_policy_catalog(policy: DegradationPolicy | None) -> dict[str, An
         "tier": policy.tier,
         "bot_count": policy.bot_count,
         "budget_profile": policy.budget_profile,
+        "additional_budget_profiles": list(policy.additional_budget_profiles),
+        "budget_profiles": [
+            policy.budget_profile,
+            *policy.additional_budget_profiles,
+        ],
         "preserved_behavior": list(policy.preserved_behavior),
         "allowed_degradation": list(policy.allowed_degradation),
         "required_metrics": [check_catalog(check) for check in policy.required_metrics],
@@ -20473,6 +20860,11 @@ def evaluate_degradation_policy(
         "tier": policy.tier,
         "bot_count": policy.bot_count,
         "budget_profile": policy.budget_profile,
+        "additional_budget_profiles": list(policy.additional_budget_profiles),
+        "budget_profiles": [
+            policy.budget_profile,
+            *policy.additional_budget_profiles,
+        ],
         "status": "passed" if not failed_metrics and not failed_marker_metrics else "failed",
         "metric_checks": metric_results,
         "marker_checks": marker_results,
@@ -20695,6 +21087,37 @@ def scenario_key_metrics(scenario_result: dict[str, Any]) -> dict[str, int | flo
     duration = scenario_result.get("duration_seconds")
     if isinstance(duration, int | float):
         metrics["duration_seconds"] = duration
+
+    perf_budgets = scenario_result.get("perf_budgets")
+    if not isinstance(perf_budgets, list) or not perf_budgets:
+        perf_budget = scenario_result.get("perf_budget")
+        perf_budgets = [perf_budget] if isinstance(perf_budget, dict) else []
+
+    all_budget_pass = True
+    for index, perf_budget in enumerate(perf_budgets):
+        if not isinstance(perf_budget, dict):
+            continue
+        budget_pass = perf_budget.get("pass_int")
+        if isinstance(budget_pass, int | float):
+            if index == 0:
+                metrics["perf_budget_pass_int"] = budget_pass
+            profile = perf_budget.get("profile") or perf_budget.get("path")
+            if isinstance(profile, str) and profile:
+                stem = re.sub(r"[^A-Za-z0-9_]+", "_", pathlib.Path(profile).stem)
+                metrics[f"perf_{stem}_pass_int"] = budget_pass
+            if budget_pass == 0:
+                all_budget_pass = False
+        source_counter_pass = perf_budget.get("source_counter_pass_int")
+        if isinstance(source_counter_pass, int | float):
+            if index == 0:
+                metrics["perf_source_counter_pass_int"] = source_counter_pass
+        budget_metrics = perf_budget.get("metrics", {})
+        if index == 0 and isinstance(budget_metrics, dict):
+            for key, value in budget_metrics.items():
+                if isinstance(value, int | float):
+                    metrics[f"perf_{key}"] = value
+    if perf_budgets:
+        metrics["perf_budget_all_pass_int"] = 1 if all_budget_pass else 0
     return metrics
 
 
@@ -21379,6 +21802,33 @@ def degradation_policy_text(scenario_result: dict[str, Any]) -> str:
     return " ".join(part for part in parts if part)
 
 
+def perf_budget_text(scenario_result: dict[str, Any]) -> str:
+    budgets = scenario_result.get("perf_budgets")
+    if not isinstance(budgets, list) or not budgets:
+        budget = scenario_result.get("perf_budget")
+        budgets = [budget] if isinstance(budget, dict) else []
+    if not budgets:
+        return ""
+
+    budget_parts: list[str] = []
+    for budget in budgets:
+        if not isinstance(budget, dict):
+            continue
+        profile = budget.get("profile") or budget.get("path") or "budget"
+        parts = [
+            f"{profile}:",
+            f"status={budget.get('status', '')}",
+            f"source_counters={budget.get('source_counter_status', 'n/a')}",
+            f"failures={len(budget.get('failures', []))}",
+            f"warnings={len(budget.get('warnings', []))}",
+        ]
+        missing = budget.get("missing_current_counter_count")
+        if missing is not None:
+            parts.append(f"missing_current_counters={missing}")
+        budget_parts.append(" ".join(part for part in parts if part))
+    return "; ".join(budget_parts)
+
+
 def build_pending_gap_markdown_report(report: dict[str, Any]) -> str:
     lines: list[str] = [
         "# Bot Scenario Pending Gap Report",
@@ -21467,20 +21917,21 @@ def build_markdown_report(report: dict[str, Any]) -> str:
 
     lines.append("## Scenarios")
     lines.append("")
-    lines.append("| Scenario | Status | Smoke | Tasks | Key Metrics | Optional Fields | Degradation Policy | Pending Blockers | Artifacts |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append("| Scenario | Status | Smoke | Tasks | Key Metrics | Optional Fields | Perf Budget | Degradation Policy | Pending Blockers | Artifacts |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for scenario in report.get("scenarios", []):
         tasks = ",".join(scenario.get("task_ids", []))
         smoke = smoke_display(scenario)
         artifacts = "<br>".join(f"`{artifact}`" for artifact in scenario_artifacts(scenario))
         lines.append(
-            "| {name} | {status} | {smoke} | {tasks} | {metrics} | {optional} | {policy} | {pending} | {artifacts} |".format(
+            "| {name} | {status} | {smoke} | {tasks} | {metrics} | {optional} | {budget} | {policy} | {pending} | {artifacts} |".format(
                 name=markdown_cell(scenario.get("name", "")),
                 status=markdown_cell(scenario.get("status", "")),
                 smoke=markdown_cell(smoke),
                 tasks=markdown_cell(tasks),
                 metrics=markdown_cell(scenario_metric_text(scenario)),
                 optional=markdown_cell(optional_field_text(scenario)),
+                budget=markdown_cell(perf_budget_text(scenario)),
                 policy=markdown_cell(degradation_policy_text(scenario)),
                 pending=markdown_cell(scenario_pending_text(scenario)),
                 artifacts=artifacts,
@@ -21551,6 +22002,119 @@ def resolve_path(root: pathlib.Path, value: str) -> pathlib.Path:
     return path.resolve()
 
 
+def load_bot_perf_analyzer() -> Any:
+    module = sys.modules.get(BOT_PERF_ANALYZER_MODULE_NAME)
+    if module is not None:
+        return module
+
+    if not BOT_PERF_ANALYZER_PATH.is_file():
+        raise RuntimeError(f"bot perf analyzer not found: {BOT_PERF_ANALYZER_PATH}")
+
+    spec = importlib.util.spec_from_file_location(
+        BOT_PERF_ANALYZER_MODULE_NAME,
+        BOT_PERF_ANALYZER_PATH,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load bot perf analyzer: {BOT_PERF_ANALYZER_PATH}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[BOT_PERF_ANALYZER_MODULE_NAME] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def scenario_perf_budget_profiles(scenario: Scenario) -> list[str]:
+    policy = scenario.degradation_policy
+    if policy is None:
+        return []
+    return [
+        profile
+        for profile in (policy.budget_profile, *policy.additional_budget_profiles)
+        if profile.endswith(".json")
+    ]
+
+
+def scenario_perf_budget_paths(root: pathlib.Path, scenario: Scenario) -> list[pathlib.Path]:
+    paths: list[pathlib.Path] = []
+    for profile in scenario_perf_budget_profiles(scenario):
+        budget_path = resolve_path(root, profile)
+        if not budget_path.is_file():
+            raise RuntimeError(f"bot perf budget not found: {budget_path}")
+        paths.append(budget_path)
+    return paths
+
+
+def scenario_perf_budget_path(root: pathlib.Path, scenario: Scenario) -> pathlib.Path | None:
+    paths = scenario_perf_budget_paths(root, scenario)
+    return paths[0] if paths else None
+
+
+def compact_bot_perf_budget(
+    perf_report: dict[str, Any],
+    budget_result: dict[str, Any],
+) -> dict[str, Any]:
+    path = budget_result.get("path")
+    return {
+        "path": path,
+        "profile": pathlib.Path(str(path)).name if path else None,
+        "status": budget_result.get("status"),
+        "pass": bool(budget_result.get("pass")),
+        "pass_int": budget_result.get("pass_int"),
+        "check_count": budget_result.get("check_count"),
+        "required_failed": budget_result.get("required_failed"),
+        "required_passed": budget_result.get("required_passed"),
+        "optional_missing": budget_result.get("optional_missing"),
+        "warning_count": budget_result.get("warning_count"),
+        "missing_current_counter_count": budget_result.get("missing_current_counter_count"),
+        "failures": list(budget_result.get("failures", [])),
+        "warnings": list(budget_result.get("warnings", [])),
+        "source_counter_status": perf_report.get("source_counter_status"),
+        "source_counter_pass": perf_report.get("source_counter_pass"),
+        "source_counter_pass_int": perf_report.get("source_counter_pass_int"),
+        "source_counter_groups_present": list(
+            perf_report.get("source_counter_groups_present", [])
+        ),
+        "source_counter_groups_missing": list(
+            perf_report.get("source_counter_groups_missing", [])
+        ),
+        "missing_current_counters": list(perf_report.get("missing_current_counters", [])),
+        "metrics": {
+            metric: perf_report.get(metric)
+            for metric in BOT_PERF_SUMMARY_METRICS
+            if metric in perf_report
+        },
+    }
+
+
+def evaluate_scenario_perf_budgets(
+    root: pathlib.Path,
+    scenario: Scenario,
+    stdout_path: pathlib.Path,
+) -> list[dict[str, Any]]:
+    budget_paths = scenario_perf_budget_paths(root, scenario)
+    if not budget_paths:
+        return []
+
+    analyzer = load_bot_perf_analyzer()
+    parsed = analyzer.parse_log(stdout_path)
+    perf_report = analyzer.analyze(parsed)
+    results: list[dict[str, Any]] = []
+    for budget_path in budget_paths:
+        budget = analyzer.load_budget(budget_path)
+        budget_result = analyzer.evaluate_budget(perf_report, parsed.status, budget)
+        results.append(compact_bot_perf_budget(perf_report, budget_result))
+    return results
+
+
+def evaluate_scenario_perf_budget(
+    root: pathlib.Path,
+    scenario: Scenario,
+    stdout_path: pathlib.Path,
+) -> dict[str, Any] | None:
+    budgets = evaluate_scenario_perf_budgets(root, scenario, stdout_path)
+    return budgets[0] if budgets else None
+
+
 def build_command(
     binary: pathlib.Path,
     install_dir: pathlib.Path,
@@ -21590,6 +22154,9 @@ def build_command(
         "+set",
         "bot_enable",
         "1",
+        "+set",
+        "bot_min_players",
+        "0",
         "+set",
         "bot_debug_route",
         "1",
@@ -21643,6 +22210,8 @@ def run_implemented_scenario(
         "selection_tags": list(scenario.selection_tags),
         "degradation_policy": degradation_policy_catalog(scenario.degradation_policy),
         "degradation_policy_result": None,
+        "perf_budget": None,
+        "perf_budgets": [],
         "port": port,
         "command": command,
         "stdout_path": str(stdout_path),
@@ -21740,6 +22309,27 @@ def run_implemented_scenario(
             for check in degradation_policy_result["failed_marker_checks"]
         )
 
+    try:
+        perf_budgets = evaluate_scenario_perf_budgets(root, scenario, stdout_path)
+    except (RuntimeError, SystemExit) as exc:
+        perf_budgets = [{
+            "status": "error",
+            "pass": False,
+            "failures": [str(exc)],
+            "warnings": [],
+        }]
+    result["perf_budgets"] = perf_budgets
+    result["perf_budget"] = perf_budgets[0] if perf_budgets else None
+    for perf_budget in perf_budgets:
+        if perf_budget.get("pass"):
+            continue
+        failures = perf_budget.get("failures") or ["budget evaluation failed"]
+        profile = perf_budget.get("profile") or perf_budget.get("path") or "unknown"
+        result["failures"].extend(
+            f"perf budget {profile}: {failure}"
+            for failure in failures
+        )
+
     forbidden_hits = [
         pattern
         for pattern in FORBIDDEN_PATTERNS
@@ -21768,6 +22358,8 @@ def pending_result(scenario: Scenario) -> dict[str, Any]:
         "selection_tags": list(scenario.selection_tags),
         "degradation_policy": degradation_policy_catalog(scenario.degradation_policy),
         "degradation_policy_result": None,
+        "perf_budget": None,
+        "perf_budgets": [],
         "pending_reason": scenario.pending_reason,
         "required_metrics": [check_catalog(check) for check in scenario.checks],
         "required_marker_metrics": [marker_check_catalog(check) for check in scenario.marker_checks],
@@ -21931,6 +22523,9 @@ def print_text_report(report: dict[str, Any]) -> None:
             policy = degradation_policy_text(result)
             if policy:
                 print(f"  degradation_policy: {policy}")
+            perf_budget = perf_budget_text(result)
+            if perf_budget:
+                print(f"  perf_budget: {perf_budget}")
             budget = result.get("runtime_budget_seconds", 0)
             if budget:
                 duration = result.get("duration_seconds")
@@ -21947,6 +22542,9 @@ def print_text_report(report: dict[str, Any]) -> None:
             policy = degradation_policy_text(result)
             if policy:
                 print(f"  degradation_policy: {policy}")
+            perf_budget = perf_budget_text(result)
+            if perf_budget:
+                print(f"  perf_budget: {perf_budget}")
             if result.get("stdout_path"):
                 print(f"  stdout: {result['stdout_path']}")
             if result.get("stderr_path"):

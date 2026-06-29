@@ -10,10 +10,14 @@ If you want deep engine internals, design notes, or migration writeups, see `doc
 - [Server Quickstart](server-quickstart.md): host a dedicated server with sane defaults.
 - [Bots](bots.md): enable bots, add/remove them, choose practical cvars, and
   understand map/AAS limitations.
+- [Bot Cvars](bot-cvars.md): supported public bot cvars, defaults, and common
+  setup snippets.
 - [Bot Map Readiness](bot-map-readiness.md): check whether a map has the AAS
   data bots need for routing.
 - [Bot Profiles](bot-profiles.md): enable bots, find installed botfiles,
   customize profiles, and reload changes.
+- [Bot Multiplayer Playtest](bot-playtest.md): generate repeatable FFA, Duel,
+  TDM, and CTF bot playtest configs and checklists.
 
 ## Full Reference Manuals
 

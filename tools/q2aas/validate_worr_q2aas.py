@@ -1054,7 +1054,7 @@ def build_reachability_policy(
             "generated_rocketjump_routes": rocketjump_count,
             "decision": (
                 "Generator and runtime route policy can expose TRAVEL_ROCKETJUMP "
-                "behind sg_bot_allow_rocketjump, but actual weapon-fire execution "
+                "behind bot_allow_rocketjump, but actual weapon-fire execution "
                 "belongs to the higher-level behavior/weapon action layer."
             ),
         },

@@ -64,6 +64,12 @@ Use [Bot Profiles](bot-profiles.md) for the full operator guide, including
 where installed botfiles live, what can be overridden, profile fields, and safe
 examples.
 
+Use [Bot Cvars](bot-cvars.md) for the supported public bot cvar/default table.
+
+Use [Bot Multiplayer Playtest](bot-playtest.md) when validating a staged build
+or checking FFA, Duel, TDM, and CTF bot behavior before opening a practice
+server to players.
+
 ## Competitive Match Tools
 
 For voting, MyMap, queued nextmap, map selector, tournament, admin, and match

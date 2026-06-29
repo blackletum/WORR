@@ -431,6 +431,11 @@ int Q3A_BotLibImport_BuildRouteSteerToGoal(
 	int preferredGoalArea,
 	const float preferredGoalOrigin[3],
 	Q3ABotLibImportRouteSteerResult *result);
+int Q3A_BotLibImport_BuildRouteSteerTowardGoal(
+	const float origin[3],
+	int preferredGoalArea,
+	const float preferredGoalOrigin[3],
+	Q3ABotLibImportRouteSteerResult *result);
 int Q3A_BotLibImport_BuildRouteSteerForTravelType(
 	const float origin[3],
 	int travelType,

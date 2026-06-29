@@ -37,8 +37,10 @@ python tools\bot_scenarios\run_bot_scenarios.py --scenario spawn_route_to_item -
 Run the manual high-bot degradation soak:
 
 ```powershell
-python tools\bot_scenarios\run_bot_scenarios.py --scenario high_bot_soak_degradation --timeout 720 --base-port 28000 --format text --json-out .tmp\bot_scenarios\high_bot_soak_report.json
+python tools\bot_scenarios\run_bot_scenarios.py --scenario high_bot_soak_degradation --timeout 720 --base-port 28000 --format text --json-out .tmp\bot_scenarios\high_bot_soak_report.json --markdown-out .tmp\bot_scenarios\high_bot_soak_report.md
 ```
+
+When a scenario degradation policy names JSON budgets under `tools/bot_perf/`, the scenario runner evaluates those budgets after the dedicated-server smoke completes. The JSON result includes the primary/default compact `perf_budget` block plus a `perf_budgets` array for every evaluated lane, including the stricter current-source high-bot budget when `high_bot_soak_degradation` runs.
 
 Run only pending placeholders without launching the game:
 
@@ -229,7 +231,10 @@ High bot count validation is split between a fast pressure proof and an opt-in s
 
 - `multi_bot_reservation` is the short eight-bot pressure gate. It does not allow degradation: all eight bots must emit commands, route commands must stay clean, and item reservation pressure must reach eight active reservations.
 - `high_bot_soak_degradation` is the long eight-bot degradation gate. It allows final item reservation occupancy and peak reservations to drop below the short proof because long soaks consume, hide, clear, and reassign goals over time. It still requires sustained command throughput, sustained route commands, zero route failures, zero invalid route slots, no inactive target bots, and regular soak progress reports.
-- Derived per-bot/sec budget thresholds remain owned by `tools/bot_perf/default_soak_budget.json`; the scenario harness reports that budget profile instead of duplicating the perf analyzer.
+- The long soak enables `bot_controlled_inactive_recovery=1` so dead-but-still-playing bots emit controlled respawn commands instead of creating transient inactive-frame failures during normal FFA deaths. Spectator loss and sustained command loss remain failures.
+- Derived per-bot/sec budget thresholds remain owned by `tools/bot_perf/default_soak_budget.json`; the scenario harness evaluates that budget through the perf analyzer, records the compact primary `perf_budget` result, and fails the scenario if required derived thresholds fail.
+- Current-source soak telemetry is owned by `tools/bot_perf/source_counter_soak_budget.json`; the scenario harness evaluates it as an additional `perf_budgets` lane for `high_bot_soak_degradation`. That strict lane requires all current source-counter groups plus current CPU, route, memory, visibility, and entity-trace derived metrics.
+- Source-counter groups remain visible in every budget result: `source_counter_status`, `source_counter_groups_present`, `source_counter_groups_missing`, and `missing_current_counter_count` show whether CPU, route, visibility, trace, entity trace, and memory counter families were present in the long-soak artifact.
 
 ## Pending Gap Reports
 

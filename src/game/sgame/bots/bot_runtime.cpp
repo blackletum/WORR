@@ -447,9 +447,21 @@ bool BotRuntimeIsDroppedItemEntity(const gentity_t *ent) {
 		 ent->spawnFlags.has(SPAWNFLAG_ITEM_DROPPED_PLAYER));
 }
 
+bool BotRuntimeClassIs(const gentity_t *ent, const char *className) {
+	return ent != nullptr &&
+		ent->className != nullptr &&
+		className != nullptr &&
+		Q_strcasecmp(ent->className, className) == 0;
+}
+
 bool BotRuntimeIsHazardEntity(const gentity_t *ent) {
 	return ent != nullptr &&
-		((ent->sv.entFlags & SVFL_TRAP_DANGER) != 0 ||
+		(BotRuntimeClassIs(ent, "trigger_hurt") ||
+		 BotRuntimeClassIs(ent, "trigger_lava") ||
+		 BotRuntimeClassIs(ent, "trigger_slime") ||
+		 BotRuntimeClassIs(ent, "target_laser") ||
+		 BotRuntimeClassIs(ent, "misc_lavaball") ||
+		 (ent->sv.entFlags & SVFL_TRAP_DANGER) != 0 ||
 		 (ent->svFlags & SVF_PROJECTILE) != 0 ||
 		 ent->moveType == MoveType::FlyMissile ||
 		 ent->moveType == MoveType::Bounce);

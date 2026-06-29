@@ -23,12 +23,123 @@ The port is not a blind file drop. The target is a maintained WORR bot stack wit
 
 ## Completion Snapshot
 
-Last refreshed: 2026-06-26 coop campaign interaction matrix round.
+Last refreshed: 2026-06-29 source-counter variance budget gate.
 
 - Phase checklist completion: 809 of 809 phase items complete, or 100.0%.
 - Raw markdown checkbox completion: 809 of 809 rows complete, or 100.0%. The reusable 12-row checklist gate in the Checklist System section is now plain template guidance instead of raw unchecked task rows.
-- Scenario catalog completion: 99 implemented catalog rows, zero pending rows, and highest reserved bot frame-command mode `91`. The latest full `implemented` run passed from `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z` with 99 passed rows, 0 failed rows, 0 timeouts, 0 errors, and 0 pending rows. Focused validation remains recorded in the per-slice logs for modes `52` through `91`, including bot chat live-event cooldown evidence at `.tmp\bot_scenarios\20260623T010530Z`, bot chat live enemy-sighted evidence at `.tmp\bot_scenarios\20260623T013832Z`, bot chat phrase-library evidence at `.tmp\bot_scenarios\20260623T020850Z`, bot chat duplicate-suppression evidence at `.tmp\bot_scenarios\20260623T023211Z`, bot chat live low-health evidence at `.tmp\bot_scenarios\20260623T025752Z`, bot chat live item-taken evidence at `.tmp\bot_scenarios\20260623T051126Z`, bot chat live objective-changed evidence at `.tmp\bot_scenarios\20260626T140601Z`, bot chat live flag-state evidence at `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`, bot chat live blocked evidence at `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`, bot chat live item-denied evidence at `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`, bot chat live match-result evidence at `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`, and coop campaign interaction matrix evidence at `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`.
-- Latest coop campaign interaction matrix round: dedicated mode `91` `coop_campaign_interaction_matrix` reuses the coop live-loop interaction family on packaged campaign map `base1`, proving route-interaction retry, campaign mover source ownership, teammate hold commands, coop progress wait, and nav interaction candidates on a second generated AAS map. Focused validation passed from `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`, and the current full 99-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z`. Implementation log: `docs-dev/q3a-botlib-coop-campaign-interaction-matrix-2026-06-26.md`.
+- Scenario catalog completion: 114 implemented catalog rows, zero pending rows, and highest reserved bot frame-command mode `96`. The latest full `implemented` run passed from `.tmp\bot_scenarios\implemented_hazard_context\20260628T083945Z` with 114 passed rows, 0 failed rows, 0 timeouts, 0 errors, and 0 pending rows. Focused validation remains recorded in the per-slice logs for modes `52` through `96`, including bot chat live-event cooldown evidence at `.tmp\bot_scenarios\20260623T010530Z`, bot chat live enemy-sighted evidence at `.tmp\bot_scenarios\20260623T013832Z`, bot chat phrase-library evidence at `.tmp\bot_scenarios\20260623T020850Z`, bot chat duplicate-suppression evidence at `.tmp\bot_scenarios\20260623T023211Z`, bot chat live low-health evidence at `.tmp\bot_scenarios\20260623T025752Z`, bot chat live item-taken evidence at `.tmp\bot_scenarios\20260623T051126Z`, bot chat live objective-changed evidence at `.tmp\bot_scenarios\20260626T140601Z`, bot chat live flag-state evidence at `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`, bot chat live blocked evidence at `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`, bot chat live item-denied evidence at `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`, bot chat live match-result evidence at `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`, coop campaign interaction matrix evidence at `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`, movement matrix evidence at `.tmp\bot_scenarios\movement_matrix_expansion_rerun\20260627T232805Z`, movement context gap evidence at `.tmp\bot_scenarios\movement_context_gap_rerun2\20260628T080154Z`, and hazard context gap evidence at `.tmp\bot_scenarios\movement_hazard_context_gap\20260628T083930Z`.
+- Latest public defaults docs gate: `tools/bot_surface/audit_bot_surface.py`
+  now validates source defaults for all 13 public bot cvars and requires
+  matching rows in `docs-user/bot-cvars.md`. The user docs now have a dedicated
+  public bot cvar/default reference, and `tools/bot_release/run_bot_acceptance.py`
+  requires that doc as part of the M8 dry run. Implementation log:
+  `docs-dev/q3a-botlib-public-defaults-docs-gate-2026-06-29.md`.
+- Latest source-counter variance gate: `tools/bot_perf/analyze_bot_perf.py`
+  now accepts `--variance-budget` for comparison-level repeated-run gates,
+  `tools/bot_perf/source_counter_variance_budget.json` defines the current
+  high-bot source-counter variance lane, and
+  `tools/bot_release/run_bot_acceptance.py` validates the perf budget files
+  through its `perf_tooling` check. The same-log control artifact
+  `.tmp\bot_perf\source_counter_variance_gate.json` passed with strict per-run
+  source-counter budgets green twice and `variance_budget.status=pass` across
+  14 checks. Implementation log:
+  `docs-dev/q3a-botlib-source-counter-variance-budget-gate-2026-06-29.md`.
+- Previous playtest evidence triage: `tools/bot_playtest/triage_bot_playtest.py`
+  now reads generated playtest artifacts plus operator notes, classifies
+  failures into route, spacing, weak-retreat, min-player, Duel queue, CTF
+  objective, and team-spacing scenario-candidate categories, and writes JSON
+  and Markdown triage reports under `.tmp\bot_playtest`. The generator now also
+  writes `bot_multiplayer_playtest_notes_template.json`, and
+  `tools/bot_release/run_bot_acceptance.py` includes a `playtest_triage` gate.
+  Implementation log:
+  `docs-dev/q3a-botlib-playtest-evidence-triage-2026-06-29.md`.
+- Previous multiplayer playtest generator: `tools/bot_playtest/generate_bot_playtest.py`
+  now writes repeatable FFA, Duel, TDM, and CTF bot playtest configs, a human
+  checklist, and a JSON artifact. The generated cases cover roaming/item
+  pickup, close-range spacing, weak-state retreat, Duel item denial and queue
+  boundaries, TDM role/friendly-fire/resource-denial behavior, and CTF flag
+  objective transitions. `tools/bot_release/run_bot_acceptance.py` now includes
+  a `playtest_plan` gate so the release dry run checks this manual validation
+  scaffold. Implementation log:
+  `docs-dev/q3a-botlib-multiplayer-playtest-script-2026-06-29.md`.
+- Previous strict source-counter budget lane: `high_bot_soak_degradation` now
+  evaluates both the compatibility `tools/bot_perf/default_soak_budget.json`
+  lane and the current-source `tools/bot_perf/source_counter_soak_budget.json`
+  lane. Scenario reports keep `perf_budget` as the primary/default result and
+  add `perf_budgets` for all evaluated budget profiles. The strict lane
+  requires all seven source-counter groups, current bot-frame/route CPU
+  derived metrics, memory failure counts, visibility decompression failures,
+  and entity-trace failures. Implementation log:
+  `docs-dev/q3a-botlib-strict-source-counter-budget-lane-2026-06-29.md`.
+- Latest hazard context gap round: mode `96` adds
+  `movement_hazard_context_gap` on packaged map `base2`. The row proves live
+  interaction context on the current liquid-or-hazard reference map and records
+  `interaction_world_hazards=0` as an explicit staged-content gap until a BSP/AAS
+  pair with slime/lava brushes or live hurt/laser hazard entities is available.
+  Runtime entity and nav interaction classification now count `target_laser`
+  and `misc_lavaball` beside `trigger_hurt`, `trigger_lava`, and
+  `trigger_slime`. Focused validation passed from
+  `.tmp\bot_scenarios\movement_hazard_context_gap\20260628T083930Z`; the full
+  suite passed 114/114 rows from
+  `.tmp\bot_scenarios\implemented_hazard_context\20260628T083945Z`.
+  Implementation log:
+  `docs-dev/q3a-botlib-hazard-context-gap-2026-06-28.md`.
+- Latest teleporter entity route promotion: mode `95` now runs
+  `movement_teleporter_entity_route` on packaged map `train`. Exact Q3A
+  `TRAVEL_TELEPORT` route support remains recorded as unsupported, but
+  runtime nav selects a touch-capable teleporter entity and builds a
+  first-reachability route toward it as an entity-backed position goal.
+  Focused validation passed from
+  `.tmp\bot_scenarios\teleporter_entity_route_final\20260629T191851Z`
+  with `commands=8`, `route_commands=8`, `route_failures=0`,
+  `travel_type_goal_resolved=0`, `teleporter_entity_goal_resolved=8`,
+  `teleporter_entity_goal_assignments=1`, and
+  `teleporter_entity_goal_fallbacks=2`. Implementation log:
+  `docs-dev/q3a-botlib-teleporter-entity-route-2026-06-29.md`.
+- Previous movement context gap matrix round: mode `92` keeps natural crouch as
+  an expected-blocked row, modes `93` and `94` validate swim and waterjump
+  routes on `q2dm2`, mode `95` initially kept teleporter traversal as an
+  expected-blocked row on `train` before the entity-route promotion, and
+  `movement_door_context` reuses the `base1` campaign interaction matrix to
+  hard-gate door context. Runtime nav
+  interaction context now reports teleporters and hazards, compact status
+  capture is large enough for the aggregate suite, live FFA roam yields to item
+  goals, route-facing wins unless the bot is firing, role combat defers behind
+  weak/non-attacking base decisions, and scenario commands pin
+  `bot_min_players 0` unless a row intentionally overrides it. Focused
+  movement/context validation passed 5/5 rows from
+  `.tmp\bot_scenarios\movement_context_gap_rerun2\20260628T080154Z`; the full
+  suite passed 113/113 rows from
+  `.tmp\bot_scenarios\implemented_movement_context_gap_rerun3\20260628T081648Z`.
+  Implementation log:
+  `docs-dev/q3a-botlib-movement-context-gap-matrix-2026-06-28.md`.
+- Latest coop campaign interaction matrix round: dedicated mode `91` `coop_campaign_interaction_matrix` reuses the coop live-loop interaction family on packaged campaign map `base1`, proving route-interaction retry, campaign mover source ownership, teammate hold commands, coop progress wait, and nav interaction candidates on a second generated AAS map. Focused validation passed from `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`, and the then-current full 99-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z`. Implementation log: `docs-dev/q3a-botlib-coop-campaign-interaction-matrix-2026-06-26.md`.
+- Previous movement matrix and live behavior round: modes `92`, `93`, and `94`
+  reserve the next movement matrix block, with implemented map-backed swim and
+  waterjump rows on `q2dm2` plus forced jump/crouch/swim and map-backed jump,
+  ladder, walk-off-ledge, elevator, barrier-jump, and rocket-jump rows. Live
+  FFA roam now yields to item goals, route-facing wins unless the bot is
+  actually firing, and role combat defers behind weak, underpowered,
+  weapon-switching, or non-attacking base decisions. Movement matrix validation
+  passed 11/11 rows from
+  `.tmp\bot_scenarios\movement_matrix_expansion_rerun\20260627T232805Z`;
+  behavior sanity passed 18/18 rows from
+  `.tmp\bot_scenarios\behavior_sanity_rerun\20260627T232911Z`; the full suite
+  passed 110/110 rows from
+  `.tmp\bot_scenarios\implemented_rerun_after_fixes\20260627T234219Z`.
+  Implementation log:
+  `docs-dev/q3a-botlib-movement-matrix-and-live-behavior-round-2026-06-28.md`.
+- Latest profile autofill and live behavior stabilization round: min-player
+  autofill now rotates through loaded first-party bot profiles, the Q3-style
+  `botfiles/bots.txt` manifest is packaged and validated, paused local servers
+  process bot autofill and queued adds, FFA roam/item decisions persist goals
+  instead of spinning around visible enemies, and role combat defers unless the
+  base action layer is truly attacking. Focused validation passed from
+  `.tmp\bot_scenarios\bot-profile-roam-state-fixes-rerun3` and
+  `.tmp\bot_scenarios\bot-role-combat-compat-check3`; direct `.install`
+  min-player smoke spawned `B|Bulwark`, `B|Relay`, and `B|Vanguard`.
+  Implementation log:
+  `docs-dev/q3a-botlib-profile-autofill-roam-combat-stabilization-2026-06-27.md`.
 - Latest bot chat live match-result round: dedicated mode `90` `bot_chat_live_match_result` reuses the native intermission path to produce real match-result state, dispatches live event id `11` / `victory_defeat` through `sg_bot_chat_live_events`, and reports `reply_chat_match_result=4`, `live_chat_match_result=4`, `last_live_chat_event_name=victory_defeat`, `intermission_bots=4`, `pm_freeze_bots=4`, `live_chat_event_taxonomy=11`, and zero dispatch, reply, or live failures. Focused validation passed from `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`, and the then-current full 98-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-match-result\20260626T182111Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-match-result-2026-06-26.md`.
 - Latest bot chat live item-denied round: dedicated mode `89` `bot_chat_live_item_denied` reuses the four-bot TDM team resource-denial proof to produce real deny-enemy resource policy pressure, dispatches live event id `5` / `item_denied` through `sg_bot_chat_live_events`, and reports `reply_chat_item_denied=4`, `live_chat_item_denied=4`, `live_chat_event_taxonomy=11`, `team_resource_denial_policy_denies=112`, and zero dispatch, reply, or live failures. Focused validation passed from `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`, and the then-current full 97-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-item-denied-2026-06-26.md`.
 - Latest bot chat live blocked round: dedicated mode `88` `bot_chat_live_blocked` reuses the blocked rocketjump travel-type goal proof to produce a real route failure, dispatches live event id `10` / `blocked` through `sg_bot_chat_live_events`, and reports `reply_chat_blocked=1`, `live_chat_blocked=1`, `live_chat_event_taxonomy=11`, and zero dispatch, reply, or live failures. Focused validation passed from `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`, and the later item-denied full 97-row `implemented` suite passed from `.tmp\bot_scenarios\20260626Timplemented-item-denied-json-file\20260626T154954Z`. Implementation log: `docs-dev/q3a-botlib-bot-chat-live-blocked-2026-06-26.md`.
@@ -151,8 +262,8 @@ Last refreshed: 2026-06-26 coop campaign interaction matrix round.
   beyond the current conservative dispatch, audience, global-rate,
   initial-selection, single-reply, and multi-event smoke proofs,
   slime/lava-specific reference-map candidates beyond the current water-backed
-  set, fresh long-soak CPU baselines with current source-counter fields, and
-  any future FR-04 task expansion tracked in the roadmap.
+  set, follow-up variance soaks against the strict current-source budget lane,
+  and any future FR-04 task expansion tracked in the roadmap.
 
 ## Source Baseline
 
@@ -172,11 +283,15 @@ Required external tool baseline:
 Current WORR bot surface:
 
 - The inherited Quake II Rerelease `bot_debug.*`, `bot_exports.*`, and `bot_utils.*` surface has been removed from `src/game/sgame/bots/` because it targets a different engine-side bot system.
-- `src/game/sgame/bots/bot_runtime.*` owns the WORR BotLib/AAS lifecycle, public `sg_bot_*` cvars, active-map AAS setup, and frame-level entity sync.
+- `src/game/sgame/bots/bot_runtime.*` owns the WORR BotLib/AAS lifecycle, public `bot_*` cvars, active-map AAS setup, and frame-level entity sync.
 - `src/game/sgame/bots/botlib_adapter.*` owns the narrow bridge to imported Q3A BotLib/AAS code.
 - `src/game/sgame/bots/bot_nav.*` owns AAS route lookup, cached route state, persistent route goals, command steering data, and native route/goal debug overlays.
 - `src/game/sgame/bots/bot_think.*` keeps `Bot_BeginFrame` and `Bot_EndFrame` as AAS-gated lifecycle hooks and exposes the AAS route-steered `Bot_BuildFrameCommand()` path for server-owned bot `usercmd_t` dispatch.
 - The old Q2R game-export bot callbacks are explicitly unavailable from `sgame`; future weapon, item, trigger, and use behavior must land in a new WORR bot action layer above the BotLib/AAS path. `Entity_ForceLookAtPoint` remains as a standalone helper exported outside the removed bot surface.
+- `tools/bot_surface/audit_bot_surface.py` now guards the current public bot
+  cvar and command contract: required public cvars use `bot_*`, Q3-style
+  commands are registered, active `sv_bot_*`/`sg_bot_*` regressions fail, and
+  smoke-only hooks are kept out of `docs-user/`.
 - `src/game/sgame/client/client_session_service_impl.cpp` already marks bot clients with `SVF_BOT` and calls `Bot_BeginFrame`.
 - `src/game/sgame/player/p_view.cpp` already calls `Bot_EndFrame`.
 
@@ -190,7 +305,10 @@ Current WORR bot surface:
 
 4. Make AAS a first-class build artifact. Bots must not depend on hand-authored waypoints. AAS generation should be reproducible, validated, and staged with `.install/basew` whenever maps/assets are packaged.
 
-5. Use `sg_` for new server-game cvars. Existing imported `bot_*` debug names may be retained inside quarantined upstream compatibility layers, but new public WORR controls should use `sg_bot_*`.
+5. Public WORR bot controls use Q3-style `bot_*` names. Imported BotLib LibVars
+   and quarantined compatibility names stay internal to the BotLib boundary, but
+   user/server-facing bot cvars and commands should match the `bot_`, `addbot`,
+   `removebot`, and `botlist` surface.
 
 6. Preserve credits continuously. Every phase has an explicit credit/provenance checklist. A task is not done until source attribution is updated.
 
@@ -393,6 +511,7 @@ Target source layout, subject to adjustment during implementation:
 - `docs-dev/q3a-botlib-aas-memory-source-counters-2026-06-18.md`: Q3A BotLib AAS memory source-counter status and analyzer grouping.
 - `docs-dev/q3a-botlib-high-bot-degradation-policy-2026-06-18.md`: explicit high-bot degradation policy in scenario catalog/reporting.
 - `docs-dev/q3a-botlib-high-bot-soak-budget-2026-06-18.md`: ten-minute eight-bot soak budget sidecar and documentation.
+- `docs-dev/q3a-botlib-strict-source-counter-budget-lane-2026-06-29.md`: strict current-source high-bot budget lane and multi-budget scenario report support.
 - `docs-dev/q3a-botlib-release-packaging-hardening-2026-06-18.md`: botfile family/hash validation plus q2aas AAS package hash enforcement.
 - `docs-dev/q3a-botlib-release-policy-2026-06-18.md`: q2aas/BSPC tool binary default-exclusion and required license/credit notice bundle policy.
 - `docs-dev/q2aas-reference-map-coverage-2026-06-18.md`: reference-map coverage categories, optional missing-map reporting, and strict future gate.
@@ -487,7 +606,7 @@ Use these tasks as the maintainable checklist backbone. Status values should fol
 | `FR-04-T04` | Backlog | `sgame/bots`, `sgame/match` | P1 | `FR-04-T02`, `FR-04-T15` | Bots understand supported team/objective modes and avoid sabotaging match flow. |
 | `FR-04-T05` | Backlog | `tools/q2aas`, `sgame/bots` | P1 | `FR-04-T11`, `FR-04-T14` | Map-level nav diagnostics validate generated AAS, spawn routing, reachability, and common blockers. |
 | `FR-04-T06` | Backlog | `sgame/match` | P1 | `FR-04-T02` | Tournament, vote, map queue, and scoreboard flows handle bot participants intentionally. |
-| `FR-04-T07` | Backlog | `sgame/bots`, docs | P2 | `FR-04-T01` | Public bot cvars use `sg_bot_*`, have sane defaults, and are documented in dev/user docs as appropriate. |
+| `FR-04-T07` | In Progress | `sgame/bots`, docs, tooling | P2 | `FR-04-T01` | Public bot cvars use Q3-style `bot_*`, have sane defaults, and are documented in dev/user docs as appropriate. Current source/user-doc audit guard is implemented in `tools/bot_surface`. |
 | `FR-04-T10` | In Progress | docs, provenance | P0 | none | Source audit, license notes, and credits ledger exist before code import starts. |
 | `FR-04-T11` | In Progress | `tools/q2aas` | P0 | `FR-04-T10` | `TTimo/bspc` based Q2 AAS generator builds locally, accepts WORR/Q2R map inputs, and emits validated `.aas` files. |
 | `FR-04-T12` | In Progress | `sgame/bots/q3a` | P0 | `FR-04-T10` | Q3A BotLib runtime compiles behind a WORR adapter and can load/unload generated AAS for the active map. |
@@ -912,7 +1031,7 @@ Implementation checklist:
   and optional lifecycle-status print so the imported BotLib memory/filesystem
   layer receives an explicit module-level shutdown.
 - Q3A `bot_*` LibVars are documented as internal to the imported AAS runtime.
-  WORR public policy remains in `sg_bot_*`; only Q2/WORR movement and
+  WORR public policy remains in `bot_*`; only Q2/WORR movement and
   reachability-cost `phys_*` / `rs_*` inputs are seeded for imported
   `be_aas_move.c`.
 - Implementation log:
@@ -1679,24 +1798,47 @@ Primary tasks: `FR-04-T07`, `DV-07-T04`, `DV-07-T06`
 
 Goal: expose the feature in a way server operators and developers can understand.
 
-Suggested public cvars:
+Current public/operator cvars:
 
-- `sg_bot_enable`
-- `sg_bot_min_players`
-- `sg_bot_skill`
-- `sg_bot_profile`
-- `sg_bot_max_clients`
-- `sg_bot_allow_chat`
-- `sg_bot_allow_item_timers`
-- `sg_bot_item_timer_fuzz_ms`
-- `sg_bot_allow_rocketjump`
-- `sg_bot_debug`
-- `sg_bot_debug_aas`
-- `sg_bot_debug_route`
-- `sg_bot_debug_goal`
-- `sg_bot_debug_client`
-- `sg_bot_cpu_budget_ms`
-- `sg_bot_lifecycle_smoke`
+- `bot_enable`
+- `bot_min_players`
+- `bot_profile`
+- `bot_skill`
+- `bot_behavior_enable`
+- `bot_allow_chat`
+- `bot_chat_team_only`
+- `bot_chat_min_interval_ms`
+- `bot_chat_live_events`
+- `bot_allow_item_timers`
+- `bot_item_timer_fuzz_ms`
+- `bot_allow_rocketjump`
+
+Developer/debug cvars:
+
+- `bot_debug`
+- `bot_debug_aas`
+- `bot_debug_route`
+- `bot_debug_goal`
+- `bot_debug_client`
+- `bot_cpu_budget_ms`
+- Smoke-only developer hooks with `bot_*_smoke` names. These are valid in
+  active source and scenario tooling, but must not be presented as public
+  operator controls in `docs-user/`.
+
+Release acceptance tooling:
+
+- `tools/bot_playtest/generate_bot_playtest.py` writes the FFA, Duel, TDM, and
+  CTF operator playtest checklist, cfgs, and JSON evidence artifact.
+- `tools/bot_playtest/triage_bot_playtest.py` writes playtest triage JSON and
+  Markdown reports from operator notes and maps repeated failures to scenario
+  candidates.
+- `docs-user/bot-cvars.md` is the required public bot cvar/default reference,
+  and `tools/bot_surface/audit_bot_surface.py` verifies its default rows.
+- `tools/bot_release/run_bot_acceptance.py` ties the public bot surface audit,
+  first-party profile validation, `bots.txt` roster exposure, botfile
+  package/loose staging, reference AAS staging, user docs, playtest plan,
+  playtest triage coverage, and scenario report evidence into one M8 dry-run
+  report.
 
 Docs checklist:
 
@@ -1724,6 +1866,11 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-bot-slot-lifecycle-2026-06-17.md`: first fake-client slot lifecycle and operator command log.
 - [x] `docs-dev/q3a-botlib-multibot-slot-queue-2026-06-17.md`: deferred multi-bot slot queue and two-active-bot smoke log.
 - [x] `docs-dev/q3a-botlib-min-players-autofill-2026-06-17.md`: min-player autofill and fill/trim/disable smoke log.
+- [x] `docs-dev/q3a-botlib-public-bot-surface-audit-2026-06-29.md`: source/user-doc public bot cvar and command surface audit guard.
+- [x] `docs-dev/q3a-botlib-release-acceptance-runner-2026-06-29.md`: executable bot release-readiness dry-run gate.
+- [x] `docs-dev/q3a-botlib-multiplayer-playtest-script-2026-06-29.md`: FFA, Duel, TDM, and CTF bot playtest generator and release-plan gate.
+- [x] `docs-dev/q3a-botlib-playtest-evidence-triage-2026-06-29.md`: operator notes template, playtest triage tool, and scenario-candidate gate.
+- [x] `docs-dev/q3a-botlib-public-defaults-docs-gate-2026-06-29.md`: public bot cvar/default docs gate and release-doc reference.
 - [x] `docs-dev/q3a-botlib-profile-loading-2026-06-17.md`: profile loader, reload command, and profile smoke log.
 - [x] `docs-dev/q3a-botlib-profile-behavior-fields-2026-06-17.md`: richer profile behavior fields and expanded profile smoke log.
 - [x] `docs-dev/q3a-botlib-native-botfiles-assets-2026-06-18.md`: native botfiles profile asset pack and smoke profile contract.
@@ -1867,6 +2014,7 @@ Docs checklist:
 - [x] `docs-dev/q3a-botlib-team-coop-policy-round-2026-06-18.md`: team/coop/resource policy helper log.
 - [x] `docs-dev/q2aas-reference-map-coverage-round-2026-06-18.md`: reference-map required-feature diagnostic coverage log.
 - [x] `docs-dev/q3a-botlib-long-soak-source-counter-round-2026-06-18.md`: long-soak source-counter completeness diagnostics log.
+- [x] `docs-dev/q3a-botlib-strict-source-counter-budget-lane-2026-06-29.md`: strict current-source high-bot budget lane and multi-budget scenario report support.
 - [x] `docs-dev/q3a-botlib-profile-behavior-depth-round-2026-06-18.md`: first-party botfile behavior metadata depth log.
 - [x] `docs-dev/q3a-botlib-extensive-round-closeout-2026-06-18.md`: current extensive round completion stats and outstanding-work closeout.
 - [x] `docs-dev/q3a-botlib-phase0-mvp-closeout-2026-06-21.md`: Phase 0 imported-file ledger, MVP behavior, and notice-retention closeout.
@@ -2033,14 +2181,23 @@ Validation checklist:
   - [x] Add `map_restart_cleanup` scenario coverage for the existing restart-capable map-repeat smoke.
   - [x] Add `team_policy_duel_readiness` scenario coverage for the existing team-policy smoke.
   - [x] Promote aim fairness, item timer, trace-checked corner cutting, FFA/TDM readiness, and coop readiness rows into implemented scenario gates.
-- [x] Performance:
-  - [x] CPU cost per bot.
-    - [x] Derived per-bot command, route, debug, and recovery pressure baselines from smoke logs.
-    - [x] Add analyzer support for optional source-side CPU timing counters once emitted.
-    - [x] Add route query/reuse and Q3A route import CPU timing fields in source-owned status structs.
-    - [x] Emit route CPU timing fields in bot status markers and validate them in a scenario/soak run.
-    - [x] Add bot-frame CPU timing counters.
+  - [x] Performance:
+    - [x] CPU cost per bot.
+      - [x] Derived per-bot command, route, debug, and recovery pressure baselines from smoke logs.
+      - [x] Add analyzer support for optional source-side CPU timing counters once emitted.
+      - [x] Add route query/reuse and Q3A route import CPU timing fields in source-owned status structs.
+      - [x] Emit route CPU timing fields in bot status markers and validate them in a scenario/soak run.
+      - [x] Add bot-frame CPU timing counters.
+      - [x] Fresh high-bot source-counter soak passed with current CPU fields:
+        `bot_frame_cpu_ms_per_bot_sec=2.671`,
+        `route_query_cpu_ms_per_bot_sec=0.181`,
+        `route_reuse_cpu_ms_per_bot_sec=0.002`, and
+        `q3a_route_cpu_ms_per_bot_sec=0.132`.
   - [x] Route recomputation rate.
+    - [x] Scenario `perf_budget` integration now gates derived route pressure
+      for the manual high-bot soak. The 2026-06-28 pass reported
+      `route_queries_per_bot_sec=22.373`, `route_refresh_ratio=0.5736`, and
+      `route_reuse_ratio=0.4264`.
   - [x] Add analyzer comparison guards for mixed scenario names, bot counts, duration sources, and missing duration data.
   - [x] Visibility trace count.
     - [x] Proposed source-side visibility/PVS/PHS/trace counters and analyzer integration/derived-metric support.
@@ -2050,6 +2207,14 @@ Validation checklist:
   - [x] Memory used by AAS.
   - [x] High bot count degradation policy.
   - [x] Source-counter completeness diagnostics for long-soak logs and budgeted derived metrics.
+  - [x] Scenario harness evaluates `tools/bot_perf/default_soak_budget.json`
+    for `high_bot_soak_degradation` and records compact `perf_budget` results
+    in JSON, Markdown, and text reports.
+  - [x] Scenario harness also evaluates
+    `tools/bot_perf/source_counter_soak_budget.json` as a strict
+    current-source lane for `high_bot_soak_degradation`, recording all budget
+    lanes in `perf_budgets` while keeping `perf_budget` as the primary default
+    result.
 - [x] Packaging:
   - [x] Botfiles are packaged into `pak0.pkz` and mirrored loose for profile discovery in no-zlib dedicated builds.
   - [x] `.install/` refreshed after build.
@@ -2089,9 +2254,11 @@ Outstanding work outline:
 - Reference-map and AAS breadth: expand beyond the current staged eight-map
   q2aas set with more DM, CTF, coop, expansion, and BSPX-heavy candidates,
   plus explicit known-failure diagnostics.
-- Performance and soak coverage: refresh long-soak CPU baselines using the
-  current source-counter fields, add strict budget thresholds where stable,
-  and keep high-bot degradation behavior observable.
+- Performance and soak coverage: one fresh source-counter high-bot baseline now
+  exists at `.tmp\bot_scenarios\fresh_source_counter_soak_pass\20260628T090904Z`,
+  and the strict current-source budget lane is in place; continue with a
+  variance follow-up after the next behavior change while high-bot degradation
+  behavior remains observable.
 - Release and platform hardening: keep `.install/` packaging, botfiles, AAS
   archive members, CI build coverage, and no-zlib dedicated-server profile/AAS
   discovery aligned as future bot assets expand.
@@ -2104,10 +2271,18 @@ Outstanding work outline:
 
 The remaining work is now concentrated in depth, breadth, and release hardening
 rather than missing core proof-helper APIs. The default installed scenario suite
-now reports 99 implemented catalog rows, 0 pending rows, and highest reserved
-bot frame-command mode `91`. The latest full `implemented` run passed all
-99 rows from `.tmp\bot_scenarios\20260626Timplemented-coop-campaign-interaction-json\20260626T185549Z`;
-focused validation passed for
+now reports 114 implemented catalog rows, 0 pending rows, and highest reserved
+bot frame-command mode `96`. The latest full `implemented` run passed all
+114 rows from
+`.tmp\bot_scenarios\implemented_hazard_context\20260628T083945Z`;
+focused validation passed for the hazard context gap from
+`.tmp\bot_scenarios\movement_hazard_context_gap\20260628T083930Z`,
+the movement context gap matrix from
+`.tmp\bot_scenarios\movement_context_gap_rerun2\20260628T080154Z`,
+the 18-row behavior sanity set from
+`.tmp\bot_scenarios\behavior_sanity_rerun\20260627T232911Z`, direct
+`.install` profile-backed min-player autofill from
+`.tmp\bot_scenarios\min_players_direct_absolute_rerun`, and earlier focused rows including
 `behavior_policy_umbrella` from
 `.tmp\bot_scenarios\behavior_policy_umbrella\20260622T050833Z`,
 `match_item_policy` from
@@ -2173,10 +2348,10 @@ the q2dm8 map-regression rows from `.tmp\bot_scenarios\20260622T204956Z`,
 `bot_chat_live_item_denied` from `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`,
 `bot_chat_live_match_result` from `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`,
 and `coop_campaign_interaction_matrix` from `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`.
-The latest coop campaign interaction matrix full-suite pass now records 99 passing rows, 0 failed rows,
+The latest movement context gap full-suite pass now records 113 passing rows, 0 failed rows,
 0 timeouts, 0 errors, and 0 pending rows.
 Modes
-`20` through `91` are implemented smoke scenarios, `trace_checked_corner_cutting`
+`20` through `95` are implemented smoke scenarios, `trace_checked_corner_cutting`
 reuses the route-rich mode `21` proof, `ffa_roam_route` uses dedicated four-bot
 FFA mode `42`, `ffa_spawn_camp_avoidance` uses dedicated four-bot FFA mode
 `45`, `ffa_item_roles` uses dedicated four-bot FFA mode `46`,
@@ -2189,6 +2364,15 @@ FFA mode `42`, `ffa_spawn_camp_avoidance` uses dedicated four-bot FFA mode
 `coop_share_loop` uses dedicated two-bot coop mode `78`,
 `coop_campaign_interaction_matrix` uses dedicated two-bot coop mode `91` on
 `base1`,
+`movement_forced_jump_command`, `movement_forced_crouch_command`, and
+`movement_forced_swim_command` use modes `5`, `6`, and `7`,
+`movement_jump_route`, `movement_ladder_route`, `movement_walkoffledge_route`,
+`movement_elevator_route`, `movement_barrierjump_route`, and
+`movement_rocketjump_route` use modes `9`, `10`, `11`, `12`, `13`, and `14`,
+`movement_door_context` reuses mode `91` on `base1`, `movement_crouch_gap`
+uses mode `92`, `movement_swim_route` plus `movement_waterjump_route` use modes
+`93` and `94` on `q2dm2`, and `movement_teleporter_entity_route` uses mode
+`95` on `train`,
 `bot_chat_live_events`, `bot_chat_live_event_cooldown`,
 `bot_chat_live_enemy_sighted`, `bot_chat_phrase_library`,
 `bot_chat_duplicate_suppression`, `bot_chat_live_low_health`,
@@ -2268,30 +2452,30 @@ plus hold commands in one coop run;
 teammate hold commands, nav interaction candidates, and coop wait policy;
 and
 `map_change_repeat` plus `map_restart_cleanup` both reuse mode `19`, with the
-restart row requiring `sv_bot_frame_command_smoke_map_repeat_restart 1` and
+restart row requiring `bot_frame_command_smoke_map_repeat_restart 1` and
 `command=map_force` evidence; `match_logging_schema` uses
-`sv_bot_matchlog_smoke 2` to validate match-stats, tournament-series, and
+`bot_matchlog_smoke 2` to validate match-stats, tournament-series, and
 catalog schema/index metadata; `warmup_bot_start_readiness` uses
-`sv_bot_warmup_smoke 2` to validate bot-only ready-up and final cleanup,
-`vote_bot_exclusion` uses `sv_bot_vote_smoke 2` to validate bot vote exclusion,
-`admin_bot_privilege_audit` uses `sv_bot_admin_audit_smoke 2` to validate
+`bot_warmup_smoke 2` to validate bot-only ready-up and final cleanup,
+`vote_bot_exclusion` uses `bot_vote_smoke 2` to validate bot vote exclusion,
+`admin_bot_privilege_audit` uses `bot_admin_audit_smoke 2` to validate
 forced-admin bot rejection from the registered `lock_team` command,
-`tournament_bot_veto_exclusion` uses `sv_bot_tournament_smoke 2` to validate
+`tournament_bot_veto_exclusion` uses `bot_tournament_smoke 2` to validate
 bot rejection from active-side tournament veto picks without mutating picks or
-bans, and `tournament_replay_reset` uses `sv_bot_tournament_smoke 3` to validate
+bans, and `tournament_replay_reset` uses `bot_tournament_smoke 3` to validate
 completed-series replay reset handling by preserving state for an out-of-range
 request and rewinding game 2 to one retained winner/map/id,
-and `mymap_queue_bot_request` uses `sv_bot_mymap_smoke 2` to validate
+and `mymap_queue_bot_request` uses `bot_mymap_smoke 2` to validate
 bot-attributed MyMap queue insertion and consume cleanup, while
-`scoreboard_bot_classification` uses `sv_bot_scoreboard_smoke 2` to validate
+`scoreboard_bot_classification` uses `bot_scoreboard_smoke 2` to validate
 bot-only sorted standings, deterministic score ordering, and final cleanup, and
-`intermission_bot_cleanup` uses `sv_bot_intermission_smoke 2` to validate
+`intermission_bot_cleanup` uses `bot_intermission_smoke 2` to validate
 native intermission entry, frozen/freecam/non-solid bot state, and final
 zero-bot/zero-connected/zero-sorted-client cleanup, and
-`queued_nextmap_transition` uses `sv_bot_nextmap_smoke 2` to validate
+`queued_nextmap_transition` uses `bot_nextmap_smoke 2` to validate
 bot-attributed queued-map insertion, queued transition consumption, observed
 same-map reload, and final zero-bot cleanup, and
-`mapvote_bot_exclusion_transition` uses `sv_bot_mapvote_smoke 2` to validate
+`mapvote_bot_exclusion_transition` uses `bot_mapvote_smoke 2` to validate
 bot-only map selector setup, blocked bot ballots, selector finalization,
 observed same-map reload, and final zero-bot cleanup.
 
@@ -2321,13 +2505,13 @@ campaign-specific trigger/key/objective coordination above the interaction
 retry and door/elevator proof bridges, Phase 7 broader live FFA/TDM/CTF role
 consumption plus downstream match logging consumers, admin hardening, and deeper coop
 behavior, and Phase 9 broader reference-map, CI, strict
-performance-budget, and fresh long-soak CPU baseline coverage.
+performance-budget variance, and follow-up long-soak CPU baseline coverage.
 
 Round-close evidence is tracked in
 `docs-dev/q3a-botlib-docs-progress-tracking-round-2026-06-18.md` and
 `docs-dev/q3a-botlib-extensive-round-closeout-2026-06-18.md`. The current round
 has focused object-build, unit-test, validator, and scenario-harness evidence
-from its worker lanes; fresh source-counter long-soak, broad reference-map
+from its worker lanes; strict source-counter soak variance, broad reference-map
 inventory data, and CI/platform breadth remain future validation work.
 
 ## Credit and Attribution Policy
@@ -2374,6 +2558,6 @@ The Q3A bot port is complete when:
 - Bots can be added/removed during a running server.
 - Bots can navigate, collect useful items, fight, and recover from common route failures.
 - Bots participate correctly in FFA/TDM/CTF and do not break match/vote/map transition flows.
-- All new public cvars use `sg_bot_*` unless explicitly documented as imported compatibility controls.
+- All public bot cvars and commands use Q3-style `bot_*` names unless explicitly documented as imported compatibility controls.
 - `.install/` staging and packaging include all required bot/AAS artifacts or a documented generation path.
 - Credits, license files, source provenance, implementation logs, user docs, and roadmap task statuses are current.
