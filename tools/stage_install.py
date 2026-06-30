@@ -12,6 +12,7 @@ RUNTIME_EXTENSIONS = {"", ".exe", ".dll", ".pdb", ".so", ".dylib"}
 RUNTIME_PATTERNS = ('worr_*', 'worr*.exe', 'worr*.dll', 'worr*.pdb', 'worr*.so', 'worr*.dylib')
 LEGACY_RUNTIME_PATTERNS = ('worr_runtime_*', 'worr_ded_runtime_*')
 GENERATED_BASE_GAME_PATTERNS = ('cgame*', 'sgame*', 'shader_vkpt', 'pak0.pkz')
+Q2AAS_REFERENCE_MAP_DIR = pathlib.Path("tools") / "q2aas" / "reference_maps"
 
 
 def is_runtime_file(path: pathlib.Path) -> bool:
@@ -95,6 +96,24 @@ def copy_base_game_tree(build_dir: pathlib.Path, install_dir: pathlib.Path, base
                 raise SystemExit(f'Game module staging verification failed for {path} -> {dest}')
 
 
+def stage_q2aas_reference_maps(repo_root: pathlib.Path, install_dir: pathlib.Path, base_game: str) -> int:
+    source_dir = repo_root / Q2AAS_REFERENCE_MAP_DIR
+    if not source_dir.is_dir():
+        return 0
+
+    maps_dir = install_dir / base_game / "maps"
+    maps_dir.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for source in sorted(source_dir.glob("*.bsp")):
+        dest = maps_dir / source.name
+        remove_path(dest)
+        shutil.copy2(source, dest)
+        if file_sha256(source) != file_sha256(dest):
+            raise SystemExit(f'q2aas reference map staging verification failed for {source} -> {dest}')
+        copied += 1
+    return copied
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description='Stage WORR runtime distributables into .install/.')
     parser.add_argument('--build-dir', default='builddir', help='Meson build directory')
@@ -105,6 +124,7 @@ def main() -> int:
 
     build_dir = pathlib.Path(args.build_dir).resolve()
     install_dir = pathlib.Path(args.install_dir).resolve()
+    repo_root = pathlib.Path(__file__).resolve().parent.parent
 
     if not build_dir.is_dir():
         raise SystemExit(f'Build directory not found: {build_dir}')
@@ -116,10 +136,13 @@ def main() -> int:
         raise SystemExit(f'No runtime binaries found in {build_dir}')
 
     copy_base_game_tree(build_dir, install_dir, args.base_game)
+    copied_reference_maps = stage_q2aas_reference_maps(repo_root, install_dir, args.base_game)
 
     print(f'Wrote staged runtime to {install_dir}')
     print(f'Copied {copied_runtime} root runtime files')
     print(f'Copied {args.base_game} runtime tree from {build_dir / args.base_game}')
+    if copied_reference_maps:
+        print(f'Copied {copied_reference_maps} q2aas reference map(s)')
     return 0
 
 

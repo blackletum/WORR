@@ -426,7 +426,7 @@ RESERVED_MODE_BEGIN_LINES = {
         "weapon_switch=0 item_focus=0 team_objective=0 target=1 gametype=0"
     ),
     96: (
-        f"{harness.SCENARIO_BEGIN_MARKER} mode=96 map=base2 combat=0 "
+        f"{harness.SCENARIO_BEGIN_MARKER} mode=96 map=fact2 combat=0 "
         "weapon_switch=0 item_focus=0 team_objective=0 target=1 gametype=0"
     ),
 }
@@ -1457,26 +1457,31 @@ def passing_raw_reserved_mode_lines(mode: int) -> list[str]:
     if mode == 92:
         return [
             *common,
-            "q3a_bot_frame_command_status pass=1 frames=8 commands=0 "
-            "route_commands=0 route_failures=1 travel_type_goal_requests=1 "
-            "travel_type_goal_resolved=0 travel_type_goal_assignments=0 "
-            "travel_type_goal_start_warps=0 "
-            "travel_type_goal_expect_blocked=1",
+            "q3a_bot_frame_command_status pass=1 frames=8 commands=1 "
+            "route_commands=1 route_failures=0 travel_type_goal_requests=1 "
+            "travel_type_goal_resolved=1 travel_type_goal_assignments=1 "
+            "travel_type_goal_start_warps=1 "
+            "travel_type_goal_expect_blocked=0 "
+            "last_travel_type_goal_type=3 last_travel_type_goal_start_type=3 "
+            "last_reachability_type=3 movement_state_commands=1 "
+            "movement_state_crouch_commands=1 "
+            "last_movement_state_travel_type=3 "
+            "last_movement_state_forced_travel_type=0",
             "q3a_bot_nav_policy_status travel_type_goal_support_checks=1 "
-            "travel_type_goal_supported=0 travel_type_goal_unsupported=1 "
+            "travel_type_goal_supported=1 travel_type_goal_unsupported=0 "
             "last_travel_type_goal_support_type=3 "
-            "last_travel_type_goal_support_area=0 "
-            "last_travel_type_goal_support_goal_area=0",
+            "last_travel_type_goal_support_area=2 "
+            "last_travel_type_goal_support_goal_area=3",
             "q3a_bot_nav_natural_support_status "
             "natural_movement_support_aas_loaded=1 "
             "natural_movement_support_checks=3 "
-            "natural_movement_supported=2 natural_movement_unsupported=1 "
-            "natural_movement_unsupported_mask=1 "
-            "natural_crouch_supported=0 natural_crouch_unsupported=1 "
-            "natural_crouch_reason=3 natural_crouch_area=0 "
-            "natural_crouch_goal_area=0 "
-            "natural_swim_supported=1 natural_swim_unsupported=0 "
-            "natural_waterjump_supported=1 natural_waterjump_unsupported=0",
+            "natural_movement_supported=1 natural_movement_unsupported=2 "
+            "natural_movement_unsupported_mask=6 "
+            "natural_crouch_supported=1 natural_crouch_unsupported=0 "
+            "natural_crouch_reason=0 natural_crouch_area=2 "
+            "natural_crouch_goal_area=3 "
+            "natural_swim_supported=0 natural_swim_unsupported=1 "
+            "natural_waterjump_supported=0 natural_waterjump_unsupported=1",
         ]
     if mode == 95:
         return [
@@ -1520,12 +1525,12 @@ def passing_raw_reserved_mode_lines(mode: int) -> list[str]:
             "q3a_bot_frame_command_status pass=1 frames=8 commands=1 "
             "route_commands=1 route_failures=0",
             "q3a_bot_nav_interaction_context_status "
-            "interaction_world_entities=33 interaction_world_doors=9 "
-            "interaction_world_buttons=3 interaction_world_platforms=1 "
-            "interaction_world_trains=0 interaction_world_waters=0 "
-            "interaction_world_triggers=14 interaction_world_movers=6 "
-            "interaction_world_teleporters=0 interaction_world_hazards=0 "
-            "interaction_world_use_entities=28 interaction_world_touch_entities=28",
+            "interaction_world_entities=124 interaction_world_doors=55 "
+            "interaction_world_buttons=17 interaction_world_platforms=3 "
+            "interaction_world_trains=36 interaction_world_waters=2 "
+            "interaction_world_triggers=90 interaction_world_movers=119 "
+            "interaction_world_teleporters=0 interaction_world_hazards=18 "
+            "interaction_world_use_entities=172 interaction_world_touch_entities=92",
         ]
     raise AssertionError(f"unexpected reserved mode: {mode}")
 
@@ -2212,41 +2217,44 @@ class BotScenarioHarnessTests(unittest.TestCase):
             matrix_results,
         )
 
-    def test_movement_context_and_gap_rows_catalog_and_marker_checks(self) -> None:
+    def test_movement_context_rows_catalog_and_marker_checks(self) -> None:
         scenarios = harness.scenario_map()
-        crouch_gap = scenarios["movement_crouch_gap"]
+        crouch_route = scenarios["movement_crouch_route"]
         door_context = scenarios["movement_door_context"]
         teleporter_route = scenarios["movement_teleporter_entity_route"]
-        hazard_gap = scenarios["movement_hazard_context_gap"]
-        report = harness.catalog_report([crouch_gap, door_context, teleporter_route, hazard_gap])
+        hazard_context = scenarios["movement_hazard_context"]
+        report = harness.catalog_report([crouch_route, door_context, teleporter_route, hazard_context])
         rows = {row["name"]: row for row in report["scenarios"]}
 
         self.assertEqual(report["summary"]["implemented"], 4)
         self.assertEqual(report["summary"]["pending"], 0)
-        self.assertEqual(rows["movement_crouch_gap"]["smoke_mode"], 92)
+        self.assertEqual(rows["movement_crouch_route"]["smoke_mode"], 92)
+        self.assertEqual(rows["movement_crouch_route"]["map_name"], "worr_crouch_ref")
         self.assertEqual(rows["movement_door_context"]["smoke_mode"], 91)
         self.assertEqual(rows["movement_door_context"]["map_name"], "base1")
         self.assertEqual(rows["movement_teleporter_entity_route"]["smoke_mode"], 95)
         self.assertEqual(rows["movement_teleporter_entity_route"]["map_name"], "train")
-        self.assertEqual(rows["movement_hazard_context_gap"]["smoke_mode"], 96)
-        self.assertEqual(rows["movement_hazard_context_gap"]["map_name"], "base2")
-        self.assertIn("gap", rows["movement_crouch_gap"]["selection_tags"])
+        self.assertEqual(rows["movement_hazard_context"]["smoke_mode"], 96)
+        self.assertEqual(rows["movement_hazard_context"]["map_name"], "fact2")
+        self.assertIn("crouch", rows["movement_crouch_route"]["selection_tags"])
+        self.assertNotIn("gap", rows["movement_crouch_route"]["selection_tags"])
         self.assertIn("door", rows["movement_door_context"]["selection_tags"])
         self.assertIn("teleporter", rows["movement_teleporter_entity_route"]["selection_tags"])
         self.assertIn("interaction", rows["movement_teleporter_entity_route"]["selection_tags"])
-        self.assertIn("hazard", rows["movement_hazard_context_gap"]["selection_tags"])
-        self.assertIn("gap", rows["movement_hazard_context_gap"]["selection_tags"])
+        self.assertIn("hazard", rows["movement_hazard_context"]["selection_tags"])
+        self.assertIn("interaction", rows["movement_hazard_context"]["selection_tags"])
+        self.assertNotIn("gap", rows["movement_hazard_context"]["selection_tags"])
 
         crouch_marker_required = {
             (check["source"], check["metric"], check["op"], check["expected"])
-            for check in rows["movement_crouch_gap"]["required_marker_metrics"]
+            for check in rows["movement_crouch_route"]["required_marker_metrics"]
         }
         self.assertIn(
             (harness.NAV_POLICY_STATUS_MARKER, "last_travel_type_goal_support_type", "eq", 3),
             crouch_marker_required,
         )
         self.assertIn(
-            (harness.NAV_NATURAL_SUPPORT_STATUS_MARKER, "natural_crouch_unsupported", "eq", 1),
+            (harness.NAV_NATURAL_SUPPORT_STATUS_MARKER, "natural_crouch_supported", "eq", 1),
             crouch_marker_required,
         )
 
@@ -2291,14 +2299,14 @@ class BotScenarioHarnessTests(unittest.TestCase):
 
         hazard_marker_required = {
             (check["source"], check["metric"], check["op"], check["expected"])
-            for check in rows["movement_hazard_context_gap"]["required_marker_metrics"]
+            for check in rows["movement_hazard_context"]["required_marker_metrics"]
         }
         self.assertIn(
             (harness.NAV_INTERACTION_CONTEXT_STATUS_MARKER, "interaction_world_triggers", "ge", 1),
             hazard_marker_required,
         )
         self.assertIn(
-            (harness.NAV_INTERACTION_CONTEXT_STATUS_MARKER, "interaction_world_hazards", "eq", 0),
+            (harness.NAV_INTERACTION_CONTEXT_STATUS_MARKER, "interaction_world_hazards", "ge", 1),
             hazard_marker_required,
         )
         self.assertIn(
@@ -2307,10 +2315,10 @@ class BotScenarioHarnessTests(unittest.TestCase):
         )
 
         for scenario, mode in (
-            (crouch_gap, 92),
+            (crouch_route, 92),
             (door_context, 91),
             (teleporter_route, 95),
-            (hazard_gap, 96),
+            (hazard_context, 96),
         ):
             text = passing_raw_reserved_mode_text(mode)
             _line, metrics = harness.parse_status_line(text)

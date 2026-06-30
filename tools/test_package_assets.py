@@ -19,6 +19,7 @@ REPO_ASSETS_DIR = REPO_ROOT / "assets"
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 import package_assets  # noqa: E402
 import refresh_install  # noqa: E402
+import stage_install  # noqa: E402
 
 
 BOTFILE_SUPPORT_MEMBERS = (
@@ -295,6 +296,20 @@ class RefreshInstallPackageValidationTest(unittest.TestCase):
 
             with self.assertRaisesRegex(SystemExit, "not part of default WORR binary releases"):
                 refresh_install.validate_q2aas_tool_binary_policy(install_dir)
+
+    def test_stage_q2aas_reference_maps_copies_bsp_to_install_maps(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            source = root / "tools" / "q2aas" / "reference_maps" / "ref_crouch.bsp"
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_bytes(b"reference bsp")
+            install_dir = root / ".install"
+
+            copied = stage_install.stage_q2aas_reference_maps(root, install_dir, "basew")
+
+            dest = install_dir / "basew" / "maps" / "ref_crouch.bsp"
+            self.assertEqual(copied, 1)
+            self.assertEqual(dest.read_bytes(), b"reference bsp")
 
 
 if __name__ == "__main__":

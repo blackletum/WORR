@@ -5109,9 +5109,14 @@ static bool SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence(void)
     return SV_BotFrameCommandSmokeMode() == 41;
 }
 
-static bool SV_BotFrameCommandSmokeIsHazardContextGap(void)
+static bool SV_BotFrameCommandSmokeIsHazardContext(void)
 {
     return SV_BotFrameCommandSmokeMode() == 96;
+}
+
+static bool SV_BotFrameCommandSmokeIsCrouchRoute(void)
+{
+    return SV_BotFrameCommandSmokeMode() == 92;
 }
 
 static bool SV_BotFrameCommandSmokeUsesScenarioCvars(void)
@@ -5162,7 +5167,8 @@ static bool SV_BotFrameCommandSmokeUsesScenarioCvars(void)
         SV_BotFrameCommandSmokeIsCtfObjectiveTransitions() ||
         SV_BotFrameCommandSmokeIsCtfObjectiveRoutePrecedence() ||
         SV_BotFrameCommandSmokeIsCtfItemRoles() ||
-        SV_BotFrameCommandSmokeIsHazardContextGap();
+        SV_BotFrameCommandSmokeIsCrouchRoute() ||
+        SV_BotFrameCommandSmokeIsHazardContext();
 }
 
 static int SV_BotFrameCommandSmokeSoakMilliseconds(void)
@@ -5418,7 +5424,7 @@ static int SV_BotFrameCommandSmokeTargetBots(void)
         SV_BotFrameCommandSmokeIsSurvivalInventory() ||
         SV_BotFrameCommandSmokeIsSurvivalRoute() ||
         SV_BotFrameCommandSmokeIsItemTimer() ||
-        SV_BotFrameCommandSmokeIsHazardContextGap() ||
+        SV_BotFrameCommandSmokeIsHazardContext() ||
         SV_BotFrameCommandSmokeIsCoopLeadAdvance()) {
         return 1;
     }
@@ -5542,7 +5548,6 @@ static bool SV_BotFrameCommandSmokeAllowsRocketJump(void)
 static bool SV_BotFrameCommandSmokeExpectsBlockedTravelTypeGoal(void)
 {
     return SV_BotFrameCommandSmokeMode() == 15 ||
-        SV_BotFrameCommandSmokeMode() == 92 ||
         SV_BotFrameCommandSmokeIsBotChatLiveBlocked();
 }
 

@@ -293,11 +293,11 @@ RESERVED_MODE_SCENARIOS = {
     89: "bot_chat_live_item_denied",
     90: "bot_chat_live_match_result",
     91: "coop_campaign_interaction_matrix",
-    92: "movement_crouch_gap",
+    92: "movement_crouch_route",
     93: "movement_swim_route",
     94: "movement_waterjump_route",
     95: "movement_teleporter_entity_route",
-    96: "movement_hazard_context_gap",
+    96: "movement_hazard_context",
 }
 ITEM_TIMING_CONSUMER_READY_OR_LIVE_METRIC = "item_timing_consumer_ready_or_live"
 PROMOTION_RELATED_METRIC_PREFIXES = {
@@ -2575,25 +2575,38 @@ SCENARIOS: tuple[Scenario, ...] = (
         checks=forced_movement_checks(3, "movement_state_crouch_commands", "crouch"),
     ),
     Scenario(
-        name="movement_crouch_gap",
-        title="Movement natural crouch gap",
+        name="movement_crouch_route",
+        title="Movement crouch route",
         smoke_mode=92,
         description=(
-            "Requests a real AAS TRAVEL_CROUCH edge and treats the current "
-            "reference-map absence as an explicit expected-blocked diagnostic "
-            "instead of a silent route failure."
+            "Routes a bot through a real AAS TRAVEL_CROUCH edge on the "
+            "WORR-authored crouch reference map and verifies crouch-button "
+            "movement-state output."
         ),
         task_ids=("FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
         budget_seconds=20,
-        selection_tags=("movement", "navigation", "crouch", "gap"),
-        checks=blocked_movement_route_goal_checks(3, "crouch"),
+        map_name="worr_crouch_ref",
+        selection_tags=("movement", "navigation", "crouch"),
+        extra_cvars=(
+            ("bot_nav_travel_type_goal", "3"),
+            ("bot_nav_travel_type_goal_warp", "1"),
+            ("bot_nav_travel_type_goal_expect_blocked", "0"),
+        ),
+        checks=movement_route_goal_checks(3, "crouch", movement_metric="movement_state_crouch_commands"),
         marker_checks=(
+            MarkerMetricCheck(
+                SCENARIO_BEGIN_MARKER,
+                "mode",
+                "eq",
+                92,
+                "crouch route proof must report the reserved smoke mode",
+            ),
             MarkerMetricCheck(
                 NAV_NATURAL_SUPPORT_STATUS_MARKER,
                 "natural_movement_support_aas_loaded",
                 "eq",
                 1,
-                "crouch gap proof must load AAS before checking natural movement support",
+                "crouch route proof must load AAS before checking natural movement support",
             ),
             MarkerMetricCheck(
                 NAV_NATURAL_SUPPORT_STATUS_MARKER,
@@ -2606,22 +2619,22 @@ SCENARIOS: tuple[Scenario, ...] = (
                 NAV_NATURAL_SUPPORT_STATUS_MARKER,
                 "natural_crouch_supported",
                 "eq",
-                0,
-                "current reference maps must not report natural crouch support until a crouch map is staged",
+                1,
+                "worr_crouch_ref must expose a natural crouch route start",
             ),
             MarkerMetricCheck(
                 NAV_NATURAL_SUPPORT_STATUS_MARKER,
                 "natural_crouch_unsupported",
                 "eq",
-                1,
-                "current reference maps must expose the crouch gap explicitly",
+                0,
+                "worr_crouch_ref must not report natural crouch as unsupported",
             ),
             MarkerMetricCheck(
                 NAV_POLICY_STATUS_MARKER,
-                "travel_type_goal_unsupported",
+                "travel_type_goal_supported",
                 "ge",
                 1,
-                "crouch route proof must record unsupported travel-type support",
+                "crouch route proof must record supported travel-type support",
             ),
             MarkerMetricCheck(
                 NAV_POLICY_STATUS_MARKER,
@@ -2834,24 +2847,23 @@ SCENARIOS: tuple[Scenario, ...] = (
         ),
     ),
     Scenario(
-        name="movement_hazard_context_gap",
-        title="Movement hazard context gap",
+        name="movement_hazard_context",
+        title="Movement hazard context",
         smoke_mode=96,
         description=(
-            "Runs the staged base2 liquid-or-hazard reference map and proves "
-            "the runtime interaction scan is live while recording that the "
-            "current packaged reference set has no hurt/laser hazard entities "
-            "for runtime context yet."
+            "Runs the staged fact2 liquid/hazard reference map and proves "
+            "the runtime interaction scan sees accepted hurt/laser hazard "
+            "entities beside normal mover, trigger, and touch context."
         ),
         task_ids=("FR-04-T05", "FR-04-T11", "FR-04-T14", "FR-04-T16", "DV-03-T05"),
         budget_seconds=20,
-        map_name="base2",
-        selection_tags=("movement", "navigation", "hazard", "maps", "gap"),
+        map_name="fact2",
+        selection_tags=("movement", "navigation", "hazard", "maps", "interaction"),
         checks=(
-            MetricCheck("pass", "eq", 1, "hazard context gap smoke must pass"),
-            MetricCheck("commands", "ge", 1, "hazard context gap smoke must emit commands"),
-            MetricCheck("route_commands", "ge", 1, "hazard context gap smoke must still route"),
-            MetricCheck("route_failures", "eq", 0, "hazard context gap smoke must stay route-clean"),
+            MetricCheck("pass", "eq", 1, "hazard context smoke must pass"),
+            MetricCheck("commands", "ge", 1, "hazard context smoke must emit commands"),
+            MetricCheck("route_commands", "ge", 1, "hazard context smoke must still route"),
+            MetricCheck("route_failures", "eq", 0, "hazard context smoke must stay route-clean"),
         ),
         marker_checks=(
             *reserved_mode_marker_checks(
@@ -2868,28 +2880,28 @@ SCENARIOS: tuple[Scenario, ...] = (
                 "interaction_world_entities",
                 "ge",
                 1,
-                "hazard gap proof must scan map interaction entities",
+                "hazard context proof must scan map interaction entities",
             ),
             MarkerMetricCheck(
                 NAV_INTERACTION_CONTEXT_STATUS_MARKER,
                 "interaction_world_triggers",
                 "ge",
                 1,
-                "base2 must expose trigger-rich runtime interaction context",
+                "fact2 must expose trigger-rich runtime interaction context",
             ),
             MarkerMetricCheck(
                 NAV_INTERACTION_CONTEXT_STATUS_MARKER,
                 "interaction_world_hazards",
-                "eq",
-                0,
-                "current packaged maps must expose the hazard content gap explicitly",
+                "ge",
+                1,
+                "fact2 must expose runtime hurt/laser hazard entities",
             ),
             MarkerMetricCheck(
                 NAV_INTERACTION_CONTEXT_STATUS_MARKER,
                 "interaction_world_touch_entities",
                 "ge",
                 1,
-                "hazard gap proof must still see touch interaction entities",
+                "hazard context proof must still see touch interaction entities",
             ),
         ),
     ),

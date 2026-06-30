@@ -5646,39 +5646,48 @@ static int Q3A_BotLibImport_RunAASAltRouteSmoke(void) {
 	return q3aSmokeStatus.aasAltRoutePassed;
 }
 
-static int Q3A_BotLibImport_FindMovementSmokeOrigin(int *outArea, vec3_t outOrigin) {
+static int Q3A_BotLibImport_FindMovementSmokeOrigin(int *outArea, int *outPresence, vec3_t outOrigin) {
 	int area;
+	int presenceIndex;
 	vec3_t mins;
 	vec3_t maxs;
+	const int presenceTypes[] = { PRESENCE_NORMAL, PRESENCE_CROUCH };
 
-	AAS_PresenceTypeBoundingBox(PRESENCE_NORMAL, mins, maxs);
+	for (presenceIndex = 0; presenceIndex < (int)(sizeof(presenceTypes) / sizeof(presenceTypes[0])); ++presenceIndex) {
+		const int presenceType = presenceTypes[presenceIndex];
 
-	for (area = 1; area < aasworld.numareas; ++area) {
-		aas_areainfo_t info;
-		vec3_t origin;
+		AAS_PresenceTypeBoundingBox(presenceType, mins, maxs);
 
-		if (!AAS_AreaReachability(area)) {
-			continue;
+		for (area = 1; area < aasworld.numareas; ++area) {
+			aas_areainfo_t info;
+			vec3_t origin;
+
+			if (!AAS_AreaReachability(area)) {
+				continue;
+			}
+
+			Com_Memset(&info, 0, sizeof(info));
+			if (!AAS_AreaInfo(area, &info) || !(info.presencetype & presenceType)) {
+				continue;
+			}
+
+			VectorCopy(info.center, origin);
+			origin[2] += 24.0f;
+			if (!AAS_DropToFloor(origin, mins, maxs) || AAS_PointAreaNum(origin) <= 0) {
+				continue;
+			}
+
+			if (outArea != NULL) {
+				*outArea = AAS_PointAreaNum(origin);
+			}
+			if (outPresence != NULL) {
+				*outPresence = presenceType;
+			}
+			if (outOrigin != NULL) {
+				VectorCopy(origin, outOrigin);
+			}
+			return qtrue;
 		}
-
-		Com_Memset(&info, 0, sizeof(info));
-		if (!AAS_AreaInfo(area, &info) || !(info.presencetype & PRESENCE_NORMAL)) {
-			continue;
-		}
-
-		VectorCopy(info.center, origin);
-		origin[2] += 24.0f;
-		if (!AAS_DropToFloor(origin, mins, maxs) || AAS_PointAreaNum(origin) <= 0) {
-			continue;
-		}
-
-		if (outArea != NULL) {
-			*outArea = AAS_PointAreaNum(origin);
-		}
-		if (outOrigin != NULL) {
-			VectorCopy(origin, outOrigin);
-		}
-		return qtrue;
 	}
 
 	return qfalse;
@@ -5686,6 +5695,7 @@ static int Q3A_BotLibImport_FindMovementSmokeOrigin(int *outArea, vec3_t outOrig
 
 static int Q3A_BotLibImport_RunAASMovementSmoke(void) {
 	int startArea = 0;
+	int presenceType = PRESENCE_NORMAL;
 	float jumpVelocity = 0.0f;
 	aas_clientmove_t move;
 	vec3_t origin;
@@ -5711,8 +5721,8 @@ static int Q3A_BotLibImport_RunAASMovementSmoke(void) {
 		return qfalse;
 	}
 
-	if (!Q3A_BotLibImport_FindMovementSmokeOrigin(&startArea, origin)) {
-		q3aSmokeStatus.aasMovementMessage = "Q3A AAS movement prediction failed: no normal reachable floor origin";
+	if (!Q3A_BotLibImport_FindMovementSmokeOrigin(&startArea, &presenceType, origin)) {
+		q3aSmokeStatus.aasMovementMessage = "Q3A AAS movement prediction failed: no reachable floor origin";
 		return qfalse;
 	}
 
@@ -5727,8 +5737,8 @@ static int Q3A_BotLibImport_RunAASMovementSmoke(void) {
 			&move,
 			-1,
 			origin,
-			PRESENCE_NORMAL,
-			AAS_OnGround(origin, PRESENCE_NORMAL, -1),
+			presenceType,
+			AAS_OnGround(origin, presenceType, -1),
 			velocity,
 			cmdmove,
 			4,
@@ -5754,9 +5764,10 @@ static int Q3A_BotLibImport_RunAASMovementSmoke(void) {
 	snprintf(
 		q3aAasMovementMessage,
 		sizeof(q3aAasMovementMessage),
-		"Q3A AAS movement prediction %s: start=%d end=%d stop=%d frames=%d drop=%s jump=%s",
+		"Q3A AAS movement prediction %s: start=%d presence=%d end=%d stop=%d frames=%d drop=%s jump=%s",
 		q3aSmokeStatus.aasMovementPassed ? "passed" : "failed",
 		startArea,
+		presenceType,
 		move.endarea,
 		move.stopevent,
 		move.frames,

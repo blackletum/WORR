@@ -24,8 +24,14 @@ WORR-native files added beside the snapshot:
 - `worr_q2aas_compat.h`: force-included build shim for compiler/platform compatibility.
 - `cfg/worr_q2.cfg`: first WORR/Q2 movement and player-hull preset.
 - `validate_worr_q2aas.py`: local cfg/map smoke runner that keeps output under `.tmp/q2aas/`.
+- `discover_reference_candidates.py`: BSP scanner for finding crouch, liquid,
+  door, teleport, and runtime hazard reference candidates before they are
+  promoted into the manifest.
 - `audit_worr_q2aas_stage.py`: staged AAS artifact audit helper for `.install/basew/maps/`.
 - `validation_manifest.json`: staged-map validation matrix seed for repeatable generator smoke coverage.
+- `reference_maps/`: WORR-authored developer BSP references used when stock
+  maps do not expose a needed AAS feature cleanly. `worr_crouch_ref` is the
+  current natural crouch reference.
 - `worr_q2aas_q2trace.c/.h`: WORR-native Q2 BSP trace bridge used by BotLib reachability during generation.
 - `README.WORR.md`: this vendor note.
 
@@ -126,10 +132,19 @@ also records minimum structural metrics and travel counts for staged maps, so
 `q2aas-staged-smoke` catches drops in AAS area count, reachability size, cluster
 count, walk routes, jump routes, ladder routes, walk-off-ledge routes, swim
 routes, water-jump routes, elevator routes, and rocket-jump route candidates
-where baselined. `mm-rage` remains the required WORR smoke map; `q2dm1`,
-`q2dm2`, `q2dm8`, `q2ctf1`, `base1`, `base2`, and `train` are optional local
-reference baselines when their Quake II BSPs are staged at
-`.install/basew/maps`.
+where baselined. Reference-feature readiness also reports natural crouch
+support from generated `TRAVEL_CROUCH` counts, and the required
+`worr_crouch_ref` developer map now satisfies `crouch_reference` with a
+36-unit-high crouch-only passage. `mm-rage` remains the
+required WORR smoke map; `worr_crouch_ref` is the required WORR crouch
+reference; `q2dm1`,
+`q2dm2`, `q2dm7`, `q2dm8`, `q2ctf1`, `base1`, `base2`, `fact2`, and `train`
+are optional local reference baselines when their Quake II BSPs are staged at
+`.install/basew/maps`. `q2dm7` is the optional slime reference, and `fact2` is
+the optional campaign lava/runtime hazard reference. With both BSPs staged,
+`q2aas-staged-smoke` validates eleven maps, `crouch_reference`,
+`slime_reference`, `lava_reference`, and `runtime_hazard_entity_reference`
+pass.
 The manifest declares schema `worr-q2aas-validation-manifest-v1`, and the
 validator rejects malformed schema/version/task metadata, wrong gate types,
 unknown baseline names, and non-integer thresholds before generation. The JSON
@@ -141,6 +156,38 @@ expected-failure path covered.
 The stage target runs the same strict map validation gates before copying a
 generated AAS file into `.install/basew/maps/`, and records the staged path and
 hash in `.tmp/q2aas/stage-report.json`.
+
+`tools/q2aas/deps/botlib/be_aas_reach.c` has one WORR-local reachability
+modification: equal-floor and small step walk links that enter or leave a
+crouch-only AAS area are emitted as `TRAVEL_CROUCH` instead of plain
+`TRAVEL_WALK`. The imported code already charged crouch start time for those
+links, but without the travel-type label the runtime could never prove natural
+crouch button output from generated routes.
+
+Discover candidate reference maps before manifest promotion:
+
+```powershell
+python tools\q2aas\discover_reference_candidates.py --root E:\Games\q2Clean\baseq2\maps --output .tmp\q2aas\reference-candidates --json-out .tmp\q2aas\reference-candidates.json --markdown-out .tmp\q2aas\reference-candidates.md
+```
+
+Convert a specific candidate through the normal validator in scratch output:
+
+```powershell
+python tools\q2aas\discover_reference_candidates.py --map .install\basew\maps\q2dm7.bsp --convert-top 1 --output .tmp\q2aas\reference-candidates-q2dm7 --json-out .tmp\q2aas\reference-candidates-q2dm7.json --markdown-out .tmp\q2aas\reference-candidates-q2dm7.md
+```
+
+Scratch conversions are evidence only until the map has acceptable provenance
+and is added to `validation_manifest.json`. The current promoted official
+lava/runtime hazard reference is `fact2`:
+
+```powershell
+python tools\q2aas\discover_reference_candidates.py --map E:\Games\q2Clean\baseq2\maps\fact2.bsp --convert-top 1 --output .tmp\q2aas\reference-candidates-fact2 --json-out .tmp\q2aas\reference-candidates-fact2.json --markdown-out .tmp\q2aas\reference-candidates-fact2.md
+```
+
+For example, `dark010.bsp` is a technically valid lava/runtime hazard candidate
+in the local map corpus, but it remains unpromoted because `fact2` provides a
+canonical Quake II replacement with lava, slime, water, mover, door, elevator,
+`trigger_hurt`, and `target_laser` evidence.
 
 Validate archive-backed map extraction and conversion with a scratch pkz:
 

@@ -158,9 +158,11 @@ class Q2AasManifestTests(unittest.TestCase):
             {
                 "elevator": 1,
                 "teleport": 0,
+                "crouch": 2,
             },
         )
 
+        self.assertEqual(readiness["features"]["crouch"]["status"], "present")
         self.assertEqual(readiness["features"]["water"]["status"], "present")
         self.assertEqual(readiness["features"]["slime"]["status"], "absent")
         self.assertEqual(readiness["features"]["lava"]["status"], "present")

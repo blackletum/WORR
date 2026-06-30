@@ -48,6 +48,19 @@ Run only pending placeholders without launching the game:
 python tools\bot_scenarios\run_bot_scenarios.py --scenario pending --json-out .tmp\bot_scenarios\pending_report.json
 ```
 
+Audit whether the remaining movement gap rows can be promoted from
+expected-blocked to accepted map-backed proof:
+
+```powershell
+python tools\bot_scenarios\audit_movement_reference_gaps.py --q2aas-report .tmp\q2aas\validation-report.json --json-out .tmp\bot_scenarios\movement_reference_gap_audit.json --markdown-out .tmp\bot_scenarios\movement_reference_gap_audit.md
+```
+
+This audit reads q2aas reference-feature readiness plus the current bot scenario
+catalog. It reports each movement reference gap as blocked, ready for
+promotion, or accepted. `worr_crouch_ref` now accepts natural crouch traversal,
+and optional `q2dm7` plus `fact2` keep the slime/lava/runtime hazard rows
+accepted when those local Quake II BSPs are staged.
+
 ## Scenarios
 
 Implemented:
@@ -129,6 +142,8 @@ Implemented:
 - `bot_chat_live_item_denied`: mode `89` with `deathmatch 1`, `g_gametype 3`, `bot_allow_chat 1`, `bot_chat_live_events 1`, and `bot_team_resource_denial 1`, verifies deny-enemy resource policy pressure produces a gameplay-derived `item_denied` live chat event without the smoke-only event gate.
 - `bot_chat_live_match_result`: mode `90` with `deathmatch 1`, `g_gametype 3`, `bot_allow_chat 1`, and `bot_chat_live_events 1`, verifies native intermission/match-result state produces a gameplay-derived `victory_defeat` live chat event without the smoke-only event gate.
 - `coop_campaign_interaction_matrix`: mode `91` on `base1` with `deathmatch 0`, `coop 1`, and `bot_coop_live_loop 1`, verifies the coop live-loop interaction owners still drive route-interaction retry, campaign mover source ownership, and teammate hold behavior on a second packaged AAS map.
+- `movement_crouch_route`: mode `92` on `worr_crouch_ref`, verifies a real generated `TRAVEL_CROUCH` route emits crouch movement-state commands instead of an expected-blocked route failure.
+- `movement_hazard_context`: mode `96` on `fact2`, verifies runtime interaction context sees accepted hurt/laser hazard entities beside normal mover, trigger, and touch context.
 - `team_fire_avoidance`: mode `34` with `deathmatch 1`, `g_gametype 3`, and `bot_team_fire_avoidance 1`, verifies TDM friendly-fire policy can suppress live attack input before `BUTTON_ATTACK` is applied.
 - `ctf_role_route`: mode `35` with `deathmatch 1`, `g_gametype 5`, and `bot_ctf_role_route 1`, verifies CTF match role/lane policy can own timed route-goal commands.
 - `ctf_role_combat`: mode `36` with `deathmatch 1`, `g_gametype 5`, and `bot_ctf_role_combat 1`, verifies CTF match role/lane policy can own live attack input from visible, shootable enemy facts.

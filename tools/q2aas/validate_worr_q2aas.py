@@ -201,6 +201,7 @@ TRAVEL_NAMES = (
 )
 
 REFERENCE_COVERAGE_FEATURES = (
+    "crouch",
     "water",
     "slime",
     "lava",
@@ -1214,6 +1215,7 @@ def build_coverage_feature_readiness(
         return len(value) if isinstance(value, list) else 0
 
     feature_evidence = {
+        "crouch": {"travel_count": travel_counts.get("crouch", 0)},
         "water": {"brush_count": flag_count("water")},
         "slime": {"brush_count": flag_count("slime")},
         "lava": {"brush_count": flag_count("lava")},

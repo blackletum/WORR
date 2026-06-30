@@ -30,7 +30,8 @@
         "numclusters": 4
       },
       "minimum_travel_counts": {
-        "walk": 468,
+        "walk": 460,
+        "crouch": 8,
         "barrier jump": 1,
         "jump": 7,
         "ladder": 1,
@@ -38,6 +39,30 @@
         "elevator": 1
       },
       "notes": "Current staged WORR smoke map. This anchors strict Q2 reachability validation until the canonical Quake II reference map set is staged."
+    },
+    {
+      "id": "worr_crouch_ref",
+      "path": "tools/q2aas/reference_maps/worr_crouch_ref.bsp",
+      "required": true,
+      "require_reachability": true,
+      "require_clean_bsp_lumps": true,
+      "require_spawn_coverage": true,
+      "require_item_coverage": true,
+      "require_high_value_reachability": true,
+      "coverage_categories": [
+        "crouch_reference",
+        "item_reachability_reference"
+      ],
+      "minimum_metrics": {
+        "numareas": 6,
+        "numareasettings": 6,
+        "reachabilitysize": 5,
+        "numclusters": 3
+      },
+      "minimum_travel_counts": {
+        "crouch": 4
+      },
+      "notes": "WORR-authored developer reference map with two normal-height rooms joined by a crouch-only passage. It validates generated TRAVEL_CROUCH, natural crouch route support, and spawn-to-high-value pickup reachability through that passage."
     },
     {
       "id": "q2dm1",
@@ -63,7 +88,8 @@
         "numclusters": 3
       },
       "minimum_travel_counts": {
-        "walk": 2019,
+        "walk": 1903,
+        "crouch": 116,
         "barrier jump": 30,
         "jump": 164,
         "walk off ledge": 541,
@@ -110,6 +136,41 @@
       "notes": "Optional id Quake II deathmatch reference candidate. When staged locally, it validates multi-level DM routing, water traversal, ladder travel, elevator routes, and high-value pickup reachability."
     },
     {
+      "id": "q2dm7",
+      "path": ".install/basew/maps/q2dm7.bsp",
+      "required": false,
+      "require_reachability": true,
+      "require_clean_bsp_lumps": true,
+      "require_spawn_coverage": true,
+      "require_item_coverage": true,
+      "require_high_value_reachability": false,
+      "coverage_categories": [
+        "id_deathmatch_reference",
+        "deathmatch_reference",
+        "item_reachability_reference",
+        "slime_reference",
+        "door_reference"
+      ],
+      "minimum_metrics": {
+        "numareas": 1224,
+        "numareasettings": 1224,
+        "reachabilitysize": 1826,
+        "numclusters": 4
+      },
+      "minimum_travel_counts": {
+        "walk": 1209,
+        "crouch": 96,
+        "barrier jump": 8,
+        "jump": 135,
+        "ladder": 43,
+        "walk off ledge": 228,
+        "swim": 42,
+        "water jump": 48,
+        "rocket jump": 16
+      },
+      "notes": "Optional id Quake II deathmatch slime reference candidate. When staged locally, it validates slime brush contents, door diagnostics, item pickup coverage, and DM routing. High-value reachability is recorded but not a gate because one pickup remains spawn-disconnected in the static graph."
+    },
+    {
       "id": "q2dm8",
       "path": ".install/basew/maps/q2dm8.bsp",
       "required": false,
@@ -131,7 +192,8 @@
         "numclusters": 3
       },
       "minimum_travel_counts": {
-        "walk": 1972,
+        "walk": 1688,
+        "crouch": 284,
         "barrier jump": 27,
         "jump": 224,
         "walk off ledge": 613,
@@ -164,7 +226,8 @@
         "numclusters": 6
       },
       "minimum_travel_counts": {
-        "walk": 2931,
+        "walk": 2345,
+        "crouch": 586,
         "barrier jump": 85,
         "jump": 206,
         "ladder": 20,
@@ -198,7 +261,8 @@
         "numclusters": 14
       },
       "minimum_travel_counts": {
-        "walk": 4667,
+        "walk": 3796,
+        "crouch": 871,
         "barrier jump": 70,
         "jump": 184,
         "ladder": 19,
@@ -231,7 +295,8 @@
         "numclusters": 24
       },
       "minimum_travel_counts": {
-        "walk": 3458,
+        "walk": 2854,
+        "crouch": 604,
         "barrier jump": 45,
         "jump": 215,
         "ladder": 15,
@@ -240,6 +305,46 @@
         "water jump": 27
       },
       "notes": "Optional campaign liquid reference candidate. When staged locally, it validates water/liquid traversal, door-heavy campaign diagnostics, and item origin coverage. No slime/lava brushes were present in this local BSP."
+    },
+    {
+      "id": "fact2",
+      "path": ".install/basew/maps/fact2.bsp",
+      "required": false,
+      "require_reachability": true,
+      "require_clean_bsp_lumps": true,
+      "require_spawn_coverage": true,
+      "require_item_coverage": true,
+      "require_high_value_reachability": true,
+      "coverage_categories": [
+        "campaign_reference",
+        "coop_reference",
+        "liquid_or_hazard_reference",
+        "water_reference",
+        "slime_reference",
+        "lava_reference",
+        "mover_reference",
+        "elevator_reference",
+        "door_reference",
+        "runtime_hazard_entity_reference"
+      ],
+      "minimum_metrics": {
+        "numareas": 3015,
+        "numareasettings": 3015,
+        "reachabilitysize": 4650,
+        "numclusters": 65
+      },
+      "minimum_travel_counts": {
+        "walk": 2293,
+        "crouch": 572,
+        "barrier jump": 47,
+        "jump": 256,
+        "walk off ledge": 778,
+        "swim": 664,
+        "water jump": 30,
+        "elevator": 7,
+        "rocket jump": 2
+      },
+      "notes": "Optional official Quake II campaign/co-op hazard reference candidate. When staged locally, it validates lava, slime, water, trigger_hurt/target_laser runtime hazard entity diagnostics, door/elevator/mover diagnostics, generated elevator routes, campaign progression coverage, item origin coverage, and high-value pickup reachability."
     },
     {
       "id": "train",
@@ -265,7 +370,8 @@
         "numclusters": 18
       },
       "minimum_travel_counts": {
-        "walk": 3028,
+        "walk": 2369,
+        "crouch": 659,
         "barrier jump": 59,
         "jump": 133,
         "walk off ledge": 649,
@@ -291,10 +397,11 @@
       "description": "Canonical id Quake II deathmatch maps for broader DM layout coverage.",
       "map_ids": [
         "q2dm1",
-        "q2dm2"
+        "q2dm2",
+        "q2dm7"
       ],
       "minimum_validated_maps": 2,
-      "notes": "Backed by staged q2dm1/q2dm2 when local Quake II data is available."
+      "notes": "Backed by staged q2dm1/q2dm2 and optional q2dm7 when local Quake II data is available."
     },
     {
       "id": "open_deathmatch_reference",
@@ -329,10 +436,11 @@
       "map_ids": [
         "base1",
         "base2",
+        "fact2",
         "train"
       ],
       "minimum_validated_maps": 1,
-      "notes": "Backed by staged base1/base2/train campaign progression diagnostics when local Quake II data is available."
+      "notes": "Backed by staged base1/base2/fact2/train campaign progression diagnostics when local Quake II data is available."
     },
     {
       "id": "liquid_or_hazard_reference",
@@ -343,6 +451,7 @@
         "q2ctf1",
         "base1",
         "base2",
+        "fact2",
         "train"
       ],
       "minimum_validated_maps": 1,
@@ -350,7 +459,7 @@
         "water"
       ],
       "strict_required": true,
-      "notes": "Currently backed by staged water/liquid maps; slime and lava keep separate feature-specific reference categories."
+      "notes": "Backed by staged water/liquid and hazard maps; slime and lava also have separate feature-specific reference categories."
     },
     {
       "id": "mover_reference",
@@ -360,6 +469,7 @@
         "q2dm1",
         "q2dm2",
         "q2ctf1",
+        "fact2",
         "train"
       ],
       "minimum_validated_maps": 1
@@ -373,6 +483,7 @@
         "q2ctf1",
         "base1",
         "base2",
+        "fact2",
         "train"
       ],
       "minimum_validated_maps": 1,
@@ -380,29 +491,56 @@
         "water"
       ],
       "strict_required": true,
-      "notes": "Backed by staged q2dm1/q2dm2/q2ctf1/base1/base2/train when local Quake II data is available."
+      "notes": "Backed by staged q2dm1/q2dm2/q2ctf1/base1/base2/fact2/train when local Quake II data is available."
+    },
+    {
+      "id": "crouch_reference",
+      "description": "Reference readiness for generated TRAVEL_CROUCH reachability and natural crouch traversal diagnostics.",
+      "map_ids": [
+        "worr_crouch_ref"
+      ],
+      "minimum_validated_maps": 1,
+      "required_features": [
+        "crouch"
+      ],
+      "strict_required": true,
+      "notes": "Backed by the WORR-authored worr_crouch_ref developer map, which generates TRAVEL_CROUCH through a 36-unit-high passage."
     },
     {
       "id": "slime_reference",
       "description": "Reference readiness for slime brush contents and hazard traversal diagnostics.",
-      "map_ids": [],
+      "map_ids": [
+        "fact2",
+        "q2dm7"
+      ],
       "minimum_validated_maps": 1,
       "required_features": [
         "slime"
       ],
       "strict_required": true,
-      "notes": "No local staged BSP candidate is declared yet; add a map only after validating that it exists and exercises slime."
+      "notes": "Backed by optional fact2 and q2dm7 when local Quake II data is available; skip-missing keeps installs without those BSPs informative."
     },
     {
       "id": "lava_reference",
       "description": "Reference readiness for lava brush contents and hazard traversal diagnostics.",
-      "map_ids": [],
+      "map_ids": [
+        "fact2"
+      ],
       "minimum_validated_maps": 1,
       "required_features": [
         "lava"
       ],
       "strict_required": true,
-      "notes": "No local staged BSP candidate is declared yet; add a map only after validating that it exists and exercises lava."
+      "notes": "Backed by optional fact2 when local Quake II data is available; skip-missing keeps installs without that BSP informative."
+    },
+    {
+      "id": "runtime_hazard_entity_reference",
+      "description": "Reference readiness for trigger_hurt, target_laser, or misc_lavaball runtime hazard entity diagnostics.",
+      "map_ids": [
+        "fact2"
+      ],
+      "minimum_validated_maps": 1,
+      "notes": "Backed by optional fact2 trigger_hurt/target_laser diagnostics when local Quake II data is available."
     },
     {
       "id": "teleport_reference",
@@ -439,10 +577,12 @@
       "id": "door_reference",
       "description": "Reference readiness for door entity diagnostics.",
       "map_ids": [
+        "q2dm7",
         "q2dm8",
         "q2ctf1",
         "base1",
         "base2",
+        "fact2",
         "train"
       ],
       "minimum_validated_maps": 1,
@@ -450,11 +590,8 @@
         "door"
       ],
       "strict_required": true,
-      "notes": "Backed by staged q2dm8/q2ctf1/base1/base2/train door entity diagnostics when local reference BSPs are available."
+      "notes": "Backed by staged q2dm7/q2dm8/q2ctf1/base1/base2/fact2/train door entity diagnostics when local reference BSPs are available."
     }
   ],
-  "pending_reference_maps": [
-    "map with slime brush contents",
-    "map with lava brush contents"
-  ]
+  "pending_reference_maps": []
 }

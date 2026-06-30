@@ -23,11 +23,11 @@ The port is not a blind file drop. The target is a maintained WORR bot stack wit
 
 ## Completion Snapshot
 
-Last refreshed: 2026-06-29 source-counter variance budget gate.
+Last refreshed: 2026-06-30 crouch reference promotion.
 
 - Phase checklist completion: 809 of 809 phase items complete, or 100.0%.
 - Raw markdown checkbox completion: 809 of 809 rows complete, or 100.0%. The reusable 12-row checklist gate in the Checklist System section is now plain template guidance instead of raw unchecked task rows.
-- Scenario catalog completion: 114 implemented catalog rows, zero pending rows, and highest reserved bot frame-command mode `96`. The latest full `implemented` run passed from `.tmp\bot_scenarios\implemented_hazard_context\20260628T083945Z` with 114 passed rows, 0 failed rows, 0 timeouts, 0 errors, and 0 pending rows. Focused validation remains recorded in the per-slice logs for modes `52` through `96`, including bot chat live-event cooldown evidence at `.tmp\bot_scenarios\20260623T010530Z`, bot chat live enemy-sighted evidence at `.tmp\bot_scenarios\20260623T013832Z`, bot chat phrase-library evidence at `.tmp\bot_scenarios\20260623T020850Z`, bot chat duplicate-suppression evidence at `.tmp\bot_scenarios\20260623T023211Z`, bot chat live low-health evidence at `.tmp\bot_scenarios\20260623T025752Z`, bot chat live item-taken evidence at `.tmp\bot_scenarios\20260623T051126Z`, bot chat live objective-changed evidence at `.tmp\bot_scenarios\20260626T140601Z`, bot chat live flag-state evidence at `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`, bot chat live blocked evidence at `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`, bot chat live item-denied evidence at `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`, bot chat live match-result evidence at `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`, coop campaign interaction matrix evidence at `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`, movement matrix evidence at `.tmp\bot_scenarios\movement_matrix_expansion_rerun\20260627T232805Z`, movement context gap evidence at `.tmp\bot_scenarios\movement_context_gap_rerun2\20260628T080154Z`, and hazard context gap evidence at `.tmp\bot_scenarios\movement_hazard_context_gap\20260628T083930Z`.
+- Scenario catalog completion: 114 implemented catalog rows, zero pending rows, and highest reserved bot frame-command mode `96`. The latest full `implemented` run passed from `.tmp\bot_scenarios\implemented_hazard_context\20260628T083945Z` with 114 passed rows, 0 failed rows, 0 timeouts, 0 errors, and 0 pending rows. Focused validation remains recorded in the per-slice logs for modes `52` through `96`, including bot chat live-event cooldown evidence at `.tmp\bot_scenarios\20260623T010530Z`, bot chat live enemy-sighted evidence at `.tmp\bot_scenarios\20260623T013832Z`, bot chat phrase-library evidence at `.tmp\bot_scenarios\20260623T020850Z`, bot chat duplicate-suppression evidence at `.tmp\bot_scenarios\20260623T023211Z`, bot chat live low-health evidence at `.tmp\bot_scenarios\20260623T025752Z`, bot chat live item-taken evidence at `.tmp\bot_scenarios\20260623T051126Z`, bot chat live objective-changed evidence at `.tmp\bot_scenarios\20260626T140601Z`, bot chat live flag-state evidence at `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`, bot chat live blocked evidence at `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`, bot chat live item-denied evidence at `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`, bot chat live match-result evidence at `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`, coop campaign interaction matrix evidence at `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`, movement matrix evidence at `.tmp\bot_scenarios\movement_matrix_expansion_rerun\20260627T232805Z`, movement context gap evidence at `.tmp\bot_scenarios\movement_context_gap_rerun2\20260628T080154Z`, accepted `worr_crouch_ref` crouch route evidence at `.tmp\bot_scenarios\movement_crouch_route.json`, historical hazard context gap evidence at `.tmp\bot_scenarios\movement_hazard_context_gap\20260628T083930Z`, and accepted `fact2` hazard context evidence at `.tmp\bot_scenarios\movement_hazard_context_fact2.json`.
 - Latest public defaults docs gate: `tools/bot_surface/audit_bot_surface.py`
   now validates source defaults for all 13 public bot cvars and requires
   matching rows in `docs-user/bot-cvars.md`. The user docs now have a dedicated
@@ -71,19 +71,46 @@ Last refreshed: 2026-06-29 source-counter variance budget gate.
   derived metrics, memory failure counts, visibility decompression failures,
   and entity-trace failures. Implementation log:
   `docs-dev/q3a-botlib-strict-source-counter-budget-lane-2026-06-29.md`.
-- Latest hazard context gap round: mode `96` adds
-  `movement_hazard_context_gap` on packaged map `base2`. The row proves live
-  interaction context on the current liquid-or-hazard reference map and records
-  `interaction_world_hazards=0` as an explicit staged-content gap until a BSP/AAS
-  pair with slime/lava brushes or live hurt/laser hazard entities is available.
-  Runtime entity and nav interaction classification now count `target_laser`
-  and `misc_lavaball` beside `trigger_hurt`, `trigger_lava`, and
-  `trigger_slime`. Focused validation passed from
-  `.tmp\bot_scenarios\movement_hazard_context_gap\20260628T083930Z`; the full
-  suite passed 114/114 rows from
+- Latest crouch reference promotion round: q2aas now preserves
+  `TRAVEL_CROUCH` for crouch-only equal-floor and step reachabilities, stages
+  the WORR-authored `worr_crouch_ref` BSP as a developer reference map, and
+  promotes mode `92` from expected-blocked `movement_crouch_gap` to accepted
+  `movement_crouch_route`. The runtime AAS movement smoke now tries crouch
+  presence when no normal floor origin is available, so crouch-only maps can
+  still pass load validation. `q2aas-staged-smoke` validates eleven maps, and
+  `.tmp\bot_scenarios\movement_reference_gap_audit.json` accepts both
+  `natural_crouch` and `hazard_context`. Focused validation passed from
+  `.tmp\bot_scenarios\movement_crouch_route.json`. Implementation log:
+  `docs-dev/q3a-botlib-crouch-reference-promotion-2026-06-30.md`.
+- Previous hazard reference promotion round: q2aas reference-feature readiness
+  now reports `crouch_reference` from generated `TRAVEL_CROUCH` counts beside
+  `slime_reference` and `lava_reference`, and
+  `tools\q2aas\discover_reference_candidates.py` scans local BSP corpora for
+  promotable liquid/runtime hazard candidates. Optional staged `q2dm7` now
+  passes `slime_reference`; optional staged official campaign map `fact2` now
+  passes `lava_reference` and `runtime_hazard_entity_reference`. Later
+  same-day `worr_crouch_ref` promotion completes `crouch_reference`, so the
+  bot scenario audit `tools\bot_scenarios\audit_movement_reference_gaps.py`
+  now reports `natural_crouch` and `hazard_context` accepted. The broad local
+  candidate scan found `dark010.bsp`
+  as a technically valid scratch candidate, but `fact2` supersedes it as the
+  canonical Quake II hazard reference. Artifacts:
+  `.tmp\bot_scenarios\movement_reference_gap_audit.json`,
+  `docs-dev/q3a-botlib-movement-reference-gap-audit-2026-06-30.md`, and
+  `docs-dev/q3a-botlib-reference-candidate-discovery-2026-06-30.md`, and
+  `docs-dev/q3a-botlib-hazard-reference-promotion-2026-06-30.md`.
+- Latest hazard context promotion: mode `96` now runs accepted
+  `movement_hazard_context` on staged official map `fact2`. The row proves live
+  runtime interaction context with positive `trigger_hurt`/`target_laser`
+  evidence instead of the previous `base2` zero-hazard gap. Runtime entity and
+  nav interaction classification still count `target_laser` and
+  `misc_lavaball` beside `trigger_hurt`, `trigger_lava`, and `trigger_slime`.
+  Focused validation passed from
+  `.tmp\bot_scenarios\movement_hazard_context_fact2.json`; the latest full
+  suite baseline remains 114/114 rows from
   `.tmp\bot_scenarios\implemented_hazard_context\20260628T083945Z`.
   Implementation log:
-  `docs-dev/q3a-botlib-hazard-context-gap-2026-06-28.md`.
+  `docs-dev/q3a-botlib-hazard-reference-promotion-2026-06-30.md`.
 - Latest teleporter entity route promotion: mode `95` now runs
   `movement_teleporter_entity_route` on packaged map `train`. Exact Q3A
   `TRAVEL_TELEPORT` route support remains recorded as unsupported, but
@@ -234,12 +261,13 @@ Last refreshed: 2026-06-29 source-counter variance budget gate.
   `reachability_policy`, `mover_route_report`, `metadata_policy`,
   `team_objective_report`, and `campaign_progression_report` alongside the
   previous generator/presence/semantic-policy fields. Locally staged
-  `q2dm2.bsp`, `q2dm8.bsp`, `q2ctf1.bsp`, `base1.bsp`, `base2.bsp`, and
-  `train.bsp` now pass optional manifest baselines in addition to `mm-rage`
-  and `q2dm1`; `q2ctf1` proves reachable CTF flags, and the campaign set
-  records trigger/door/progression evidence for coop review. `q2aas-stage-aas`
-  stages eight `.aas` files, and `refresh_install.py --package-q2aas-aas`
-  packages/audits all eight archive members. The current imported Q3A AAS
+  `q2dm2.bsp`, `q2dm7.bsp`, `q2dm8.bsp`, `q2ctf1.bsp`, `base1.bsp`,
+  `base2.bsp`, `fact2.bsp`, and `train.bsp` now pass optional manifest baselines in
+  addition to `mm-rage` and `q2dm1`; `q2ctf1` proves reachable CTF flags,
+  `q2dm7` proves slime reference coverage, `fact2` proves lava and runtime
+  hazard entity coverage, and the campaign set records trigger/door/progression
+  evidence for coop review. `q2aas-stage-aas` stages ten `.aas` files when
+  optional `q2dm7` and `fact2` are present. The current imported Q3A AAS
   runtime C set also rebuilds into `sgame_x86_64`, with `Trace`,
   `PointContents`, and PVS/PHS visibility owned by the active-map Q2 BSP
   bridges, `EntityTrace` owned by the WORR `gi.clip` adapter path, module-level
@@ -251,7 +279,7 @@ Last refreshed: 2026-06-29 source-counter variance budget gate.
   closed. The final round added the imported runtime/adapter implementation
   rollup, the q2aas generator tailoring rollup, roadmap/credits closeout
   notes, Linux/macOS CI build coverage evidence from the release matrix, and
-  final reference-map validation evidence for the eight-map staged q2aas set.
+  final reference-map validation evidence for the staged q2aas set.
 - Raw markdown checklist cleanup: the reusable Checklist System gate now uses
   plain bullets so it remains copyable guidance without showing up as open raw
   task debt.
@@ -261,9 +289,10 @@ Last refreshed: 2026-06-29 source-counter variance budget gate.
   coordination, richer Q3A-style chat phrase libraries and live event triggers
   beyond the current conservative dispatch, audience, global-rate,
   initial-selection, single-reply, and multi-event smoke proofs,
-  slime/lava-specific reference-map candidates beyond the current water-backed
-  set, follow-up variance soaks against the strict current-source budget lane,
-  and any future FR-04 task expansion tracked in the roadmap.
+  natural crouch, lava-specific, or runtime hazard-entity reference-map
+  candidates beyond the current water/slime-backed set, follow-up variance soaks
+  against the strict current-source budget lane, and any future FR-04 task
+  expansion tracked in the roadmap.
 
 ## Source Baseline
 
@@ -901,6 +930,23 @@ Reference map checklist:
   archive members inside `.install\basew\pak0.pkz`.
 - Implementation log:
   `docs-dev/q3a-botlib-reference-map-runtime-adapter-round-2026-06-21.md`.
+
+2026-06-30 candidate-discovery follow-up:
+
+- `tools\q2aas\discover_reference_candidates.py` scans local BSP corpora and
+  can convert top candidates through the normal q2aas validator before manifest
+  promotion.
+- Optional `q2dm7` is staged as the first slime reference candidate, optional
+  official `fact2` is staged as the lava/runtime hazard reference, and
+  WORR-authored `worr_crouch_ref` is staged as the required natural-crouch
+  reference. With the optional BSPs present, `q2aas-staged-smoke` validates
+  eleven maps while `crouch_reference`, `slime_reference`, `lava_reference`,
+  and `runtime_hazard_entity_reference` pass.
+- `dark010.bsp` passed a scratch conversion as a strong lava/runtime hazard
+  candidate, but remains unpromoted because `fact2` provides a canonical
+  Quake II replacement.
+- Implementation log:
+  `docs-dev/q3a-botlib-reference-candidate-discovery-2026-06-30.md`.
 
 Exit criteria:
 
@@ -2251,9 +2297,12 @@ Outstanding work outline:
 - Movement and map evidence: add broader natural movement validation for
   crouch, swim, waterjump, slime/lava-adjacent hazards, movers, doors,
   elevators, teleporters, and route recovery across more reference maps.
-- Reference-map and AAS breadth: expand beyond the current staged eight-map
-  q2aas set with more DM, CTF, coop, expansion, and BSPX-heavy candidates,
-  plus explicit known-failure diagnostics.
+  `worr_crouch_ref` now covers accepted natural crouch routing, `fact2` covers
+  accepted hazard context, and the movement reference gap audit has no
+  remaining reference blockers.
+- Reference-map and AAS breadth: expand beyond the current staged q2aas set
+  with more DM, CTF, coop, expansion, natural crouch, lava/runtime hazard, and
+  BSPX-heavy candidates, plus explicit known-failure diagnostics.
 - Performance and soak coverage: one fresh source-counter high-bot baseline now
   exists at `.tmp\bot_scenarios\fresh_source_counter_soak_pass\20260628T090904Z`,
   and the strict current-source budget lane is in place; continue with a
@@ -2275,8 +2324,10 @@ now reports 114 implemented catalog rows, 0 pending rows, and highest reserved
 bot frame-command mode `96`. The latest full `implemented` run passed all
 114 rows from
 `.tmp\bot_scenarios\implemented_hazard_context\20260628T083945Z`;
-focused validation passed for the hazard context gap from
-`.tmp\bot_scenarios\movement_hazard_context_gap\20260628T083930Z`,
+focused validation passed for accepted hazard context from
+`.tmp\bot_scenarios\movement_hazard_context_fact2.json`,
+accepted natural crouch route from
+`.tmp\bot_scenarios\movement_crouch_route.json`,
 the movement context gap matrix from
 `.tmp\bot_scenarios\movement_context_gap_rerun2\20260628T080154Z`,
 the 18-row behavior sanity set from
@@ -2369,10 +2420,10 @@ FFA mode `42`, `ffa_spawn_camp_avoidance` uses dedicated four-bot FFA mode
 `movement_jump_route`, `movement_ladder_route`, `movement_walkoffledge_route`,
 `movement_elevator_route`, `movement_barrierjump_route`, and
 `movement_rocketjump_route` use modes `9`, `10`, `11`, `12`, `13`, and `14`,
-`movement_door_context` reuses mode `91` on `base1`, `movement_crouch_gap`
-uses mode `92`, `movement_swim_route` plus `movement_waterjump_route` use modes
-`93` and `94` on `q2dm2`, and `movement_teleporter_entity_route` uses mode
-`95` on `train`,
+`movement_door_context` reuses mode `91` on `base1`,
+`movement_crouch_route` uses mode `92` on `worr_crouch_ref`,
+`movement_swim_route` plus `movement_waterjump_route` use modes `93` and `94`
+on `q2dm2`, and `movement_teleporter_entity_route` uses mode `95` on `train`,
 `bot_chat_live_events`, `bot_chat_live_event_cooldown`,
 `bot_chat_live_enemy_sighted`, `bot_chat_phrase_library`,
 `bot_chat_duplicate_suppression`, `bot_chat_live_low_health`,

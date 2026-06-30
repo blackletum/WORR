@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  * name:		be_aas_reach.c
  *
  * desc:		reachability calculations
+ * Modified for WORR 2026-06-30: preserve TRAVEL_CROUCH for crouch-only
+ *              equal-floor and step reachabilities in the q2aas generator.
  *
  * $Archive: /MissionPack/code/botlib/be_aas_reach.c $
  *
@@ -1005,7 +1007,8 @@ int AAS_Reachability_EqualFloorHeight(int area1num, int area2num)
 						lr.edgenum = edgenum;
 						VectorCopy(start, lr.start);
 						VectorCopy(end, lr.end);
-						lr.traveltype = TRAVEL_WALK;
+						lr.traveltype = (AAS_AreaCrouch(area1num) || AAS_AreaCrouch(area2num)) ?
+							TRAVEL_CROUCH : TRAVEL_WALK;
 						lr.traveltime = 1;
 						foundreach = qtrue;
 					} //end if
@@ -1356,7 +1359,7 @@ int AAS_Reachability_Step_Barrier_WaterJump_WalkOffLedge(int area1num, int area2
 		//NOTE: ground_bestdist >= 0 also catches equal floor reachabilities
 		if (ground_bestdist >= 0 && ground_bestdist < aassettings.phys_maxstep)
 		{
-			//create walk reachability from area1 to area2
+			//create walk/crouch reachability from area1 to area2
 			lreach = AAS_AllocReachability();
 			if (!lreach) return qfalse;
 			lreach->areanum = area2num;
@@ -1364,7 +1367,8 @@ int AAS_Reachability_Step_Barrier_WaterJump_WalkOffLedge(int area1num, int area2
 			lreach->edgenum = ground_bestarea2groundedgenum;
 			VectorMA(ground_beststart, INSIDEUNITS_WALKSTART, ground_bestnormal, lreach->start);
 			VectorMA(ground_bestend, INSIDEUNITS_WALKEND, ground_bestnormal, lreach->end);
-			lreach->traveltype = TRAVEL_WALK;
+			lreach->traveltype = (AAS_AreaCrouch(area1num) || AAS_AreaCrouch(area2num)) ?
+				TRAVEL_CROUCH : TRAVEL_WALK;
 			lreach->traveltime = 0;//1;
 			//if going into a crouch area
 			if (!AAS_AreaCrouch(area1num) && AAS_AreaCrouch(area2num))
@@ -1518,7 +1522,7 @@ int AAS_Reachability_Step_Barrier_WaterJump_WalkOffLedge(int area1num, int area2
 		{
 			if (ground_bestdist > -aassettings.phys_maxstep)
 			{
-				//create walk reachability from area1 to area2
+				//create walk/crouch reachability from area1 to area2
 				lreach = AAS_AllocReachability();
 				if (!lreach) return qfalse;
 				lreach->areanum = area2num;
@@ -1526,7 +1530,8 @@ int AAS_Reachability_Step_Barrier_WaterJump_WalkOffLedge(int area1num, int area2
 				lreach->edgenum = ground_bestarea2groundedgenum;
 				VectorMA(ground_beststart, INSIDEUNITS_WALKSTART, ground_bestnormal, lreach->start);
 				VectorMA(ground_bestend, INSIDEUNITS_WALKEND, ground_bestnormal, lreach->end);
-				lreach->traveltype = TRAVEL_WALK;
+				lreach->traveltype = (AAS_AreaCrouch(area1num) || AAS_AreaCrouch(area2num)) ?
+					TRAVEL_CROUCH : TRAVEL_WALK;
 				lreach->traveltime = 1;
 				lreach->next = areareachability[area1num];
 				areareachability[area1num] = lreach;

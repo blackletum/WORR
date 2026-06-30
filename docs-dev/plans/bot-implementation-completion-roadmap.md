@@ -42,7 +42,7 @@ canonical strategic roadmap.
 
 ## Current Baseline
 
-Snapshot from 2026-06-28 after the hazard context gap round:
+Snapshot from 2026-06-30 after the crouch reference promotion round:
 
 | Area | Current State |
 |---|---|
@@ -52,7 +52,7 @@ Snapshot from 2026-06-28 after the hazard context gap round:
 | Default pending rows | `0`. |
 | Highest bot frame-command smoke mode | `96`. |
 | Latest aggregate artifact | `.tmp\bot_scenarios\implemented_hazard_context\20260628T083945Z`, with `114/114` `implemented` rows passing. |
-| Latest focused artifact | `.tmp\bot_scenarios\movement_hazard_context_gap\20260628T083930Z` for the `base2` hazard context gap; `.tmp\bot_scenarios\movement_context_gap_rerun2\20260628T080154Z` remains the focused crouch/door/teleporter/swim/waterjump proof. |
+| Latest focused artifact | `.tmp\bot_scenarios\movement_crouch_route.json` for accepted `worr_crouch_ref` natural crouch routing; `.tmp\bot_scenarios\movement_reference_gap_audit.json` now accepts both natural crouch and hazard context. |
 | Core runtime | Q3A BotLib/AAS loads generated AAS, updates entity snapshots, routes bots, and emits source counters. |
 | Bot lifecycle | Server-owned fake clients can be added, removed, auto-filled, cleaned up, and classified in match flow. |
 | Profiles | Q3-style WORR botfiles load behavior metadata, roles, movement style, item policy, team policy, aim hints, and chat personality. |
@@ -88,11 +88,21 @@ reported as unsupported, but runtime nav now selects a touch-capable teleporter
 entity, persists it as a position goal, and builds a first-reachability route
 toward that entity without bot-nav route failures.
 
-The follow-up hazard context gap round adds mode `96` on packaged map `base2`.
-It proves live runtime interaction context while recording
-`interaction_world_hazards=0` as an explicit staged-content gap until a
-reference map with slime/lava brushes or hurt/laser hazard entities is
-available.
+The 2026-06-28 hazard context gap round added mode `96` on packaged map
+`base2`, proving live runtime interaction context while explicitly recording
+the missing staged hazard content.
+
+The 2026-06-30 movement reference gap audit made the remaining M6 gaps
+machine-checkable. q2aas reference validation now reports `crouch_reference`
+from generated `TRAVEL_CROUCH` counts beside the existing `slime_reference` and
+`lava_reference` gates. Same-day follow-up slices promoted optional `q2dm7` as
+the first staged slime reference, optional official campaign map `fact2` as
+the lava/runtime hazard reference, and WORR-authored `worr_crouch_ref` as the
+required natural-crouch reference. With those maps staged locally, q2aas
+validation passes `crouch_reference`, `slime_reference`, `lava_reference`, and
+`runtime_hazard_entity_reference`; mode `92` is now accepted as
+`movement_crouch_route` and mode `96` remains accepted as
+`movement_hazard_context`.
 
 ## Completion Definition
 
@@ -121,7 +131,7 @@ of the following are true:
 | M3 | Multiplayer Mode Intelligence | `FR-04-T04`, `FR-04-T06`, `FR-04-T15` | In progress; CTF objective live-loop and transition proofs, TDM role spawn-stability, FFA live-pacing, and Duel live-pacing proofs done | Bots play FFA, Duel, TDM, and CTF objectives coherently. |
 | M4 | Coop And Campaign Behavior | `FR-04-T04`, `FR-04-T05`, `FR-04-T15` | In progress; coop live-loop, target/resource share, and first campaign interaction matrix proofs done | Bots help rather than block campaign and coop progression. |
 | M5 | Chat And Personality | `FR-04-T07`, `FR-04-T15` | In progress; live spawn, route-ready, enemy-sighted, low-health, item-taken, objective-changed, flag-state, blocked, item-denied, and match-result events, global cooldown, duplicate suppression, and four-variant phrase libraries done | Profile personality influences safe live communication and behavior flavor. |
-| M6 | Map, AAS, And Movement Coverage | `FR-04-T05`, `FR-04-T11`, `FR-04-T14`, `FR-04-T16` | In progress; first coop campaign map-matrix row plus forced movement, map-backed jump/ladder/ledge/elevator/barrier-jump/rocket-jump/swim/waterjump rows, door context, accepted teleporter entity-route fallback, explicit crouch gap, and the `base2` hazard context gap done | Bots have reliable navigation evidence across representative map families. |
+| M6 | Map, AAS, And Movement Coverage | `FR-04-T05`, `FR-04-T11`, `FR-04-T14`, `FR-04-T16` | In progress; first coop campaign map-matrix row plus forced movement, map-backed jump/ladder/ledge/elevator/barrier-jump/rocket-jump/swim/waterjump rows, door context, accepted natural crouch route, accepted teleporter entity-route fallback, and accepted `fact2` hazard context done | Bots have reliable navigation evidence across representative map families. |
 | M7 | Performance, Soak, And Reliability | `FR-04-T02`, `FR-04-T14`, `FR-04-T16`, `DV-03-T05` | In progress; fresh source-counter soak, strict source-counter budget lane, and repeated-run variance tooling done | Performance budgets and long-run behavior are stable enough to ship. |
 | M8 | Productization And Release Readiness | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | In progress; public surface/default docs gates, playtest tooling, release acceptance runner, and perf tooling checks done | Operator docs, defaults, packaging, and release notes are complete. |
 
@@ -524,8 +534,13 @@ Validation gates:
 Status: In progress; first coop campaign map-matrix row, forced
 jump/crouch/swim command rows, map-backed jump, ladder, walk-off-ledge,
 elevator, barrier-jump, rocket-jump, swim, and waterjump rows, plus door
-context, accepted teleporter entity-route fallback, explicit crouch gap, and
-the `base2` hazard context gap row are implemented.
+context, accepted natural crouch routing, accepted teleporter entity-route
+fallback, and accepted `fact2` hazard context row are implemented. q2aas now
+exposes `crouch_reference`, required `worr_crouch_ref` satisfies the natural
+crouch route gate, optional `q2dm7` satisfies `slime_reference` when staged
+locally, optional `fact2` satisfies `lava_reference` and
+`runtime_hazard_entity_reference`, and the movement reference gap audit records
+no remaining M6 reference blockers.
 
 Goal: make navigation reliable across the maps players actually use.
 
@@ -549,18 +564,23 @@ Latest validation note:
 
 - Focused movement context validation passed 5/5 rows from
   `.tmp\bot_scenarios\movement_context_gap_rerun2\20260628T080154Z`.
+  Focused natural crouch validation passed from
+  `.tmp\bot_scenarios\movement_crouch_route.json`.
   Focused hazard context validation passed from
-  `.tmp\bot_scenarios\movement_hazard_context_gap\20260628T083930Z`.
+  `.tmp\bot_scenarios\movement_hazard_context_fact2.json`.
   Focused teleporter entity-route validation passed from
   `.tmp\bot_scenarios\teleporter_entity_route_final\20260629T191851Z`.
   The full catalog now includes 20 movement-tagged implemented rows covering
   forced jump/crouch/swim commands; map-backed jump, ladder, walk-off-ledge,
-  elevator, barrier-jump, rocket-jump, swim, and waterjump routes; `base1`
-  door context; accepted train teleporter entity-route fallback; the explicit
-  expected-blocked crouch gap row; and the `base2` hazard context gap row.
-  Natural crouch travel and accepted hazard traversal/avoidance remain explicit
-  gaps until reference maps or generated proof maps expose suitable routes and
-  hazard content.
+  elevator, barrier-jump, rocket-jump, crouch, swim, and waterjump routes;
+  `base1` door context; accepted train teleporter entity-route fallback; and
+  accepted `fact2` hazard context.
+  `tools\q2aas\discover_reference_candidates.py` now scans local BSP corpora for
+  liquid and runtime hazard candidates. With local optional BSPs plus the
+  WORR-authored crouch reference staged,
+  `meson compile -C builddir-win q2aas-staged-smoke` validates eleven maps.
+  `.tmp\bot_scenarios\movement_reference_gap_audit.json` reports
+  `natural_crouch` and `hazard_context` as `accepted`.
 
 ## M7: Performance, Soak, And Reliability
 
@@ -708,16 +728,15 @@ defaults/docs release pass" slice is complete via
 
 | Order | Slice | Primary Milestone | Main Task IDs | Expected Artifact |
 |---|---|---|---|---|
-| 1 | Accepted movement/hazard reference promotion | M6 | `FR-04-T05`, `FR-04-T11`, `FR-04-T14`, `FR-04-T16` | Replace remaining expected-blocked crouch/hazard gap rows with accepted traversal or avoidance proofs when suitable reference maps exist. |
-| 2 | Post-build release acceptance dry run | M8 | `FR-04-T16`, `DV-07-T06` | Re-run `tools/bot_release/run_bot_acceptance.py` after a fresh build/`.install` refresh and full scenario rerun, then attach the JSON artifact to release notes. |
-| 3 | Duel live-server play-depth pass | M3 | `FR-04-T04`, `FR-04-T06`, `DV-07-T06` | Use `bot_playtest_duel_rotation.cfg` as the manual scaffold while checking item-denial timing, spawn pressure, and queue boundaries beyond the mode `75` smoke. |
-| 4 | CTF live-server play-depth pass | M3 | `FR-04-T04`, `FR-04-T15`, `DV-07-T06` | Use `bot_playtest_ctf_objectives.cfg` as the manual scaffold while checking pickup/drop/return handoffs, carrier support, and base-return decisions beyond the mode `76` smoke. |
-| 5 | Bot chat user-facing docs readiness pass | M5/M8 | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | Decide which live chat controls and event families are stable enough for `docs-user/` after the match-result breadth pass. |
-| 6 | Outcome-aware match-result chat polish | M5 | `FR-04-T07`, `FR-04-T15` | Distinguish win/loss/tie/abort phrasing once match-result outcome metadata is ready for public behavior. |
-| 7 | Second campaign interaction map row | M4/M6 | `FR-04-T04`, `FR-04-T05`, `FR-04-T15`, `DV-07-T06` | Add another packaged campaign map row once key/button/trigger objective progression has stronger status evidence. |
-| 8 | Triage-backed playtest evidence run | M3/M8 | `FR-04-T04`, `FR-04-T06`, `FR-04-T16`, `DV-07-T06` | Run the generated Duel/CTF play-depth cases, fill the notes template, rerun triage, and convert any promoted candidate into a scenario row. |
-| 9 | Bot cvar docs release freeze | M8 | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | Keep `docs-user/bot-cvars.md` frozen to supported public cvars while release notes and server references are finalized. |
-| 10 | Next behavior-change source-counter variance refresh | M7 | `FR-04-T16`, `DV-03-T05`, `DV-05-T05` | Re-run `tools/bot_perf/run_source_counter_variance_soak.py` after the next movement/combat/routing behavior change and attach the fresh JSON/Markdown artifacts. |
+| 1 | Post-build release acceptance dry run | M8 | `FR-04-T16`, `DV-07-T06` | Re-run `tools/bot_release/run_bot_acceptance.py` after a fresh build/`.install` refresh and full scenario rerun, then attach the JSON artifact to release notes. |
+| 2 | Duel live-server play-depth pass | M3 | `FR-04-T04`, `FR-04-T06`, `DV-07-T06` | Use `bot_playtest_duel_rotation.cfg` as the manual scaffold while checking item-denial timing, spawn pressure, and queue boundaries beyond the mode `75` smoke. |
+| 3 | CTF live-server play-depth pass | M3 | `FR-04-T04`, `FR-04-T15`, `DV-07-T06` | Use `bot_playtest_ctf_objectives.cfg` as the manual scaffold while checking pickup/drop/return handoffs, carrier support, and base-return decisions beyond the mode `76` smoke. |
+| 4 | Bot chat user-facing docs readiness pass | M5/M8 | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | Decide which live chat controls and event families are stable enough for `docs-user/` after the match-result breadth pass. |
+| 5 | Outcome-aware match-result chat polish | M5 | `FR-04-T07`, `FR-04-T15` | Distinguish win/loss/tie/abort phrasing once match-result outcome metadata is ready for public behavior. |
+| 6 | Second campaign interaction map row | M4/M6 | `FR-04-T04`, `FR-04-T05`, `FR-04-T15`, `DV-07-T06` | Add another packaged campaign map row once key/button/trigger objective progression has stronger status evidence. |
+| 7 | Triage-backed playtest evidence run | M3/M8 | `FR-04-T04`, `FR-04-T06`, `FR-04-T16`, `DV-07-T06` | Run the generated Duel/CTF play-depth cases, fill the notes template, rerun triage, and convert any promoted candidate into a scenario row. |
+| 8 | Bot cvar docs release freeze | M8 | `FR-04-T07`, `FR-04-T16`, `DV-07-T06` | Keep `docs-user/bot-cvars.md` frozen to supported public cvars while release notes and server references are finalized. |
+| 9 | Next behavior-change source-counter variance refresh | M7 | `FR-04-T16`, `DV-03-T05`, `DV-05-T05` | Re-run `tools/bot_perf/run_source_counter_variance_soak.py` after the next movement/combat/routing behavior change and attach the fresh JSON/Markdown artifacts. |
 
 ## Scenario Strategy
 
@@ -773,7 +792,7 @@ for the milestone are satisfied, not merely that code exists.
 | M3 Multiplayer Mode Intelligence | In progress | Existing FFA/TDM/CTF role and objective proof rows, mode `40` `ctf_objective_route` live-loop validation from `.tmp\bot_scenarios\20260622T210329Z`, mode `73` `tdm_role_spawn_stability` validation from `.tmp\bot_scenarios\20260622T212431Z`, mode `74` `ffa_live_pacing` validation from `.tmp\bot_scenarios\20260622T214927Z`, mode `75` `duel_live_pacing` validation from `.tmp\bot_scenarios\20260622T222142Z`, mode `76` `ctf_objective_transitions` validation from `.tmp\bot_scenarios\20260622T230509Z`, the 2026-06-27 FFA/Duel pacing rerun from `.tmp\bot_scenarios\bot-profile-roam-state-fixes-rerun3`, and the 2026-06-29 multiplayer playtest generator plus triage tooling covering FFA, Duel, TDM, and CTF. | Run generated Duel and CTF live-server play-depth passes and attach triage output. |
 | M4 Coop And Campaign Behavior | In progress | Existing coop readiness, leader, progress-wait, interaction, resource, anti-blocking, target-share, and door/elevator proof rows, mode `77` `coop_live_loop` validation from `.tmp\bot_scenarios\20260622T234315Z`, mode `78` `coop_share_loop` validation from `.tmp\bot_scenarios\20260623T001149Z`, and mode `91` `coop_campaign_interaction_matrix` validation from `.tmp\bot_scenarios\20260626Tcoop-campaign-interaction-final\20260626T185108Z`. | Add second campaign interaction rows and coop play-depth validation. |
 | M5 Chat And Personality | In progress | Modes `57` through `62` prove dispatch, audience, rate, initial, reply, and event-policy selection; mode `79` `bot_chat_live_events` proves live spawn plus route-ready accounting from `.tmp\bot_scenarios\20260623T010520Z`; mode `80` `bot_chat_live_event_cooldown` proves global cooldown suppression from `.tmp\bot_scenarios\20260623T010530Z`; mode `81` `bot_chat_live_enemy_sighted` proves blackboard-visible enemy chat from `.tmp\bot_scenarios\20260623T013832Z`; mode `82` `bot_chat_phrase_library` proves four-variant phrase selection from `.tmp\bot_scenarios\20260623T020850Z`; mode `83` `bot_chat_duplicate_suppression` proves duplicate route-ready reply/live event suppression from `.tmp\bot_scenarios\20260623T023211Z`; mode `84` `bot_chat_live_low_health` proves survival-state low-health live chat from `.tmp\bot_scenarios\20260623T025752Z`; mode `85` `bot_chat_live_item_taken` proves pickup-observation live chat from `.tmp\bot_scenarios\20260623T051126Z`; mode `86` `bot_chat_live_objective_changed` proves CTF transition-driven objective live chat from `.tmp\bot_scenarios\20260626T140601Z`; mode `87` `bot_chat_live_flag_state` proves CTF flag-state live chat from `.tmp\bot_scenarios\20260626Tflagstate3\20260626T144136Z`; mode `88` `bot_chat_live_blocked` proves blocked route-failure live chat from `.tmp\bot_scenarios\20260626Tblocked-fixed\20260626T151437Z`; mode `89` `bot_chat_live_item_denied` proves TDM deny-enemy resource-policy live chat from `.tmp\bot_scenarios\20260626Titem-denied\20260626T154429Z`; mode `90` `bot_chat_live_match_result` proves native intermission/match-result live chat from `.tmp\bot_scenarios\20260626Tmatch-result\20260626T182046Z`. | Continue outcome-aware phrasing polish and user-facing chat docs readiness. |
-| M6 Map, AAS, And Movement Coverage | In progress | Eight staged reference maps, mode `91` `base1` coop campaign interaction/door context evidence, mode `92` crouch gap, modes `93`/`94` q2dm2 swim/waterjump evidence, mode `95` train teleporter entity-route evidence, mode `96` `base2` hazard context gap, and the 20 movement-tagged implemented rows. | Add accepted natural crouch traversal and promote hazard gap into accepted hazard traversal/avoidance when suitable reference content exists. |
+| M6 Map, AAS, And Movement Coverage | In progress | Eleven local staged q2aas reference maps when optional `q2dm7` and `fact2` are present, mode `91` `base1` coop campaign interaction/door context evidence, mode `92` `worr_crouch_ref` natural crouch route evidence, modes `93`/`94` q2dm2 swim/waterjump evidence, mode `95` train teleporter entity-route evidence, mode `96` accepted `fact2` hazard context, the 20 movement-tagged implemented rows, and `.tmp\bot_scenarios\movement_reference_gap_audit.json` accepting both `natural_crouch` and `hazard_context`. | Expand movement breadth beyond the accepted reference blockers with additional campaign, expansion, hazard, and recovery map rows. |
 | M7 Performance, Soak, And Reliability | In progress | Fresh source-counter high-bot soak passed from `.tmp\bot_scenarios\fresh_source_counter_soak_pass\20260628T090904Z`; scenario default `perf_budget`, strict `perf_budgets` source-counter lane, standalone analyzer pass with all seven source-counter groups present, variance gate artifact `.tmp\bot_perf\source_counter_variance_gate.json`, repeatable runner `tools/bot_perf/run_source_counter_variance_soak.py`, and fresh two-log post-change reanalysis `.tmp\bot_perf\post_recovery_source_counter_variance_reanalyzed.json` passing 14 variance checks. | Rerun the variance runner after the next movement/combat/routing behavior change. |
 | M8 Productization And Release Readiness | In progress | Current bot user docs, public bot cvar/default docs, profile docs, bot playtest docs, package audits, CI release matrix hooks, packaged `botfiles/bots.txt`, `tools/bot_surface` public surface/default audit with `.tmp\bot_surface\public_bot_surface_audit.json` reporting 0 violations, `tools/bot_playtest` generated checklist/triage support, and `tools/bot_release` acceptance artifact `.tmp\bot_release\bot_release_acceptance.json` passing 11/11 checks including `perf_tooling`. | Post-build acceptance rerun and generated manual playtest evidence. |
 
