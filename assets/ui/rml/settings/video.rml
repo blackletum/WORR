@@ -1,0 +1,71 @@
+<rml>
+  <head>
+    <title>WORR Video Settings</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/rcss" href="../common/theme/settings.rcss" />
+    <link type="text/template" href="../common/components/menu_frame.rml" />
+    <link type="text/template" href="../common/components/cvar_controls.rml" />
+  </head>
+  <body id="settings-video" data-route-id="video" data-route-group="settings" data-route-version="1" data-document-status="first-round-scaffold">
+    <div class="screen settings-screen" id="video-screen">
+      <header class="menu-header">
+        <h1>Video Setup</h1>
+      </header>
+
+      <main class="settings-form" id="video-settings-form" data-component="common.components.cvar_controls">
+        <section class="settings-section" id="video-window-section">
+          <h2>Display</h2>
+          <div class="setting-row" data-control="select" data-cvar="r_fullscreen">
+            <label for="video-mode">Video Mode</label>
+            <select id="video-mode" data-cvar="r_fullscreen">
+              <option value="0">Windowed</option>
+              <option value="1">Fullscreen</option>
+            </select>
+          </div>
+          <div class="setting-row" data-control="toggle" data-cvar="r_borderless">
+            <label for="video-borderless">Borderless</label>
+            <input id="video-borderless" type="checkbox" data-cvar="r_borderless" />
+          </div>
+          <div class="setting-row" data-control="toggle" data-cvar="gl_swapinterval">
+            <label for="video-vsync">Vertical Sync</label>
+            <input id="video-vsync" type="checkbox" data-cvar="gl_swapinterval" />
+          </div>
+        </section>
+
+        <section class="settings-section" id="video-quality-section">
+          <h2>Quality</h2>
+          <div class="setting-row" data-control="range" data-cvar="r_gamma">
+            <label for="video-gamma">Texture Gamma</label>
+            <input id="video-gamma" type="range" min="0.5" max="2.0" step="0.05" data-cvar="r_gamma" />
+            <span class="setting-value" data-bind-cvar="r_gamma"></span>
+          </div>
+          <div class="setting-row" data-control="range" data-cvar="gl_picmip">
+            <label for="video-texture-quality">Texture Quality</label>
+            <input id="video-texture-quality" type="range" min="0" max="3" step="1" data-cvar="gl_picmip" />
+            <span class="setting-value" data-bind-cvar="gl_picmip"></span>
+          </div>
+          <div class="setting-row" data-control="select" data-cvar="gl_texturemode">
+            <label for="video-texture-filter">Texture Filter</label>
+            <select id="video-texture-filter" data-cvar="gl_texturemode">
+              <option value="GL_NEAREST">Nearest</option>
+              <option value="GL_LINEAR">Linear</option>
+              <option value="GL_LINEAR_MIPMAP_LINEAR">Trilinear</option>
+            </select>
+          </div>
+          <div class="setting-row" data-control="select" data-cvar="gl_shaders">
+            <label for="video-rendering-backend">Rendering Backend</label>
+            <select id="video-rendering-backend" data-cvar="gl_shaders">
+              <option value="0">Fixed</option>
+              <option value="1">Shader</option>
+            </select>
+          </div>
+        </section>
+      </main>
+
+      <footer class="menu-footer" id="video-menu-footer">
+        <button id="video-back" type="button" data-command="ui.back">Back</button>
+        <button id="video-close" type="button" data-command="ui.close">Close</button>
+      </footer>
+    </div>
+  </body>
+</rml>

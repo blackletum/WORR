@@ -1,0 +1,33 @@
+/*
+ * Shell-specific starter rules for first-round RmlUi menu documents.
+ * The base theme remains the source of shared colors, focus, and readability.
+ */
+
+.shell-screen
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+.menu-header
+{
+	margin-bottom: var(--space-3);
+}
+
+.menu-stack,
+.menu-actions
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.menu-footer
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin-top: var(--space-4);
+}

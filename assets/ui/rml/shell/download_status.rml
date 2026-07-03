@@ -1,0 +1,33 @@
+<rml>
+  <head>
+    <title>WORR Download Status</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/rcss" href="../common/theme/shell.rcss" />
+    <link type="text/template" href="../common/components/menu_frame.rml" />
+    <link type="text/template" href="../common/components/command_button.rml" />
+  </head>
+  <body id="shell-download-status" data-route-id="download_status" data-route-group="shell" data-route-version="1" data-document-status="scaffolded-round2" data-close-command="download_cancel">
+    <div class="screen shell-screen" id="download-status-screen">
+      <header class="menu-header">
+        <h1>Downloading Content</h1>
+      </header>
+
+      <main class="menu-stack" id="download-status-stack" data-component="common.components.menu_frame">
+        <section class="settings-section" id="download-status-details" data-model="shell.download_status">
+          <p id="download-status-file" data-label-cvar="ui_download_file" data-show-if="ui_download_file"></p>
+          <p id="download-status-message" data-label-cvar="ui_download_status" data-show-if="ui_download_status"></p>
+          <div class="setting-row" data-control="progress" data-cvar="ui_download_percent">
+            <label for="download-status-progress">Progress</label>
+            <progress id="download-status-progress" value="0" max="100" data-cvar="ui_download_percent"></progress>
+            <span class="setting-value" data-bind-cvar="ui_download_percent"></span>
+          </div>
+          <p id="download-status-queue" data-label-cvar="ui_download_queue" data-show-if="ui_download_queue"></p>
+        </section>
+      </main>
+
+      <footer class="menu-footer" id="download-status-menu-footer">
+        <button id="download-status-cancel" type="button" data-command="download_cancel">Cancel</button>
+      </footer>
+    </div>
+  </body>
+</rml>

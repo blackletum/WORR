@@ -1,0 +1,285 @@
+/*
+ * WORR RmlUi utility-page theme contract.
+ *
+ * Import after common/theme/base.rcss. These rules cover table browsers,
+ * toolbar-driven utilities, and preview/form layouts without binding to any
+ * renderer implementation.
+ */
+
+.utility-screen,
+#servers-screen,
+#demos-screen,
+#players-screen
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	min-height: 100%;
+}
+
+.page-header
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	max-width: 920px;
+}
+
+.page-header p
+{
+	max-width: 760px;
+	margin-bottom: 0px;
+	color: var(--color-text-muted);
+}
+
+.toolbar,
+.utility-toolbar
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-2);
+	background-color: var(--color-surface);
+	border-width: var(--control-border-width);
+	border-color: var(--color-border);
+	border-radius: var(--radius-medium);
+}
+
+.toolbar button,
+.toolbar .ui-button,
+.utility-toolbar button,
+.utility-toolbar .ui-button
+{
+	min-width: 112px;
+}
+
+.content,
+.utility-content
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	min-height: 0px;
+}
+
+.content.two-column,
+.utility-two-column
+{
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+	gap: var(--space-4);
+}
+
+.form-panel,
+.preview-panel,
+.utility-panel
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	padding: var(--space-4);
+	background-color: var(--color-surface);
+	border-width: var(--control-border-width);
+	border-color: var(--color-border);
+	border-radius: var(--radius-medium);
+}
+
+.form-panel
+{
+	width: 360px;
+	min-width: 300px;
+}
+
+.preview-panel
+{
+	flex: 1 1 auto;
+	min-width: 360px;
+	min-height: 320px;
+}
+
+.form-panel label,
+.utility-label
+{
+	color: var(--color-text-muted);
+	font-weight: bold;
+}
+
+.form-panel input,
+.form-panel select
+{
+	width: 100%;
+	margin-bottom: var(--space-2);
+}
+
+.preview-surface,
+.utility-preview-surface
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1 1 auto;
+	min-height: 220px;
+	padding: var(--space-4);
+	background-color: #090909;
+	color: var(--color-text-muted);
+	border-width: var(--control-border-width);
+	border-color: var(--color-border);
+	border-radius: var(--radius-small);
+	text-align: center;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.utility-preview-meta
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	color: var(--color-text-muted);
+}
+
+.utility-preview-actions
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin-top: var(--space-2);
+}
+
+.data-table,
+.utility-table
+{
+	width: 100%;
+	background-color: var(--color-surface);
+	border-width: var(--control-border-width);
+	border-color: var(--color-border);
+	border-radius: var(--radius-small);
+	color: var(--color-text);
+}
+
+.data-table th,
+.utility-table th
+{
+	padding: var(--space-2);
+	background-color: var(--color-surface-raised);
+	color: var(--color-accent-strong);
+	border-bottom-width: var(--control-border-width);
+	border-bottom-color: var(--color-border);
+	text-align: left;
+	font-weight: bold;
+	white-space: nowrap;
+}
+
+.data-table td,
+.utility-table td
+{
+	padding: var(--space-2);
+	color: var(--color-text);
+	border-bottom-width: 1px;
+	border-bottom-color: var(--color-border);
+	white-space: normal;
+	word-break: break-word;
+}
+
+.data-table tr:hover td,
+.utility-table tr:hover td,
+.data-table tr.is-selected td,
+.utility-table tr.is-selected td
+{
+	background-color: var(--color-surface-active);
+	color: var(--color-accent-strong);
+}
+
+.data-table th[data-sort-key],
+.utility-table th[data-sort-key],
+.utility-sortable
+{
+	cursor: pointer;
+}
+
+.data-table th[data-sort-state="ascending"],
+.data-table th[data-sort-state="descending"],
+.utility-table th[data-sort-state="ascending"],
+.utility-table th[data-sort-state="descending"]
+{
+	background-color: var(--color-accent);
+	color: #000000;
+}
+
+.placeholder-row td,
+.utility-empty-state
+{
+	padding: var(--space-4);
+	color: var(--color-text-muted);
+	text-align: center;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.status-bar,
+.utility-status-bar
+{
+	min-height: 34px;
+	padding: var(--space-2) var(--space-3);
+	background-color: var(--color-surface);
+	color: var(--color-text-muted);
+	border-width: var(--control-border-width);
+	border-color: var(--color-border);
+	border-radius: var(--radius-small);
+	white-space: normal;
+	word-break: break-word;
+}
+
+.utility-status-bar.is-busy,
+.status-bar.is-busy
+{
+	color: var(--color-info);
+}
+
+.utility-status-bar.is-error,
+.status-bar.is-error
+{
+	color: var(--color-danger);
+	border-color: var(--color-danger);
+}
+
+.utility-status-bar.is-ready,
+.status-bar.is-ready
+{
+	color: var(--color-success);
+}
+
+.ui-high-visibility .toolbar,
+.ui-high-visibility .utility-toolbar,
+.ui-high-visibility .form-panel,
+.ui-high-visibility .preview-panel,
+.ui-high-visibility .utility-panel,
+.ui-high-visibility .data-table,
+.ui-high-visibility .utility-table,
+.ui-high-visibility .status-bar,
+.ui-high-visibility .utility-status-bar
+{
+	background-color: var(--color-surface);
+	border-color: var(--color-border);
+}
+
+.ui-high-visibility .data-table th,
+.ui-high-visibility .utility-table th
+{
+	background-color: #000000;
+	color: var(--color-accent-strong);
+	border-color: var(--color-border);
+}
+
+.ui-high-visibility .data-table tr:hover td,
+.ui-high-visibility .utility-table tr:hover td,
+.ui-high-visibility .data-table tr.is-selected td,
+.ui-high-visibility .utility-table tr.is-selected td
+{
+	background-color: #202000;
+	color: var(--color-accent-strong);
+}

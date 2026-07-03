@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "client/cgame_ui.h"
+#include "ui_rml/ui_rml.h"
 
 extern "C" void SCR_NotifyMouseEvent(int x, int y);
 
@@ -27,6 +28,8 @@ static const cgame_ui_export_t *UI_GetAPI(void)
 
 void UI_Init(void)
 {
+    UI_Rml_Init();
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->Init)
         api->Init();
@@ -37,6 +40,8 @@ void UI_Shutdown(void)
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->Shutdown)
         api->Shutdown();
+
+    UI_Rml_Shutdown();
 }
 
 void UI_ModeChanged(void)
@@ -69,6 +74,9 @@ void UI_Draw(unsigned realtime)
 
 void UI_OpenMenu(uiMenu_t menu)
 {
+    if (UI_Rml_OpenMenu(menu))
+        return;
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->OpenMenu)
         api->OpenMenu(menu);

@@ -1,0 +1,31 @@
+.worr-save-slots {
+  display: block;
+  width: 100%;
+}
+
+.worr-save-slot {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px;
+  text-align: left;
+  color: #f2eee6;
+  background-color: #202832;
+  border-width: 1px;
+  border-color: #3b4652;
+}
+
+.worr-save-slot:hover {
+  background-color: #2d3845;
+}
+
+.worr-save-slot-name {
+  font-size: 17px;
+}
+
+.worr-save-slot-meta,
+.worr-save-slot-status {
+  margin-top: 3px;
+  color: #9ca3ad;
+  font-size: 13px;
+}

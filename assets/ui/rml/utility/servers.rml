@@ -1,0 +1,48 @@
+<rml>
+  <head>
+    <title>WORR Server Browser</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/template" href="../common/components/list-table.rml" />
+    <link type="text/template" href="../common/components/command_button.rml" />
+  </head>
+  <body id="utility-servers" data-route-id="servers" data-route-version="1">
+    <div class="screen" id="servers-screen">
+      <header class="page-header">
+        <h1>Servers</h1>
+        <p id="servers-summary">
+          Browse, refresh, sort, and connect to multiplayer servers through the
+          future RmlUi list controller.
+        </p>
+      </header>
+
+      <section class="toolbar" id="servers-toolbar" data-model="server_browser">
+        <button id="servers-refresh" type="button" data-command="servers.refresh">Refresh</button>
+        <button id="servers-connect" type="button" data-command="servers.connect_selected">Connect</button>
+        <button id="servers-favorites" type="button" data-command="servers.toggle_favorites">Favorites</button>
+        <button id="servers-back" type="button" data-command="ui.back">Back</button>
+      </section>
+
+      <section class="content" id="servers-content">
+        <table id="servers-table" class="data-table" data-model="server_browser.servers" data-controller="shared.table">
+          <thead>
+            <tr>
+              <th data-sort-key="hostname">Server</th>
+              <th data-sort-key="map">Map</th>
+              <th data-sort-key="players">Players</th>
+              <th data-sort-key="ping">Ping</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="placeholder-row">
+              <td colspan="4">Server rows bind here once the browser bridge is available.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer class="status-bar" id="servers-status" data-bind="server_browser.status">
+        Waiting for server browser data.
+      </footer>
+    </div>
+  </body>
+</rml>

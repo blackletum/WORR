@@ -1,0 +1,119 @@
+/*
+  Shared image-grid selector styles for WORR RmlUi.
+  Content pages can import this for crosshair and other visual selectors.
+*/
+
+.worr-image-grid-selector {
+  display: block;
+  width: 100%;
+}
+
+.worr-image-grid-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.worr-image-grid-title {
+  color: #f2eee6;
+  font-size: 18px;
+}
+
+.worr-image-grid-value {
+  color: #d9c48f;
+  font-size: 14px;
+}
+
+.worr-image-grid-hint {
+  margin-top: 4px;
+  margin-bottom: 10px;
+  color: #9ca3ad;
+  font-size: 13px;
+}
+
+.worr-image-grid-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.worr-image-grid-item {
+  width: 112px;
+  min-height: 124px;
+  padding: 6px;
+  color: #f8f2e6;
+  background-color: #202832;
+  border-width: 1px;
+  border-color: #465463;
+}
+
+.worr-image-grid-item:hover {
+  background-color: #2d3845;
+}
+
+.worr-image-grid-item-selected {
+  background-color: #303c49;
+  border-color: #d9c48f;
+}
+
+.worr-image-grid-thumb {
+  width: 96px;
+  height: 72px;
+  background-color: #111820;
+  border-width: 1px;
+  border-color: #303945;
+}
+
+.worr-image-grid-image {
+  width: 96px;
+  height: 72px;
+}
+
+.worr-image-grid-fallback {
+  margin-top: 25px;
+  text-align: center;
+  color: #9ca3ad;
+  font-size: 12px;
+}
+
+.worr-image-grid-label {
+  margin-top: 6px;
+  min-height: 28px;
+  text-align: center;
+  color: #f2eee6;
+  font-size: 13px;
+}
+
+.worr-image-grid-selected {
+  margin-top: 10px;
+}
+
+.worr-image-grid-selected-label {
+  color: #f2eee6;
+  font-size: 15px;
+}
+
+.worr-image-grid-selected-detail {
+  margin-top: 2px;
+  color: #9ca3ad;
+  font-size: 13px;
+}
+
+.worr-image-grid-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.worr-image-grid-action {
+  min-width: 112px;
+  padding: 6px 10px;
+  color: #f8f2e6;
+  background-color: #28323d;
+  border-width: 1px;
+  border-color: #596878;
+}
+
+.worr-image-grid-action:hover {
+  background-color: #374656;
+}

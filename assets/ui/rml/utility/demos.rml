@@ -1,0 +1,48 @@
+<rml>
+  <head>
+    <title>WORR Demo Browser</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/template" href="../common/components/list-table.rml" />
+    <link type="text/template" href="../common/components/command_button.rml" />
+  </head>
+  <body id="utility-demos" data-route-id="demos" data-route-version="1">
+    <div class="screen" id="demos-screen">
+      <header class="page-header">
+        <h1>Demos</h1>
+        <p id="demos-summary">
+          Browse recorded demos with directory navigation, sorting, and playback
+          commands preserved for the RmlUi migration.
+        </p>
+      </header>
+
+      <section class="toolbar" id="demos-toolbar" data-model="demo_browser">
+        <button id="demos-up" type="button" data-command="demos.parent_directory">Up</button>
+        <button id="demos-refresh" type="button" data-command="demos.refresh">Refresh</button>
+        <button id="demos-play" type="button" data-command="demos.play_selected">Play</button>
+        <button id="demos-back" type="button" data-command="ui.back">Back</button>
+      </section>
+
+      <section class="content" id="demos-content">
+        <table id="demos-table" class="data-table" data-model="demo_browser.entries" data-controller="shared.table">
+          <thead>
+            <tr>
+              <th data-sort-key="name">Name</th>
+              <th data-sort-key="type">Type</th>
+              <th data-sort-key="date">Date</th>
+              <th data-sort-key="size">Size</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="placeholder-row">
+              <td colspan="4">Demo and folder entries bind here once the demo bridge is available.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer class="status-bar" id="demos-status" data-bind="demo_browser.status">
+        Waiting for demo browser data.
+      </footer>
+    </div>
+  </body>
+</rml>

@@ -1,0 +1,64 @@
+<rml>
+  <head>
+    <title>WORR Download Options</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/rcss" href="../common/theme/shell.rcss" />
+    <link type="text/rcss" href="../common/theme/settings.rcss" />
+    <link type="text/template" href="../common/components/menu_frame.rml" />
+    <link type="text/template" href="../common/components/cvar_controls.rml" />
+  </head>
+  <body id="shell-downloads" data-route-id="downloads" data-route-group="shell" data-route-version="1" data-document-status="scaffolded-round2">
+    <div class="screen shell-screen settings-screen" id="downloads-screen">
+      <header class="menu-header">
+        <h1>Download Options</h1>
+      </header>
+
+      <main class="settings-form" id="downloads-settings-form" data-component="common.components.cvar_controls">
+        <section class="settings-section" id="downloads-permission-section">
+          <h2>Allowed Content</h2>
+          <div class="setting-row" data-control="toggle" data-cvar="allow_download">
+            <label for="downloads-allow">Allow Downloading</label>
+            <input id="downloads-allow" type="checkbox" data-cvar="allow_download" />
+          </div>
+          <div class="setting-row" data-control="toggle" data-cvar="allow_download_maps">
+            <label for="downloads-maps">Maps</label>
+            <input id="downloads-maps" type="checkbox" data-cvar="allow_download_maps" />
+          </div>
+          <div class="setting-row" data-control="toggle" data-cvar="allow_download_players">
+            <label for="downloads-players">Player Models/Skins</label>
+            <input id="downloads-players" type="checkbox" data-cvar="allow_download_players" />
+          </div>
+          <div class="setting-row" data-control="toggle" data-cvar="allow_download_models">
+            <label for="downloads-models">Models</label>
+            <input id="downloads-models" type="checkbox" data-cvar="allow_download_models" />
+          </div>
+          <div class="setting-row" data-control="toggle" data-cvar="allow_download_sounds">
+            <label for="downloads-sounds">Sounds</label>
+            <input id="downloads-sounds" type="checkbox" data-cvar="allow_download_sounds" />
+          </div>
+          <div class="setting-row" data-control="toggle" data-cvar="allow_download_textures">
+            <label for="downloads-textures">Textures</label>
+            <input id="downloads-textures" type="checkbox" data-cvar="allow_download_textures" />
+          </div>
+          <div class="setting-row" data-control="toggle" data-cvar="allow_download_pics">
+            <label for="downloads-pics">Pics</label>
+            <input id="downloads-pics" type="checkbox" data-cvar="allow_download_pics" />
+          </div>
+        </section>
+
+        <section class="settings-section" id="downloads-http-section">
+          <h2>Transport</h2>
+          <div class="setting-row" data-control="toggle" data-cvar="cl_http_downloads">
+            <label for="downloads-http">HTTP Downloads</label>
+            <input id="downloads-http" type="checkbox" data-cvar="cl_http_downloads" />
+          </div>
+        </section>
+      </main>
+
+      <footer class="menu-footer" id="downloads-menu-footer">
+        <button id="downloads-back" type="button" data-command="ui.back">Back</button>
+        <button id="downloads-close" type="button" data-command="ui.close">Close</button>
+      </footer>
+    </div>
+  </body>
+</rml>

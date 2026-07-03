@@ -1,0 +1,37 @@
+/*
+ * Settings-specific starter rules for RmlUi settings pages.
+ */
+
+.settings-screen
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+.settings-form
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+.settings-section
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+}
+
+.setting-row
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	max-width: 520px;
+}
+
+.setting-value
+{
+	color: var(--color-text-muted);
+}

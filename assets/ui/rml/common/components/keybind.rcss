@@ -1,0 +1,130 @@
+/*
+  Shared keybind capture styles for WORR RmlUi.
+  The selectors are presentation-only; capture behavior belongs to controllers.
+*/
+
+.worr-keybind-list {
+  display: block;
+  width: 100%;
+}
+
+.worr-keybind-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.worr-keybind-title {
+  color: #f2eee6;
+  font-size: 18px;
+}
+
+.worr-keybind-toolbar-action,
+.worr-keybind-conflict-action {
+  min-width: 120px;
+  padding: 6px 10px;
+  color: #f8f2e6;
+  background-color: #28323d;
+  border-width: 1px;
+  border-color: #596878;
+}
+
+.worr-keybind-status {
+  min-height: 22px;
+  margin-bottom: 8px;
+  color: #d9c48f;
+  font-size: 13px;
+}
+
+.worr-keybind-group {
+  display: block;
+  margin-top: 12px;
+}
+
+.worr-keybind-group-title {
+  padding-bottom: 4px;
+  color: #d9c48f;
+  font-size: 15px;
+  border-bottom-width: 1px;
+  border-bottom-color: #3b4652;
+}
+
+.worr-keybind-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 6px 0;
+  border-bottom-width: 1px;
+  border-bottom-color: #2c3540;
+}
+
+.worr-keybind-label-block {
+  display: block;
+  width: 42%;
+}
+
+.worr-keybind-label {
+  color: #f2eee6;
+  font-size: 15px;
+}
+
+.worr-keybind-hint {
+  margin-top: 2px;
+  color: #9ca3ad;
+  font-size: 12px;
+}
+
+.worr-keybind-slots {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 56%;
+}
+
+.worr-keybind-slot {
+  width: 120px;
+  padding: 6px 8px;
+  text-align: center;
+  color: #f8f2e6;
+  background-color: #202832;
+  border-width: 1px;
+  border-color: #596878;
+}
+
+.worr-keybind-slot:hover,
+.worr-keybind-clear:hover,
+.worr-keybind-toolbar-action:hover,
+.worr-keybind-conflict-action:hover {
+  background-color: #374656;
+}
+
+.worr-keybind-clear {
+  width: 76px;
+  padding: 6px 8px;
+  text-align: center;
+  color: #d9c48f;
+  background-color: #1d232b;
+  border-width: 1px;
+  border-color: #4b5662;
+}
+
+.worr-keybind-conflict {
+  margin-top: 12px;
+  padding: 10px;
+  background-color: #2d2326;
+  border-width: 1px;
+  border-color: #7a5559;
+}
+
+.worr-keybind-conflict-title {
+  color: #f2d2d2;
+  font-size: 15px;
+}
+
+.worr-keybind-conflict-detail {
+  margin: 4px 0 8px;
+  color: #d8b8b8;
+  font-size: 13px;
+}

@@ -1,0 +1,32 @@
+<rml>
+  <head>
+    <title>WORR Multiplayer</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/template" href="../common/components/command_button.rml" />
+  </head>
+  <body id="multiplayer-root" data-route-id="multiplayer" data-route-version="1">
+    <div class="screen" id="multiplayer-screen">
+      <header class="page-header">
+        <h1>Multiplayer</h1>
+        <p id="multiplayer-summary">
+          Entry hub for server browsing, joining, hosting, player setup, and
+          session-only multiplayer routes.
+        </p>
+      </header>
+
+      <nav class="menu-list" id="multiplayer-menu" data-model="multiplayer_menu">
+        <button id="multiplayer-servers" type="button" data-command="ui.open_route" data-route="servers">Server Browser</button>
+        <button id="multiplayer-connect" type="button" data-command="multiplayer.connect_address">Connect Address</button>
+        <button id="multiplayer-startserver" type="button" data-command="ui.open_route" data-route="startserver">Start Server</button>
+        <button id="multiplayer-player" type="button" data-command="ui.open_route" data-route="players">Player Setup</button>
+        <button id="multiplayer-demos" type="button" data-command="ui.open_route" data-route="demos">Demos</button>
+        <button id="multiplayer-back" type="button" data-command="ui.back">Back</button>
+      </nav>
+
+      <section class="status-panel" id="multiplayer-session-status" data-model="session_summary">
+        <h2>Session Status</h2>
+        <p data-bind="session_summary.message">No active multiplayer session data is bound yet.</p>
+      </section>
+    </div>
+  </body>
+</rml>

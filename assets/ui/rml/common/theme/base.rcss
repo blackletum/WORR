@@ -1,0 +1,362 @@
+/*
+ * WORR RmlUi base theme contract.
+ *
+ * Future RML documents should import this once from the document head.
+ * Preferred UI-root href after the file interface is finalized:
+ *   <link type="text/rcss" href="common/theme/base.rcss" />
+ * Route documents in subdirectories may need a route-relative href until the
+ * file interface normalizes root-relative RmlUi asset paths.
+ *
+ * Keep this file renderer-neutral. Native OpenGL, Vulkan, and RTX/vkpt
+ * backends must draw the same rules without routing Vulkan paths through
+ * OpenGL fallback code.
+ */
+
+body
+{
+	--font-body: "WORR UI";
+	--font-mono: "WORR Mono";
+
+	--color-canvas: #12110f;
+	--color-surface: #1b1916;
+	--color-surface-raised: #27231d;
+	--color-surface-active: #332d23;
+	--color-text: #f3eee4;
+	--color-text-muted: #c9beb0;
+	--color-text-disabled: #81776a;
+	--color-border: #756a5d;
+	--color-border-strong: #b99b5b;
+	--color-accent: #e5b64f;
+	--color-accent-strong: #ffd967;
+	--color-danger: #ee6758;
+	--color-success: #83d18f;
+	--color-info: #7ed4d8;
+	--color-backplate: rgba(0, 0, 0, 210);
+
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 24px;
+
+	--radius-small: 3px;
+	--radius-medium: 6px;
+	--control-border-width: 2px;
+
+	margin: 0px;
+	padding: 0px;
+	background-color: var(--color-canvas);
+	color: var(--color-text);
+	font-family: var(--font-body);
+	font-size: 18px;
+	line-height: 1.28;
+	font-kerning: normal;
+}
+
+body.ui-high-visibility,
+.ui-high-visibility
+{
+	--color-canvas: #000000;
+	--color-surface: #000000;
+	--color-surface-raised: #101010;
+	--color-surface-active: #202000;
+	--color-text: #ffffff;
+	--color-text-muted: #ffffff;
+	--color-text-disabled: #b0b0b0;
+	--color-border: #ffffff;
+	--color-border-strong: #ffff00;
+	--color-accent: #ffff00;
+	--color-accent-strong: #ffff00;
+	--color-danger: #ff5544;
+	--color-success: #66ff66;
+	--color-info: #66ffff;
+	--color-backplate: #000000;
+}
+
+*
+{
+	box-sizing: border-box;
+}
+
+h1,
+.ui-title
+{
+	margin: 0px 0px var(--space-3) 0px;
+	color: var(--color-text);
+	font-size: 34px;
+	line-height: 1.1;
+	font-weight: bold;
+}
+
+h2,
+.ui-heading
+{
+	margin: 0px 0px var(--space-2) 0px;
+	color: var(--color-text);
+	font-size: 24px;
+	line-height: 1.15;
+	font-weight: bold;
+}
+
+p,
+.ui-copy
+{
+	margin: 0px 0px var(--space-3) 0px;
+	color: var(--color-text);
+	white-space: normal;
+	word-break: break-word;
+}
+
+.ui-muted
+{
+	color: var(--color-text-muted);
+}
+
+.ui-warning
+{
+	color: var(--color-accent-strong);
+}
+
+.ui-danger
+{
+	color: var(--color-danger);
+}
+
+.ui-success
+{
+	color: var(--color-success);
+}
+
+.ui-info
+{
+	color: var(--color-info);
+}
+
+ul,
+ol
+{
+	margin: 0px 0px var(--space-3) 0px;
+	padding-left: var(--space-5);
+}
+
+li
+{
+	margin-bottom: var(--space-1);
+	white-space: normal;
+	word-break: break-word;
+}
+
+.label
+{
+	color: var(--color-text-muted);
+	font-weight: bold;
+}
+
+.value
+{
+	color: var(--color-text);
+	white-space: normal;
+	word-break: break-word;
+}
+
+.ui-route,
+.screen
+{
+	width: 100%;
+	height: 100%;
+	padding: var(--space-5);
+	background-color: var(--color-canvas);
+	color: var(--color-text);
+}
+
+.ui-panel,
+.contract
+{
+	padding: var(--space-4);
+	background-color: var(--color-surface);
+	border-width: var(--control-border-width);
+	border-color: var(--color-border);
+	border-radius: var(--radius-medium);
+}
+
+.ui-row
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: var(--space-3);
+}
+
+.ui-stack
+{
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+}
+
+.ui-cluster,
+.actions
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+button,
+.ui-button,
+input,
+select,
+textarea,
+.ui-focusable
+{
+	tab-index: auto;
+	nav: auto;
+	focus: auto;
+}
+
+button,
+.ui-button
+{
+	display: inline-block;
+	min-height: 42px;
+	min-width: 96px;
+	padding: 8px 14px;
+	background-color: var(--color-surface-raised);
+	color: var(--color-text);
+	border-width: var(--control-border-width);
+	border-color: var(--color-border);
+	border-radius: var(--radius-small);
+	text-align: center;
+	font-family: var(--font-body);
+	font-size: 18px;
+	line-height: 1.1;
+	cursor: pointer;
+}
+
+button:hover,
+.ui-button:hover
+{
+	background-color: var(--color-surface-active);
+	border-color: var(--color-border-strong);
+	color: var(--color-accent-strong);
+}
+
+button:active,
+.ui-button:active
+{
+	background-color: var(--color-accent);
+	border-color: var(--color-accent-strong);
+	color: #000000;
+}
+
+button:focus-visible,
+.ui-button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.ui-focusable:focus-visible
+{
+	background-color: var(--color-surface-active);
+	border-color: var(--color-accent-strong);
+	color: var(--color-accent-strong);
+}
+
+input,
+select,
+textarea,
+.ui-field
+{
+	min-height: 40px;
+	padding: 7px 10px;
+	background-color: var(--color-surface);
+	color: var(--color-text);
+	border-width: var(--control-border-width);
+	border-color: var(--color-border);
+	border-radius: var(--radius-small);
+	font-family: var(--font-body);
+	font-size: 18px;
+	line-height: 1.2;
+}
+
+textarea
+{
+	min-height: 96px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+[disabled],
+.is-disabled
+{
+	color: var(--color-text-disabled);
+	border-color: var(--color-border);
+	opacity: 0.65;
+	pointer-events: none;
+}
+
+.ui-scroll
+{
+	overflow: auto;
+	overscroll-behavior: contain;
+}
+
+.ui-wrap
+{
+	white-space: normal;
+	word-break: break-word;
+}
+
+.ui-break-all
+{
+	white-space: normal;
+	word-break: break-all;
+}
+
+.ui-truncate
+{
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ui-readable-backplate
+{
+	padding: var(--space-1) var(--space-2);
+	background-color: var(--color-backplate);
+	color: var(--color-text);
+	border-radius: var(--radius-small);
+}
+
+.ui-code
+{
+	font-family: var(--font-mono);
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.ui-high-visibility .ui-panel,
+.ui-high-visibility button,
+.ui-high-visibility .ui-button,
+.ui-high-visibility input,
+.ui-high-visibility select,
+.ui-high-visibility textarea,
+.ui-high-visibility .ui-field,
+.ui-high-visibility .ui-focusable
+{
+	border-color: var(--color-border);
+	background-color: var(--color-surface);
+}
+
+.ui-high-visibility button:focus-visible,
+.ui-high-visibility .ui-button:focus-visible,
+.ui-high-visibility input:focus-visible,
+.ui-high-visibility select:focus-visible,
+.ui-high-visibility textarea:focus-visible,
+.ui-high-visibility .ui-focusable:focus-visible
+{
+	background-color: #202000;
+	border-color: var(--color-accent-strong);
+	color: var(--color-accent-strong);
+}

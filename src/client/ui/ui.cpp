@@ -21,6 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/input.h"
 #include "client/ui_font.h"
 #include "common/prompt.h"
+#include "../ui_rml/ui_rml.h"
 
 uiStatic_t    uis;
 
@@ -248,6 +249,10 @@ void UI_OpenMenu(uiMenu_t type)
 
     // close any existing menus
     UI_ForceMenuOff();
+
+    if ((type != UIMENU_DEFAULT || ui_open->integer) && UI_Rml_OpenMenu(type)) {
+        return;
+    }
 
     switch (type) {
     case UIMENU_DEFAULT:
@@ -697,6 +702,7 @@ void UI_Init(void)
 
     ui_debug = Cvar_Get("ui_debug", "0", 0);
     ui_open = Cvar_Get("ui_open", "1", 0);
+    UI_Rml_Init();
 
     UI_ModeChanged();
 
@@ -749,6 +755,7 @@ void UI_Shutdown(void)
         return;
     }
     UI_ForceMenuOff();
+    UI_Rml_Shutdown();
 
     ui_scale->changed = NULL;
 

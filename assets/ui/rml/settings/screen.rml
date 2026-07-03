@@ -1,0 +1,90 @@
+<rml>
+  <head>
+    <title>WORR Screen Settings</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/rcss" href="../common/theme/settings.rcss" />
+    <link type="text/template" href="../common/components/menu_frame.rml" />
+    <link type="text/template" href="../common/components/cvar_controls.rml" />
+  </head>
+  <body id="settings-screen" data-route-id="screen" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2">
+    <div class="screen settings-screen" id="screen-screen">
+      <header class="menu-header">
+        <h1>Screen Setup</h1>
+      </header>
+
+      <main class="settings-form" id="screen-settings-form" data-component="common.components.cvar_controls">
+        <section class="settings-section" id="screen-hud-section">
+          <h2>HUD</h2>
+          <div class="setting-row" data-control="range" data-cvar="viewsize">
+            <label for="screen-size">Screen Size</label>
+            <input id="screen-size" type="range" min="40" max="100" step="10" data-cvar="viewsize" />
+            <span class="setting-value" data-bind-cvar="viewsize"></span>
+          </div>
+          <div class="setting-row" data-control="toggle" data-cvar="cg_lagometer">
+            <label for="screen-lagometer">Lagometer</label>
+            <input id="screen-lagometer" type="checkbox" data-cvar="cg_lagometer" />
+          </div>
+          <div class="setting-row" data-control="select" data-cvar="cl_demobar">
+            <label for="screen-demobar">Demo Bar</label>
+            <select id="screen-demobar" data-cvar="cl_demobar">
+              <option value="0">No</option>
+              <option value="1">Yes</option>
+              <option value="2">Verbose</option>
+            </select>
+          </div>
+          <div class="setting-row" data-control="range" data-cvar="cl_alpha">
+            <label for="screen-hud-opacity">HUD Opacity</label>
+            <input id="screen-hud-opacity" type="range" min="0" max="1" step="0.01" data-cvar="cl_alpha" />
+            <span class="setting-value" data-bind-cvar="cl_alpha"></span>
+          </div>
+          <button id="screen-crosshair" type="button" data-command="pushmenu crosshair" data-route-target="crosshair">Crosshair Setup...</button>
+        </section>
+
+        <section class="settings-section" id="screen-console-section">
+          <h2>Console</h2>
+          <div class="setting-row" data-control="range" data-cvar="con_alpha">
+            <label for="screen-console-opacity">Console Opacity</label>
+            <input id="screen-console-opacity" type="range" min="0" max="1" step="0.01" data-cvar="con_alpha" />
+            <span class="setting-value" data-bind-cvar="con_alpha"></span>
+          </div>
+        </section>
+
+        <section class="settings-section" id="screen-scale-section">
+          <h2>Scale</h2>
+          <div class="setting-row" data-control="select" data-cvar="cl_scale">
+            <label for="screen-hud-scale">HUD Scale</label>
+            <select id="screen-hud-scale" data-cvar="cl_scale">
+              <option value="0">Auto</option>
+              <option value="1">1x</option>
+              <option value="2">2x</option>
+              <option value="4">4x</option>
+            </select>
+          </div>
+          <div class="setting-row" data-control="select" data-cvar="con_scale">
+            <label for="screen-console-scale">Console Scale</label>
+            <select id="screen-console-scale" data-cvar="con_scale">
+              <option value="0">Auto</option>
+              <option value="1">1x</option>
+              <option value="2">2x</option>
+              <option value="4">4x</option>
+            </select>
+          </div>
+          <div class="setting-row" data-control="select" data-cvar="ui_scale">
+            <label for="screen-menu-scale">Menu Scale</label>
+            <select id="screen-menu-scale" data-cvar="ui_scale">
+              <option value="0">Auto</option>
+              <option value="1">1x</option>
+              <option value="2">2x</option>
+              <option value="4">4x</option>
+            </select>
+          </div>
+        </section>
+      </main>
+
+      <footer class="menu-footer" id="screen-menu-footer">
+        <button id="screen-back" type="button" data-command="ui.back">Back</button>
+        <button id="screen-close" type="button" data-command="ui.close">Close</button>
+      </footer>
+    </div>
+  </body>
+</rml>

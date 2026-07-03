@@ -21,6 +21,28 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 renderer_import_t ri;
 extern uint32_t d_8to24table[256];
 
+#if USE_REF != REF_GL
+static renderer_rmlui_family_t Renderer_RmlUiRendererFamily(void)
+{
+    return R_RENDERER_RMLUI_FAMILY_NONE;
+}
+
+static const char *Renderer_RmlUiRendererName(void)
+{
+    return "none";
+}
+
+static bool Renderer_RmlUiCanRender(void)
+{
+    return false;
+}
+
+static void *Renderer_RmlUiNativeRenderInterface(void)
+{
+    return NULL;
+}
+#endif
+
 void AngleVectors(const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 {
     ri.AngleVectors(angles, forward, right, up);
@@ -76,6 +98,17 @@ static const renderer_export_t renderer_exports = {
     .ExpireDebugObjects     = GL_ExpireDebugObjects,
     .SupportsPerPixelLighting = R_SupportsPerPixelLighting,
     .GetGLConfig            = R_GetGLConfig,
+#if USE_REF == REF_GL
+    .RmlUiRendererFamily    = R_RmlUiRendererFamily,
+    .RmlUiRendererName      = R_RmlUiRendererName,
+    .RmlUiCanRender         = R_RmlUiCanRender,
+    .RmlUiNativeRenderInterface = R_RmlUiNativeRenderInterface,
+#else
+    .RmlUiRendererFamily    = Renderer_RmlUiRendererFamily,
+    .RmlUiRendererName      = Renderer_RmlUiRendererName,
+    .RmlUiCanRender         = Renderer_RmlUiCanRender,
+    .RmlUiNativeRenderInterface = Renderer_RmlUiNativeRenderInterface,
+#endif
     .ClearDebugLines        = R_ClearDebugLines,
     .AddDebugLine           = R_AddDebugLine,
     .AddDebugPoint          = R_AddDebugPoint,

@@ -1,0 +1,35 @@
+<rml>
+  <head>
+    <title>WORR MyMap Flags</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/template" href="../common/components/command_button.rml" />
+  </head>
+  <body id="session-mymap-flags" data-route-id="mymap_flags" data-route-group="session" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5" data-session-owner="sgame">
+    <div class="screen compact-screen" id="mymap-flags-screen">
+      <header class="page-header">
+        <h1>MyMap Flags</h1>
+        <p id="mymap-flags-summary">
+          Map flag labels are tri-state strings from ui_mymap_flag_* cvars;
+          buttons keep the current worr_mymap_flag code arguments.
+        </p>
+      </header>
+
+      <section class="content" id="mymap-flags-content" data-model="session.mymap.flags" data-owner-boundary="sgame-published-cvars">
+        <button id="mymap-flag-pu" type="button" data-label-cvar="ui_mymap_flag_pu" data-command="worr_mymap_flag pu">Powerups</button>
+        <button id="mymap-flag-pa" type="button" data-label-cvar="ui_mymap_flag_pa" data-command="worr_mymap_flag pa">Power Armor</button>
+        <button id="mymap-flag-ar" type="button" data-label-cvar="ui_mymap_flag_ar" data-command="worr_mymap_flag ar">Armor</button>
+        <button id="mymap-flag-am" type="button" data-label-cvar="ui_mymap_flag_am" data-command="worr_mymap_flag am">Ammo</button>
+        <button id="mymap-flag-ht" type="button" data-label-cvar="ui_mymap_flag_ht" data-command="worr_mymap_flag ht">Health</button>
+        <button id="mymap-flag-bfg" type="button" data-label-cvar="ui_mymap_flag_bfg" data-command="worr_mymap_flag bfg">BFG10K</button>
+        <button id="mymap-flag-pb" type="button" data-label-cvar="ui_mymap_flag_pb" data-command="worr_mymap_flag pb">Plasma Beam</button>
+        <button id="mymap-flag-fd" type="button" data-label-cvar="ui_mymap_flag_fd" data-command="worr_mymap_flag fd">Falling Damage</button>
+        <button id="mymap-flag-sd" type="button" data-label-cvar="ui_mymap_flag_sd" data-command="worr_mymap_flag sd">Self Damage</button>
+        <button id="mymap-flag-ws" type="button" data-label-cvar="ui_mymap_flag_ws" data-command="worr_mymap_flag ws">Weapons Stay</button>
+      </section>
+
+      <footer class="actions" id="mymap-flags-actions">
+        <button id="mymap-flags-back" type="button" data-command="popmenu">Back</button>
+      </footer>
+    </div>
+  </body>
+</rml>

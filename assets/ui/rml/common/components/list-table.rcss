@@ -1,0 +1,47 @@
+.worr-table {
+  display: block;
+  width: 100%;
+}
+
+.worr-table-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.worr-table-action {
+  padding: 6px 10px;
+  color: #f8f2e6;
+  background-color: #28323d;
+  border-width: 1px;
+  border-color: #596878;
+}
+
+.worr-table-grid {
+  width: 100%;
+  border-width: 1px;
+  border-color: #3b4652;
+}
+
+.worr-table-grid th {
+  padding: 6px;
+  color: #d9c48f;
+  background-color: #202832;
+}
+
+.worr-table-grid td {
+  padding: 6px;
+  color: #e7e1d7;
+  border-top-width: 1px;
+  border-top-color: #303945;
+}
+
+.worr-table-grid tr:hover td {
+  background-color: #2d3845;
+}
+
+.worr-table-status {
+  margin-top: 8px;
+  color: #9ca3ad;
+  font-size: 13px;
+}

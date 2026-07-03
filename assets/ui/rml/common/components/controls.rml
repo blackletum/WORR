@@ -1,0 +1,49 @@
+<!--
+  WORR RmlUi shared control templates.
+
+  These are first-round component contracts for FR-09-T05/FR-09-T07. The
+  {{placeholders}} name the future RmlUi data model fields; live C++ controllers
+  are not implemented in this slice.
+-->
+<templates>
+  <template name="worr-cvar-toggle">
+    <div class="worr-control worr-cvar-control" data-contract-id="{{id}}" data-cvar="{{cvar}}">
+      <label class="worr-control-label" for="{{id}}">{{label}}</label>
+      <input class="worr-toggle" id="{{id}}" type="checkbox" data-event-change="cvar.set" />
+      <div class="worr-control-hint">{{hint}}</div>
+    </div>
+  </template>
+
+  <template name="worr-cvar-slider">
+    <div class="worr-control worr-cvar-control" data-contract-id="{{id}}" data-cvar="{{cvar}}">
+      <div class="worr-control-row">
+        <label class="worr-control-label" for="{{id}}">{{label}}</label>
+        <span class="worr-control-value">{{display_value}}</span>
+      </div>
+      <input class="worr-slider" id="{{id}}" type="range" min="{{min}}" max="{{max}}" step="{{step}}" data-event-change="cvar.set" />
+      <div class="worr-control-hint">{{hint}}</div>
+    </div>
+  </template>
+
+  <template name="worr-cvar-select">
+    <div class="worr-control worr-cvar-control" data-contract-id="{{id}}" data-cvar="{{cvar}}">
+      <label class="worr-control-label" for="{{id}}">{{label}}</label>
+      <select class="worr-select" id="{{id}}" data-event-change="cvar.set">
+        <option data-for="option : options" value="{{option.value}}">{{option.label}}</option>
+      </select>
+      <div class="worr-control-hint">{{hint}}</div>
+    </div>
+  </template>
+
+  <template name="worr-command-button">
+    <button class="worr-command-button" data-command="{{command}}" data-event-click="command.dispatch">
+      {{label}}
+    </button>
+  </template>
+
+  <template name="worr-conditional-region">
+    <div class="worr-conditional-region" data-condition="{{condition}}" data-if="{{condition_result}}">
+      <div class="worr-conditional-body">{{content}}</div>
+    </div>
+  </template>
+</templates>

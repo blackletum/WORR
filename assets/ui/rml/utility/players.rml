@@ -1,0 +1,56 @@
+<rml>
+  <head>
+    <title>WORR Player Setup</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/template" href="../common/components/preview.rml" />
+    <link type="text/template" href="../common/components/controls.rml" />
+  </head>
+  <body id="utility-players" data-route-id="players" data-route-version="1">
+    <div class="screen" id="players-screen">
+      <header class="page-header">
+        <h1>Player Setup</h1>
+        <p id="players-summary">
+          Configure player identity, model, skin, handedness, and preview state
+          through the future shared player-preview contract.
+        </p>
+      </header>
+
+      <section class="content two-column" id="players-content" data-model="player_config">
+        <div class="form-panel" id="players-form">
+          <label for="players-name">Name</label>
+          <input id="players-name" type="text" data-bind="player_config.name" />
+
+          <label for="players-model">Model</label>
+          <select id="players-model" data-bind="player_config.model" data-options="player_config.models">
+            <option value="">Model list binds here</option>
+          </select>
+
+          <label for="players-skin">Skin</label>
+          <select id="players-skin" data-bind="player_config.skin" data-options="player_config.skins">
+            <option value="">Skin list binds here</option>
+          </select>
+
+          <label for="players-hand">Weapon Hand</label>
+          <select id="players-hand" data-bind="player_config.hand">
+            <option value="right">Right</option>
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+          </select>
+        </div>
+
+        <div class="preview-panel" id="players-preview" data-component="player_preview" data-model="player_config.preview">
+          <h2>Preview</h2>
+          <div id="players-preview-surface" class="preview-surface">
+            Player preview surface binds here.
+          </div>
+        </div>
+      </section>
+
+      <footer class="actions" id="players-actions">
+        <button id="players-apply" type="button" data-command="players.apply">Apply</button>
+        <button id="players-reset" type="button" data-command="players.reset">Reset</button>
+        <button id="players-back" type="button" data-command="ui.back">Back</button>
+      </footer>
+    </div>
+  </body>
+</rml>

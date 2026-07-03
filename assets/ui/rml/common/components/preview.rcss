@@ -1,0 +1,45 @@
+.worr-preview {
+  display: block;
+  width: 100%;
+}
+
+.worr-preview-surface {
+  height: 220px;
+  background-color: #111820;
+  border-width: 1px;
+  border-color: #465463;
+}
+
+.worr-preview-placeholder {
+  margin-top: 92px;
+  text-align: center;
+  color: #9ca3ad;
+}
+
+.worr-preview-meta {
+  margin-top: 8px;
+}
+
+.worr-preview-title {
+  color: #f2eee6;
+  font-size: 18px;
+}
+
+.worr-preview-detail {
+  color: #9ca3ad;
+  font-size: 13px;
+}
+
+.worr-preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.worr-preview-action {
+  padding: 6px 10px;
+  color: #f8f2e6;
+  background-color: #28323d;
+  border-width: 1px;
+  border-color: #596878;
+}

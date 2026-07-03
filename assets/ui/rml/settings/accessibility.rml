@@ -1,0 +1,41 @@
+<rml>
+  <head>
+    <title>WORR Accessibility Settings</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/rcss" href="../common/theme/settings.rcss" />
+    <link type="text/template" href="../common/components/menu_frame.rml" />
+    <link type="text/template" href="../common/components/cvar_controls.rml" />
+  </head>
+  <body id="settings-accessibility" data-route-id="accessibility" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2">
+    <div class="screen settings-screen" id="accessibility-screen">
+      <header class="menu-header">
+        <h1>Accessibility</h1>
+      </header>
+
+      <main class="settings-form" id="accessibility-settings-form" data-component="common.components.cvar_controls">
+        <section class="settings-section" id="accessibility-text-section">
+          <h2>Text</h2>
+          <div class="setting-row" data-control="toggle" data-cvar="ui_high_visibility_text">
+            <label for="accessibility-high-visibility">High-Visibility Text</label>
+            <input id="accessibility-high-visibility" type="checkbox" data-cvar="ui_high_visibility_text" />
+            <span class="setting-value">Adds black text backgrounds and forces TrueType.</span>
+          </div>
+          <div class="setting-row" data-control="select" data-cvar="ui_text_typeface">
+            <label for="accessibility-typeface">Typeface</label>
+            <select id="accessibility-typeface" data-cvar="ui_text_typeface">
+              <option value="0">Legacy</option>
+              <option value="1">KEX</option>
+              <option value="2">TrueType</option>
+            </select>
+            <span class="setting-value">High-visibility text always uses TrueType.</span>
+          </div>
+        </section>
+      </main>
+
+      <footer class="menu-footer" id="accessibility-menu-footer">
+        <button id="accessibility-back" type="button" data-command="ui.back">Back</button>
+        <button id="accessibility-close" type="button" data-command="ui.close">Close</button>
+      </footer>
+    </div>
+  </body>
+</rml>

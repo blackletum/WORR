@@ -1,0 +1,22 @@
+<rml>
+  <head>
+    <title>WORR Leave Match</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/template" href="../common/components/command_button.rml" />
+  </head>
+  <body id="session-leave-match-confirm" data-route-id="leave_match_confirm" data-route-group="session" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5">
+    <div class="screen compact-screen" id="leave-match-confirm-screen">
+      <header class="page-header">
+        <h1 data-loc-key="m_confirm_leave_match">Confirm Leave Match</h1>
+        <p id="leave-match-prompt" data-loc-key="m_confirm_leave_match_prompt">
+          Are you sure you want to leave the match?
+        </p>
+      </header>
+
+      <footer class="actions" id="leave-match-confirm-actions">
+        <button id="leave-match-yes" type="button" data-loc-key="m_yes" data-command="forcemenuoff; disconnect">Yes</button>
+        <button id="leave-match-no" type="button" data-loc-key="m_no" data-command="popmenu">No</button>
+      </footer>
+    </div>
+  </body>
+</rml>

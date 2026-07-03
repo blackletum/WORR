@@ -1,0 +1,36 @@
+<rml>
+  <head>
+    <title>WORR Legacy Key Bindings</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/template" href="../common/components/controls.rml" />
+    <link type="text/template" href="../common/components/command_button.rml" />
+  </head>
+  <body id="utility-legacykeys" data-route-id="legacykeys" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5">
+    <div class="screen" id="legacykeys-screen">
+      <header class="page-header">
+        <h1>Legacy Key Bindings</h1>
+        <p id="legacykeys-summary">
+          Legacy look and turn binds kept separate from the primary key binding
+          page to preserve the current menu split.
+        </p>
+      </header>
+
+      <section class="content" id="legacykeys-content" data-model="utility.legacy_keybinds" data-controller="keybind.capture">
+        <div class="bind-group" id="legacykeys-binds" data-bind-group="legacy">
+          <button id="legacykeys-left" type="button" data-bind-command="+left" data-event-click="keybind.capture">Turn Left</button>
+          <button id="legacykeys-right" type="button" data-bind-command="+right" data-event-click="keybind.capture">Turn Right</button>
+          <button id="legacykeys-strafe" type="button" data-bind-command="+strafe" data-event-click="keybind.capture">Sidestep</button>
+          <button id="legacykeys-lookup" type="button" data-bind-command="+lookup" data-event-click="keybind.capture">Look Up</button>
+          <button id="legacykeys-lookdown" type="button" data-bind-command="+lookdown" data-event-click="keybind.capture">Look Down</button>
+          <button id="legacykeys-centerview" type="button" data-bind-command="centerview" data-event-click="keybind.capture">Center View</button>
+          <button id="legacykeys-mlook" type="button" data-bind-command="+mlook" data-event-click="keybind.capture">Mouse Look</button>
+          <button id="legacykeys-klook" type="button" data-bind-command="+klook" data-event-click="keybind.capture">Keyboard Look</button>
+        </div>
+      </section>
+
+      <footer class="actions" id="legacykeys-actions">
+        <button id="legacykeys-back" type="button" data-command="ui.back">Back</button>
+      </footer>
+    </div>
+  </body>
+</rml>

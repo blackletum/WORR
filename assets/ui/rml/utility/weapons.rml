@@ -1,0 +1,39 @@
+<rml>
+  <head>
+    <title>WORR Weapon Bindings</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/template" href="../common/components/controls.rml" />
+    <link type="text/template" href="../common/components/command_button.rml" />
+  </head>
+  <body id="utility-weapons" data-route-id="weapons" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5">
+    <div class="screen" id="weapons-screen">
+      <header class="page-header">
+        <h1>Weapon Bindings</h1>
+        <p id="weapons-summary">
+          Weapon use binds keep the current item command strings while the
+          shared key-capture controller gains conflict and wait-state parity.
+        </p>
+      </header>
+
+      <section class="content" id="weapons-content" data-model="utility.weapon_binds" data-controller="keybind.capture">
+        <div class="bind-group" id="weapons-binds" data-bind-group="weapons">
+          <button id="weapons-blaster" type="button" data-bind-command="use Blaster" data-event-click="keybind.capture">Blaster</button>
+          <button id="weapons-shotgun" type="button" data-bind-command="use Shotgun" data-event-click="keybind.capture">Shotgun</button>
+          <button id="weapons-super-shotgun" type="button" data-bind-command="use Super Shotgun" data-event-click="keybind.capture">Super Shotgun</button>
+          <button id="weapons-machinegun" type="button" data-bind-command="use Machinegun" data-event-click="keybind.capture">Machinegun</button>
+          <button id="weapons-chaingun" type="button" data-bind-command="use Chaingun" data-event-click="keybind.capture">Chaingun</button>
+          <button id="weapons-grenade-launcher" type="button" data-bind-command="use Grenade Launcher" data-event-click="keybind.capture">Grenade Launcher</button>
+          <button id="weapons-rocket-launcher" type="button" data-bind-command="use Rocket Launcher" data-event-click="keybind.capture">Rocket Launcher</button>
+          <button id="weapons-hyperblaster" type="button" data-bind-command="use HyperBlaster" data-event-click="keybind.capture">HyperBlaster</button>
+          <button id="weapons-railgun" type="button" data-bind-command="use Railgun" data-event-click="keybind.capture">Railgun</button>
+          <button id="weapons-bfg10k" type="button" data-bind-command="use BFG10K" data-event-click="keybind.capture">BFG10K</button>
+          <button id="weapons-grenades" type="button" data-bind-command="use Grenades" data-event-click="keybind.capture">Grenades</button>
+        </div>
+      </section>
+
+      <footer class="actions" id="weapons-actions">
+        <button id="weapons-back" type="button" data-command="ui.back">Back</button>
+      </footer>
+    </div>
+  </body>
+</rml>
