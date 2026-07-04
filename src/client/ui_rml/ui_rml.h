@@ -47,6 +47,12 @@ typedef struct {
     bool (*Init)(void);
     void (*Shutdown)(void);
     bool (*OpenRoute)(const char *route_id, const char *document_path);
+    void (*CloseRoute)(void);
+    bool (*Update)(int width, int height, unsigned realtime);
+    bool (*Render)(void);
+    bool (*KeyEvent)(int key, bool down);
+    bool (*CharEvent)(int key);
+    bool (*MouseEvent)(int x, int y);
     bool (*ProbeRoute)(const char *route_id, const char *document_path);
     const char *(*RuntimeName)(void);
     bool (*CanOpenRoutes)(void);
@@ -83,6 +89,12 @@ const char *UI_Rml_RouteForMenu(uiMenu_t menu);
 const char *UI_Rml_DocumentForRoute(const char *route_id);
 bool UI_Rml_ProbeRoute(const char *route_id);
 bool UI_Rml_OpenMenu(uiMenu_t menu);
+bool UI_Rml_IsRouteActive(void);
+bool UI_Rml_Draw(unsigned realtime);
+bool UI_Rml_KeyEvent(int key, bool down);
+bool UI_Rml_CharEvent(int key);
+bool UI_Rml_MouseEvent(int x, int y);
+void UI_Rml_CloseActiveRoute(void);
 
 #if UI_RML_HAS_RUNTIME
 // Runtime implementations register dependency-aware hooks here; keep this free of RmlUi types.

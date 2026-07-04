@@ -22,6 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/cvar.h"
 #include "common/files.h"
 #include "common/prompt.h"
+#include "client/keys.h"
+#include "renderer/renderer.h"
 
 static cvar_t *ui_rml_enable;
 static cvar_t *ui_rml_debug;
@@ -34,6 +36,28 @@ static ui_rml_runtime_interface_t ui_rml_runtime;
 static bool ui_rml_runtime_registered;
 static bool ui_rml_runtime_started;
 static bool ui_rml_runtime_failed;
+static bool ui_rml_route_active;
+static char ui_rml_active_route[MAX_QPATH];
+typedef struct {
+    unsigned opens;
+    unsigned closes;
+    unsigned close_requests;
+    unsigned synthetic_inputs;
+    unsigned updates;
+    unsigned renders;
+    unsigned key_events;
+    unsigned char_events;
+    unsigned mouse_moves;
+    unsigned mouse_buttons;
+    unsigned mouse_wheels;
+    unsigned last_realtime;
+    int width;
+    int height;
+    int last_mouse_x;
+    int last_mouse_y;
+} ui_rml_route_metrics_t;
+
+static ui_rml_route_metrics_t ui_rml_route_metrics;
 static ui_rml_renderer_interface_t ui_rml_renderer;
 static bool ui_rml_renderer_registered;
 #endif
@@ -42,6 +66,12 @@ typedef struct {
     const char *id;
     const char *document;
 } ui_rml_route_t;
+
+typedef struct {
+    const char *route_id;
+    uiMenu_t menu;
+    const char *menu_name;
+} ui_rml_menu_route_t;
 
 static const ui_rml_route_t ui_rml_routes[] = {
     { "main", "shell/main.rml" },
@@ -104,6 +134,12 @@ static const ui_rml_route_t ui_rml_routes[] = {
     { "core.runtime_smoke", "core/runtime_smoke.rml" },
 };
 
+static const ui_rml_menu_route_t ui_rml_runtime_menu_routes[] = {
+    { "main", UIMENU_MAIN, "UIMENU_MAIN" },
+    { "game", UIMENU_GAME, "UIMENU_GAME" },
+    { "download_status", UIMENU_DOWNLOAD, "UIMENU_DOWNLOAD" },
+};
+
 static int UI_Rml_DefaultLoadFile(const char *path, void **data)
 {
     return FS_LoadFileEx(path, data, 0, TAG_FILESYSTEM);
@@ -133,6 +169,28 @@ static const ui_rml_route_t *UI_Rml_FindRoute(const char *route_id)
     }
 
     return NULL;
+}
+
+static const ui_rml_menu_route_t *UI_Rml_FindRuntimeMenuRoute(const char *route_id)
+{
+    if (!route_id || !route_id[0]) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < q_countof(ui_rml_runtime_menu_routes); i++) {
+        if (!strcmp(route_id, ui_rml_runtime_menu_routes[i].route_id)) {
+            return &ui_rml_runtime_menu_routes[i];
+        }
+    }
+
+    return NULL;
+}
+
+static bool UI_Rml_RuntimeRouteIsAllowed(const char *route_id)
+{
+    return route_id &&
+           (!strcmp(route_id, "core.runtime_smoke") ||
+            UI_Rml_FindRuntimeMenuRoute(route_id) != NULL);
 }
 
 static const char *UI_Rml_AssetRoot(void)
@@ -195,6 +253,8 @@ static bool UI_Rml_RuntimeCanOpenRoutes(void)
 }
 
 static void UI_Rml_StopRuntime(void);
+static void UI_Rml_ClearActiveRoute(bool notify_runtime);
+static void UI_Rml_PrintRuntimeStatus(void);
 
 static bool UI_Rml_StartRuntime(void)
 {
@@ -222,12 +282,70 @@ static bool UI_Rml_StartRuntime(void)
 static void UI_Rml_StopRuntime(void)
 {
 #if UI_RML_HAS_RUNTIME
+    UI_Rml_ClearActiveRoute(true);
+
     if (ui_rml_runtime_started && ui_rml_runtime.Shutdown) {
         ui_rml_runtime.Shutdown();
     }
 
     ui_rml_runtime_started = false;
 #endif
+}
+
+static void UI_Rml_ClaimMenuKeyDest(void)
+{
+    keydest_t dest = Key_GetDest();
+
+    Key_SetDest((keydest_t)((dest & ~KEY_CONSOLE) | KEY_MENU));
+}
+
+static void UI_Rml_ReleaseMenuKeyDest(void)
+{
+    Key_SetDest((keydest_t)(Key_GetDest() & ~KEY_MENU));
+}
+
+static void UI_Rml_MarkRouteActive(const char *route_id)
+{
+#if UI_RML_HAS_RUNTIME
+    ui_rml_route_active = true;
+    ui_rml_route_metrics = {};
+    ui_rml_route_metrics.opens++;
+    Q_strlcpy(ui_rml_active_route, route_id ? route_id : "", sizeof(ui_rml_active_route));
+    UI_Rml_ClaimMenuKeyDest();
+#else
+    (void)route_id;
+#endif
+}
+
+static void UI_Rml_ClearActiveRoute(bool notify_runtime)
+{
+#if UI_RML_HAS_RUNTIME
+    if (!ui_rml_route_active) {
+        return;
+    }
+
+    if (notify_runtime && ui_rml_runtime_started && ui_rml_runtime.CloseRoute) {
+        ui_rml_runtime.CloseRoute();
+    }
+
+    ui_rml_route_metrics.closes++;
+    ui_rml_route_active = false;
+    ui_rml_active_route[0] = 0;
+    UI_Rml_ReleaseMenuKeyDest();
+#else
+    (void)notify_runtime;
+#endif
+}
+
+static bool UI_Rml_KeyIsMouseButton(int key)
+{
+    return key >= K_MOUSEFIRST && key <= K_MOUSE8;
+}
+
+static bool UI_Rml_KeyIsMouseWheel(int key)
+{
+    return key == K_MWHEELUP || key == K_MWHEELDOWN ||
+           key == K_MWHEELLEFT || key == K_MWHEELRIGHT;
 }
 
 static bool UI_Rml_RuntimeProbeRoute(const char *route_id)
@@ -272,6 +390,75 @@ static bool UI_Rml_RuntimeProbeRoute(const char *route_id)
     return ok;
 #else
     Com_Printf("RmlUi runtime probe is unavailable; runtime support is not compiled.\n");
+    return false;
+#endif
+}
+
+static bool UI_Rml_OpenRouteInternal(const char *route_id)
+{
+#if UI_RML_HAS_RUNTIME
+    const ui_rml_route_t *route = UI_Rml_FindRoute(route_id);
+    const char *document;
+    bool document_found;
+
+    if (!route) {
+        Com_Printf("RmlUi route '%s' is not registered.\n",
+                   route_id ? route_id : "<null>");
+        return false;
+    }
+
+    if (!UI_Rml_IsEnabled()) {
+        Com_Printf("RmlUi route '%s' requested, but ui_rml_enable is disabled.\n",
+                   route->id);
+        return false;
+    }
+
+    if (!UI_Rml_RuntimeRouteIsAllowed(route->id)) {
+        Com_Printf("RmlUi route '%s' is not enabled for runtime drawing yet; keeping legacy UI fallback active.\n",
+                   route->id);
+        return false;
+    }
+
+    Com_Printf("RmlUi route '%s' requested; probing document.\n", route->id);
+    document_found = UI_Rml_ProbeRoute(route->id);
+
+    if (!UI_Rml_RuntimeIsAvailable()) {
+        Com_Printf("RmlUi availability is '%s' with renderer='%s' family='%s'; falling back to legacy UI.\n",
+                   UI_Rml_AvailabilityString(UI_Rml_Availability()),
+                   UI_Rml_RendererName(),
+                   UI_Rml_RendererFamilyString(UI_Rml_RendererFamily()));
+        return false;
+    }
+
+    if (!document_found) {
+        return false;
+    }
+
+    document = UI_Rml_DocumentForRoute(route->id);
+    if (!document) {
+        Com_Printf("RmlUi route '%s' document path is unavailable; falling back to legacy UI.\n",
+                   route->id);
+        return false;
+    }
+
+    if (!UI_Rml_StartRuntime()) {
+        Com_Printf("RmlUi runtime '%s' failed to start; falling back to legacy UI.\n",
+                   UI_Rml_RuntimeName());
+        return false;
+    }
+
+    UI_Rml_ClearActiveRoute(true);
+
+    if (ui_rml_runtime.OpenRoute(route->id, document)) {
+        UI_Rml_MarkRouteActive(route->id);
+        return true;
+    }
+
+    Com_Printf("RmlUi runtime '%s' declined route '%s'; falling back to legacy UI.\n",
+               UI_Rml_RuntimeName(), route->id);
+    return false;
+#else
+    (void)route_id;
     return false;
 #endif
 }
@@ -326,9 +513,182 @@ static void UI_Rml_RuntimeProbeRoute_f(void)
     }
 }
 
+static void UI_Rml_RuntimeOpenRoute_c(genctx_t *ctx, int argnum)
+{
+    if (argnum != 1) {
+        return;
+    }
+
+    for (size_t i = 0; i < q_countof(ui_rml_routes); i++) {
+        if (UI_Rml_RuntimeRouteIsAllowed(ui_rml_routes[i].id)) {
+            Prompt_AddMatch(ctx, ui_rml_routes[i].id);
+        }
+    }
+}
+
+static void UI_Rml_RuntimeMenuRoute_c(genctx_t *ctx, int argnum)
+{
+    if (argnum != 1) {
+        return;
+    }
+
+    for (size_t i = 0; i < q_countof(ui_rml_runtime_menu_routes); i++) {
+        Prompt_AddMatch(ctx, ui_rml_runtime_menu_routes[i].route_id);
+    }
+}
+
+static void UI_Rml_RuntimeOpenRoute_f(void)
+{
+    const char *route_id = "core.runtime_smoke";
+
+    if (Cmd_Argc() > 2) {
+        Com_Printf("Usage: %s [route_id]\n", Cmd_Argv(0));
+        return;
+    }
+
+    if (Cmd_Argc() == 2) {
+        route_id = Cmd_Argv(1);
+    }
+
+    UI_Rml_OpenRouteInternal(route_id);
+}
+
+static void UI_Rml_RuntimeCaptureMenu_f(void)
+{
+#if UI_RML_HAS_RUNTIME
+    const ui_rml_menu_route_t *menu_route;
+
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: %s <main|game|download_status>\n", Cmd_Argv(0));
+        return;
+    }
+
+    menu_route = UI_Rml_FindRuntimeMenuRoute(Cmd_Argv(1));
+    if (!menu_route) {
+        Com_Printf("RmlUi runtime menu capture route '%s' is not in the guarded menu entrypoint set.\n",
+                   Cmd_Argv(1));
+        return;
+    }
+
+    UI_OpenMenu(menu_route->menu);
+    if (!UI_Rml_IsRouteActive()) {
+        Com_Printf("RmlUi guarded menu capture route '%s' could not be opened through %s.\n",
+                   menu_route->route_id,
+                   menu_route->menu_name);
+        return;
+    }
+
+    Com_Printf("RmlUi guarded menu capture route '%s' is active through %s; capture after the next rendered frame and attach the current ui_rml_runtime_status output to the evidence note.\n",
+               menu_route->route_id,
+               menu_route->menu_name);
+    UI_Rml_PrintRuntimeStatus();
+#else
+    Com_Printf("RmlUi runtime menu capture is unavailable; runtime support is not compiled.\n");
+#endif
+}
+
+static void UI_Rml_RuntimeCloseRoute_f(void)
+{
+    UI_Rml_CloseActiveRoute();
+}
+
+static void UI_Rml_PrintRuntimeStatus(void)
+{
+#if UI_RML_HAS_RUNTIME
+    Com_Printf("RmlUi runtime status: active=%s route='%s' availability='%s' runtime='%s' renderer='%s' family='%s'.\n",
+               ui_rml_route_active ? "yes" : "no",
+               ui_rml_route_active && ui_rml_active_route[0] ? ui_rml_active_route : "<none>",
+               UI_Rml_AvailabilityString(UI_Rml_Availability()),
+               UI_Rml_RuntimeName(),
+               UI_Rml_RendererName(),
+               UI_Rml_RendererFamilyString(UI_Rml_RendererFamily()));
+    Com_Printf("RmlUi runtime frames: updates=%u renders=%u last_realtime=%u dimensions=%dx%d.\n",
+               ui_rml_route_metrics.updates,
+               ui_rml_route_metrics.renders,
+               ui_rml_route_metrics.last_realtime,
+               ui_rml_route_metrics.width,
+               ui_rml_route_metrics.height);
+    Com_Printf("RmlUi runtime route counters: opens=%u closes=%u close_requests=%u synthetic_inputs=%u.\n",
+               ui_rml_route_metrics.opens,
+               ui_rml_route_metrics.closes,
+               ui_rml_route_metrics.close_requests,
+               ui_rml_route_metrics.synthetic_inputs);
+    Com_Printf("RmlUi runtime input: keys=%u chars=%u mouse_moves=%u mouse_buttons=%u mouse_wheels=%u last_mouse=%d,%d.\n",
+               ui_rml_route_metrics.key_events,
+               ui_rml_route_metrics.char_events,
+               ui_rml_route_metrics.mouse_moves,
+               ui_rml_route_metrics.mouse_buttons,
+               ui_rml_route_metrics.mouse_wheels,
+               ui_rml_route_metrics.last_mouse_x,
+               ui_rml_route_metrics.last_mouse_y);
+#else
+    Com_Printf("RmlUi runtime status: runtime support is not compiled.\n");
+#endif
+}
+
+static void UI_Rml_RuntimeStatus_f(void)
+{
+    UI_Rml_PrintRuntimeStatus();
+}
+
+static void UI_Rml_RuntimeSyntheticInput_f(void)
+{
+#if UI_RML_HAS_RUNTIME
+    if (!ui_rml_route_active) {
+        Com_Printf("RmlUi synthetic input smoke skipped: no active route.\n");
+        return;
+    }
+
+    if (!UI_Rml_RuntimeRouteIsAllowed(ui_rml_active_route)) {
+        Com_Printf("RmlUi synthetic input smoke skipped: route '%s' is not in the guarded runtime route set.\n",
+                   ui_rml_active_route[0] ? ui_rml_active_route : "<none>");
+        return;
+    }
+
+    ui_rml_route_metrics.synthetic_inputs++;
+    UI_Rml_MouseEvent(128, 192);
+    UI_Rml_CharEvent('w');
+    UI_Rml_KeyEvent(K_MWHEELUP, true);
+    UI_Rml_KeyEvent(K_MOUSE2, true);
+
+    Com_Printf("RmlUi synthetic input smoke: keys=%u chars=%u mouse_moves=%u mouse_buttons=%u mouse_wheels=%u close_requests=%u closes=%u active=%s.\n",
+               ui_rml_route_metrics.key_events,
+               ui_rml_route_metrics.char_events,
+               ui_rml_route_metrics.mouse_moves,
+               ui_rml_route_metrics.mouse_buttons,
+               ui_rml_route_metrics.mouse_wheels,
+               ui_rml_route_metrics.close_requests,
+               ui_rml_route_metrics.closes,
+               ui_rml_route_active ? "yes" : "no");
+#else
+    Com_Printf("RmlUi synthetic input smoke is unavailable; runtime support is not compiled.\n");
+#endif
+}
+
+static void UI_Rml_RuntimeCapture_f(void)
+{
+#if UI_RML_HAS_RUNTIME
+    if (!UI_Rml_IsRouteActive() && !UI_Rml_OpenRouteInternal("core.runtime_smoke")) {
+        Com_Printf("RmlUi guarded capture route could not be opened.\n");
+        return;
+    }
+
+    Com_Printf("RmlUi guarded capture route is active; capture after the next rendered frame and attach the current ui_rml_runtime_status output to the evidence note.\n");
+    UI_Rml_PrintRuntimeStatus();
+#else
+    Com_Printf("RmlUi runtime capture is unavailable; runtime support is not compiled.\n");
+#endif
+}
+
 static const cmdreg_t ui_rml_commands[] = {
     { "ui_rml_probe", UI_Rml_ProbeRoute_f, UI_Rml_ProbeRoute_c },
     { "ui_rml_runtime_probe", UI_Rml_RuntimeProbeRoute_f, UI_Rml_RuntimeProbeRoute_c },
+    { "ui_rml_runtime_open", UI_Rml_RuntimeOpenRoute_f, UI_Rml_RuntimeOpenRoute_c },
+    { "ui_rml_runtime_close", UI_Rml_RuntimeCloseRoute_f },
+    { "ui_rml_runtime_status", UI_Rml_RuntimeStatus_f },
+    { "ui_rml_runtime_capture", UI_Rml_RuntimeCapture_f },
+    { "ui_rml_runtime_capture_menu", UI_Rml_RuntimeCaptureMenu_f, UI_Rml_RuntimeMenuRoute_c },
+    { "ui_rml_runtime_synthetic_input", UI_Rml_RuntimeSyntheticInput_f },
     { NULL }
 };
 
@@ -605,50 +965,158 @@ bool UI_Rml_ProbeRoute(const char *route_id)
 bool UI_Rml_OpenMenu(uiMenu_t menu)
 {
     const char *route = UI_Rml_RouteForMenu(menu);
-    const char *document;
-    bool document_found;
+
+    if (menu == UIMENU_NONE) {
+        UI_Rml_CloseActiveRoute();
+        return false;
+    }
 
     if (!route || !UI_Rml_IsEnabled()) {
         return false;
     }
 
-    Com_Printf("RmlUi route '%s' requested; probing document.\n", route);
-    document_found = UI_Rml_ProbeRoute(route);
+    if (!UI_Rml_RuntimeRouteIsAllowed(route)) {
+        if (UI_Rml_IsRouteActive()) {
+            UI_Rml_CloseActiveRoute();
+        }
+
+        if (ui_rml_debug && ui_rml_debug->integer) {
+            Com_Printf("RmlUi route '%s' is not enabled for runtime drawing yet; keeping legacy UI fallback active.\n",
+                       route);
+        }
+        return false;
+    }
+
+    return UI_Rml_OpenRouteInternal(route);
+}
+
+bool UI_Rml_IsRouteActive(void)
+{
+#if UI_RML_HAS_RUNTIME
+    return ui_rml_route_active;
+#else
+    return false;
+#endif
+}
+
+bool UI_Rml_Draw(unsigned realtime)
+{
+#if UI_RML_HAS_RUNTIME
+    int width;
+    int height;
+
+    if (!ui_rml_route_active || !ui_rml_runtime_started ||
+        !ui_rml_runtime.Update || !ui_rml_runtime.Render) {
+        return false;
+    }
 
     if (!UI_Rml_RuntimeIsAvailable()) {
-        Com_Printf("RmlUi availability is '%s' with renderer='%s' family='%s'; falling back to legacy UI.\n",
-                   UI_Rml_AvailabilityString(UI_Rml_Availability()),
-                   UI_Rml_RendererName(),
-                   UI_Rml_RendererFamilyString(UI_Rml_RendererFamily()));
+        UI_Rml_ClearActiveRoute(true);
         return false;
     }
 
-    if (!document_found) {
+    width = r_config.width > 0 ? r_config.width : VIRTUAL_SCREEN_WIDTH;
+    height = r_config.height > 0 ? r_config.height : VIRTUAL_SCREEN_HEIGHT;
+
+    if (!ui_rml_runtime.Update(width, height, realtime) ||
+        !ui_rml_runtime.Render()) {
+        Com_Printf("RmlUi route '%s' failed to render; falling back to legacy UI.\n",
+                   ui_rml_active_route[0] ? ui_rml_active_route : "<unknown>");
+        UI_Rml_ClearActiveRoute(true);
         return false;
     }
 
-    document = UI_Rml_DocumentForRoute(route);
-    if (!document) {
-        Com_Printf("RmlUi route '%s' document path is unavailable; falling back to legacy UI.\n",
-                   route);
-        return false;
-    }
-
-    if (!UI_Rml_StartRuntime()) {
-        Com_Printf("RmlUi runtime '%s' failed to start; falling back to legacy UI.\n",
-                   UI_Rml_RuntimeName());
-        return false;
-    }
-
-#if UI_RML_HAS_RUNTIME
-    if (ui_rml_runtime.OpenRoute(route, document)) {
-        return true;
-    }
-
-    Com_Printf("RmlUi runtime '%s' declined route '%s'; falling back to legacy UI.\n",
-               UI_Rml_RuntimeName(), route);
-#endif
+    ui_rml_route_metrics.updates++;
+    ui_rml_route_metrics.renders++;
+    ui_rml_route_metrics.last_realtime = realtime;
+    ui_rml_route_metrics.width = width;
+    ui_rml_route_metrics.height = height;
+    return true;
+#else
+    (void)realtime;
     return false;
+#endif
+}
+
+bool UI_Rml_KeyEvent(int key, bool down)
+{
+#if UI_RML_HAS_RUNTIME
+    if (!ui_rml_route_active) {
+        return false;
+    }
+
+    if (ui_rml_runtime.KeyEvent) {
+        (void)ui_rml_runtime.KeyEvent(key, down);
+    }
+
+    ui_rml_route_metrics.key_events++;
+    if (UI_Rml_KeyIsMouseButton(key)) {
+        ui_rml_route_metrics.mouse_buttons++;
+    } else if (down && UI_Rml_KeyIsMouseWheel(key)) {
+        ui_rml_route_metrics.mouse_wheels++;
+    }
+
+    if (down && (key == K_ESCAPE || key == K_MOUSE2)) {
+        UI_Rml_CloseActiveRoute();
+    }
+
+    return true;
+#else
+    (void)key;
+    (void)down;
+    return false;
+#endif
+}
+
+bool UI_Rml_CharEvent(int key)
+{
+#if UI_RML_HAS_RUNTIME
+    if (!ui_rml_route_active) {
+        return false;
+    }
+
+    if (ui_rml_runtime.CharEvent) {
+        (void)ui_rml_runtime.CharEvent(key);
+    }
+
+    ui_rml_route_metrics.char_events++;
+    return true;
+#else
+    (void)key;
+    return false;
+#endif
+}
+
+bool UI_Rml_MouseEvent(int x, int y)
+{
+#if UI_RML_HAS_RUNTIME
+    if (!ui_rml_route_active) {
+        return false;
+    }
+
+    if (ui_rml_runtime.MouseEvent) {
+        (void)ui_rml_runtime.MouseEvent(x, y);
+    }
+
+    ui_rml_route_metrics.mouse_moves++;
+    ui_rml_route_metrics.last_mouse_x = x;
+    ui_rml_route_metrics.last_mouse_y = y;
+    return true;
+#else
+    (void)x;
+    (void)y;
+    return false;
+#endif
+}
+
+void UI_Rml_CloseActiveRoute(void)
+{
+#if UI_RML_HAS_RUNTIME
+    if (ui_rml_route_active) {
+        ui_rml_route_metrics.close_requests++;
+    }
+#endif
+    UI_Rml_ClearActiveRoute(true);
 }
 
 #if UI_RML_HAS_RUNTIME
@@ -659,7 +1127,13 @@ void UI_Rml_SetRuntimeInterface(const ui_rml_runtime_interface_t *runtime)
 
     if (runtime) {
         ui_rml_runtime = *runtime;
-        ui_rml_runtime_registered = runtime->OpenRoute != NULL;
+        ui_rml_runtime_registered = runtime->OpenRoute != NULL &&
+                                    runtime->CloseRoute != NULL &&
+                                    runtime->Update != NULL &&
+                                    runtime->Render != NULL &&
+                                    runtime->KeyEvent != NULL &&
+                                    runtime->CharEvent != NULL &&
+                                    runtime->MouseEvent != NULL;
     } else {
         ui_rml_runtime = {};
         ui_rml_runtime_registered = false;

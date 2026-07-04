@@ -1,6 +1,7 @@
 <rml>
   <head>
     <title>WORR RmlUi Runtime Smoke</title>
+    <link type="text/rcss" href="runtime_smoke.rcss" />
   </head>
   <body id="core-runtime-smoke" data-route-id="core.runtime_smoke" data-route-version="1">
     <div class="screen" id="runtime-smoke-screen">

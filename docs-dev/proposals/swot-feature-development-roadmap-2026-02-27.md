@@ -1870,12 +1870,95 @@ Tasks:
   after renderer initialization, but `R_RmlUiCanRender()` remains `false`.
   OpenGL visible draw behavior, Vulkan/RTX-vkpt native bridges, and sample
   route draw proof remain open.
+  Round 21 note: the OpenGL bridge now owns RmlUi geometry caches, renders via
+  the OpenGL 2D tessellator, uploads generated textures, resolves loaded
+  textures through the renderer image manager, applies scissor state, and
+  reports `R_RmlUiCanRender=true`. Runtime route ownership remains guarded by
+  `CanOpenRoutes=false`; Vulkan/RTX-vkpt native bridges and sample route draw
+  proof remain open. Implementation log:
+  `docs-dev/rmlui-round21-opengl-render-primitives-2026-07-04.md`.
+  Round 22 note: the compiled runtime now opens the guarded
+  `core.runtime_smoke` route through `ui_rml_runtime_open`, creates the
+  `worr_ui` RmlUi context, loads/shows one document, updates and renders it
+  from the client UI draw loop, closes it on Escape or
+  `ui_rml_runtime_close`, and keeps normal menu routes on legacy fallback.
+  Vulkan/RTX-vkpt native bridges, full input/font services, normal menu route
+  ownership, screenshots, and parity proof remain open. Implementation log:
+  `docs-dev/rmlui-round22-guarded-context-route-2026-07-04.md`.
+  Round 23 note: the guarded sample route now receives key, text, mouse
+  button, mouse wheel, and pointer movement events through the RmlUi context;
+  Escape and mouse button 2 close the route; and
+  `ui_rml_runtime_status`/`ui_rml_runtime_capture` expose counters for the
+  next OpenGL evidence pass. Normal menu route ownership, Vulkan/RTX-vkpt
+  native bridges, full input/font services, automated screenshots, and parity
+  proof remain open. Implementation log:
+  `docs-dev/rmlui-round23-input-capture-2026-07-04.md`.
+  Round 24 note: the guarded sample route now has an automated OpenGL TGA
+  runtime capture harness, local `r_screenshot_dir` evidence routing, visible
+  smoke-route RCSS, and a temporary layout-only RmlUi font engine that lets the
+  `RMLUI_FONT_ENGINE=none` build initialize. The accepted capture is
+  nonblank and records 24 updates/renders, but real glyph rendering, normal
+  menu route ownership, Vulkan/RTX-vkpt native bridges, runtime navigation,
+  full input/font services, and parity proof remain open. Implementation log:
+  `docs-dev/rmlui-round24-runtime-capture-harness-2026-07-04.md`.
+  Round 25 note: the guarded sample route now emits actual text geometry
+  through `UI_Rml_SmokeFontEngineInterface`, a minimal 5x7 bitmap glyph path
+  that feeds RmlUi mesh quads into the existing OpenGL bridge. The capture
+  harness now requires the glyph-generation marker and accepted a fresh
+  `rmlui_runtime_smoke_round25.tga` screenshot. This remains a smoke path, not
+  final font/text ownership or normal menu route ownership. Implementation log:
+  `docs-dev/rmlui-round25-smoke-font-glyph-path-2026-07-04.md`.
+  Round 26 note: the guarded sample capture now has route-specific TGA layout
+  assertions. The runtime capture harness records smoke-route color counts,
+  bounding boxes, and panel/text/button relationship checks, and accepted a
+  fresh `rmlui_runtime_smoke_round26.tga` screenshot with `layout_ok=true`.
+  This remains guarded OpenGL sample evidence, not normal route ownership or
+  parity. Implementation log:
+  `docs-dev/rmlui-round26-capture-layout-assertions-2026-07-04.md`.
+  Round 27 note: the same guarded capture now drives synthetic pointer, text,
+  mouse-wheel, and mouse-button-2 back-close input after the screenshot, then
+  requires inactive final status plus input and route close counters. The
+  accepted `rmlui_runtime_smoke_round27.tga` manifest records
+  `synthetic_input_marker_seen=true`, `inactive_status_seen=true`,
+  positive input counters, and route open/close/request counters. This remains
+  guarded OpenGL sample evidence, not broad input parity or normal route
+  ownership. Implementation log:
+  `docs-dev/rmlui-round27-synthetic-input-capture-2026-07-04.md`.
+  Round 28 note: the guarded capture harness now runs a two-viewport OpenGL
+  matrix with explicit `r_geometry` values and exact screenshot-dimension
+  validation. The accepted matrix covers `960x720` and `1280x960`, retaining
+  glyph, layout, synthetic input, back-close, route teardown, and inactive
+  status checks for both viewports. This remains guarded sample evidence, not
+  normal route ownership, responsive widescreen parity, or renderer parity.
+  Implementation log:
+  `docs-dev/rmlui-round28-viewport-matrix-2026-07-04.md`.
+  Round 29 note: the guarded runtime now opens `main`, `game`, and
+  `download_status` through `UI_OpenMenu` when `ui_rml_enable=1`.
+  `ui_rml_runtime_capture_menu` and the route-matrix harness accepted all
+  three routes at `960x720` with active OpenGL status, glyph text evidence,
+  synthetic input, close counters, inactive final status, and fresh
+  screenshots. This remains guarded OpenGL evidence, not default route
+  ownership, final theme/layout parity, controller behavior, runtime
+  navigation, Vulkan/RTX-vkpt renderer parity, or end-user parity.
+  Implementation log:
+  `docs-dev/rmlui-round29-menu-route-capture-2026-07-04.md`.
+  Round 30 note: `tools/ui_smoke/check_rmlui_renderer_matrix.py` now records
+  the renderer-family matrix as `OpenGL=native_guarded`,
+  `Vulkan=blocked_until_native`, and `RTX/vkpt=blocked_until_native`; it
+  rejects Vulkan/RTX-to-OpenGL mapping and premature non-OpenGL RmlUi runtime
+  dependency enablement. This is a guardrail, not native Vulkan/RTX-vkpt draw
+  proof. Implementation log:
+  `docs-dev/rmlui-round30-renderer-matrix-guardrails-2026-07-04.md`.
 - [ ] `FR-09-T04` Integrate fonts, localization, theme assets, cursor/audio
   affordances, and accessibility policy into the RmlUi stack.
   Dependency: `FR-09-T03`. Priority: P1.
   Progress: source theme contracts now include base, utility, session, and
   accessibility styles plus font/theme staging notes. Live runtime font,
   cursor, audio, and input services remain pending.
+  Round 25 note: the first runtime-visible glyph geometry exists for the
+  guarded smoke route through a temporary ASCII bitmap font engine. Final font
+  source, fallback policy, localization text flow, shaping, scaling, and
+  accessibility behavior remain pending.
   Round 6 note: `performance`, `accessibility`, `sound`, `screen`, and `input`
   now have `controller_stub` metadata for static cvar/command/navigation
   evidence. Live runtime font, cursor, audio, input, and accessibility services
@@ -2157,6 +2240,64 @@ Tasks:
   installation, OpenGL scaffold method coverage, and `CanRender=false`.
   Runtime navigation, screenshot/layout capture, visible renderer coverage,
   input/back coverage, and parity validation remain open.
+  Round 21 note: runtime-adapter validation now also checks OpenGL geometry
+  caching, tessellator draw primitives, generated texture upload,
+  loaded/generated texture lifetime, scissor state handling, and
+  `CanRender=true` while preserving the route-open guard and no
+  Vulkan-to-OpenGL redirection. Runtime navigation, screenshot/layout capture,
+  input/back coverage, and parity validation remain open.
+  Round 22 note: runtime-adapter validation now also checks runtime context
+  lifecycle hooks, RmlUi context/document load/update/render/removal behavior,
+  guarded `core.runtime_smoke` route ownership, runtime open/close commands,
+  and UI bridge draw ordering before legacy UI draw. Runtime navigation,
+  screenshot/layout capture, input/back coverage beyond Escape-close, and
+  parity validation remain open.
+  Round 23 note: runtime-adapter validation now also checks runtime input hook
+  declarations, adapter-side key/text/mouse event delivery into the RmlUi
+  context, UI bridge input ordering before legacy UI callbacks, close/back
+  tokens, and guarded status/capture commands. Runtime navigation,
+  screenshot/layout capture, broad input/back coverage, and parity validation
+  remain open.
+  Round 24 note: `tools/ui_smoke/check_rmlui_runtime_capture.py` now validates
+  the guarded runtime capture path by launching the enabled scratch engine,
+  opening `core.runtime_smoke`, writing a local TGA screenshot, checking
+  guarded OpenGL status/frame/input markers, verifying `960x720` dimensions,
+  and enforcing a nonblank payload. Runtime navigation, broader screenshot
+  layout assertions, broad input/back coverage, and parity validation remain
+  open.
+  Round 25 note: the runtime capture checker now also requires the
+  `RmlUi smoke font engine generated glyph geometry` marker, and focused tests
+  cover missing glyph-marker failure. Broader screenshot layout assertions,
+  synthetic input/back validation, renderer breadth, and parity validation
+  remain open.
+  Round 26 note: the runtime capture checker now parses TGA screenshots and
+  validates layout color counts, bounding boxes, and expected
+  panel/text/button ordering for `core.runtime_smoke`. Synthetic input/back
+  validation, renderer breadth, broader route coverage, and parity validation
+  remain open.
+  Round 27 note: the runtime capture checker now requires
+  `ui_rml_runtime_synthetic_input` evidence after the screenshot, including
+  inactive final status, positive key/text/pointer/button/wheel counters, and
+  route open/close/request/synthetic counters. Renderer breadth, broader route
+  coverage, broad input/navigation parity, and parity validation remain open.
+  Round 28 note: the runtime capture checker now supports geometry-driven
+  capture validation and aggregate viewport matrix manifests. The accepted
+  matrix records `viewports=2`, `passed=2`, `failed=0`, exact dimensions for
+  `960x720` and `1280x960`, and `layout_ok=true` in both cases. Renderer
+  breadth, broader route coverage, responsive widescreen parity, and parity
+  validation remain open.
+  Round 29 note: the runtime capture checker now supports `--route-matrix` for
+  the guarded menu entrypoint routes `main`, `game`, and `download_status`.
+  The accepted matrix records `routes=3`, `passed=3`, `failed=0`, exact
+  `960x720` dimensions, active route-specific OpenGL status, glyph text
+  evidence, synthetic input, close counters, inactive final status, and
+  `layout_required=false` for all three routes. Renderer breadth, route
+  navigation, final route layout parity, and parity validation remain open.
+  Round 30 note: `tools/ui_smoke/check_rmlui_renderer_matrix.py` now adds
+  focused renderer-family matrix validation with one guarded OpenGL lane, two
+  native-pending non-OpenGL lanes, and explicit no Vulkan/RTX-to-OpenGL
+  shortcut enforcement. Live native Vulkan/RTX renderer coverage, route
+  navigation, final route layout parity, and parity validation remain open.
 - [ ] `FR-09-T10` Remove legacy JSON menu loading/widgets, close migration
   bridge fallbacks, and update staging/docs for the final RmlUi path.
   Dependency: `FR-09-T09`. Priority: P1.
@@ -2401,6 +2542,63 @@ Tasks:
   installation, and the `CanRender=false` guard. Native runtime navigation,
   screenshot capture, input/back behavior, and visible renderer-specific
   coverage remain pending.
+  Round 21 note: the same checker now covers the OpenGL primitive bridge:
+  geometry caching, tessellator drawing, generated and loaded texture
+  handling, scissor state, and `CanRender=true`. Native runtime navigation,
+  screenshot capture, input/back behavior, and route-visible renderer-specific
+  coverage remain pending.
+  Round 22 note: the same checker now covers the guarded sample context path:
+  runtime lifecycle hooks, `Rml::CreateContext`, document load/show,
+  update/render, context removal, explicit runtime open/close commands, and
+  UI bridge draw interception before legacy UI draw. Native runtime
+  navigation, screenshot capture, broad input/back behavior, and
+  route-visible renderer-specific coverage remain pending.
+  Round 23 note: the same checker now covers the guarded sample input/capture
+  path: RmlUi key/text/mouse hook declarations, adapter event dispatch,
+  UI bridge input interception before legacy callbacks, Escape/mouse-button-2
+  close tokens, and status/capture commands. Native runtime navigation,
+  automated screenshot capture, broad input/back behavior, and route-visible
+  renderer-specific coverage remain pending.
+  Round 24 note: the guarded capture harness is implemented and validated for
+  the OpenGL `core.runtime_smoke` route. It writes local TGA evidence under
+  `.install/basew/screenshots`, copies screenshot/log artifacts to
+  `.tmp/rmlui/runtime-capture`, writes a JSON manifest, and validates route
+  status, frame counters, screenshot dimensions, and nonblank payload. Native
+  runtime navigation, broader screenshot/layout assertions, broad input/back
+  behavior, and route-visible renderer-specific coverage remain pending.
+  Round 25 note: the same guarded capture harness now proves text-geometry
+  generation by requiring the smoke font glyph marker and validating the
+  refreshed Round 25 TGA/log evidence. Native runtime navigation, broader
+  layout assertions, broad input/back behavior, and route-visible
+  renderer-specific coverage remain pending.
+  Round 26 note: the guarded capture harness now includes first visual layout
+  assertions for the smoke route and fails nonblank screenshots with the wrong
+  color/region structure. Native runtime navigation, synthetic input/back
+  behavior, broader route coverage, and renderer-specific coverage remain
+  pending.
+  Round 27 note: the guarded capture harness now includes first automated
+  synthetic input/back-close validation for the smoke route and fails visual
+  evidence that lacks input counters, close counters, or inactive final status.
+  Native runtime navigation, broad input/navigation parity, broader route
+  coverage, and renderer-specific coverage remain pending.
+  Round 28 note: the guarded capture harness now includes exact-geometry
+  validation and a default two-viewport OpenGL matrix for the smoke route.
+  Native runtime navigation, responsive widescreen parity, broad input/
+  navigation parity, broader route coverage, and renderer-specific coverage
+  remain pending.
+  Round 29 note: the guarded capture harness now includes a route matrix for
+  `main`, `game`, and `download_status`, opened through `UI_OpenMenu` and
+  checked for fresh `960x720` screenshots, route-specific OpenGL status, glyph
+  text evidence, synthetic input, route close counters, and inactive final
+  status. Native runtime navigation, broad input/navigation parity, final
+  route layout assertions, and renderer-specific coverage remain pending.
+  Round 30 note: the UI smoke suite now includes
+  `check_rmlui_renderer_matrix.py` and focused pytest coverage for the current
+  renderer-family matrix: OpenGL native guarded, Vulkan blocked until native,
+  and RTX/vkpt blocked until native. It also fails non-OpenGL runtime
+  dependency enablement and Vulkan/RTX-to-OpenGL mapping. Native runtime
+  navigation, broad input/navigation parity, final route layout assertions,
+  and live renderer-specific coverage remain pending.
 
 ## Epic DV-04: Architecture and Code Quality
 Objective: reduce maintenance overhead and complete key modernization tracks.
@@ -2650,6 +2848,51 @@ Tasks:
   Vulkan and RTX/vkpt exports remain unavailable rather than redirected.
   Final notice/update policy, local patch policy, supported-matrix
   acceptance, and renderer/runtime enablement remain pending.
+  RmlUi Round 21 note:
+  the same OpenGL-scoped dependency path now links an implemented primitive
+  bridge for geometry, texture upload/lifetime, tessellator drawing, and
+  scissor state without enabling route ownership or changing Vulkan/RTX-vkpt
+  exports. Final notice/update policy, local patch policy, supported-matrix
+  acceptance, and renderer/runtime enablement remain pending.
+  RmlUi Round 22 note:
+  the compiled runtime now uses the OpenGL-scoped render interface to open and
+  draw only the guarded `core.runtime_smoke` document from a RmlUi context,
+  while normal routes and non-OpenGL renderers remain guarded. Final
+  notice/update policy, local patch policy, supported-matrix acceptance, and
+  renderer/runtime enablement remain pending.
+  RmlUi Round 23 note:
+  the same guarded OpenGL-scoped path now carries key, text, mouse-button,
+  mouse-wheel, and pointer movement events into the RmlUi context and exposes
+  status/capture counters for manual evidence collection, while normal routes
+  and non-OpenGL renderers remain guarded. Final notice/update policy, local
+  patch policy, supported-matrix acceptance, and renderer/runtime enablement
+  remain pending.
+  RmlUi Round 24 note:
+  the guarded OpenGL-scoped path now installs a temporary layout-only RmlUi
+  font engine and records automated runtime capture evidence. The null font
+  engine is a bootstrap dependency decision only; final font/text ownership,
+  local patch policy, supported-matrix acceptance, and renderer/runtime
+  enablement remain pending.
+  RmlUi Round 25 note:
+  the guarded OpenGL-scoped path now replaces that null adapter with a smoke
+  bitmap glyph path and validates glyph-generation evidence in the runtime
+  capture harness. The smoke glyph table is temporary; final font/text
+  ownership, local patch policy, supported-matrix acceptance, and
+  renderer/runtime enablement remain pending.
+  RmlUi Round 29 note:
+  the guarded OpenGL-scoped path now includes route-matrix evidence for
+  `main`, `game`, and `download_status` opened through `UI_OpenMenu`.
+  This remains opt-in and OpenGL-only; final font/text ownership, local patch
+  policy, supported-matrix acceptance, native Vulkan/RTX-vkpt renderer
+  enablement, and default runtime ownership remain pending.
+  RmlUi Round 30 note:
+  the dependency boundary now includes renderer-family matrix guardrails that
+  keep OpenGL as the only current guarded native lane and require Vulkan and
+  RTX/vkpt to remain unavailable until native bridges exist. The checker also
+  rejects Vulkan/RTX-to-OpenGL routing and premature non-OpenGL RmlUi runtime
+  dependency enablement. Final notice/update policy, local patch policy,
+  supported-matrix acceptance, native Vulkan/RTX-vkpt renderer enablement, and
+  default runtime ownership remain pending.
 - [ ] `DV-06-T02` Remove or archive superseded dependency trees not needed for reproducible builds.
   Dependency: `DV-06-T01`. Priority: P1.
   2026-07-02 cleanup note: removed ignored local stale unpacked source trees
@@ -2755,6 +2998,57 @@ Tasks:
   lane, but no end-user parity documentation is claimed until visible route
   rendering, runtime/controller behavior, and player-visible parity evidence
   are accepted.
+  RmlUi Round 21 note: OpenGL primitive bridge validation improves
+  developer-side regression tracking for the first renderer-backed geometry,
+  texture, and scissor path, but no end-user parity documentation is claimed
+  until visible route rendering, runtime/controller behavior, and
+  player-visible parity evidence are accepted.
+  RmlUi Round 22 note: guarded context-route validation improves
+  developer-side regression tracking for the first RmlUi document load,
+  update, and render path, but no end-user parity documentation is claimed
+  until normal route ownership, runtime/controller behavior, and
+  player-visible parity evidence are accepted.
+  RmlUi Round 23 note: guarded input/capture validation improves
+  developer-side regression tracking for the first RmlUi key/text/mouse event
+  bridge and manual capture counters, but no end-user parity documentation is
+  claimed until normal route ownership, automated screenshot evidence,
+  runtime/controller behavior, and player-visible parity evidence are
+  accepted.
+  RmlUi Round 24 note: guarded screenshot evidence now exists for the internal
+  `core.runtime_smoke` route, but it is developer-only, OpenGL-only, and uses
+  a layout-only null font engine. No end-user parity documentation is claimed
+  until normal route ownership, real text rendering, runtime/controller
+  behavior, and player-visible parity evidence are accepted.
+  RmlUi Round 25 note: the guarded developer-only OpenGL screenshot now
+  includes smoke glyph geometry, but it still does not establish normal route
+  ownership, full font/text behavior, runtime/controller behavior, or
+  player-visible parity evidence. No end-user documentation is claimed.
+  RmlUi Round 26 note: the guarded developer-only OpenGL screenshot now also
+  carries layout assertion evidence for the smoke route. It still does not
+  establish normal route ownership, full font/text behavior,
+  runtime/controller behavior, renderer parity, or player-visible parity
+  evidence. No end-user documentation is claimed.
+  RmlUi Round 27 note: the guarded developer-only OpenGL capture now also
+  carries synthetic input/back-close counter evidence for the smoke route. It
+  still does not establish normal route ownership, broad input/navigation
+  parity, runtime/controller behavior, renderer parity, or player-visible
+  parity evidence. No end-user documentation is claimed.
+  RmlUi Round 28 note: the guarded developer-only OpenGL capture now also
+  carries two-viewport matrix evidence for the smoke route. It still does not
+  establish normal route ownership, responsive widescreen parity,
+  runtime/controller behavior, renderer parity, or player-visible parity
+  evidence. No end-user documentation is claimed.
+  RmlUi Round 29 note: the guarded developer-only OpenGL capture now also
+  carries menu-route matrix evidence for `main`, `game`, and
+  `download_status`. It still does not establish default route ownership,
+  final theme/layout parity, runtime/controller behavior, renderer parity, or
+  player-visible parity evidence. No end-user documentation is claimed.
+  RmlUi Round 30 note: renderer-family matrix guardrails now protect the
+  developer-only migration path by recording OpenGL as the sole guarded native
+  lane and keeping Vulkan/RTX-vkpt blocked until native bridges exist. It
+  still does not establish native renderer parity, default route ownership,
+  runtime/controller behavior, or player-visible parity evidence. No end-user
+  documentation is claimed.
 - [x] `DV-07-T05` Keep the canonical shadowmapping replacement baseline synchronized with implementation status.
   Dependency: `FR-02-T09`. Priority: P1.
 - [ ] `DV-07-T06` Maintain imported-source credits and provenance ledgers for the Q3A BotLib and `TTimo/bspc` AAS work.

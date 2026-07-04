@@ -306,8 +306,10 @@ def parse_registered_routes(cpp_text: str, errors: list[str]) -> list[Registered
 def extract_function_body(cpp_text: str, function_name: str, errors: list[str]) -> str | None:
     stripped_text = strip_c_comments_keep_newlines(cpp_text)
     signature_re = re.compile(
-        r"\b" + re.escape(function_name) + r"\s*\([^;{}]*\)\s*\{",
-        re.DOTALL,
+        r"^[ \t]*(?:static\s+)?[A-Za-z_][A-Za-z0-9_:\s<>,*&]*\b"
+        + re.escape(function_name)
+        + r"\s*\([^;{}]*\)\s*\{",
+        re.DOTALL | re.MULTILINE,
     )
     signature_match = signature_re.search(stripped_text)
     if signature_match is None:
@@ -369,13 +371,34 @@ def validate_open_menu_probe_fallback(cpp_text: str, errors: list[str]) -> bool:
         return False
 
     probe_match = re.search(r"\bUI_Rml_ProbeRoute\s*\(\s*route\s*\)\s*;", body)
-    if probe_match is None:
-        errors.append("UI_Rml_OpenMenu does not call UI_Rml_ProbeRoute(route)")
+    if probe_match is not None:
+        after_probe = body[probe_match.end() :]
+        if re.search(r"\breturn\s+false\s*;", after_probe) is None:
+            errors.append("UI_Rml_OpenMenu does not return false after probing the route")
+            return False
+
+        return True
+
+    if re.search(r"\bUI_Rml_OpenRouteInternal\s*\(\s*route\s*\)", body) is None:
+        errors.append(
+            "UI_Rml_OpenMenu neither probes the route nor delegates to UI_Rml_OpenRouteInternal(route)"
+        )
         return False
 
-    after_probe = body[probe_match.end() :]
-    if re.search(r"\breturn\s+false\s*;", after_probe) is None:
-        errors.append("UI_Rml_OpenMenu does not return false after probing the route")
+    open_body = extract_function_body(cpp_text, "UI_Rml_OpenRouteInternal", errors)
+    if open_body is None:
+        return False
+
+    probe_call = re.search(r"\bUI_Rml_ProbeRoute\s*\(\s*route->id\s*\)", open_body)
+    runtime_open_call = re.search(r"\bui_rml_runtime\.OpenRoute\s*\(", open_body)
+    if probe_call is None:
+        errors.append("UI_Rml_OpenRouteInternal does not call UI_Rml_ProbeRoute(route->id)")
+        return False
+    if runtime_open_call is None:
+        errors.append("UI_Rml_OpenRouteInternal does not call ui_rml_runtime.OpenRoute")
+        return False
+    if probe_call.start() > runtime_open_call.start():
+        errors.append("UI_Rml_OpenRouteInternal must probe before runtime OpenRoute")
         return False
 
     return True

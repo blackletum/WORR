@@ -19,8 +19,10 @@ DEFAULT_RENDERER_HEADER = Path("inc/renderer/renderer.h")
 DEFAULT_RENDERER_API_SOURCE = Path("src/renderer/renderer_api.c")
 DEFAULT_RENDERER_BRIDGE_SOURCE = Path("src/renderer/rmlui_bridge.cpp")
 DEFAULT_CLIENT_RENDERER_SOURCE = Path("src/client/renderer.cpp")
+DEFAULT_UI_BRIDGE_SOURCE = Path("src/client/ui_bridge.cpp")
 DEFAULT_WRAP = Path("subprojects/rmlui.wrap")
 PATH_SEP_RE = re.compile(r"[\\/]+")
+GUARDED_RUNTIME_ROUTES = ("core.runtime_smoke", "main", "game", "download_status")
 
 
 @dataclass
@@ -34,6 +36,7 @@ class RuntimeAdapterReport:
     renderer_api_source_path: Path
     renderer_bridge_source_path: Path
     client_renderer_source_path: Path
+    ui_bridge_source_path: Path
     wrap_path: Path
     meson_build_exists: bool = False
     header_exists: bool = False
@@ -43,6 +46,7 @@ class RuntimeAdapterReport:
     renderer_api_source_exists: bool = False
     renderer_bridge_source_exists: bool = False
     client_renderer_source_exists: bool = False
+    ui_bridge_source_exists: bool = False
     wrap_exists: bool = False
     adapter_listed_in_meson: bool = False
     renderer_bridge_listed_in_meson: bool = False
@@ -57,12 +61,22 @@ class RuntimeAdapterReport:
     rmlui_core_symbols: list[str] = field(default_factory=list)
     rmlui_core_interface_symbols: list[str] = field(default_factory=list)
     rmlui_render_interface_symbols: list[str] = field(default_factory=list)
+    runtime_font_engine_adapter_present: bool = False
     worr_file_symbols: list[str] = field(default_factory=list)
     worr_system_symbols: list[str] = field(default_factory=list)
     runtime_registration_declared: bool = False
     runtime_registration_called: bool = False
     runtime_interface_registered: bool = False
     runtime_probe_hook_present: bool = False
+    runtime_context_hooks_declared: bool = False
+    runtime_context_adapter_present: bool = False
+    runtime_context_scaffolded: bool = False
+    runtime_draw_bridge_hooked: bool = False
+    runtime_open_commands_present: bool = False
+    runtime_input_hooks_declared: bool = False
+    runtime_input_adapter_present: bool = False
+    runtime_input_bridge_hooked: bool = False
+    runtime_status_capture_commands_present: bool = False
     core_interfaces_installed_before_initialise: bool = False
     renderer_contract_declared: bool = False
     renderer_native_families: list[str] = field(default_factory=list)
@@ -76,8 +90,13 @@ class RuntimeAdapterReport:
     client_renderer_family_mapping: bool = False
     opengl_renderer_bridge_guarded: bool = False
     opengl_renderer_bridge_scaffolded: bool = False
+    opengl_renderer_geometry_cache: bool = False
+    opengl_renderer_draw_primitives: bool = False
+    opengl_renderer_texture_uploads: bool = False
+    opengl_renderer_texture_lifetime: bool = False
+    opengl_renderer_scissor_state: bool = False
     opengl_renderer_bridge_family: bool = False
-    opengl_renderer_can_render_false: bool = False
+    opengl_renderer_can_render_true: bool = False
     renderer_route_gate_present: bool = False
     renderer_native_interface_required: bool = False
     vulkan_renderer_not_redirected: bool = False
@@ -191,6 +210,7 @@ def validate_runtime_adapter(
     renderer_api_source_path: Path,
     renderer_bridge_source_path: Path,
     client_renderer_source_path: Path,
+    ui_bridge_source_path: Path,
     wrap_path: Path,
 ) -> RuntimeAdapterReport:
     repo_root = repo_root.resolve()
@@ -202,6 +222,7 @@ def validate_runtime_adapter(
     renderer_api_source_path = renderer_api_source_path.resolve(strict=False)
     renderer_bridge_source_path = renderer_bridge_source_path.resolve(strict=False)
     client_renderer_source_path = client_renderer_source_path.resolve(strict=False)
+    ui_bridge_source_path = ui_bridge_source_path.resolve(strict=False)
     wrap_path = wrap_path.resolve(strict=False)
 
     meson_build_text = read_text_if_file(meson_build_path)
@@ -212,6 +233,7 @@ def validate_runtime_adapter(
     renderer_api_text = read_text_if_file(renderer_api_source_path)
     renderer_bridge_text = read_text_if_file(renderer_bridge_source_path)
     client_renderer_text = read_text_if_file(client_renderer_source_path)
+    ui_bridge_text = read_text_if_file(ui_bridge_source_path)
     wrap_text = read_text_if_file(wrap_path)
 
     symbols = [
@@ -273,6 +295,9 @@ def validate_runtime_adapter(
         if runtime_can_open_index >= 0 and runtime_next_index > runtime_can_open_index
         else ""
     )
+    ui_draw_index = ui_bridge_text.find("void UI_Draw")
+    rml_draw_index = ui_bridge_text.find("UI_Rml_Draw(realtime)", ui_draw_index)
+    legacy_draw_index = ui_bridge_text.find("api->Draw(realtime)", ui_draw_index)
     vulkan_redirected_to_opengl = any(
         re.search(pattern, scaffold_text + "\n" + adapter_text, re.IGNORECASE | re.DOTALL)
         for pattern in (
@@ -292,6 +317,7 @@ def validate_runtime_adapter(
         renderer_api_source_path=renderer_api_source_path,
         renderer_bridge_source_path=renderer_bridge_source_path,
         client_renderer_source_path=client_renderer_source_path,
+        ui_bridge_source_path=ui_bridge_source_path,
         wrap_path=wrap_path,
         meson_build_exists=meson_build_path.is_file(),
         header_exists=header_path.is_file(),
@@ -301,6 +327,7 @@ def validate_runtime_adapter(
         renderer_api_source_exists=renderer_api_source_path.is_file(),
         renderer_bridge_source_exists=renderer_bridge_source_path.is_file(),
         client_renderer_source_exists=client_renderer_source_path.is_file(),
+        ui_bridge_source_exists=ui_bridge_source_path.is_file(),
         wrap_exists=wrap_path.is_file(),
         adapter_listed_in_meson=source_listed(meson_build_text, adapter_source_path, repo_root),
         renderer_bridge_listed_in_meson=source_listed(
@@ -352,6 +379,24 @@ def validate_runtime_adapter(
             )
             if symbol in adapter_text
         ],
+        runtime_font_engine_adapter_present=(
+            guarded_include_present(adapter_text, "#include <RmlUi/Core/FontEngineInterface.h>")
+            and all(
+                symbol in adapter_text
+                for symbol in (
+                    "UI_Rml_SmokeFontEngineInterface",
+                    "Rml::FontEngineInterface",
+                    "Rml::SetFontEngineInterface",
+                    "Rml::TexturedMesh",
+                    "GetFontFaceHandle",
+                    "GetFontMetrics",
+                    "GetStringWidth",
+                    "GenerateString",
+                    "generated glyph geometry",
+                    "ui_rml_font_interface",
+                )
+            )
+        ),
         worr_file_symbols=worr_file_symbols,
         worr_system_symbols=worr_system_symbols,
         runtime_registration_declared="UI_Rml_RegisterCompiledRuntime" in header_text,
@@ -362,6 +407,124 @@ def validate_runtime_adapter(
             and "ui_rml_runtime_probe" in scaffold_text
             and "UI_Rml_CompiledRuntimeProbeRoute" in adapter_text
             and "LoadFile(document_path" in adapter_text
+        ),
+        runtime_context_hooks_declared=all(
+            symbol in header_text
+            for symbol in (
+                "CloseRoute",
+                "Update)(int width, int height, unsigned realtime)",
+                "Render)(void)",
+                "UI_Rml_IsRouteActive",
+                "UI_Rml_Draw",
+                "UI_Rml_CloseActiveRoute",
+            )
+        ),
+        runtime_context_adapter_present=(
+            guarded_include_present(adapter_text, "#include <RmlUi/Core/Context.h>")
+            and guarded_include_present(adapter_text, "#include <RmlUi/Core/ElementDocument.h>")
+            and all(
+                symbol in adapter_text
+                for symbol in (
+                    "Rml::Context",
+                    "Rml::ElementDocument",
+                    "Rml::CreateContext",
+                    "Rml::RemoveContext",
+                    "LoadDocument",
+                    "Show()",
+                    "SetDimensions",
+                    "Update()",
+                    "Render()",
+                    "Close()",
+                    "UI_Rml_CompiledRuntimeUpdate",
+                    "UI_Rml_CompiledRuntimeRender",
+                )
+            )
+        ),
+        runtime_context_scaffolded=all(
+            symbol in scaffold_text
+            for symbol in (
+                "ui_rml_route_active",
+                "ui_rml_active_route",
+                "UI_Rml_OpenRouteInternal",
+                "UI_Rml_ClearActiveRoute(true)",
+                "ui_rml_runtime.Update(width, height, realtime)",
+                "ui_rml_runtime.Render()",
+                "Key_SetDest",
+                "KEY_MENU",
+                "core.runtime_smoke",
+            )
+        ),
+        runtime_draw_bridge_hooked=(
+            ui_bridge_source_path.is_file()
+            and rml_draw_index >= 0
+            and legacy_draw_index >= 0
+            and rml_draw_index < legacy_draw_index
+            and "UI_Rml_KeyEvent(key, down)" in ui_bridge_text
+            and "UI_Rml_CharEvent(key)" in ui_bridge_text
+            and "UI_Rml_MouseEvent(x, y)" in ui_bridge_text
+        ),
+        runtime_open_commands_present=(
+            "ui_rml_runtime_open" in scaffold_text
+            and "ui_rml_runtime_close" in scaffold_text
+            and "UI_Rml_RuntimeOpenRoute_f" in scaffold_text
+            and "UI_Rml_RuntimeCloseRoute_f" in scaffold_text
+        ),
+        runtime_input_hooks_declared=all(
+            symbol in header_text
+            for symbol in (
+                "KeyEvent)(int key, bool down)",
+                "CharEvent)(int key)",
+                "MouseEvent)(int x, int y)",
+                "UI_Rml_KeyEvent",
+                "UI_Rml_CharEvent",
+                "UI_Rml_MouseEvent",
+            )
+        ),
+        runtime_input_adapter_present=(
+            guarded_include_present(adapter_text, "#include <RmlUi/Core/Input.h>")
+            and all(
+                symbol in adapter_text
+                for symbol in (
+                    "ProcessKeyDown",
+                    "ProcessKeyUp",
+                    "ProcessTextInput",
+                    "ProcessMouseMove",
+                    "ProcessMouseButtonDown",
+                    "ProcessMouseButtonUp",
+                    "ProcessMouseWheel",
+                    "UI_Rml_CompiledRuntimeKeyIdentifier",
+                    "UI_Rml_CompiledRuntimeModifiers",
+                    "UI_Rml_CompiledRuntimeMouseButtonIndex",
+                    "Rml::Input::KI_ESCAPE",
+                    "Rml::Input::KM_CTRL",
+                )
+            )
+        ),
+        runtime_input_bridge_hooked=all(
+            symbol in scaffold_text + "\n" + ui_bridge_text
+            for symbol in (
+                "ui_rml_runtime.KeyEvent",
+                "ui_rml_runtime.CharEvent",
+                "ui_rml_runtime.MouseEvent",
+                "UI_Rml_KeyEvent(key, down)",
+                "UI_Rml_CharEvent(key)",
+                "UI_Rml_MouseEvent(x, y)",
+                "K_MOUSE2",
+                "K_MWHEELUP",
+            )
+        ),
+        runtime_status_capture_commands_present=(
+            "ui_rml_runtime_status" in scaffold_text
+            and "ui_rml_runtime_capture" in scaffold_text
+            and "ui_rml_runtime_capture_menu" in scaffold_text
+            and "ui_rml_runtime_synthetic_input" in scaffold_text
+            and "UI_Rml_RuntimeCaptureMenu_f" in scaffold_text
+            and "UI_Rml_PrintRuntimeStatus" in scaffold_text
+            and "UI_Rml_RuntimeSyntheticInput_f" in scaffold_text
+            and "ui_rml_route_metrics" in scaffold_text
+            and "updates=%u renders=%u" in scaffold_text
+            and "opens=%u closes=%u close_requests=%u synthetic_inputs=%u" in scaffold_text
+            and "mouse_moves=%u" in scaffold_text
         ),
         core_interfaces_installed_before_initialise=(
             install_index >= 0 and initialise_index >= 0 and install_index < initialise_index
@@ -459,11 +622,72 @@ def validate_runtime_adapter(
         ),
         opengl_renderer_bridge_family=(
             "return R_RENDERER_RMLUI_FAMILY_OPENGL;" in renderer_bridge_text
-            and "OpenGL RmlUi render-interface scaffold" in renderer_bridge_text
+            and "OpenGL RmlUi render-interface primitives" in renderer_bridge_text
         ),
-        opengl_renderer_can_render_false=(
+        opengl_renderer_geometry_cache=all(
+            symbol in renderer_bridge_text
+            for symbol in (
+                "R_RmlUiCompiledGeometry",
+                "std::vector<glVertexDesc2D_t>",
+                "std::vector<glIndex_t>",
+                "ToNonPremultiplied",
+                "COLOR_U32_RGBA",
+                "reinterpret_cast<Rml::CompiledGeometryHandle>",
+                "delete compiled",
+            )
+        ),
+        opengl_renderer_draw_primitives=all(
+            symbol in renderer_bridge_text
+            for symbol in (
+                "reinterpret_cast<glVertexDesc2D_t *>(tess.vertices)",
+                "tess.indices",
+                "GL_Flush2D()",
+                "TextureForHandle",
+                "translation.x",
+                "translation.y",
+                "GLS_BLEND_BLEND",
+                "GLS_SHADE_SMOOTH",
+                "TEXNUM_WHITE",
+            )
+        ),
+        opengl_renderer_texture_uploads=all(
+            symbol in renderer_bridge_text
+            for symbol in (
+                "qglGenTextures",
+                "GL_ForceTexture",
+                "qglPixelStorei",
+                "qglTexImage2D",
+                "qglTexParameteri",
+                "GL_TEXTURE_MIN_FILTER",
+                "GL_TEXTURE_WRAP_S",
+                "UnpremultiplyTexture",
+                "c.texUploads",
+            )
+        ),
+        opengl_renderer_texture_lifetime=all(
+            symbol in renderer_bridge_text
+            for symbol in (
+                "IMG_Find",
+                "RegisterTexture",
+                "r_rmlui_textures",
+                "qglDeleteTextures",
+                "owned",
+                "R_NOTEXTURE",
+            )
+        ),
+        opengl_renderer_scissor_state=all(
+            symbol in renderer_bridge_text
+            for symbol in (
+                "qglEnable(GL_SCISSOR_TEST)",
+                "qglDisable(GL_SCISSOR_TEST)",
+                "qglScissor",
+                "r_config.height",
+                "draw.scissor",
+            )
+        ),
+        opengl_renderer_can_render_true=(
             re.search(
-                r"R_RmlUiCanRender\s*\([^)]*\)\s*\{[^{}]*return\s+false\s*;",
+                r"R_RmlUiCanRender\s*\([^)]*\)\s*\{[^{}]*return\s+true\s*;",
                 renderer_bridge_text,
                 re.DOTALL,
             )
@@ -487,12 +711,13 @@ def validate_runtime_adapter(
         route_open_guard_present=(
             "CanOpenRoutes" in header_text
             and "UI_Rml_CompiledRuntimeCanOpenRoutes" in adapter_text
-            and re.search(
-                r"UI_Rml_CompiledRuntimeCanOpenRoutes\s*\([^)]*\)\s*\{[^{}]*return\s+false\s*;",
-                adapter_text,
-                re.DOTALL,
-            )
-            is not None
+            and "UI_Rml_CompiledRuntimeRouteIsAllowed" in adapter_text
+            and "UI_Rml_RuntimeRouteIsAllowed" in scaffold_text
+            and "UI_Rml_FindRuntimeMenuRoute" in scaffold_text
+            and "ui_rml_runtime_menu_routes" in scaffold_text
+            and all(route in adapter_text for route in GUARDED_RUNTIME_ROUTES)
+            and all(route in scaffold_text for route in GUARDED_RUNTIME_ROUTES)
+            and "UI_RML_RENDERER_FAMILY_OPENGL" in adapter_text
         ),
         cmake_font_engine_none=(
             "RMLUI_FONT_ENGINE" in meson_build_text and "'none'" in meson_build_text
@@ -542,6 +767,10 @@ def add_consistency_findings(report: RuntimeAdapterReport) -> None:
     if not report.client_renderer_source_exists:
         report.errors.append(
             f"client renderer: missing {display_path(report.client_renderer_source_path, report.repo_root)}"
+        )
+    if not report.ui_bridge_source_exists:
+        report.errors.append(
+            f"ui bridge: missing {display_path(report.ui_bridge_source_path, report.repo_root)}"
         )
     if report.adapter_source_exists and not report.adapter_listed_in_meson:
         report.errors.append("adapter: source exists but is not listed in meson.build")
@@ -596,6 +825,8 @@ def add_consistency_findings(report: RuntimeAdapterReport) -> None:
             "adapter: missing RmlUi render interface symbols: "
             + ", ".join(sorted(missing_render_symbols))
         )
+    if not report.runtime_font_engine_adapter_present:
+        report.errors.append("adapter: missing guarded RmlUi glyph-generating font engine install")
     missing_file_symbols = {
         "FS_OpenFile",
         "FS_CloseFile",
@@ -627,6 +858,24 @@ def add_consistency_findings(report: RuntimeAdapterReport) -> None:
         report.errors.append("adapter: runtime interface is not registered")
     if not report.runtime_probe_hook_present:
         report.errors.append("adapter: missing runtime file-probe hook and command")
+    if not report.runtime_context_hooks_declared:
+        report.errors.append("header: missing RmlUi runtime context lifecycle hooks")
+    if not report.runtime_context_adapter_present:
+        report.errors.append("adapter: missing guarded RmlUi context load/update/render lifecycle")
+    if not report.runtime_context_scaffolded:
+        report.errors.append("scaffold: missing guarded active-route context state")
+    if not report.runtime_draw_bridge_hooked:
+        report.errors.append("ui bridge: RmlUi draw path is not hooked before legacy UI draw")
+    if not report.runtime_open_commands_present:
+        report.errors.append("scaffold: missing guarded RmlUi runtime open/close commands")
+    if not report.runtime_input_hooks_declared:
+        report.errors.append("header: missing RmlUi runtime input lifecycle hooks")
+    if not report.runtime_input_adapter_present:
+        report.errors.append("adapter: missing guarded RmlUi key/text/pointer event delivery")
+    if not report.runtime_input_bridge_hooked:
+        report.errors.append("ui bridge: RmlUi input path is not hooked before legacy UI input")
+    if not report.runtime_status_capture_commands_present:
+        report.errors.append("scaffold: missing guarded RmlUi status/capture/synthetic-input commands")
     if not report.core_interfaces_installed_before_initialise:
         report.errors.append("adapter: RmlUi system/file interfaces must be installed before Initialise")
     if not report.renderer_contract_declared:
@@ -661,10 +910,20 @@ def add_consistency_findings(report: RuntimeAdapterReport) -> None:
         report.errors.append("renderer bridge: OpenGL RmlUi bridge must be guarded by UI_RML_HAS_RUNTIME")
     if not report.opengl_renderer_bridge_scaffolded:
         report.errors.append("renderer bridge: missing OpenGL RmlUi RenderInterface scaffold methods")
+    if not report.opengl_renderer_geometry_cache:
+        report.errors.append("renderer bridge: missing OpenGL compiled geometry cache and color conversion")
+    if not report.opengl_renderer_draw_primitives:
+        report.errors.append("renderer bridge: missing OpenGL tessellator draw primitive path")
+    if not report.opengl_renderer_texture_uploads:
+        report.errors.append("renderer bridge: missing OpenGL generated texture upload path")
+    if not report.opengl_renderer_texture_lifetime:
+        report.errors.append("renderer bridge: missing OpenGL loaded/generated texture lifetime tracking")
+    if not report.opengl_renderer_scissor_state:
+        report.errors.append("renderer bridge: missing OpenGL scissor state handling")
     if not report.opengl_renderer_bridge_family:
-        report.errors.append("renderer bridge: OpenGL scaffold must report the OpenGL renderer family")
-    if not report.opengl_renderer_can_render_false:
-        report.errors.append("renderer bridge: OpenGL scaffold must keep CanRender false until it draws")
+        report.errors.append("renderer bridge: OpenGL primitive bridge must report the OpenGL renderer family")
+    if not report.opengl_renderer_can_render_true:
+        report.errors.append("renderer bridge: OpenGL primitive bridge must report CanRender true")
     if not report.renderer_route_gate_present:
         report.errors.append("scaffold: route availability is not gated by native renderer availability")
     if not report.renderer_native_interface_required:
@@ -674,7 +933,7 @@ def add_consistency_findings(report: RuntimeAdapterReport) -> None:
     if not report.renderer_unavailable_state:
         report.errors.append("scaffold: missing renderer_unavailable availability state")
     if not report.route_open_guard_present:
-        report.errors.append("adapter: missing conservative CanOpenRoutes false guard")
+        report.errors.append("adapter: missing guarded runtime-route open guard")
     if not report.cmake_font_engine_none:
         report.errors.append("meson: RmlUi CMake fallback must set RMLUI_FONT_ENGINE to none")
     if not report.cmake_samples_disabled:
@@ -701,6 +960,7 @@ def json_report_payload(report: RuntimeAdapterReport) -> dict[str, Any]:
             "renderer_api_source": display_path(report.renderer_api_source_path, report.repo_root),
             "renderer_bridge_source": display_path(report.renderer_bridge_source_path, report.repo_root),
             "client_renderer_source": display_path(report.client_renderer_source_path, report.repo_root),
+            "ui_bridge_source": display_path(report.ui_bridge_source_path, report.repo_root),
             "wrap": display_path(report.wrap_path, report.repo_root),
         },
         "files": {
@@ -712,6 +972,7 @@ def json_report_payload(report: RuntimeAdapterReport) -> dict[str, Any]:
             "renderer_api_source_exists": report.renderer_api_source_exists,
             "renderer_bridge_source_exists": report.renderer_bridge_source_exists,
             "client_renderer_source_exists": report.client_renderer_source_exists,
+            "ui_bridge_source_exists": report.ui_bridge_source_exists,
             "wrap_exists": report.wrap_exists,
         },
         "adapter": {
@@ -728,12 +989,22 @@ def json_report_payload(report: RuntimeAdapterReport) -> dict[str, Any]:
             "rmlui_core_symbols": report.rmlui_core_symbols,
             "rmlui_core_interface_symbols": report.rmlui_core_interface_symbols,
             "rmlui_render_interface_symbols": report.rmlui_render_interface_symbols,
+            "runtime_font_engine_adapter_present": report.runtime_font_engine_adapter_present,
             "worr_file_symbols": report.worr_file_symbols,
             "worr_system_symbols": report.worr_system_symbols,
             "runtime_registration_declared": report.runtime_registration_declared,
             "runtime_registration_called": report.runtime_registration_called,
             "runtime_interface_registered": report.runtime_interface_registered,
             "runtime_probe_hook_present": report.runtime_probe_hook_present,
+            "runtime_context_hooks_declared": report.runtime_context_hooks_declared,
+            "runtime_context_adapter_present": report.runtime_context_adapter_present,
+            "runtime_context_scaffolded": report.runtime_context_scaffolded,
+            "runtime_draw_bridge_hooked": report.runtime_draw_bridge_hooked,
+            "runtime_open_commands_present": report.runtime_open_commands_present,
+            "runtime_input_hooks_declared": report.runtime_input_hooks_declared,
+            "runtime_input_adapter_present": report.runtime_input_adapter_present,
+            "runtime_input_bridge_hooked": report.runtime_input_bridge_hooked,
+            "runtime_status_capture_commands_present": report.runtime_status_capture_commands_present,
             "core_interfaces_installed_before_initialise": report.core_interfaces_installed_before_initialise,
             "renderer_contract_declared": report.renderer_contract_declared,
             "renderer_native_families": report.renderer_native_families,
@@ -747,8 +1018,13 @@ def json_report_payload(report: RuntimeAdapterReport) -> dict[str, Any]:
             "client_renderer_family_mapping": report.client_renderer_family_mapping,
             "opengl_renderer_bridge_guarded": report.opengl_renderer_bridge_guarded,
             "opengl_renderer_bridge_scaffolded": report.opengl_renderer_bridge_scaffolded,
+            "opengl_renderer_geometry_cache": report.opengl_renderer_geometry_cache,
+            "opengl_renderer_draw_primitives": report.opengl_renderer_draw_primitives,
+            "opengl_renderer_texture_uploads": report.opengl_renderer_texture_uploads,
+            "opengl_renderer_texture_lifetime": report.opengl_renderer_texture_lifetime,
+            "opengl_renderer_scissor_state": report.opengl_renderer_scissor_state,
             "opengl_renderer_bridge_family": report.opengl_renderer_bridge_family,
-            "opengl_renderer_can_render_false": report.opengl_renderer_can_render_false,
+            "opengl_renderer_can_render_true": report.opengl_renderer_can_render_true,
             "renderer_route_gate_present": report.renderer_route_gate_present,
             "renderer_native_interface_required": report.renderer_native_interface_required,
             "vulkan_renderer_not_redirected": report.vulkan_renderer_not_redirected,
@@ -794,6 +1070,7 @@ def print_report(report: RuntimeAdapterReport) -> None:
     print(f"  Renderer API: {display_path(report.renderer_api_source_path, report.repo_root)}")
     print(f"  Renderer bridge: {display_path(report.renderer_bridge_source_path, report.repo_root)}")
     print(f"  Client renderer: {display_path(report.client_renderer_source_path, report.repo_root)}")
+    print(f"  UI bridge: {display_path(report.ui_bridge_source_path, report.repo_root)}")
     print(f"  Wrap: {display_path(report.wrap_path, report.repo_root)}")
 
     print("\nAdapter facts:")
@@ -827,6 +1104,7 @@ def print_report(report: RuntimeAdapterReport) -> None:
             else "-"
         )
     )
+    print(f"  Runtime font engine adapter: {yes_no(report.runtime_font_engine_adapter_present)}")
     print(
         "  WORR filesystem symbols: "
         + (", ".join(report.worr_file_symbols) if report.worr_file_symbols else "-")
@@ -839,6 +1117,15 @@ def print_report(report: RuntimeAdapterReport) -> None:
     print(f"  Registration called: {yes_no(report.runtime_registration_called)}")
     print(f"  Runtime interface registered: {yes_no(report.runtime_interface_registered)}")
     print(f"  Runtime file-probe hook: {yes_no(report.runtime_probe_hook_present)}")
+    print(f"  Runtime context hooks declared: {yes_no(report.runtime_context_hooks_declared)}")
+    print(f"  Runtime context adapter: {yes_no(report.runtime_context_adapter_present)}")
+    print(f"  Runtime active-route scaffold: {yes_no(report.runtime_context_scaffolded)}")
+    print(f"  UI bridge draw hook: {yes_no(report.runtime_draw_bridge_hooked)}")
+    print(f"  Runtime open/close commands: {yes_no(report.runtime_open_commands_present)}")
+    print(f"  Runtime input hooks declared: {yes_no(report.runtime_input_hooks_declared)}")
+    print(f"  Runtime input adapter: {yes_no(report.runtime_input_adapter_present)}")
+    print(f"  UI bridge input hook: {yes_no(report.runtime_input_bridge_hooked)}")
+    print(f"  Runtime status/capture commands: {yes_no(report.runtime_status_capture_commands_present)}")
     print(
         "  Core interfaces installed before Initialise: "
         + yes_no(report.core_interfaces_installed_before_initialise)
@@ -858,8 +1145,13 @@ def print_report(report: RuntimeAdapterReport) -> None:
     print(f"  Client renderer family mapping: {yes_no(report.client_renderer_family_mapping)}")
     print(f"  OpenGL renderer bridge guarded: {yes_no(report.opengl_renderer_bridge_guarded)}")
     print(f"  OpenGL renderer bridge scaffolded: {yes_no(report.opengl_renderer_bridge_scaffolded)}")
+    print(f"  OpenGL geometry cache: {yes_no(report.opengl_renderer_geometry_cache)}")
+    print(f"  OpenGL draw primitives: {yes_no(report.opengl_renderer_draw_primitives)}")
+    print(f"  OpenGL texture uploads: {yes_no(report.opengl_renderer_texture_uploads)}")
+    print(f"  OpenGL texture lifetime: {yes_no(report.opengl_renderer_texture_lifetime)}")
+    print(f"  OpenGL scissor state: {yes_no(report.opengl_renderer_scissor_state)}")
     print(f"  OpenGL renderer bridge family: {yes_no(report.opengl_renderer_bridge_family)}")
-    print(f"  OpenGL renderer CanRender false: {yes_no(report.opengl_renderer_can_render_false)}")
+    print(f"  OpenGL renderer CanRender true: {yes_no(report.opengl_renderer_can_render_true)}")
     print(f"  Renderer route gate: {yes_no(report.renderer_route_gate_present)}")
     print(f"  Native render interface required: {yes_no(report.renderer_native_interface_required)}")
     print(f"  Vulkan not redirected to OpenGL: {yes_no(report.vulkan_renderer_not_redirected)}")
@@ -945,6 +1237,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to the client renderer lifecycle source.",
     )
     parser.add_argument(
+        "--ui-bridge-source",
+        type=Path,
+        default=DEFAULT_UI_BRIDGE_SOURCE,
+        help="Path to the client UI bridge source.",
+    )
+    parser.add_argument(
         "--wrap",
         type=Path,
         default=DEFAULT_WRAP,
@@ -969,6 +1267,7 @@ def main(argv: list[str] | None = None) -> int:
         renderer_api_source_path=resolve_path(args.renderer_api_source, repo_root),
         renderer_bridge_source_path=resolve_path(args.renderer_bridge_source, repo_root),
         client_renderer_source_path=resolve_path(args.client_renderer_source, repo_root),
+        ui_bridge_source_path=resolve_path(args.ui_bridge_source, repo_root),
         wrap_path=resolve_path(args.wrap, repo_root),
     )
 

@@ -53,6 +53,9 @@ void UI_ModeChanged(void)
 
 void UI_KeyEvent(int key, bool down)
 {
+    if (UI_Rml_KeyEvent(key, down))
+        return;
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->KeyEvent)
         api->KeyEvent(key, down);
@@ -60,6 +63,9 @@ void UI_KeyEvent(int key, bool down)
 
 void UI_CharEvent(int key)
 {
+    if (UI_Rml_CharEvent(key))
+        return;
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->CharEvent)
         api->CharEvent(key);
@@ -67,6 +73,9 @@ void UI_CharEvent(int key)
 
 void UI_Draw(unsigned realtime)
 {
+    if (UI_Rml_Draw(realtime))
+        return;
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->Draw)
         api->Draw(realtime);
@@ -84,6 +93,9 @@ void UI_OpenMenu(uiMenu_t menu)
 
 void UI_Frame(int msec)
 {
+    if (UI_Rml_IsRouteActive())
+        return;
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->Frame)
         api->Frame(msec);
@@ -107,6 +119,8 @@ void UI_MouseEvent(int x, int y)
 {
     if (Key_GetDest() & KEY_MESSAGE)
         SCR_NotifyMouseEvent(x, y);
+    if (UI_Rml_MouseEvent(x, y))
+        return;
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->MouseEvent)
         api->MouseEvent(x, y);

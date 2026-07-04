@@ -26,6 +26,7 @@ def write_cpp(
     menu_returns: dict[str, list[str]],
     *,
     include_probe_fallback: bool = True,
+    include_guarded_open_internal: bool = False,
 ) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     route_entries = "\n".join(
@@ -54,7 +55,24 @@ def write_cpp(
                 "    return false;",
             ]
         )
+    elif include_guarded_open_internal:
+        open_menu_lines.append("    return UI_Rml_OpenRouteInternal(route);")
     open_menu_lines.append("}")
+
+    open_internal_lines: list[str] = []
+    if include_guarded_open_internal:
+        open_internal_lines = [
+            "static bool UI_Rml_OpenRouteInternal(const char *route_id)",
+            "{",
+            "    const ui_rml_route_t *route = UI_Rml_FindRoute(route_id);",
+            "    bool document_found = UI_Rml_ProbeRoute(route->id);",
+            "    if (!document_found) {",
+            "        return false;",
+            "    }",
+            "    return ui_rml_runtime.OpenRoute(route->id, UI_Rml_DocumentForRoute(route->id));",
+            "}",
+            "",
+        ]
 
     path.write_text(
         "\n".join(
@@ -67,6 +85,8 @@ def write_cpp(
                 "static const ui_rml_route_t ui_rml_routes[] = {",
                 route_entries,
                 "};",
+                "static const ui_rml_route_t *UI_Rml_FindRoute(const char *route_id) { return ui_rml_routes; }",
+                "static const char *UI_Rml_DocumentForRoute(const char *route_id) { return \"ui/rml/shell/main.rml\"; }",
                 "",
                 "const char *UI_Rml_RouteForMenu(uiMenu_t menu)",
                 "{",
@@ -77,6 +97,7 @@ def write_cpp(
                 "    }",
                 "}",
                 "",
+                *open_internal_lines,
                 *open_menu_lines,
                 "",
             ]
@@ -146,6 +167,8 @@ def run_checker(
     shell_routes: list[dict[str, Any]],
     registered_routes: list[tuple[str, str]],
     menu_returns: dict[str, list[str]],
+    include_probe_fallback: bool = True,
+    include_guarded_open_internal: bool = False,
 ) -> tuple[int, pytest.CaptureResult[str]]:
     manifest_path = write_json(
         repo_root / "tools/ui_smoke/rmlui_manifest.json",
@@ -159,6 +182,8 @@ def run_checker(
         repo_root / "src/client/ui_rml/ui_rml.cpp",
         registered_routes,
         menu_returns,
+        include_probe_fallback=include_probe_fallback,
+        include_guarded_open_internal=include_guarded_open_internal,
     )
 
     result = eligibility.main(
@@ -222,6 +247,38 @@ def test_valid_runtime_stub_route_passes(
         menu_returns={
             "main": ["UIMENU_DEFAULT", "UIMENU_MAIN"],
         },
+    )
+
+    assert result == 0
+    assert "Runtime_stub routes checked: 1" in captured.out
+    assert "Menu-mapped routes: 1" in captured.out
+    assert "Registry matches: 1" in captured.out
+    assert "Controller contract matches: 1" in captured.out
+
+
+def test_valid_runtime_stub_route_can_delegate_to_guarded_open_internal(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+
+    result, captured = run_checker(
+        repo_root,
+        capsys,
+        manifest_routes=[
+            manifest_route("main", "runtime_stub"),
+        ],
+        shell_routes=[
+            shell_route("main"),
+        ],
+        registered_routes=[
+            ("main", "shell/main.rml"),
+        ],
+        menu_returns={
+            "main": ["UIMENU_DEFAULT", "UIMENU_MAIN"],
+        },
+        include_probe_fallback=False,
+        include_guarded_open_internal=True,
     )
 
     assert result == 0

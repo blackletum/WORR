@@ -12,8 +12,8 @@ Primary tasks: `FR-09-T01`, `FR-09-T02`, `FR-09-T03`, `FR-09-T04`,
 
 Supporting linked tasks: `DV-06-T01`, `FR-07-T01`, and `FR-07-T02`.
 
-Execution status: `Active/round-20 OpenGL render-interface scaffold validation accepted`.
-Round 20 is the latest coordinator-accepted validation baseline. Earlier
+Execution status: `Active/round-30 renderer-family matrix guardrail accepted`.
+Round 30 is the latest coordinator-accepted validation baseline. Earlier
 parallel rounds produced source asset scaffolds, mock contracts, shared
 theme/component contracts, smoke and route-contract checkers, package-asset
 staging for loose `.install/basew/ui/rml/` assets, a guarded client
@@ -88,10 +88,43 @@ Vulkan-to-OpenGL redirection. Round 20 added the first renderer-family
 implementation scaffold: an OpenGL-owned `Rml::RenderInterface` object exported
 from the OpenGL renderer DLL, client renderer lifecycle registration, adapter
 installation through `Rml::SetRenderInterface`, and validation that the
-scaffold remains `CanRender=false` until it can draw. Visible native drawing,
-Vulkan/RTX-vkpt renderer implementations, route opening/rendering, live data
-controllers, runtime navigation, screenshot/parity proof, and legacy-removal
-cutover remain incomplete.
+scaffold remained guarded until it could draw. Round 21 turned that OpenGL
+scaffold into a primitive bridge with geometry caching, tessellator drawing,
+generated and loaded texture handling, scissor state, and `CanRender=true` for
+the OpenGL renderer. Round 22 adds the first guarded runtime context path:
+`core.runtime_smoke` can be opened with `ui_rml_runtime_open`, the compiled
+runtime creates the `worr_ui` RmlUi context, loads and shows one document,
+updates/resizes/renders it from `UI_Draw`, and closes it with Escape or
+`ui_rml_runtime_close`. Round 23 adds guarded key/text/mouse delivery into the
+sample RmlUi context, status counters, and `ui_rml_runtime_capture` as the
+manual evidence path for the next OpenGL screenshot pass. Round 24 converts
+that path into an automated guarded OpenGL TGA capture harness, adds a
+local `r_screenshot_dir` evidence override, installs a temporary layout-only
+RmlUi font engine, and styles `core.runtime_smoke` for visible nonblank
+geometry. Round 25 replaces that layout-only adapter with a guarded smoke
+bitmap font engine that emits RmlUi glyph quads, tightens the capture harness
+to require the glyph-generation marker, and refreshes the smoke RCSS so the
+captured route is legible. Round 26 adds TGA visual layout assertions to the
+guarded capture harness, checking smoke-route color counts, bounding boxes,
+and panel/text/button relationships. Round 27 adds a guarded synthetic
+input/back-close pass to the same capture harness, requiring pointer, text,
+mouse-wheel, mouse-button, close-request, close-counter, and inactive-status
+evidence after the visual screenshot is written. Round 28 broadens the same
+capture path into a two-viewport OpenGL matrix, setting explicit
+`r_geometry` values for `960x720` and `1280x960`, validating exact screenshot
+dimensions, and writing aggregate per-viewport evidence. Round 29 promotes the
+three guarded `runtime_stub` menu entrypoints (`main`, `game`, and
+`download_status`) into the same opt-in OpenGL runtime path, adds
+`ui_rml_runtime_capture_menu`, and accepts a route matrix proving each route
+opens through `UI_OpenMenu`, renders text, receives synthetic input, closes,
+and reports inactive status at `960x720`. Round 30 adds a dedicated
+renderer-family matrix guardrail that records OpenGL as the only current
+guarded native RmlUi lane, keeps Vulkan and RTX/vkpt explicitly blocked until
+native bridges exist, and fails Vulkan/RTX-to-OpenGL shortcut wiring. Native
+Vulkan/RTX-vkpt renderer implementations, final font/text services, live data
+controllers, responsive widescreen parity, broad input/navigation parity,
+automated runtime navigation, theme/layout parity, parity proof, and
+legacy-removal cutover remain incomplete.
 
 Strategic parent:
 `docs-dev/proposals/swot-feature-development-roadmap-2026-02-27.md`.
@@ -117,20 +150,20 @@ Status legend:
 |---|---|---|---|---|
 | `FR-09-T01` Runtime ownership, inventory, asset layout, and cutover policy | S0, Agent 1 | `Active`: route and ownership manifests seeded; route-ownership metadata, full-route probe coverage, and selected route progression through three guarded menu-entrypoint `runtime_stub` routes accepted; S0 not closed | S0 inventory -> route/data/command contracts -> ownership metadata reconciliation -> full-route probe/route progression evidence -> guarded entrypoint evidence -> Gate G0 | Ownership decision, asset layout, staging plan, coexistence policy, and full menu ownership manifest. |
 | `FR-09-T02` RmlUi dependency, Meson/build wiring, and staging | Agent 1 | `Active`: loose `ui/rml` package staging implemented, client scaffold source wired, full-route runtime document probe, registry drift, runtime asset/import, JSON runtime-asset reporting, detailed runtime asset manifest output, staged loose validation, proposed dependency decision/audit record, RmlUi `6.2` source wrap, default-disabled optional `rmlui` Meson feature gate, dependency-integration checker state `optional`, wrap provide aliases, explicit CMake fallback options, and enabled scratch compile/link proof accepted; supported-matrix/install refresh and runtime enablement pending | Gate G0 -> full-route runtime document probe accepted -> runtime registry/import validation -> runtime asset JSON/staging/manifest evidence -> dependency decision/audit -> dependency integration -> optional build gate -> runtime-switch/build wiring -> install refresh -> Gate G1 | RmlUi dependency resolves, links in the supported build matrix, and `.install/basew/ui/rml/` refreshes with current RmlUi assets. |
-| `FR-09-T03` Runtime bootstrap and native renderer integration | Agents 1 and 2 | `Active`: runtime smoke document, native renderer guardrails, guarded `ui_rml_enable` switch scaffold, filesystem-backed probe coverage for 57 route documents plus `core.runtime_smoke`, guarded menu-open probes for `main`, `game`, and `download_status`, runtime availability reporting, dependency-free file-interface boundary, runtime-hook boundary, compiled RmlUi Core adapter registration, WORR-backed RmlUi system/file interfaces, explicit `ui_rml_runtime_probe`, native renderer bridge contract/family lanes, OpenGL render-interface scaffold export/registration, and conservative `renderer_unavailable` route-open guard accepted; OpenGL visible draw behavior, Vulkan/RTX-vkpt implementations, and route render proof pending | Gate G0 -> runtime-switch scaffold -> full-route document probe -> guarded menu-entrypoint runtime stubs -> runtime/file interface boundary -> compiled core adapter -> system/file bridge -> native renderer contract -> OpenGL render-interface scaffold -> sample route -> native renderer draw proof -> Gate G1 | Sample `.rml` opens from normal menu entry points in OpenGL, Vulkan, and RTX/vkpt without Vulkan-to-OpenGL fallback. |
-| `FR-09-T04` Fonts, localization, theme, cursor/audio, and accessibility | Agent 2, Agent 4 consumer | `Active`: base, utility, session, and accessibility themes seeded; all low-risk settings routes have `controller_stub` metadata; a11y/localization inventory reports 8 static refs and 6 localization keys with 0 malformed hooks; live services pending | Gate G1 -> theme/font/input services -> a11y/localization inventory -> content consumption -> live localization/a11y services -> Gate G2 | Stable theme/font/input/accessibility services plus at least one migrated page using them. |
+| `FR-09-T03` Runtime bootstrap and native renderer integration | Agents 1 and 2 | `Active`: runtime smoke document, native renderer guardrails, guarded `ui_rml_enable` switch scaffold, filesystem-backed probe coverage for 57 route documents plus `core.runtime_smoke`, guarded menu-open probes for `main`, `game`, and `download_status`, runtime availability reporting, dependency-free file-interface boundary, runtime-hook boundary, compiled RmlUi Core adapter registration, WORR-backed RmlUi system/file interfaces, explicit `ui_rml_runtime_probe`, native renderer bridge contract/family lanes, OpenGL render-interface scaffold export/registration, OpenGL geometry/texture/scissor primitive bridge with `CanRender=true`, guarded `core.runtime_smoke` context open/update/render path, `ui_rml_runtime_open`/`ui_rml_runtime_close`, UI draw interception, guarded key/text/mouse delivery, runtime counters, `ui_rml_runtime_capture`, smoke bitmap glyph font path, styled smoke RCSS, local screenshot-dir override, automated guarded OpenGL TGA capture with glyph marker and layout assertions, guarded synthetic input/back-close capture evidence, two-viewport OpenGL matrix evidence, guarded `main`/`game`/`download_status` menu-route OpenGL matrix evidence, and explicit renderer-family matrix guardrails accepted; Vulkan/RTX-vkpt implementations, full font/text services, full input services, runtime navigation, responsive widescreen parity, theme/layout parity, and parity proof pending | Gate G0 -> runtime-switch scaffold -> full-route document probe -> guarded menu-entrypoint runtime stubs -> runtime/file interface boundary -> compiled core adapter -> system/file bridge -> native renderer contract -> OpenGL render-interface scaffold -> OpenGL render primitives -> guarded sample route/context draw proof -> guarded sample input/capture proof -> guarded sample screenshot/glyph/layout proof -> guarded synthetic input/back-close proof -> guarded viewport matrix proof -> guarded menu route proof -> renderer-family guardrail -> native renderer matrix proof -> Gate G1 | Sample `.rml` opens from normal menu entry points in OpenGL, Vulkan, and RTX/vkpt without Vulkan-to-OpenGL fallback. |
+| `FR-09-T04` Fonts, localization, theme, cursor/audio, and accessibility | Agent 2, Agent 4 consumer | `Active`: base, utility, session, and accessibility themes seeded; all low-risk settings routes have `controller_stub` metadata; a11y/localization inventory reports 8 static refs and 6 localization keys with 0 malformed hooks; guarded smoke bitmap glyph path validates first text geometry; live final font/localization/cursor/audio services pending | Gate G1 -> theme/font/input services -> a11y/localization inventory -> content consumption -> live localization/a11y services -> Gate G2 | Stable theme/font/input/accessibility services plus at least one migrated page using them. |
 | `FR-09-T05` Reusable data-model and controller bridges | Agent 3 | `Active`: mock contracts, route-contract audit, shared components, controller fixtures, 54 accepted `controller_stub` routes, 3 guarded `runtime_stub` routes, 149 controller-contract references across all 57 advanced routes, command/cvar/data-model/condition/event inventory validation, metadata-sync validation, phase-consistency validation, controller fixture validation, controller-stub coverage, route metadata shape validation, runtime-stub eligibility validation, and controller-stub completion validation landed; live C++ controllers pending | mock contracts -> controller fixture reconciliation -> selected `controller_stub` routes accepted -> guarded `runtime_stub` eligibility -> utility/list/single-player/local-session/session-vote/lobby/final session controller-stub metadata -> cvar/command/condition/keybind/list/save-load/session bridges -> controller-stub completion gate -> live C++ controllers -> Gate G2 | One cvar control, one command button, one conditional element, one list/table, and one preview component validated through RmlUi. |
 | `FR-09-T06` Shell/settings/single-player menu translation | Agent 4 | `Active`: all 23 Agent 4 source-route starter documents landed; all Agent 4-owned shell/settings/single-player routes now have either `controller_stub` metadata (`20`) or guarded `runtime_stub` metadata (`3`); runtime/parity pending | Agent 4 documents -> smoke manifest -> controller-stub batches -> runtime-stub entrypoint batch -> single-player controller-stub batch -> remaining local-session controller-stub batch -> parity checks -> Gate G3 | Agent 4-owned Wave A and single-player Wave B routes run through RmlUi with settings persistence and back/escape parity. |
 | `FR-09-T07` Browser, player-config, save/load, keybind, and utility surfaces | Agents 3, 4, and 5 | `Active`: all tracked rich utility and save/load starter documents landed; `addressbook`, `keys`, `legacykeys`, `weapons`, `servers`, `demos`, `players`, `ui_list`, `loadgame`, `savegame`, and `downloads` have `controller_stub` metadata; live controllers/parity pending | shared rich components -> utility documents -> utility controller-stub metadata -> utility/list controller-stub metadata -> save/load controller-stub metadata -> download-options controller-stub metadata -> smoke/parity checks -> Gate G3 | Servers, demos, players, ui_list, keybind, addressbook, weapons, loadgame, and savegame routes pass parity checks. |
 | `FR-09-T08` Multiplayer/session/match menu translation | Agent 5 | `Active`: all tracked Wave C source-route starter documents landed; multiplayer/session route metadata covers the multiplayer hub plus all 25 session/match routes; all non-runtime multiplayer/session/vote/tournament/MyMap/map selector/match-stats routes now have static `controller_stub` metadata; live session behavior/parity pending | session data contract -> Wave C documents -> session route metadata -> vote/callvote controller-stub metadata -> multiplayer/lobby controller-stub metadata -> tournament/MyMap/map-selector/match-stats controller-stub metadata -> live match-state smoke -> Gate G3 | Vote, tournament, MyMap, forfeit, replay, map selector, match info, and match stats flows run through RmlUi. |
-| `FR-09-T09` Migration-specific validation | Agent 5 plus all agents | `Active`: smoke, route-contract, command inventory, cvar inventory, data-model inventory, condition inventory, event inventory, a11y/localization inventory, document-id inventory, entrypoint inventory, route-metadata-shape validation, legacy-removal inventory/reporting, metadata sync, phase-consistency, dependency-decision, dependency-integration, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold validation, controller fixture, controller-stub coverage, controller-stub completion, runtime-stub eligibility, menu-entrypoint, static RML semantics, navigation graph, runtime registry, import-aware runtime asset JSON/manifest, parity checklist/summary, and progress-report tools validate 57/57 source routes with `starter=0`, `controller_stub=54`, and `runtime_stub=3`; runtime navigation/screenshot coverage pending | smoke manifest -> migration-phase metadata -> static semantics checks -> runtime registry/import checks -> menu-entrypoint/runtime-stub checks -> navigation graph/fixture/parity checks -> command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventories -> metadata/shape/phase/dependency/dependency-integration/legacy guardrails -> controller-stub completion gate -> runtime-adapter/system-file/renderer-contract/OpenGL-scaffold checks -> progress reports -> document-load checks -> renderer/layout/input/session evidence -> Gate G4 | Automated smoke coverage and manual parity checklist cover all migrated routes and selected renderer/layout matrix. |
-| `FR-09-T10` Legacy JSON removal and final docs/staging cleanup | Agent 5 plus all agents | `Blocked`: waits on Gate G3/G4; legacy-removal inventory/checker tracks 6 items with 4 blocked, 2 pending, 0 ready, and 0 complete; progress reports surface the closed parity gate; controller-bindings parity is complete, but navigation, renderer, screenshot, input/back, and legacy-fallback evidence remain pending; no legacy removal attempted | legacy inventory -> progress gate summaries -> parity-ready evidence -> delete/archive -> docs/staging updates -> Gate G4 | Legacy JSON loader/widgets and dead assets are removed or intentionally archived with a documented reason. |
+| `FR-09-T09` Migration-specific validation | Agent 5 plus all agents | `Active`: smoke, route-contract, command inventory, cvar inventory, data-model inventory, condition inventory, event inventory, a11y/localization inventory, document-id inventory, entrypoint inventory, route-metadata-shape validation, legacy-removal inventory/reporting, metadata sync, phase-consistency, dependency-decision, dependency-integration, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font validation, runtime capture harness glyph-marker, TGA layout, synthetic input/back-close, viewport-matrix validation, menu-route-matrix validation, and renderer-family matrix guardrail validation, controller fixture, controller-stub coverage, controller-stub completion, runtime-stub eligibility, menu-entrypoint, static RML semantics, navigation graph, runtime registry, import-aware runtime asset JSON/manifest, parity checklist/summary, and progress-report tools validate 57/57 source routes with `starter=0`, `controller_stub=54`, and `runtime_stub=3`; runtime navigation/broader route/input coverage pending | smoke manifest -> migration-phase metadata -> static semantics checks -> runtime registry/import checks -> menu-entrypoint/runtime-stub checks -> navigation graph/fixture/parity checks -> command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventories -> metadata/shape/phase/dependency/dependency-integration/legacy guardrails -> controller-stub completion gate -> runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font checks -> guarded screenshot/glyph/layout/input/viewport/menu-route harness -> renderer-family guardrail -> progress reports -> document-load checks -> renderer/layout/input/session evidence -> Gate G4 | Automated smoke coverage and manual parity checklist cover all migrated routes and selected renderer/layout matrix. |
+| `FR-09-T10` Legacy JSON removal and final docs/staging cleanup | Agent 5 plus all agents | `Blocked`: waits on Gate G3/G4; legacy-removal inventory/checker tracks 6 items with 4 blocked, 2 pending, 0 ready, and 0 complete; progress reports surface the closed parity gate; controller-bindings parity is complete, but navigation, renderer, broad screenshot/input/back, and legacy-fallback evidence remain pending; no legacy removal attempted | legacy inventory -> progress gate summaries -> parity-ready evidence -> delete/archive -> docs/staging updates -> Gate G4 | Legacy JSON loader/widgets and dead assets are removed or intentionally archived with a documented reason. |
 | `FR-03-T08` Complete engine-side/cgame-side UI ownership split | S0, Agents 1 and 3 | `Active`: client-owned presentation/data-provider contract seeded; route ownership metadata, full-route probe registry, 54 selected `controller_stub` routes, 3 guarded menu-entrypoint `runtime_stub` routes, and all 57 central routes matched to feature metadata validated; ownership audit pending | ownership audit -> route ownership metadata -> selected route progression accepted -> guarded entrypoint route progression -> all static controller-stub progression -> data bridge contract -> Gate G0/G2 | Client runtime ownership and cgame/sgame data-provider boundaries are explicit and documented. |
-| `DV-03-T07` UI automation harness | Agent 5 | `Active`: manifest, route-contract, command inventory, cvar inventory, data-model inventory, condition inventory, event inventory, a11y/localization inventory, document-id inventory, entrypoint inventory, route-metadata-shape validation, legacy-removal inventory/reporting, metadata sync, phase-consistency, dependency-decision, dependency-integration, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold, controller fixture, controller-stub coverage, controller-stub completion, runtime-stub eligibility, menu-entrypoint, navigation graph, parity manifest/summary, import, phase, package, static semantics, runtime registry/asset text/JSON/manifest, and text/markdown/JSON progress-report checks landed; runtime navigation/screenshot harness pending | manifest -> smoke-transition metadata -> static semantics checks -> runtime registry/import checks -> menu-entrypoint/runtime-stub checks -> navigation graph/fixture/parity checks -> command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventories -> dependency/source/build/runtime-adapter/system-file/renderer-contract/OpenGL-scaffold guardrails -> metadata/progress reports -> controller-stub completion -> load/navigation smoke -> screenshot/layout capture -> Gate G4 | Harness can prove document load, route navigation, renderer smoke, and session transition coverage. |
+| `DV-03-T07` UI automation harness | Agent 5 | `Active`: manifest, route-contract, command inventory, cvar inventory, data-model inventory, condition inventory, event inventory, a11y/localization inventory, document-id inventory, entrypoint inventory, route-metadata-shape validation, legacy-removal inventory/reporting, metadata sync, phase-consistency, dependency-decision, dependency-integration, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font checks, guarded runtime capture harness with glyph marker, layout assertions, synthetic input/back-close counters, exact geometry validation, viewport-matrix manifest output, menu-route-matrix manifest output, and renderer-family matrix guardrail output, controller fixture, controller-stub coverage, controller-stub completion, runtime-stub eligibility, menu-entrypoint, navigation graph, parity manifest/summary, import, phase, package, static semantics, runtime registry/asset text/JSON/manifest, and text/markdown/JSON progress-report checks landed; runtime navigation/broader route/input harness pending | manifest -> smoke-transition metadata -> static semantics checks -> runtime registry/import checks -> menu-entrypoint/runtime-stub checks -> navigation graph/fixture/parity checks -> command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventories -> dependency/source/build/runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font guardrails -> guarded screenshot/glyph/layout/input/viewport/menu-route smoke -> renderer-family guardrail -> metadata/progress reports -> controller-stub completion -> load/navigation smoke -> broader screenshot/layout capture -> Gate G4 | Harness can prove document load, route navigation, renderer smoke, and session transition coverage. |
 | `DV-04-T02` Reduce mixed ownership and refactor risk | S0, Agent 3 | `Active`: mock bridge boundaries, guarded client runtime switch, full-route probe registry, 54 selected `controller_stub` routes, 3 guarded menu-entrypoint `runtime_stub` ownership progression, all 57 central routes matched to feature metadata, and route metadata shape guardrails accepted; live bridge simplification pending | ownership contract -> runtime-switch/controller contracts -> selected `controller_stub` routes accepted -> guarded `runtime_stub` routes accepted -> all static controller-stub progression -> metadata-sync/shape coverage -> bridge simplification -> parity validation | New UI path uses narrow data/command bridges instead of recreating legacy ownership tangles. |
 | `DV-07-T02` Visual/readability modernization support | Agent 2 | `Active`: readable base, utility, session, and accessibility theme hooks landed | theme tokens -> readable defaults -> high-visibility checks -> Gate G2/G4 | Theme and readability policy are shared by all migrated documents and validated against long strings. |
-| `DV-07-T04` Regression/parity hardening support | Agent 2 and Agent 5 | `Active`: full source-route manifest, route shape, asset import, loose staging, phase metadata, command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventory, legacy-removal guardrails, metadata-sync/shape guardrails, phase-consistency guardrails, dependency-decision validation, dependency-integration validation, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold validation, controller-contract/fixture/coverage/completion, runtime-stub eligibility, menu-entrypoint, navigation graph, parity checklist/summary, static semantics, runtime registry/asset JSON/manifest, and structured progress-report checks landed; broader parity evidence pending | renderer/layout checks -> migration metadata evidence -> static semantics/runtime registry/import/menu-entrypoint/navigation/parity/command/cvar/data-model/condition/event/a11y/document-id/entrypoint/dependency/legacy/metadata/progress reports -> controller-stub completion -> runtime-adapter/system-file/renderer-contract/OpenGL-scaffold guardrails -> migration regression checklist -> Gate G4 | Manual and automated parity evidence covers renderer, layout, accessibility, and content stress cases. |
-| `DV-06-T01` Dependency baseline audit | Agent 1 | `Active`: proposed RmlUi dependency decision/audit record, validation checker, upstream RmlUi `6.2` wrap URL/hash, license/provenance notes, wrap provide aliases, explicit CMake fallback options, enabled scratch compile/link proof, WORR-backed RmlUi file-interface proof, renderer-contract dependency boundary, and OpenGL-scoped renderer scaffold dependency wiring accepted; final notice/update/local-patch/supported-matrix policy pending | RmlUi dependency review -> proposed decision record -> proposed/not-implemented guardrail -> accepted source/version/license audit -> optional Meson build gate -> vendoring/build-link decision -> system/file bridge -> renderer contract -> OpenGL-scoped renderer scaffold -> Gate G1 | Dependency choice is documented and accepted before first-class build integration lands. |
+| `DV-07-T04` Regression/parity hardening support | Agent 2 and Agent 5 | `Active`: full source-route manifest, route shape, asset import, loose staging, phase metadata, command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventory, legacy-removal guardrails, metadata-sync/shape guardrails, phase-consistency guardrails, dependency-decision validation, dependency-integration validation, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font validation, guarded runtime screenshot/glyph/layout/input-back/viewport-matrix/menu-route evidence, renderer-family matrix guardrails, controller-contract/fixture/coverage/completion, runtime-stub eligibility, menu-entrypoint, navigation graph, parity checklist/summary, static semantics, runtime registry/asset JSON/manifest, and structured progress-report checks landed; broader parity evidence pending | renderer/layout checks -> migration metadata evidence -> static semantics/runtime registry/import/menu-entrypoint/navigation/parity/command/cvar/data-model/condition/event/a11y/document-id/entrypoint/dependency/legacy/metadata/progress reports -> controller-stub completion -> runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font guardrails -> guarded screenshot/glyph/layout/input/viewport/menu-route evidence -> renderer-family guardrail -> migration regression checklist -> Gate G4 | Manual and automated parity evidence covers renderer, layout, accessibility, and content stress cases. |
+| `DV-06-T01` Dependency baseline audit | Agent 1 | `Active`: proposed RmlUi dependency decision/audit record, validation checker, upstream RmlUi `6.2` wrap URL/hash, license/provenance notes, wrap provide aliases, explicit CMake fallback options, enabled scratch compile/link proof, WORR-backed RmlUi file-interface proof, renderer-contract dependency boundary, OpenGL-scoped renderer scaffold/primitive/context/input-capture/glyph-font/layout/input-back/viewport/menu-route dependency wiring, and renderer-family matrix dependency guardrails accepted; final notice/update/local-patch/supported-matrix policy and full font service pending | RmlUi dependency review -> proposed decision record -> proposed/not-implemented guardrail -> accepted source/version/license audit -> optional Meson build gate -> vendoring/build-link decision -> system/file bridge -> renderer contract -> OpenGL-scoped renderer scaffold -> OpenGL primitive bridge -> guarded sample context -> guarded input/capture -> guarded screenshot/glyph/layout/input bootstrap -> viewport matrix -> guarded menu route matrix -> renderer-family guardrail -> Gate G1 | Dependency choice is documented and accepted before first-class build integration lands. |
 | `FR-07-T01` Map vote, MyMap, and nextmap validation scenarios | Agent 5 | `Active`: MyMap, map selector, and match stats now have static `controller_stub` hooks/metadata; live validation pending | session contract -> RmlUi match flows -> static MyMap/map-selector/match-stats controller-stub metadata -> session transition smoke -> Gate G3/G4 | RmlUi session documents preserve map vote, MyMap queue, and nextmap transition behavior. |
 | `FR-07-T02` Tournament veto/replay flow hardening | Agent 5 | `Active`: tournament/veto/replay documents now have static `controller_stub` hooks/metadata; live validation pending | session contract -> tournament/replay documents -> static tournament/veto/replay controller-stub metadata -> match-state smoke -> Gate G3/G4 | RmlUi tournament veto and replay reset flows preserve current error handling and state reset behavior. |
 
@@ -1431,6 +1464,519 @@ OpenGL.
     against the compiled RmlUi Core path.
   - `git diff --check`: passed with only existing LF-to-CRLF normalization
     warnings.
+
+### Round 21 Evidence (2026-07-04)
+
+Round 21 is accepted as the first OpenGL-native RmlUi primitive bridge. It
+keeps the renderer-family boundary from Round 19 and the OpenGL-only export
+scope from Round 20, but replaces the OpenGL no-op scaffold with renderer-owned
+geometry, texture, draw, and scissor behavior. It does not create a RmlUi
+context, draw a menu route, claim parity, or redirect Vulkan/RTX-vkpt paths to
+OpenGL.
+
+- Implementation log:
+  `docs-dev/rmlui-round21-opengl-render-primitives-2026-07-04.md`.
+- `src/renderer/rmlui_bridge.cpp` now compiles RmlUi geometry into
+  `glVertexDesc2D_t`/`glIndex_t` caches, converts premultiplied RmlUi colors
+  back to straight alpha for WORR's current OpenGL blend state, and releases
+  compiled geometry through the RmlUi handle lifetime.
+- The OpenGL bridge renders compiled geometry through the existing `tess` 2D
+  path, applies RmlUi translations, resolves RmlUi texture handles to OpenGL
+  texture ids, and flushes the batch for immediate primitive output.
+- Generated RmlUi textures upload through OpenGL-owned textures with linear
+  filtering and clamp-to-edge when available. Loaded textures use `IMG_Find`
+  and remain owned by the renderer image manager rather than deleted by RmlUi.
+- RmlUi scissor enable/disable and rectangle updates now map to
+  `GL_SCISSOR_TEST`, `qglScissor`, and the renderer's `draw.scissor` tracking.
+- `R_RmlUiCanRender()` now returns `true` for RmlUi-enabled OpenGL builds
+  because the required render-interface primitives are implemented. The
+  compiled runtime still returns `CanOpenRoutes=false`, so normal menu entry
+  points keep legacy fallback until a context/draw-loop route proof exists.
+- Runtime-adapter validation now checks OpenGL geometry caching, tessellator
+  drawing, generated texture upload, loaded/generated texture lifetime,
+  scissor state, OpenGL-scoped dependency wiring, `CanRender=true`, and no
+  Vulkan-to-OpenGL redirection.
+- Coordinator validation accepted:
+  - `python tools\ui_smoke\check_rmlui_runtime_adapter.py --format json`:
+    passed with `errors=0` and the new OpenGL primitive bridge checks.
+  - `python tools\ui_smoke\check_rmlui_dependency_integration.py --format json`:
+    passed with dependency/build state `optional`.
+  - `python tools\ui_smoke\check_rmlui_dependency_decision.py --format json`:
+    passed with route-rendering, Vulkan, and legacy-removal guardrails intact.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_adapter.py tools/ui_smoke/test_check_rmlui_dependency_integration.py tools/ui_smoke/test_check_rmlui_dependency_decision.py`:
+    passed with the focused RmlUi dependency/runtime suite.
+  - `ninja -C builddir-win worr_engine_x86_64.dll worr_opengl_x86_64.dll`:
+    passed and linked the default-disabled engine and OpenGL renderer targets.
+  - `ninja -C .tmp\rmlui\round17-rmlui-enabled3 worr_engine_x86_64.dll worr_opengl_x86_64.dll`:
+    passed and linked the enabled scratch engine and OpenGL renderer targets
+    against the compiled RmlUi Core path.
+  - `git diff --check`: passed with only existing LF-to-CRLF normalization
+    warnings.
+
+### Round 22 Evidence (2026-07-04)
+
+Round 22 is accepted as the first guarded RmlUi context/draw path. It keeps the
+Round 21 OpenGL primitive bridge and opens only the sample
+`core.runtime_smoke` route through a new explicit command path. Normal menu
+entry points (`main`, `game`, `download_status`, and the rest of the route
+table) still fall back to the legacy UI until route-level input, font/text,
+controller, and parity evidence exists. Vulkan and RTX/vkpt remain native
+pending and are not redirected to OpenGL.
+
+- Implementation log:
+  `docs-dev/rmlui-round22-guarded-context-route-2026-07-04.md`.
+- `ui_rml_runtime_interface_t` now includes `CloseRoute`, `Update`, and
+  `Render` hooks so the dependency-free scaffold can own route lifecycle
+  without exposing RmlUi types outside the compiled adapter.
+- `src/client/ui_rml/ui_rml_runtime.cpp` creates a `worr_ui` RmlUi context,
+  loads one `ElementDocument`, shows it, resizes the context from renderer
+  dimensions, updates it before rendering, renders through the native OpenGL
+  bridge, and removes the context during shutdown.
+- `src/client/ui_rml/ui_rml.cpp` keeps a scaffold-side active-route guard,
+  allow-lists only `core.runtime_smoke`, exposes
+  `ui_rml_runtime_open [route_id]` and `ui_rml_runtime_close`, and keeps normal
+  menu routes on the legacy fallback path.
+- `src/client/ui_bridge.cpp` now lets an active RmlUi route draw before the
+  legacy cgame UI draw callback, suppresses legacy input/frame callbacks while
+  the sample route is active, and closes the sample route on Escape.
+- Runtime-adapter validation now checks context lifecycle hooks, adapter
+  `CreateContext`/`LoadDocument`/`Update`/`Render`/`RemoveContext` behavior,
+  sample-route guardrails, runtime open/close commands, UI bridge draw order,
+  and the existing no Vulkan-to-OpenGL redirection guard.
+- Coordinator validation accepted:
+  - `python tools\ui_smoke\check_rmlui_runtime_adapter.py --format json`:
+    passed with `errors=0` and the new context lifecycle checks.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_adapter.py`:
+    passed with the focused runtime-adapter suite.
+  - `ninja -C builddir-win worr_engine_x86_64.dll worr_opengl_x86_64.dll`:
+    passed and linked the default-disabled engine and OpenGL renderer targets.
+
+### Round 23 Evidence (2026-07-04)
+
+Round 23 is accepted as the guarded sample input/capture proof. It keeps the
+Round 22 `core.runtime_smoke` ownership guard and adds key, text, mouse button,
+mouse wheel, and pointer movement delivery into the RmlUi context. It also adds
+runtime status counters and `ui_rml_runtime_capture` as the repeatable manual
+path for collecting OpenGL visual evidence in the next slice. Normal menu
+routes still fall back to legacy UI; Vulkan/RTX-vkpt bridges, live
+controllers, automated screenshots, full font/input services, and parity remain
+pending.
+
+- Implementation log:
+  `docs-dev/rmlui-round23-input-capture-2026-07-04.md`.
+- `ui_rml_runtime_interface_t` now includes `KeyEvent`, `CharEvent`, and
+  `MouseEvent` hooks, preserving the dependency-free public scaffold boundary.
+- `src/client/ui_bridge.cpp` now routes guarded RmlUi key, char, draw, and
+  mouse callbacks before legacy cgame UI callbacks while preserving
+  console/chat mouse notification before pointer delivery.
+- `src/client/ui_rml/ui_rml_runtime.cpp` maps WORR keys/modifiers into
+  `Rml::Input`, dispatches key/text/mouse button/mouse wheel/pointer events to
+  the active RmlUi context, and keeps the OpenGL-only sample route guard.
+- `src/client/ui_rml/ui_rml.cpp` tracks guarded route frame/input counters,
+  closes the active sample route on Escape or mouse button 2, and exposes
+  `ui_rml_runtime_status` plus `ui_rml_runtime_capture`.
+- Runtime-adapter validation now checks input hook declarations, adapter
+  event-delivery calls, UI bridge input ordering, close/back tokens, and
+  status/capture command coverage.
+- Coordinator validation accepted:
+  - `python tools\ui_smoke\check_rmlui_runtime_adapter.py --format json`:
+    passed with `errors=0` and the new input/capture checks.
+  - `python tools\ui_smoke\check_rmlui_dependency_integration.py --format json`:
+    passed with `errors=0`.
+  - `python tools\ui_smoke\check_rmlui_dependency_decision.py --format json`:
+    passed with `errors=0`.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_adapter.py tools/ui_smoke/test_check_rmlui_dependency_integration.py tools/ui_smoke/test_check_rmlui_dependency_decision.py`:
+    passed with the focused smoke checker suite.
+  - `ninja -C builddir-win worr_engine_x86_64.dll worr_opengl_x86_64.dll`:
+    passed and linked the default-disabled engine and OpenGL renderer targets.
+  - `ninja -C .tmp\rmlui\round17-rmlui-enabled3 worr_engine_x86_64.dll worr_opengl_x86_64.dll`:
+    passed and linked the enabled scratch engine and OpenGL renderer targets.
+  - `git diff --check`: passed with only existing LF-to-CRLF normalization
+    warnings.
+
+### Round 24 Evidence (2026-07-04)
+
+Round 24 is accepted as the guarded runtime capture harness proof. It keeps
+the `core.runtime_smoke` ownership guard, uses the Round 23 capture/status
+commands, installs a temporary layout-only RmlUi font engine so RmlUi can
+initialize under the current `RMLUI_FONT_ENGINE=none` build, and records a
+fresh nonblank OpenGL TGA screenshot with matching runtime counters. The
+capture shows styled RmlUi geometry but no glyph rendering yet. Normal menu
+routes still fall back to legacy UI; Vulkan/RTX-vkpt bridges, real font/text
+services, live controllers, runtime navigation, and parity remain pending.
+
+- Implementation log:
+  `docs-dev/rmlui-round24-runtime-capture-harness-2026-07-04.md`.
+- `tools/ui_smoke/check_rmlui_runtime_capture.py` launches the engine when
+  requested, opens `core.runtime_smoke`, captures a TGA screenshot by default,
+  validates log markers/status counters/frame counters/screenshot dimensions,
+  checks the TGA payload is nonblank, copies evidence to `.tmp/rmlui/`, and
+  writes a JSON manifest.
+- `r_screenshot_dir` is now an empty-by-default, non-archived renderer cvar in
+  the OpenGL and RTX screenshot implementations so automation can keep
+  evidence in `.install/basew/screenshots` without changing normal screenshot
+  behavior.
+- `src/client/ui_rml/ui_rml_runtime.cpp` installs
+  `UI_Rml_NullFontEngineInterface` before `Rml::Initialise`. This is only a
+  bootstrap/layout adapter: it reports metrics and widths, but emits no glyph
+  mesh.
+- `assets/ui/rml/core/runtime_smoke.rml` now links
+  `runtime_smoke.rcss`, giving the guarded capture route visible background,
+  panel, border, and button geometry.
+- Accepted live evidence:
+  - `.install/basew/screenshots/rmlui_runtime_smoke_round24.tga`
+  - `.install/basew/logs/rmlui_runtime_smoke_round24.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round24.tga`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round24.log`
+  - `.tmp/rmlui/runtime-capture/manifest.json`
+- Final manifest facts included `ok=true`, `errors=[]`, `updates=24`,
+  `renders=24`, OpenGL guarded route status, screenshot format `tga`,
+  screenshot dimensions `960x720`, size `2073618`, and nonblank payload.
+- Coordinator validation accepted:
+  - `python tools\ui_smoke\check_rmlui_runtime_capture.py --run --engine-exe .tmp\rmlui\round17-rmlui-enabled3\worr_x86_64.exe --install-dir .install --write-manifest .tmp\rmlui\runtime-capture\manifest.json --format json --timeout 120`:
+    passed with `errors=0` and copied log/screenshot evidence.
+  - `python tools\ui_smoke\check_rmlui_runtime_capture.py --engine-exe .tmp\rmlui\round17-rmlui-enabled3\worr_x86_64.exe --install-dir .install --write-manifest .tmp\rmlui\runtime-capture\manifest.json --format json`:
+    passed against the freshly captured evidence.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_capture.py`:
+    passed with the focused capture-harness suite.
+  - `ninja -C builddir-win worr_x86_64.exe worr_engine_x86_64.dll worr_opengl_x86_64.dll worr_rtx_x86_64.dll`:
+    passed and linked the default-disabled engine, OpenGL, and RTX targets.
+  - `ninja -C .tmp\rmlui\round17-rmlui-enabled3 worr_x86_64.exe worr_engine_x86_64.dll worr_opengl_x86_64.dll`:
+    passed and linked the enabled scratch engine and OpenGL renderer targets.
+  - `python tools\refresh_install.py --build-dir builddir-win --install-dir .install --base-game basew --platform-id windows-x86_64`:
+    passed and validated the staged payload, including `104` RmlUi
+    package/loose assets.
+
+### Round 25 Evidence (2026-07-04)
+
+Round 25 is accepted as the guarded smoke glyph proof. It replaces the Round 24
+layout-only font bootstrap with a minimal `UI_Rml_SmokeFontEngineInterface`
+that emits RmlUi mesh quads for ASCII smoke-route text. The route still does
+not claim final font ownership, localization coverage, text shaping, or menu
+parity, but the OpenGL runtime capture now proves actual text geometry rather
+than only styled boxes.
+
+- Implementation log:
+  `docs-dev/rmlui-round25-smoke-font-glyph-path-2026-07-04.md`.
+- `src/client/ui_rml/ui_rml_runtime.cpp` now emits untextured colored 5x7
+  bitmap glyph quads through `Rml::TexturedMeshList`, returns matching smoke
+  string widths, and logs
+  `RmlUi smoke font engine generated glyph geometry` once glyph geometry is
+  generated.
+- `tools/ui_smoke/check_rmlui_runtime_adapter.py` now requires the
+  glyph-generating smoke font path, and
+  `tools/ui_smoke/check_rmlui_runtime_capture.py` now requires the glyph marker
+  in the flushed log/condump evidence.
+- `assets/ui/rml/core/runtime_smoke.rcss` now gives smoke text elements
+  explicit block layout and fixed widths so the captured route is readable
+  while the full font/layout service remains pending.
+- Accepted live evidence:
+  - `.install/basew/screenshots/rmlui_runtime_smoke_round25.tga`
+  - `.install/basew/logs/rmlui_runtime_smoke_round25.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round25.tga`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round25.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round25.preview.png`
+  - `.tmp/rmlui/runtime-capture/manifest.json`
+- Final manifest facts included `ok=true`, `errors=[]`, `font_geometry_marker_seen=true`,
+  `updates=24`, `renders=24`, OpenGL guarded route status, screenshot format
+  `tga`, screenshot dimensions `960x720`, size `2073618`, fresh screenshot,
+  and nonblank payload.
+- Coordinator validation accepted:
+  - `python tools\ui_smoke\check_rmlui_runtime_adapter.py --format json`:
+    passed with `runtime_font_engine_adapter_present=true`.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_adapter.py tools/ui_smoke/test_check_rmlui_runtime_capture.py`:
+    passed with the focused adapter/capture suites.
+  - `ninja -C builddir-win worr_x86_64.exe worr_engine_x86_64.dll worr_opengl_x86_64.dll worr_rtx_x86_64.dll`:
+    passed for the default-disabled build targets.
+  - `ninja -C .tmp\rmlui\round17-rmlui-enabled3 worr_engine_x86_64.dll worr_x86_64.exe worr_opengl_x86_64.dll`:
+    passed and relinked the enabled scratch engine.
+  - `python tools\refresh_install.py --build-dir builddir-win --install-dir .install --base-game basew --platform-id windows-x86_64`:
+    passed and validated the staged payload, including `104` RmlUi
+    package/loose assets.
+  - `python tools\ui_smoke\check_rmlui_runtime_capture.py --run --engine-exe .tmp\rmlui\round17-rmlui-enabled3\worr_x86_64.exe --install-dir .install --write-manifest .tmp\rmlui\runtime-capture\manifest.json --format json --timeout 120`:
+    passed with `font_geometry_marker_seen=true` and copied log/screenshot
+    evidence.
+
+### Round 26 Evidence (2026-07-04)
+
+Round 26 is accepted as the guarded capture layout proof. It keeps the Round
+25 smoke glyph path and adds TGA pixel/layout assertions to the runtime
+capture harness, so the accepted screenshot must contain the expected smoke
+route colors and region relationships rather than merely being nonblank.
+Normal menu routes still fall back to legacy UI; Vulkan/RTX-vkpt bridges,
+full font/text services, synthetic input/back automation, live controllers,
+runtime navigation, and parity remain pending.
+
+- Implementation log:
+  `docs-dev/rmlui-round26-capture-layout-assertions-2026-07-04.md`.
+- `tools/ui_smoke/check_rmlui_runtime_capture.py` now parses uncompressed
+  true-color TGA screenshots, counts smoke-route colors, records bounding
+  boxes, and validates that the contract panel, panel border, text, accent
+  text, and action buttons occupy the expected route structure.
+- The JSON manifest now includes `layout_checked`, `layout_ok`,
+  `layout_color_counts`, `layout_bounding_boxes`,
+  `layout_button_fill_below_panel_count`, and `layout_assertions`.
+- `tools/ui_smoke/test_check_rmlui_runtime_capture.py` now paints valid
+  synthetic layout evidence and verifies that a nonblank but wrong-layout TGA
+  fails the harness.
+- Accepted live evidence:
+  - `.install/basew/screenshots/rmlui_runtime_smoke_round26.tga`
+  - `.install/basew/logs/rmlui_runtime_smoke_round26.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round26.tga`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round26.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round26.preview.png`
+  - `.tmp/rmlui/runtime-capture/manifest.json`
+- Final manifest facts included `ok=true`, `errors=[]`,
+  `font_geometry_marker_seen=true`, `layout_checked=true`, `layout_ok=true`,
+  `updates=24`, `renders=24`, OpenGL guarded route status, screenshot format
+  `tga`, screenshot dimensions `960x720`, size `2073618`, fresh screenshot,
+  and nonblank payload.
+- Accepted layout facts included panel background bbox `[66, 221, 865, 424]`,
+  panel border bbox `[64, 219, 867, 426]`, button fill bbox
+  `[66, 247, 433, 498]`, body text bbox `[64, 130, 775, 390]`,
+  `layout_button_fill_below_panel_count=15640`, and all `12` layout
+  assertions set to `true`.
+- Coordinator validation accepted:
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_capture.py`:
+    passed with the focused capture-layout suite.
+  - `python tools\ui_smoke\check_rmlui_runtime_capture.py --run --engine-exe .tmp\rmlui\round17-rmlui-enabled3\worr_x86_64.exe --install-dir .install --write-manifest .tmp\rmlui\runtime-capture\manifest.json --format json --timeout 120`:
+    passed with `layout_ok=true` and copied log/screenshot evidence.
+
+### Round 27 Evidence (2026-07-04)
+
+Round 27 is accepted as the guarded synthetic input/back-close proof. It keeps
+the Round 26 glyph and layout checks, then runs a developer-only synthetic
+input command after the screenshot has been written. The accepted evidence must
+show pointer, text, mouse-wheel, mouse-button, close-request, close-counter,
+and inactive final status facts for `core.runtime_smoke`. Normal menu routes
+still fall back to legacy UI; Vulkan/RTX-vkpt bridges, full font/text
+services, broad input/navigation parity, live controllers, runtime navigation,
+and parity remain pending.
+
+- Implementation log:
+  `docs-dev/rmlui-round27-synthetic-input-capture-2026-07-04.md`.
+- `src/client/ui_rml/ui_rml.cpp` now exposes
+  `ui_rml_runtime_synthetic_input`, route open/close/request/synthetic
+  counters, and `RmlUi runtime route counters` status output.
+- `tools/ui_smoke/check_rmlui_runtime_capture.py` now inserts
+  `ui_rml_runtime_synthetic_input` into the live command sequence and requires
+  `synthetic_input_marker_seen`, `inactive_status_seen`, positive input
+  counters, and positive route close counters.
+- `tools/ui_smoke/check_rmlui_runtime_adapter.py` now treats the synthetic
+  input command and route counter status line as part of the guarded adapter
+  boundary.
+- Accepted live evidence:
+  - `.install/basew/screenshots/rmlui_runtime_smoke_round27.tga`
+  - `.install/basew/logs/rmlui_runtime_smoke_round27.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round27.tga`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round27.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round27.preview.png`
+  - `.tmp/rmlui/runtime-capture/manifest.json`
+- Final manifest facts included `ok=true`, `errors=[]`, `ran_engine=true`,
+  `exit_code=0`, `font_geometry_marker_seen=true`, `layout_checked=true`,
+  `layout_ok=true`, `synthetic_input_marker_seen=true`,
+  `inactive_status_seen=true`, `updates=24`, `renders=24`,
+  `input_keys=2`, `input_chars=1`, `input_mouse_moves=1`,
+  `input_mouse_buttons=1`, `input_mouse_wheels=1`, `route_opens=1`,
+  `route_closes=1`, `route_close_requests=1`, `route_synthetic_inputs=1`,
+  screenshot format `tga`, screenshot dimensions `960x720`, size `2073618`,
+  fresh screenshot, and nonblank payload.
+- The Round 27 visual facts retained the Round 26 layout contract: panel
+  background bbox `[66, 221, 865, 424]`, panel border bbox
+  `[64, 219, 867, 426]`, button fill bbox `[66, 247, 433, 498]`, body text
+  bbox `[64, 130, 775, 390]`, `layout_button_fill_below_panel_count=15640`,
+  and all `12` layout assertions set to `true`.
+- Coordinator validation accepted:
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_capture.py`:
+    passed with the focused capture-input suite.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_adapter.py`:
+    passed with the static adapter-boundary fixture.
+  - `python tools\ui_smoke\check_rmlui_runtime_adapter.py --format json`:
+    passed with `runtime_status_capture_commands_present=true`.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_adapter.py tools/ui_smoke/test_check_rmlui_runtime_capture.py tools/ui_smoke/test_check_rmlui_dependency_integration.py tools/ui_smoke/test_check_rmlui_dependency_decision.py tools/ui_smoke/test_check_rmlui_cvar_inventory.py tools/ui_smoke/test_check_rmlui_runtime_assets.py`:
+    passed with `52` focused RmlUi tests.
+  - `python tools\ui_smoke\check_rmlui_runtime_capture.py --run --engine-exe .tmp\rmlui\round17-rmlui-enabled3\worr_x86_64.exe --install-dir .install --write-manifest .tmp\rmlui\runtime-capture\manifest.json --format json --timeout 120`:
+    passed with `synthetic_input_marker_seen=true`,
+    `inactive_status_seen=true`, and copied log/screenshot evidence.
+
+### Round 28 Evidence (2026-07-04)
+
+Round 28 is accepted as the first guarded viewport-matrix proof for the
+OpenGL `core.runtime_smoke` route. It keeps the Round 27 glyph, layout,
+synthetic input, back-close, route teardown, and inactive-status assertions,
+then runs them across two explicit window geometries. Normal menu routes still
+fall back to legacy UI; responsive widescreen parity, Vulkan/RTX-vkpt
+bridges, full font/text services, live controllers, runtime navigation, and
+parity remain pending.
+
+- Implementation log:
+  `docs-dev/rmlui-round28-viewport-matrix-2026-07-04.md`.
+- `tools/ui_smoke/check_rmlui_runtime_capture.py` now accepts
+  `--geometry WIDTHxHEIGHT`, validates exact screenshot dimensions for
+  geometry-driven captures, and exposes `--matrix` for the default viewport
+  matrix.
+- The accepted matrix appends viewport names to the evidence ID stem and
+  writes aggregate per-viewport results to
+  `.tmp/rmlui/runtime-capture/manifest.json`.
+- `tools/ui_smoke/test_check_rmlui_runtime_capture.py` now covers matrix
+  dry-runs, successful two-viewport evidence, exact dimension mismatch
+  failure, and the existing glyph/layout/input failure modes.
+- Accepted live evidence:
+  - `.install/basew/screenshots/rmlui_runtime_smoke_round28_default_960x720.tga`
+  - `.install/basew/logs/rmlui_runtime_smoke_round28_default_960x720.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round28_default_960x720.tga`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round28_default_960x720.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round28_default_960x720.preview.png`
+  - `.install/basew/screenshots/rmlui_runtime_smoke_round28_large_1280x960.tga`
+  - `.install/basew/logs/rmlui_runtime_smoke_round28_large_1280x960.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round28_large_1280x960.tga`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round28_large_1280x960.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round28_large_1280x960.preview.png`
+  - `.tmp/rmlui/runtime-capture/manifest.json`
+- Final aggregate manifest facts included `ok=true`, `viewports=2`,
+  `passed=2`, `failed=0`, and `errors=[]`.
+- `default_960x720` facts included `ran_engine=true`, `exit_code=0`,
+  `screenshot_fresh=true`, `screenshot_dimensions=[960, 720]`,
+  `expected_dimensions=[960, 720]`, `layout_ok=true`,
+  `font_geometry_marker_seen=true`, `synthetic_input_marker_seen=true`,
+  `inactive_status_seen=true`, `route_closes=1`, and
+  `route_close_requests=1`.
+- `large_1280x960` facts included `ran_engine=true`, `exit_code=0`,
+  `screenshot_fresh=true`, `screenshot_dimensions=[1280, 960]`,
+  `expected_dimensions=[1280, 960]`, `layout_ok=true`,
+  `font_geometry_marker_seen=true`, `synthetic_input_marker_seen=true`,
+  `inactive_status_seen=true`, `route_closes=1`, and
+  `route_close_requests=1`.
+- Accepted layout facts retained all `12` layout assertions in both viewports.
+  The larger viewport recorded panel background bbox `[132, 442, 1279, 849]`,
+  panel border bbox `[128, 438, 1279, 853]`, button fill bbox
+  `[132, 493, 867, 959]`, body text bbox `[128, 259, 1279, 780]`, and
+  `layout_button_fill_below_panel_count=35940`.
+- Coordinator validation accepted:
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_capture.py`:
+    passed with `10` focused capture tests.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_adapter.py tools/ui_smoke/test_check_rmlui_runtime_capture.py tools/ui_smoke/test_check_rmlui_dependency_integration.py tools/ui_smoke/test_check_rmlui_dependency_decision.py tools/ui_smoke/test_check_rmlui_cvar_inventory.py tools/ui_smoke/test_check_rmlui_runtime_assets.py`:
+    passed with `55` focused RmlUi tests.
+  - `python tools\ui_smoke\check_rmlui_runtime_capture.py --run --matrix --engine-exe .tmp\rmlui\round17-rmlui-enabled3\worr_x86_64.exe --install-dir .install --write-manifest .tmp\rmlui\runtime-capture\manifest.json --format json --timeout 120`:
+    passed with `viewports=2`, `passed=2`, and copied per-viewport log/TGA
+    evidence.
+
+### Round 29 Evidence (2026-07-04)
+
+Round 29 is accepted as the first guarded normal-menu-entrypoint OpenGL route
+proof. It keeps the `ui_rml_enable` opt-in gate, widens the guarded runtime
+allow-list to the three existing `runtime_stub` menu routes (`main`, `game`,
+and `download_status`), and adds `ui_rml_runtime_capture_menu` so the capture
+harness opens those routes through `UI_OpenMenu`. This does not claim final
+theme/layout parity, route navigation, live controller behavior, Vulkan/RTX-vkpt
+renderer support, final font/text services, or legacy JSON removal.
+
+- Implementation log:
+  `docs-dev/rmlui-round29-menu-route-capture-2026-07-04.md`.
+- `src/client/ui_rml/ui_rml.cpp` now keeps a guarded menu route table mapping
+  `main`, `game`, and `download_status` to `UIMENU_MAIN`, `UIMENU_GAME`, and
+  `UIMENU_DOWNLOAD`, and `UI_Rml_RuntimeRouteIsAllowed` accepts those route IDs
+  alongside `core.runtime_smoke`.
+- `src/client/ui_rml/ui_rml_runtime.cpp` mirrors the same route allow-list in
+  the compiled RmlUi adapter while preserving the OpenGL-only guarded context
+  path.
+- `tools/ui_smoke/check_rmlui_runtime_capture.py` now accepts
+  `--route-matrix`, captures all three menu routes at `960x720`, and validates
+  route-specific active OpenGL status, exact dimensions, glyph text evidence,
+  synthetic input, close counters, and inactive final status.
+- Menu-route captures set `layout_required=false`; the pixel/color layout
+  contract remains scoped to `core.runtime_smoke`.
+- Accepted live evidence:
+  - `.install/basew/screenshots/rmlui_runtime_smoke_round29_main.tga`
+  - `.install/basew/logs/rmlui_runtime_smoke_round29_main.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round29_main.tga`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round29_main.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round29_main.preview.png`
+  - `.install/basew/screenshots/rmlui_runtime_smoke_round29_game.tga`
+  - `.install/basew/logs/rmlui_runtime_smoke_round29_game.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round29_game.tga`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round29_game.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round29_game.preview.png`
+  - `.install/basew/screenshots/rmlui_runtime_smoke_round29_download_status.tga`
+  - `.install/basew/logs/rmlui_runtime_smoke_round29_download_status.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round29_download_status.tga`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round29_download_status.log`
+  - `.tmp/rmlui/runtime-capture/rmlui_runtime_smoke_round29_download_status.preview.png`
+  - `.tmp/rmlui/runtime-capture/manifest.json`
+- Final aggregate manifest facts included `ok=true`, `routes=3`, `passed=3`,
+  `failed=0`, and `errors=0`.
+- Each route recorded `ran_engine=true`, `exit_code=0`,
+  `screenshot_fresh=true`, `screenshot_dimensions=[960, 720]`,
+  `expected_dimensions=[960, 720]`, `route_document_exists=true`,
+  `guarded_opengl_status_seen=true`, `font_geometry_marker_seen=true`,
+  `synthetic_input_marker_seen=true`, `inactive_status_seen=true`,
+  `route_opens=1`, `route_closes=1`, `route_close_requests=1`,
+  `route_synthetic_inputs=1`, and `layout_required=false`.
+- Coordinator validation accepted:
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_capture.py`:
+    passed with `12` focused capture tests.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_adapter.py`:
+    passed with `8` focused adapter tests.
+  - `python -m pytest tools/ui_smoke/test_check_rmlui_runtime_adapter.py tools/ui_smoke/test_check_rmlui_runtime_capture.py tools/ui_smoke/test_check_rmlui_dependency_integration.py tools/ui_smoke/test_check_rmlui_dependency_decision.py tools/ui_smoke/test_check_rmlui_cvar_inventory.py tools/ui_smoke/test_check_rmlui_runtime_assets.py tools/ui_smoke/test_check_rmlui_menu_entrypoints.py tools/ui_smoke/test_check_rmlui_runtime_stub_eligibility.py`:
+    passed with `69` focused RmlUi tests.
+  - `python tools\ui_smoke\check_rmlui_runtime_adapter.py --format json`:
+    passed with `route_open_guard_present=true` and `errors=0`.
+  - `python tools\ui_smoke\check_rmlui_menu_entrypoints.py`:
+    passed with `3` unique mapped routes.
+  - `python tools\ui_smoke\check_rmlui_runtime_stub_eligibility.py`:
+    passed with `3` `runtime_stub` routes checked.
+  - `ninja -C builddir-win worr_x86_64.exe worr_engine_x86_64.dll worr_opengl_x86_64.dll worr_rtx_x86_64.dll`:
+    passed.
+  - `ninja -C .tmp\rmlui\round17-rmlui-enabled3 worr_engine_x86_64.dll worr_x86_64.exe worr_opengl_x86_64.dll`:
+    passed.
+  - `python tools\refresh_install.py --build-dir builddir-win --install-dir .install --base-game basew --platform-id windows-x86_64`:
+    passed and refreshed `.install/`.
+  - `python tools\ui_smoke\check_rmlui_runtime_capture.py --run --route-matrix --engine-exe .tmp\rmlui\round17-rmlui-enabled3\worr_x86_64.exe --install-dir .install --write-manifest .tmp\rmlui\runtime-capture\manifest.json --format json --timeout 120`:
+    passed with `routes=3`, `passed=3`, and copied per-route log/TGA
+    evidence.
+
+### Round 30 Evidence (2026-07-04)
+
+Round 30 is accepted as renderer-family matrix guardrail evidence for the
+guarded RmlUi runtime path. It does not add native Vulkan or RTX/vkpt drawing;
+instead, it makes the current matrix explicit: OpenGL is the single guarded
+native lane, Vulkan and RTX/vkpt remain blocked until native bridges exist,
+and any Vulkan/RTX-to-OpenGL shortcut wiring fails validation.
+
+- Implementation log:
+  `docs-dev/rmlui-round30-renderer-matrix-guardrails-2026-07-04.md`.
+- `tools/ui_smoke/check_rmlui_renderer_matrix.py` validates:
+  - renderer-family declarations and renderer export hooks in
+    `inc/renderer/renderer.h`;
+  - OpenGL native hook exports from `src/renderer/renderer_api.c`;
+  - non-OpenGL external renderer exports returning `family=NONE`,
+    `CanRender=false`, and `NativeRenderInterface=NULL`;
+  - OpenGL-scoped Meson runtime dependency wiring;
+  - Vulkan/RTX runtime dependencies remaining disabled until native bridges
+    exist;
+  - client renderer family mappings staying distinct;
+  - client renderer bridge cleanup when no native RmlUi family is registered;
+  - runtime capture automation remaining explicitly `r_renderer=opengl`.
+- `tools/ui_smoke/test_check_rmlui_renderer_matrix.py` covers the accepted
+  matrix plus failures for OpenGL `CanRender=false`, Vulkan mapped to OpenGL,
+  premature Vulkan runtime dependency enablement, and a non-OpenGL capture
+  harness.
+- Accepted checker facts include `native_guarded_lanes=1`, `blocked_lanes=2`,
+  `errors=0`, `opengl.expected_status=native_guarded`,
+  `vulkan.expected_status=blocked_until_native`,
+  `rtx_vkpt.expected_status=blocked_until_native`, and
+  `no_vulkan_or_rtx_to_opengl_redirect=true`.
+- Coordinator validation accepted:
+  - `python -m pytest tools\ui_smoke\test_check_rmlui_renderer_matrix.py`:
+    passed with `6` focused renderer-matrix tests.
+  - `python -m pytest tools\ui_smoke\test_check_rmlui_runtime_adapter.py tools\ui_smoke\test_check_rmlui_renderer_matrix.py tools\ui_smoke\test_check_rmlui_runtime_capture.py tools\ui_smoke\test_check_rmlui_dependency_integration.py tools\ui_smoke\test_check_rmlui_dependency_decision.py tools\ui_smoke\test_check_rmlui_cvar_inventory.py tools\ui_smoke\test_check_rmlui_runtime_assets.py tools\ui_smoke\test_check_rmlui_menu_entrypoints.py tools\ui_smoke\test_check_rmlui_runtime_stub_eligibility.py`:
+    passed with `75` focused RmlUi tests.
+  - `python tools\ui_smoke\check_rmlui_renderer_matrix.py --format json`:
+    passed with the accepted lane counts and `errors=0`.
+  - `python tools\ui_smoke\check_rmlui_dependency_decision.py --format json`:
+    passed with `ok=true` and `errors=[]`.
+  - `python tools\ui_smoke\check_rmlui_runtime_adapter.py --format json`:
+    passed with `ok=true` and `errors=[]`.
 
 ## Purpose
 
