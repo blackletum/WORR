@@ -4,17 +4,15 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/shell.rcss" />
     <link type="text/rcss" href="../common/theme/settings.rcss" />
-    <link type="text/template" href="../common/components/menu_frame.rml" />
-    <link type="text/template" href="../common/components/cvar_controls.rml" />
   </head>
   <body id="shell-downloads" data-route-id="downloads" data-route-group="shell" data-route-version="1" data-document-status="scaffolded-round2">
     <div class="screen shell-screen settings-screen" id="downloads-screen">
-      <header class="menu-header">
+      <div class="menu-header">
         <h1>Download Options</h1>
-      </header>
+      </div>
 
-      <main class="settings-form" id="downloads-settings-form" data-component="common.components.cvar_controls">
-        <section class="settings-section" id="downloads-permission-section">
+      <div class="settings-form" id="downloads-settings-form" data-component="common.components.cvar_controls">
+        <div class="settings-section" id="downloads-permission-section">
           <h2>Allowed Content</h2>
           <div class="setting-row" data-control="toggle" data-cvar="allow_download">
             <label for="downloads-allow">Allow Downloading</label>
@@ -44,21 +42,21 @@
             <label for="downloads-pics">Pics</label>
             <input id="downloads-pics" type="checkbox" data-cvar="allow_download_pics" />
           </div>
-        </section>
+        </div>
 
-        <section class="settings-section" id="downloads-http-section">
+        <div class="settings-section" id="downloads-http-section">
           <h2>Transport</h2>
           <div class="setting-row" data-control="toggle" data-cvar="cl_http_downloads">
             <label for="downloads-http">HTTP Downloads</label>
             <input id="downloads-http" type="checkbox" data-cvar="cl_http_downloads" />
           </div>
-        </section>
-      </main>
+        </div>
+      </div>
 
-      <footer class="menu-footer" id="downloads-menu-footer">
+      <div class="menu-footer" id="downloads-menu-footer">
         <button id="downloads-back" type="button" data-command="ui.back">Back</button>
         <button id="downloads-close" type="button" data-command="ui.close">Close</button>
-      </footer>
+      </div>
     </div>
   </body>
 </rml>

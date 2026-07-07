@@ -6,13 +6,402 @@
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-4);
+	min-height: 0px;
+}
+
+#startserver-settings-form,
+#gameflags-settings-form
+{
+	width: 604px;
+	height: 455px;
+	overflow: auto;
+}
+
+#gameflags-settings-form
+{
+	height: 500px;
+}
+
+#startserver-settings-form .setting-row,
+#gameflags-settings-form .setting-row
+{
+	width: 584px;
+}
+
+#startserver-settings-form .settings-section,
+#gameflags-settings-form .settings-section
+{
+	width: 592px;
+}
+
+#startserver-settings-form input,
+#startserver-settings-form select
+{
+	width: 288px;
+}
+
+#startserver-settings-form .setting-row[data-control="field"] input[type="number"]
+{
+	width: 150px;
+}
+
+#gameflags-settings-form input
+{
+	width: 36px;
+}
+
+#startserver-actions button
+{
+	width: 584px;
+	margin-bottom: 6px;
 }
 
 .selector-section
 {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-2);
-	max-width: 560px;
+	display: inline-block;
+	vertical-align: top;
+	width: 272px;
+	max-width: 272px;
+	min-height: 132px;
+	margin-right: 8px;
+	margin-bottom: 10px;
+	padding: 10px 12px;
+	background-color: #171511;
+	border-width: 1px;
+	border-color: #332d23;
+	border-left-width: 3px;
+	border-left-color: #332d23;
+	border-radius: 5px;
+	transition: background-color border-color 0.12s cubic-out;
+}
+
+.selector-section:hover
+{
+	background-color: #211e19;
+	border-left-color: #b99b5b;
+}
+
+.selector-section label
+{
+	display: block;
+	width: 248px;
+	margin-bottom: 5px;
+	color: #c9beb0;
+	font-weight: bold;
+}
+
+.selector-section input,
+.selector-section select,
+.selector-section button
+{
+	width: 248px;
+	margin-bottom: 8px;
+}
+
+#singleplayer-menu-stack
+{
+	position: relative;
+	flex: 0 0 auto;
+	width: 604px;
+	min-width: 604px;
+	max-width: 604px;
+	height: 228px;
+	padding-right: 8px;
+	overflow: hidden;
+}
+
+#singleplayer-episode-section,
+#singleplayer-level-section,
+#singleplayer-save-load-actions
+{
+	position: absolute;
+}
+
+#singleplayer-episode-section
+{
+	top: 0px;
+	left: 0px;
+}
+
+#singleplayer-level-section
+{
+	top: 0px;
+	left: 304px;
+}
+
+#singleplayer-save-load-actions
+{
+	top: 160px;
+	left: 0px;
+	position: absolute;
+	width: 604px;
+	min-width: 604px;
+	max-width: 604px;
+	height: 54px;
+	overflow: hidden;
+}
+
+#singleplayer-save-load-actions button
+{
+	position: absolute;
+	width: 272px;
+	min-width: 272px;
+	height: 34px;
+	min-height: 34px;
+	padding: 6px 12px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+	background-color: #211e19;
+	border-left-width: 4px;
+	border-left-color: #4b4235;
+	border-radius: 5px;
+	text-align: left;
+}
+
+#singleplayer-load
+{
+	top: 0px;
+	left: 0px;
+}
+
+#singleplayer-save
+{
+	top: 0px;
+	left: 304px;
+}
+
+#skill-select-actions
+{
+	flex: 0 0 auto;
+	width: 360px;
+	max-width: 360px;
+}
+
+#skill-select-actions button
+{
+	flex: 0 0 auto;
+	width: 330px;
+	min-width: 330px;
+	min-height: 42px;
+	margin-bottom: 8px;
+}
+
+.save-slot-list
+{
+	position: relative;
+	flex: 0 0 auto;
+	width: 604px;
+	height: 474px;
+	min-height: 0px;
+	max-width: 604px;
+	padding-right: 8px;
+	overflow: auto;
+}
+
+#loadgame-slot-list
+{
+	height: 414px;
+}
+
+#savegame-slot-list
+{
+	height: 336px;
+}
+
+.save-slot
+{
+	position: absolute;
+	width: 272px;
+	min-width: 272px;
+	height: 24px;
+	min-height: 24px;
+	padding: 5px 12px;
+	background-color: #211e19;
+	border-left-width: 4px;
+	border-left-color: #4b4235;
+	border-radius: 5px;
+	font-size: 15px;
+	line-height: 1.1;
+	text-align: left;
+	margin-right: 8px;
+	margin-bottom: 6px;
+}
+
+.save-slot-autosave
+{
+	width: 568px;
+	min-width: 568px;
+	height: 28px;
+	min-height: 28px;
+	color: #ffd967;
+}
+
+.menu-separator
+{
+	position: absolute;
+	height: 8px;
+	width: 604px;
+}
+
+#loadgame-save0
+{
+	top: 0px;
+	left: 0px;
+}
+
+#loadgame-autosave-separator
+{
+	top: 48px;
+	left: 0px;
+}
+
+#loadgame-save1,
+#loadgame-save3,
+#loadgame-save5,
+#loadgame-save7,
+#loadgame-save9,
+#loadgame-save11,
+#loadgame-save13,
+#loadgame-save15,
+#savegame-save1,
+#savegame-save3,
+#savegame-save5,
+#savegame-save7,
+#savegame-save9,
+#savegame-save11,
+#savegame-save13,
+#savegame-save15
+{
+	left: 0px;
+}
+
+#loadgame-save2,
+#loadgame-save4,
+#loadgame-save6,
+#loadgame-save8,
+#loadgame-save10,
+#loadgame-save12,
+#loadgame-save14,
+#savegame-save2,
+#savegame-save4,
+#savegame-save6,
+#savegame-save8,
+#savegame-save10,
+#savegame-save12,
+#savegame-save14
+{
+	left: 304px;
+}
+
+#loadgame-save1,
+#loadgame-save2
+{
+	top: 62px;
+}
+
+#loadgame-save3,
+#loadgame-save4,
+#savegame-save1,
+#savegame-save2
+{
+	top: 104px;
+}
+
+#loadgame-save5,
+#loadgame-save6,
+#savegame-save3,
+#savegame-save4
+{
+	top: 146px;
+}
+
+#loadgame-save7,
+#loadgame-save8,
+#savegame-save5,
+#savegame-save6
+{
+	top: 188px;
+}
+
+#loadgame-save9,
+#loadgame-save10,
+#savegame-save7,
+#savegame-save8
+{
+	top: 230px;
+}
+
+#loadgame-save11,
+#loadgame-save12,
+#savegame-save9,
+#savegame-save10
+{
+	top: 272px;
+}
+
+#loadgame-save13,
+#loadgame-save14,
+#savegame-save11,
+#savegame-save12
+{
+	top: 314px;
+}
+
+#loadgame-save15,
+#savegame-save13,
+#savegame-save14
+{
+	top: 356px;
+}
+
+#savegame-save15
+{
+	top: 398px;
+}
+
+#savegame-save1,
+#savegame-save2
+{
+	top: 0px;
+}
+
+#savegame-save3,
+#savegame-save4
+{
+	top: 42px;
+}
+
+#savegame-save5,
+#savegame-save6
+{
+	top: 84px;
+}
+
+#savegame-save7,
+#savegame-save8
+{
+	top: 126px;
+}
+
+#savegame-save9,
+#savegame-save10
+{
+	top: 168px;
+}
+
+#savegame-save11,
+#savegame-save12
+{
+	top: 210px;
+}
+
+#savegame-save13,
+#savegame-save14
+{
+	top: 252px;
+}
+
+#savegame-save15
+{
+	top: 294px;
 }

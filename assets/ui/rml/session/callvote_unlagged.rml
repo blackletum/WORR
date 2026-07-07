@@ -4,13 +4,12 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
   <body id="session-callvote-unlagged" data-route-id="callvote_unlagged" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame">
     <div class="screen compact-screen session-screen" id="callvote-unlagged-screen">
       <header class="page-header">
         <h1>Callvote: Unlagged</h1>
-        <p id="callvote-unlagged-current" class="status-message" data-bind="cvars.ui_callvote_unlagged_current" data-visible-if="ui_callvote_unlagged_current">Current unlagged state binds here.</p>
+        <p id="callvote-unlagged-current" class="status-message" data-bind="cvars.ui_callvote_unlagged_current" data-visible-if="ui_callvote_unlagged_current">Current unlagged state</p>
       </header>
 
       <nav class="menu-list" id="callvote-unlagged-menu" data-model="session.callvote.unlagged" data-owner-boundary="sgame-published-cvars">

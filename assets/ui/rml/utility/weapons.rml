@@ -2,16 +2,15 @@
   <head>
     <title>WORR Weapon Bindings</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/controls.rml" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/utility.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="utility-weapons" data-route-id="weapons" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5">
     <div class="screen" id="weapons-screen">
       <header class="page-header">
         <h1>Weapon Bindings</h1>
         <p id="weapons-summary">
-          Weapon use binds keep the current item command strings while the
-          shared key-capture controller gains conflict and wait-state parity.
+          Assign quick-select keys for each weapon and grenade slot.
         </p>
       </header>
 

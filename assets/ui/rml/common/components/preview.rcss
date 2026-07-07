@@ -32,12 +32,14 @@
 
 .worr-preview-actions {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
   margin-top: 10px;
 }
 
 .worr-preview-action {
   padding: 6px 10px;
+  margin-right: 8px;
+  margin-bottom: 8px;
   color: #f8f2e6;
   background-color: #28323d;
   border-width: 1px;

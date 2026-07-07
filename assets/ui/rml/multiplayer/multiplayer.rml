@@ -2,15 +2,15 @@
   <head>
     <title>WORR Multiplayer</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/session.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="multiplayer-root" data-route-id="multiplayer" data-route-version="1">
     <div class="screen" id="multiplayer-screen">
       <header class="page-header">
         <h1>Multiplayer</h1>
         <p id="multiplayer-summary">
-          Entry hub for server browsing, joining, hosting, player setup, and
-          session-only multiplayer routes.
+          Find a server, connect directly, host a match, or adjust your player.
         </p>
       </header>
 
@@ -25,7 +25,7 @@
 
       <section class="status-panel" id="multiplayer-session-status" data-model="session_summary">
         <h2>Session Status</h2>
-        <p data-bind="session_summary.message">No active multiplayer session data is bound yet.</p>
+        <p data-bind="session_summary.message">No active multiplayer session.</p>
       </section>
     </div>
   </body>

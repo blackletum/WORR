@@ -3,9 +3,6 @@
     <title>WORR Single Player</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/singleplayer.rcss" />
-    <link type="text/template" href="../common/components/menu_frame.rml" />
-    <link type="text/template" href="../common/components/selector_list.rml" />
-    <link type="text/template" href="../common/components/save_slot.rml" />
   </head>
   <body id="singleplayer-main" data-route-id="singleplayer" data-route-group="singleplayer" data-route-version="1" data-document-status="first-round-scaffold">
     <div class="screen singleplayer-screen" id="singleplayer-screen">

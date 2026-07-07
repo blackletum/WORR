@@ -2,16 +2,15 @@
   <head>
     <title>WORR Player Setup</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/preview.rml" />
-    <link type="text/template" href="../common/components/controls.rml" />
+    <link type="text/rcss" href="../common/theme/utility.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="utility-players" data-route-id="players" data-route-version="1">
     <div class="screen" id="players-screen">
       <header class="page-header">
         <h1>Player Setup</h1>
         <p id="players-summary">
-          Configure player identity, model, skin, handedness, and preview state
-          through the future shared player-preview contract.
+          Configure your name, model, skin, and weapon hand.
         </p>
       </header>
 
@@ -22,12 +21,12 @@
 
           <label for="players-model">Model</label>
           <select id="players-model" data-bind="player_config.model" data-options="player_config.models">
-            <option value="">Model list binds here</option>
+            <option value="">Choose Model</option>
           </select>
 
           <label for="players-skin">Skin</label>
           <select id="players-skin" data-bind="player_config.skin" data-options="player_config.skins">
-            <option value="">Skin list binds here</option>
+            <option value="">Choose Skin</option>
           </select>
 
           <label for="players-hand">Weapon Hand</label>
@@ -41,7 +40,7 @@
         <div class="preview-panel" id="players-preview" data-component="player_preview" data-model="player_config.preview">
           <h2>Preview</h2>
           <div id="players-preview-surface" class="preview-surface">
-            Player preview surface binds here.
+            Player preview
           </div>
         </div>
       </section>

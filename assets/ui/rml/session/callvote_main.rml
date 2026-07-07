@@ -2,15 +2,15 @@
   <head>
     <title>WORR Call Vote</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/session.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="session-callvote-main" data-route-id="callvote_main" data-route-group="session" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5" data-session-owner="sgame">
     <div class="screen compact-screen" id="callvote-main-screen">
       <header class="page-header">
         <h1>Call a Vote</h1>
         <p id="callvote-main-summary">
-          Vote availability is still published by sgame through ui_callvote_show
-          cvars; each action keeps the current worr_callvote command.
+          Choose the match setting you want players to vote on.
         </p>
       </header>
 

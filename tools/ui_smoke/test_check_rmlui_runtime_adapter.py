@@ -29,6 +29,12 @@ client_src = [
 renderer_src = [
   'src/renderer/rmlui_bridge.cpp',
 ]
+renderer_vk_rtx_src = [
+  'src/renderer/rmlui_bridge.cpp',
+]
+renderer_vk_src = [
+  'src/renderer/rmlui_bridge.cpp',
+]
 renderer_cpp_args = [
   '-DHAVE_CONFIG_H',
   '-DQ2PROTO_CONFIG_H="common/q2proto_config.h"',
@@ -40,6 +46,10 @@ renderer_gl_deps = renderer_deps
 if rmlui_runtime
   renderer_gl_deps += rmlui_dep
   renderer_gl_cpp_args += '-DUI_RML_HAS_RUNTIME=1'
+  renderer_vk_rtx_deps += rmlui_dep
+  renderer_vk_rtx_cpp_args += '-DUI_RML_HAS_RUNTIME=1'
+  renderer_vk_deps += rmlui_dep
+  renderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'
 endif
 rmlui_cmake_options = {
   'RMLUI_FONT_ENGINE': 'none',
@@ -268,6 +278,11 @@ static const char *ui_rml_runtime_synthetic_input = "ui_rml_runtime_synthetic_in
 #include <RmlUi/Core/SystemInterface.h>
 static Rml::Context *ui_rml_context;
 static Rml::ElementDocument *ui_rml_document;
+static const char *ui_rml_q2r_font_source_marker = "loaded from Quake II Rerelease font";
+static const char *ui_rml_q2r_font_source_prefix = "Quake II Rerelease:";
+static const char *ui_rml_q2r_display_font = "fonts/RussoOne-Regular.ttf";
+static const char *ui_rml_q2r_ui_font = "fonts/Montserrat-Regular.ttf";
+static const char *ui_rml_q2r_mono_font = "fonts/RobotoMono-Regular.ttf";
 class UI_Rml_SmokeFontEngineInterface final : public Rml::FontEngineInterface {
     Rml::FontMetrics metrics;
     Rml::FontFaceHandle GetFontFaceHandle(const Rml::String &, Rml::Style::FontStyle, Rml::Style::FontWeight, int) override { return 1; }
@@ -443,14 +458,6 @@ typedef struct renderer_export_s {
         repo_root / "src/renderer/renderer_api.c",
         """
 #if USE_REF != REF_GL
-static renderer_rmlui_family_t Renderer_RmlUiRendererFamily(void)
-{
-    return R_RENDERER_RMLUI_FAMILY_NONE;
-}
-static const char *Renderer_RmlUiRendererName(void)
-{
-    return "none";
-}
 static bool Renderer_RmlUiCanRender(void)
 {
     return false;
@@ -461,14 +468,12 @@ static void *Renderer_RmlUiNativeRenderInterface(void)
 }
 #endif
 static const renderer_export_t renderer_exports = {
-#if USE_REF == REF_GL
     .RmlUiRendererFamily    = R_RmlUiRendererFamily,
     .RmlUiRendererName      = R_RmlUiRendererName,
+#if USE_REF == REF_GL
     .RmlUiCanRender         = R_RmlUiCanRender,
     .RmlUiNativeRenderInterface = R_RmlUiNativeRenderInterface,
 #else
-    .RmlUiRendererFamily    = Renderer_RmlUiRendererFamily,
-    .RmlUiRendererName      = Renderer_RmlUiRendererName,
     .RmlUiCanRender         = Renderer_RmlUiCanRender,
     .RmlUiNativeRenderInterface = Renderer_RmlUiNativeRenderInterface,
 #endif
@@ -693,13 +698,14 @@ def test_valid_runtime_adapter_boundary_passes(
     assert "UI bridge draw hook: yes" in captured.out
     assert "Runtime open/close commands: yes" in captured.out
     assert "Runtime font engine adapter: yes" in captured.out
+    assert "Runtime Q2R font candidates: yes" in captured.out
     assert "Runtime input hooks declared: yes" in captured.out
     assert "Runtime input adapter: yes" in captured.out
     assert "UI bridge input hook: yes" in captured.out
     assert "Runtime status/capture commands: yes" in captured.out
     assert "Renderer bridge listed in meson.build: yes" in captured.out
     assert "Renderer C++ args configured: yes" in captured.out
-    assert "OpenGL-scoped RmlUi renderer dependency: yes" in captured.out
+    assert "Renderer RmlUi runtime dependencies: yes" in captured.out
     assert "Renderer contract declared: yes" in captured.out
     assert "RmlUi render interface symbols: Rml::SetRenderInterface, Rml::RenderInterface" in captured.out
     assert "Renderer API contract declared: yes" in captured.out
@@ -735,9 +741,16 @@ def test_json_report_exposes_adapter_facts(
     assert payload["ok"] is True
     assert payload["adapter"]["listed_in_meson"] is True
     assert payload["adapter"]["renderer_bridge_listed_in_meson"] is True
-    assert payload["adapter"]["renderer_bridge_listed_once_in_meson"] is True
+    assert payload["adapter"]["renderer_bridge_listed_once_in_meson"] is False
+    assert payload["adapter"]["renderer_bridge_meson_occurrences"] == 3
+    assert payload["adapter"]["renderer_bridge_required_source_sets"] == [
+        "renderer_src",
+        "renderer_vk_rtx_src",
+        "renderer_vk_src",
+    ]
+    assert payload["adapter"]["renderer_bridge_required_source_sets_present"] is True
     assert payload["adapter"]["renderer_cpp_args_configured"] is True
-    assert payload["adapter"]["renderer_gl_runtime_dependency"] is True
+    assert payload["adapter"]["renderer_runtime_dependencies"] is True
     assert payload["adapter"]["runtime_guard_present"] is True
     assert payload["adapter"]["rmlui_core_include_guarded"] is True
     assert payload["adapter"]["rmlui_system_file_includes_guarded"] is True
@@ -750,6 +763,7 @@ def test_json_report_exposes_adapter_facts(
     assert payload["adapter"]["runtime_draw_bridge_hooked"] is True
     assert payload["adapter"]["runtime_open_commands_present"] is True
     assert payload["adapter"]["runtime_font_engine_adapter_present"] is True
+    assert payload["adapter"]["runtime_font_engine_q2r_fonts_present"] is True
     assert payload["adapter"]["runtime_input_hooks_declared"] is True
     assert payload["adapter"]["runtime_input_adapter_present"] is True
     assert payload["adapter"]["runtime_input_bridge_hooked"] is True
@@ -769,7 +783,7 @@ def test_json_report_exposes_adapter_facts(
     assert payload["adapter"]["renderer_api_contract_declared"] is True
     assert payload["adapter"]["renderer_api_exports_declared"] is True
     assert payload["adapter"]["renderer_api_opengl_only"] is True
-    assert payload["adapter"]["renderer_api_non_gl_none"] is True
+    assert payload["adapter"]["renderer_api_non_gl_unavailable"] is True
     assert payload["adapter"]["client_renderer_bridge_registered"] is True
     assert payload["adapter"]["client_renderer_bridge_cleared"] is True
     assert payload["adapter"]["client_renderer_family_mapping"] is True
@@ -794,6 +808,33 @@ def test_json_report_exposes_adapter_facts(
     assert payload["adapter"]["cmake_tests_disabled"] is True
     assert payload["wrap"]["provide_dependencies"] == ["RmlUi", "rmlui"]
     assert payload["errors"] == []
+
+
+def test_missing_non_gl_renderer_bridge_source_set_fails(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+    write_valid_repo(repo_root)
+    meson_path = repo_root / "meson.build"
+    meson_path.write_text(
+        meson_path.read_text(encoding="utf-8").replace(
+            """renderer_vk_src = [
+  'src/renderer/rmlui_bridge.cpp',
+]
+""",
+            "renderer_vk_src = []\n",
+        ),
+        encoding="utf-8",
+    )
+
+    result, captured = run_checker(repo_root, capsys)
+
+    assert result == 1
+    assert (
+        "renderer bridge: source must be listed in renderer source sets: "
+        "renderer_vk_src"
+    ) in captured.out
 
 
 def test_missing_adapter_meson_entry_fails(

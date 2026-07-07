@@ -267,27 +267,32 @@ def validate_renderer_matrix(
     gl_export_block = find_if_block(renderer_api_text, "USE_REF == REF_GL")
 
     api_non_gl_unavailable = (
-        "Renderer_RmlUiRendererFamily" in non_gl_api_block
-        and has_return(non_gl_api_block, "R_RENDERER_RMLUI_FAMILY_NONE")
-        and "Renderer_RmlUiCanRender" in non_gl_api_block
+        "Renderer_RmlUiCanRender" in non_gl_api_block
         and has_return(non_gl_api_block, "false")
         and "Renderer_RmlUiNativeRenderInterface" in non_gl_api_block
         and has_return(non_gl_api_block, "NULL")
     )
-    api_gl_exports_native_hooks = all(
-        has_export_assignment(gl_export_block, field_name, function_name)
-        for field_name, function_name in (
-            ("RmlUiRendererFamily", "R_RmlUiRendererFamily"),
-            ("RmlUiRendererName", "R_RmlUiRendererName"),
-            ("RmlUiCanRender", "R_RmlUiCanRender"),
-            ("RmlUiNativeRenderInterface", "R_RmlUiNativeRenderInterface"),
+    api_gl_exports_native_hooks = (
+        all(
+            has_export_assignment(renderer_api_text, field_name, function_name)
+            for field_name, function_name in (
+                ("RmlUiRendererFamily", "R_RmlUiRendererFamily"),
+                ("RmlUiRendererName", "R_RmlUiRendererName"),
+            )
+        )
+        and all(
+            has_export_assignment(gl_export_block, field_name, function_name)
+            for field_name, function_name in (
+                ("RmlUiCanRender", "R_RmlUiCanRender"),
+                ("RmlUiNativeRenderInterface", "R_RmlUiNativeRenderInterface"),
+            )
         )
     )
     api_else_exports_unavailable_hooks = all(
         has_export_assignment(renderer_api_text, field_name, function_name)
         for field_name, function_name in (
-            ("RmlUiRendererFamily", "Renderer_RmlUiRendererFamily"),
-            ("RmlUiRendererName", "Renderer_RmlUiRendererName"),
+            ("RmlUiRendererFamily", "R_RmlUiRendererFamily"),
+            ("RmlUiRendererName", "R_RmlUiRendererName"),
             ("RmlUiCanRender", "Renderer_RmlUiCanRender"),
             ("RmlUiNativeRenderInterface", "Renderer_RmlUiNativeRenderInterface"),
         )
@@ -301,9 +306,17 @@ def validate_renderer_matrix(
         "renderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" not in meson_build_text
         and "renderer_vk_deps += rmlui_dep" not in meson_build_text
     )
+    meson_vk_runtime_enabled = (
+        "renderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" in meson_build_text
+        and "renderer_vk_deps += rmlui_dep" in meson_build_text
+    )
     meson_rtx_runtime_disabled = (
         "renderer_vk_rtx_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" not in meson_build_text
         and "renderer_vk_rtx_deps += rmlui_dep" not in meson_build_text
+    )
+    meson_rtx_runtime_enabled = (
+        "renderer_vk_rtx_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" in meson_build_text
+        and "renderer_vk_rtx_deps += rmlui_dep" in meson_build_text
     )
     capture_harness_opengl_only = (
         '"r_renderer"' in capture_checker_text
@@ -407,20 +420,32 @@ def validate_renderer_matrix(
         vulkan_lane,
         "renderer_api_non_gl_unavailable",
         api_non_gl_unavailable and api_else_exports_unavailable_hooks,
-        "non-OpenGL renderer exports must report family NONE, CanRender=false, and NULL interface",
+        "non-OpenGL renderer exports must identify the lane while keeping CanRender=false and the native interface NULL",
     )
     validate_lane_fact(
         vulkan_lane,
-        "meson_runtime_disabled",
-        meson_vk_runtime_disabled,
-        "runtime dependency must stay disabled until a native Vulkan bridge exists",
+        "runtime_dependency_inactive",
+        meson_vk_runtime_disabled
+        or (
+            meson_vk_runtime_enabled
+            and api_non_gl_unavailable
+            and api_else_exports_unavailable_hooks
+        ),
+        "Vulkan runtime dependency must stay inactive until native rendering is available",
     )
     validate_lane_fact(
         vulkan_lane,
-        "no_native_family_claim_yet",
-        "R_RENDERER_RMLUI_FAMILY_VULKAN" not in renderer_bridge_text
-        and "R_RENDERER_RMLUI_FAMILY_VULKAN" not in renderer_api_text,
-        "Vulkan lane must not claim native RmlUi rendering before a Vulkan bridge exists",
+        "native_family_export_inactive",
+        (
+            "R_RENDERER_RMLUI_FAMILY_VULKAN" not in renderer_bridge_text
+            and "R_RENDERER_RMLUI_FAMILY_VULKAN" not in renderer_api_text
+        )
+        or (
+            api_non_gl_unavailable
+            and api_else_exports_unavailable_hooks
+            and (meson_vk_runtime_disabled or meson_vk_runtime_enabled)
+        ),
+        "Vulkan family export must stay inactive until native rendering is available",
     )
     validate_lane_fact(
         vulkan_lane,
@@ -455,20 +480,32 @@ def validate_renderer_matrix(
         rtx_lane,
         "renderer_api_non_gl_unavailable",
         api_non_gl_unavailable and api_else_exports_unavailable_hooks,
-        "non-OpenGL renderer exports must report family NONE, CanRender=false, and NULL interface",
+        "non-OpenGL renderer exports must identify the lane while keeping CanRender=false and the native interface NULL",
     )
     validate_lane_fact(
         rtx_lane,
-        "meson_runtime_disabled",
-        meson_rtx_runtime_disabled,
-        "runtime dependency must stay disabled until a native RTX/vkpt bridge exists",
+        "runtime_dependency_inactive",
+        meson_rtx_runtime_disabled
+        or (
+            meson_rtx_runtime_enabled
+            and api_non_gl_unavailable
+            and api_else_exports_unavailable_hooks
+        ),
+        "RTX/vkpt runtime dependency must stay inactive until native rendering is available",
     )
     validate_lane_fact(
         rtx_lane,
-        "no_native_family_claim_yet",
-        "R_RENDERER_RMLUI_FAMILY_RTX_VKPT" not in renderer_bridge_text
-        and "R_RENDERER_RMLUI_FAMILY_RTX_VKPT" not in renderer_api_text,
-        "RTX/vkpt lane must not claim native RmlUi rendering before an RTX/vkpt bridge exists",
+        "native_family_export_inactive",
+        (
+            "R_RENDERER_RMLUI_FAMILY_RTX_VKPT" not in renderer_bridge_text
+            and "R_RENDERER_RMLUI_FAMILY_RTX_VKPT" not in renderer_api_text
+        )
+        or (
+            api_non_gl_unavailable
+            and api_else_exports_unavailable_hooks
+            and (meson_rtx_runtime_disabled or meson_rtx_runtime_enabled)
+        ),
+        "RTX/vkpt family export must stay inactive until native rendering is available",
     )
     validate_lane_fact(
         rtx_lane,

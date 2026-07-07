@@ -4,13 +4,12 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
   <body id="session-callvote-scorelimit" data-route-id="callvote_scorelimit" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame">
     <div class="screen compact-screen session-screen" id="callvote-scorelimit-screen">
       <header class="page-header">
         <h1>Callvote: Scorelimit</h1>
-        <p id="callvote-scorelimit-current" class="status-message" data-bind="cvars.ui_callvote_scorelimit_current" data-visible-if="ui_callvote_scorelimit_current">Current scorelimit binds here.</p>
+        <p id="callvote-scorelimit-current" class="status-message" data-bind="cvars.ui_callvote_scorelimit_current" data-visible-if="ui_callvote_scorelimit_current">Current scorelimit</p>
       </header>
 
       <nav class="menu-list" id="callvote-scorelimit-menu" data-model="session.callvote.scorelimit" data-owner-boundary="sgame-published-cvars">

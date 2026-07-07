@@ -1,26 +1,199 @@
 /*
- * Shell-specific starter rules for first-round RmlUi menu documents.
- * The base theme remains the source of shared colors, focus, and readability.
+ * Shell-specific RmlUi menu styles.
  */
 
 .shell-screen
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-4);
+	min-height: 0px;
 }
 
 .menu-header
 {
-	margin-bottom: var(--space-3);
+	margin-bottom: 12px;
 }
 
-.menu-stack,
-.menu-actions
+.menu-stack
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-2);
+	flex: 1 1 auto;
+	min-height: 0px;
+	margin-bottom: 16px;
+	overflow: auto;
+}
+
+.menu-actions
+{
+	display: block;
+	min-height: 0px;
+	width: 604px;
+	max-width: 604px;
+	overflow: auto;
+}
+
+.menu-actions button,
+.menu-actions .ui-button
+{
+	margin-bottom: 6px;
+}
+
+#main-menu-actions
+{
+	width: 320px;
+	max-width: 320px;
+}
+
+#main-menu-actions button,
+#main-menu-actions .ui-button
+{
+	width: 300px;
+}
+
+#options-menu-actions
+{
+	position: relative;
+	width: 604px;
+	min-width: 604px;
+	max-width: 604px;
+	height: 406px;
+	padding-right: 8px;
+	overflow: hidden;
+}
+
+#options-menu-actions button,
+#options-menu-actions .ui-button,
+#game-menu-actions button,
+#game-menu-actions .ui-button
+{
+	display: inline-block;
+	vertical-align: top;
+	position: absolute;
+	width: 272px;
+	min-width: 272px;
+	height: 36px;
+	min-height: 36px;
+	padding: 6px 12px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+	background-color: #211e19;
+	border-color: #6f6253;
+	border-left-width: 4px;
+	border-left-color: #4b4235;
+	border-radius: 5px;
+	text-align: left;
+}
+
+#game-menu-actions
+{
+	position: relative;
+	width: 604px;
+	min-width: 604px;
+	max-width: 604px;
+	height: 348px;
+	padding-right: 8px;
+	overflow: hidden;
+}
+
+#options-menu-actions button:hover,
+#options-menu-actions .ui-button:hover,
+#game-menu-actions button:hover,
+#game-menu-actions .ui-button:hover,
+#options-menu-actions button:focus,
+#options-menu-actions .ui-button:focus,
+#game-menu-actions button:focus,
+#game-menu-actions .ui-button:focus
+{
+	background-color: #30291f;
+	border-color: #b99b5b;
+	border-left-color: #ffd967;
+}
+
+#options-player,
+#options-keys,
+#options-video,
+#options-performance,
+#options-sound,
+#options-screen-setup,
+#options-downloads,
+#game-resume,
+#game-options,
+#game-servers-q2servers,
+#game-demos,
+#game-load,
+#game-quit
+{
+	left: 0px;
+}
+
+#options-input,
+#options-weapons,
+#options-multimonitor,
+#options-accessibility,
+#options-effects,
+#options-language,
+#options-addressbook,
+#game-player-setup,
+#game-gameflags,
+#game-servers-addressbook,
+#game-save,
+#game-disconnect
+{
+	left: 304px;
+}
+
+#options-player,
+#options-input,
+#game-resume,
+#game-player-setup
+{
+	top: 0px;
+}
+
+#options-keys,
+#options-weapons,
+#game-options,
+#game-gameflags
+{
+	top: 58px;
+}
+
+#options-video,
+#options-multimonitor,
+#game-servers-q2servers,
+#game-servers-addressbook
+{
+	top: 116px;
+}
+
+#options-performance,
+#options-accessibility,
+#game-demos,
+#game-save
+{
+	top: 174px;
+}
+
+#options-sound,
+#options-effects,
+#game-load,
+#game-disconnect
+{
+	top: 232px;
+}
+
+#options-screen-setup,
+#options-language,
+#game-quit
+{
+	top: 290px;
+}
+
+#options-downloads,
+#options-addressbook
+{
+	top: 348px;
 }
 
 .menu-footer
@@ -28,6 +201,58 @@
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
-	gap: var(--space-2);
-	margin-top: var(--space-4);
+	flex: 0 0 auto;
+	margin-top: 16px;
+}
+
+.menu-footer .ui-button
+{
+	margin-right: 8px;
+	margin-bottom: 8px;
+}
+
+#game-menu-actions #game-resume
+{
+	background-color: #1f271d;
+	border-color: #5f8765;
+	border-left-width: 4px;
+	border-left-color: #83d18f;
+}
+
+#main-menu-actions #main-quit,
+#game-menu-actions #game-quit,
+#game-menu-actions #game-disconnect,
+#download-status-cancel,
+#quit-confirm-yes
+{
+	background-color: #281b18;
+	border-color: #895047;
+	border-left-width: 4px;
+	border-left-color: #ee6758;
+}
+
+#game-menu-actions #game-resume:hover,
+#game-menu-actions #game-resume:focus
+{
+	background-color: #263322;
+	border-color: #83d18f;
+	border-left-color: #a6e3ad;
+	color: #83d18f;
+}
+
+#main-menu-actions #main-quit:hover,
+#game-menu-actions #game-quit:hover,
+#game-menu-actions #game-disconnect:hover,
+#download-status-cancel:hover,
+#quit-confirm-yes:hover,
+#main-menu-actions #main-quit:focus,
+#game-menu-actions #game-quit:focus,
+#game-menu-actions #game-disconnect:focus,
+#download-status-cancel:focus,
+#quit-confirm-yes:focus
+{
+	background-color: #321f1b;
+	border-color: #ee6758;
+	border-left-color: #ff9285;
+	color: #ee6758;
 }

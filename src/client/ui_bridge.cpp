@@ -17,6 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "client/cgame_ui.h"
+#include "client/sound/sound.h"
+#include "client/ui.h"
 #include "ui_rml/ui_rml.h"
 
 extern "C" void SCR_NotifyMouseEvent(int x, int y);
@@ -46,6 +48,8 @@ void UI_Shutdown(void)
 
 void UI_ModeChanged(void)
 {
+    UI_Rml_ModeChanged();
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->ModeChanged)
         api->ModeChanged();
@@ -89,6 +93,26 @@ void UI_OpenMenu(uiMenu_t menu)
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->OpenMenu)
         api->OpenMenu(menu);
+}
+
+void UI_StartFeedbackSound(uiFeedbackSound_t sound)
+{
+    switch (sound) {
+    case UI_FEEDBACK_OPEN:
+        S_StartLocalSound("misc/menu1.wav");
+        break;
+    case UI_FEEDBACK_MOVE:
+        S_StartLocalSound("misc/menu2.wav");
+        break;
+    case UI_FEEDBACK_CLOSE:
+        S_StartLocalSound("misc/menu3.wav");
+        break;
+    case UI_FEEDBACK_ALERT:
+        S_StartLocalSound("misc/talk1.wav");
+        break;
+    default:
+        break;
+    }
 }
 
 void UI_Frame(int msec)

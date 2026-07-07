@@ -44,9 +44,10 @@ until the runtime file interface supports stable UI-root paths.
   Vulkan renderer behavior through OpenGL fallback paths.
 - The input bridge still owns mouse, keyboard, text input, gamepad navigation,
   cursor mapping, focus-visible behavior, and controller repeat policy.
-- Font files are intentionally absent. `base.rcss` reserves `WORR UI` and
-  `WORR Mono`; final font assets, licenses, fallbacks, and `.install` staging
-  belong to the runtime/font integration task.
+- Font files are intentionally absent from the RmlUi source tree. `base.rcss`
+  reserves `WORR Display`, `WORR UI`, and `WORR Mono`; the runtime resolves
+  those families from Quake II Rerelease fonts on the existing filesystem
+  search path before any platform fallback.
 - Accessibility classes are contractual hooks. Runtime cvars or settings can
   later apply them to `body` or scoped route roots without requiring page-local
   rewrites.

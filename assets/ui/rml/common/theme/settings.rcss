@@ -1,37 +1,274 @@
 /*
- * Settings-specific starter rules for RmlUi settings pages.
+ * Shared settings layout and typed control treatment for RmlUi menu pages.
  */
 
 .settings-screen
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-4);
+	min-height: 0px;
 }
 
 .settings-form
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-4);
+	flex: 0 0 auto;
+	width: 604px;
+	height: 500px;
+	min-height: 0px;
+	margin-bottom: 12px;
+	padding-right: 8px;
+	overflow: auto;
 }
 
 .settings-section
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-3);
+	width: 592px;
+	margin-bottom: 12px;
+	padding-bottom: 8px;
+	border-bottom-width: 1px;
+	border-bottom-color: #332d23;
+}
+
+.settings-section h2
+{
+	margin-bottom: 6px;
+	color: #ffd967;
+	font-size: 18px;
 }
 
 .setting-row
 {
 	display: flex;
+	flex-direction: row;
+	align-items: center;
+	width: 584px;
+	min-height: 38px;
+	margin-bottom: 6px;
+	padding: 5px 8px;
+	background-color: #171511;
+	border-width: 1px;
+	border-color: #242019;
+	border-left-width: 3px;
+	border-left-color: #332d23;
+	border-radius: 5px;
+	transition: background-color border-color color 0.12s cubic-out;
+}
+
+.setting-row:hover
+{
+	background-color: #211e19;
+	border-left-color: #b99b5b;
+}
+
+.setting-row label
+{
+	display: block;
+	width: 180px;
+	margin-right: 14px;
+	color: #c9beb0;
+	font-weight: bold;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.setting-row:hover label
+{
+	color: #f3eee4;
+}
+
+.setting-row input,
+.setting-row select
+{
+	width: 288px;
+}
+
+.setting-row[data-control="field"] input
+{
+	width: 220px;
+}
+
+.setting-row[data-control="field"] input[type="number"]
+{
+	width: 150px;
+}
+
+.setting-row[data-control="select"] select,
+.setting-row[data-control="combo"] select,
+.setting-row[data-control="imagevalues"] select
+{
+	width: 288px;
+}
+
+.setting-row[data-control="range"] input,
+.setting-row .worr-slider
+{
+	width: 260px;
+}
+
+.setting-row[data-control="range"] .setting-value
+{
+	width: 84px;
+}
+
+.setting-row[data-control="toggle"] label
+{
+	width: 528px;
+}
+
+.setting-row[data-control="toggle"] input
+{
+	width: 36px;
+	min-width: 36px;
+	height: 28px;
+	min-height: 28px;
+	padding: 0px;
+}
+
+.setting-row[data-control="toggle"] input:hover,
+.setting-row[data-control="toggle"] input:focus
+{
+	background-color: #332d23;
+	border-color: #ffd967;
+}
+
+.setting-row[data-control="progress"] progress
+{
+	width: 288px;
+	height: 28px;
+}
+
+.setting-row[data-control="progress"] .setting-value
+{
+	width: 84px;
+}
+
+#downloads-settings-form
+{
+	height: 540px;
+}
+
+#sound-settings-form
+{
+	width: 780px;
+	height: 456px;
+	padding-right: 0px;
+	overflow: hidden;
+}
+
+#sound-settings-columns
+{
+	display: flex;
+	flex-direction: row;
+	width: 780px;
+	min-height: 0px;
+}
+
+#sound-settings-form .settings-column
+{
+	display: flex;
 	flex-direction: column;
-	gap: var(--space-1);
-	max-width: 520px;
+	width: 382px;
+	min-height: 0px;
+	margin-right: 12px;
+}
+
+#sound-music-column
+{
+	margin-right: 0px;
+}
+
+#sound-settings-form .settings-section
+{
+	width: 370px;
+	margin-bottom: 10px;
+	padding-bottom: 6px;
+}
+
+#sound-settings-form .settings-section h2
+{
+	margin-bottom: 5px;
+	font-size: 17px;
+}
+
+#sound-settings-form .setting-row
+{
+	width: 358px;
+	min-height: 34px;
+	margin-bottom: 5px;
+	padding: 4px 6px;
+}
+
+#sound-settings-form .setting-row label
+{
+	width: 142px;
+	margin-right: 8px;
+}
+
+#sound-settings-form .setting-row input,
+#sound-settings-form .setting-row select
+{
+	width: 146px;
+}
+
+#sound-settings-form .setting-row[data-control="select"] select,
+#sound-settings-form .setting-row[data-control="combo"] select,
+#sound-settings-form .setting-row[data-control="imagevalues"] select
+{
+	width: 146px;
+}
+
+#sound-settings-form .setting-row[data-control="range"] input,
+#sound-settings-form .setting-row .worr-slider
+{
+	width: 132px;
+}
+
+#sound-settings-form .setting-row[data-control="range"] .setting-value
+{
+	width: 54px;
+}
+
+#sound-settings-form .setting-row[data-control="field"] input,
+#sound-settings-form .setting-row[data-control="field"] input[type="number"]
+{
+	width: 74px;
+}
+
+#sound-settings-form .setting-row[data-control="field"] .setting-value
+{
+	width: 66px;
+}
+
+#sound-settings-form .setting-row[data-control="toggle"] label
+{
+	width: 300px;
+}
+
+#sound-settings-form .setting-row[data-control="toggle"] input
+{
+	width: 32px;
+	min-width: 32px;
+	height: 26px;
+	min-height: 26px;
 }
 
 .setting-value
 {
-	color: var(--color-text-muted);
+	display: block;
+	width: 86px;
+	margin-left: 10px;
+	color: #c9beb0;
+	font-size: 14px;
+	line-height: 1.1;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.setting-row:hover .setting-value
+{
+	color: #ffd967;
 }

@@ -3,78 +3,87 @@
     <title>WORR Sound Settings</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/settings.rcss" />
-    <link type="text/template" href="../common/components/menu_frame.rml" />
-    <link type="text/template" href="../common/components/cvar_controls.rml" />
   </head>
-  <body id="settings-sound" data-route-id="sound" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2">
+  <body id="settings-sound" data-route-id="sound" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu">
     <div class="screen settings-screen" id="sound-screen">
       <header class="menu-header">
         <h1>Sound Setup</h1>
       </header>
 
       <main class="settings-form" id="sound-settings-form" data-component="common.components.cvar_controls">
-        <section class="settings-section" id="sound-engine-section">
-          <h2>Sound Engine</h2>
-          <div class="setting-row" data-control="select" data-cvar="s_enable">
-            <label for="sound-engine">Sound Engine</label>
-            <select id="sound-engine" data-cvar="s_enable">
-              <option value="0">No Sound</option>
-              <option value="1">Software</option>
-              <option value="2">OpenAL</option>
-            </select>
-          </div>
-          <div class="setting-row" data-control="range" data-cvar="s_mixahead">
-            <label for="sound-latency">Sound Latency</label>
-            <input id="sound-latency" type="range" min="0.05" max="0.2" step="0.01" data-cvar="s_mixahead" />
-            <span class="setting-value" data-bind-cvar="s_mixahead"></span>
-          </div>
-        </section>
+        <div class="settings-columns" id="sound-settings-columns">
+          <div class="settings-column" id="sound-primary-column">
+            <section class="settings-section" id="sound-engine-section">
+              <h2>Sound Engine</h2>
+              <div class="setting-row" data-control="select" data-cvar="s_enable">
+                <label for="sound-engine">Sound Engine</label>
+                <select id="sound-engine" data-cvar="s_enable">
+                  <option value="0">No Sound</option>
+                  <option value="1">Software</option>
+                  <option value="2">OpenAL</option>
+                </select>
+              </div>
+              <div class="setting-row" data-control="range" data-cvar="s_mixahead">
+                <label for="sound-latency">Sound Latency</label>
+                <input id="sound-latency" type="range" min="0.05" max="0.2" step="0.01" data-cvar="s_mixahead" />
+                <span class="setting-value" data-bind-cvar="s_mixahead"></span>
+              </div>
+            </section>
 
-        <section class="settings-section" id="sound-volume-section">
-          <h2>Volume</h2>
-          <div class="setting-row" data-control="range" data-cvar="s_volume">
-            <label for="sound-volume">Sound Volume</label>
-            <input id="sound-volume" type="range" min="0" max="1" step="0.01" data-cvar="s_volume" />
-            <span class="setting-value" data-bind-cvar="s_volume"></span>
+            <section class="settings-section" id="sound-volume-section">
+              <h2>Volume</h2>
+              <div class="setting-row" data-control="range" data-cvar="s_volume">
+                <label for="sound-volume">Sound Volume</label>
+                <input id="sound-volume" type="range" min="0" max="1" step="0.01" data-cvar="s_volume" />
+                <span class="setting-value" data-bind-cvar="s_volume"></span>
+              </div>
+              <div class="setting-row" data-control="range" data-cvar="ogg_volume">
+                <label for="sound-music-volume">Music Volume</label>
+                <input id="sound-music-volume" type="range" min="0" max="1" step="0.01" data-cvar="ogg_volume" />
+                <span class="setting-value" data-bind-cvar="ogg_volume"></span>
+              </div>
+            </section>
           </div>
-          <div class="setting-row" data-control="range" data-cvar="ogg_volume">
-            <label for="sound-music-volume">Music Volume</label>
-            <input id="sound-music-volume" type="range" min="0" max="1" step="0.01" data-cvar="ogg_volume" />
-            <span class="setting-value" data-bind-cvar="ogg_volume"></span>
-          </div>
-        </section>
 
-        <section class="settings-section" id="sound-music-section">
-          <h2>Music And Effects</h2>
-          <div class="setting-row" data-control="toggle" data-cvar="ogg_enable">
-            <label for="sound-music-enable">Enable Music</label>
-            <input id="sound-music-enable" type="checkbox" data-cvar="ogg_enable" />
+          <div class="settings-column" id="sound-music-column">
+            <section class="settings-section" id="sound-music-section">
+              <h2>Music And Effects</h2>
+              <div class="setting-row" data-control="toggle" data-cvar="ogg_enable">
+                <label for="sound-music-enable">Enable Music</label>
+                <input id="sound-music-enable" type="checkbox" data-cvar="ogg_enable" />
+              </div>
+              <div class="setting-row" data-control="toggle" data-cvar="ogg_shuffle">
+                <label for="sound-music-shuffle">Shuffle Tracks</label>
+                <input id="sound-music-shuffle" type="checkbox" data-cvar="ogg_shuffle" />
+              </div>
+              <div class="setting-row" data-control="field" data-cvar="ogg_menu_track">
+                <label for="sound-menu-track">Menu Track</label>
+                <input id="sound-menu-track" type="number" min="0" step="1" data-cvar="ogg_menu_track" data-integer="true" data-width="3" />
+                <span class="setting-value">0 - off</span>
+              </div>
+              <div class="setting-row" data-control="toggle" data-cvar="s_underwater">
+                <label for="sound-underwater">Underwater Effect</label>
+                <input id="sound-underwater" type="checkbox" data-cvar="s_underwater" />
+              </div>
+              <div class="setting-row" data-control="select" data-cvar="s_ambient">
+                <label for="sound-ambient">Ambient Sounds</label>
+                <select id="sound-ambient" data-cvar="s_ambient">
+                  <option value="0">No</option>
+                  <option value="1">Yes</option>
+                  <option value="2">Only Player's Own</option>
+                </select>
+              </div>
+              <div class="setting-row" data-control="select" data-cvar="cl_chat_sound">
+                <label for="sound-chat-beep">Chat Beep</label>
+                <select id="sound-chat-beep" data-cvar="cl_chat_sound">
+                  <option value="0">Disabled</option>
+                  <option value="1">Default</option>
+                  <option value="2">Alternative</option>
+                </select>
+              </div>
+            </section>
           </div>
-          <div class="setting-row" data-control="toggle" data-cvar="ogg_shuffle">
-            <label for="sound-music-shuffle">Shuffle Tracks</label>
-            <input id="sound-music-shuffle" type="checkbox" data-cvar="ogg_shuffle" />
-          </div>
-          <div class="setting-row" data-control="toggle" data-cvar="s_underwater">
-            <label for="sound-underwater">Underwater Effect</label>
-            <input id="sound-underwater" type="checkbox" data-cvar="s_underwater" />
-          </div>
-          <div class="setting-row" data-control="select" data-cvar="s_ambient">
-            <label for="sound-ambient">Ambient Sounds</label>
-            <select id="sound-ambient" data-cvar="s_ambient">
-              <option value="0">No</option>
-              <option value="1">Yes</option>
-              <option value="2">Only Player's Own</option>
-            </select>
-          </div>
-          <div class="setting-row" data-control="select" data-cvar="cl_chat_sound">
-            <label for="sound-chat-beep">Chat Beep</label>
-            <select id="sound-chat-beep" data-cvar="cl_chat_sound">
-              <option value="0">Disabled</option>
-              <option value="1">Default</option>
-              <option value="2">Alternative</option>
-            </select>
-          </div>
-        </section>
+        </div>
       </main>
 
       <footer class="menu-footer" id="sound-menu-footer">

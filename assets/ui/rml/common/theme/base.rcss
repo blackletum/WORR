@@ -1,89 +1,46 @@
 /*
- * WORR RmlUi base theme contract.
+ * WORR RmlUi base theme.
  *
- * Future RML documents should import this once from the document head.
- * Preferred UI-root href after the file interface is finalized:
- *   <link type="text/rcss" href="common/theme/base.rcss" />
- * Route documents in subdirectories may need a route-relative href until the
- * file interface normalizes root-relative RmlUi asset paths.
- *
- * Keep this file renderer-neutral. Native OpenGL, Vulkan, and RTX/vkpt
- * backends must draw the same rules without routing Vulkan paths through
- * OpenGL fallback code.
+ * Keep this file in RmlUi-native RCSS. RmlUi 6.2 does not accept browser CSS
+ * custom properties or var() expansion, so shared route styles use literal
+ * colors and spacing until a runtime token preprocessor exists.
  */
 
 body
 {
-	--font-body: "WORR UI";
-	--font-mono: "WORR Mono";
-
-	--color-canvas: #12110f;
-	--color-surface: #1b1916;
-	--color-surface-raised: #27231d;
-	--color-surface-active: #332d23;
-	--color-text: #f3eee4;
-	--color-text-muted: #c9beb0;
-	--color-text-disabled: #81776a;
-	--color-border: #756a5d;
-	--color-border-strong: #b99b5b;
-	--color-accent: #e5b64f;
-	--color-accent-strong: #ffd967;
-	--color-danger: #ee6758;
-	--color-success: #83d18f;
-	--color-info: #7ed4d8;
-	--color-backplate: rgba(0, 0, 0, 210);
-
-	--space-1: 4px;
-	--space-2: 8px;
-	--space-3: 12px;
-	--space-4: 16px;
-	--space-5: 24px;
-
-	--radius-small: 3px;
-	--radius-medium: 6px;
-	--control-border-width: 2px;
-
+	position: absolute;
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	left: 0px;
 	margin: 0px;
 	padding: 0px;
-	background-color: var(--color-canvas);
-	color: var(--color-text);
-	font-family: var(--font-body);
-	font-size: 18px;
-	line-height: 1.28;
-	font-kerning: normal;
+	background-color: #12110f;
+	color: #f3eee4;
+	font-family: "WORR UI";
+	font-size: 16px;
+	line-height: 1.24;
+	overflow: hidden;
 }
 
-body.ui-high-visibility,
-.ui-high-visibility
+div,
+header,
+main,
+footer,
+nav,
+section
 {
-	--color-canvas: #000000;
-	--color-surface: #000000;
-	--color-surface-raised: #101010;
-	--color-surface-active: #202000;
-	--color-text: #ffffff;
-	--color-text-muted: #ffffff;
-	--color-text-disabled: #b0b0b0;
-	--color-border: #ffffff;
-	--color-border-strong: #ffff00;
-	--color-accent: #ffff00;
-	--color-accent-strong: #ffff00;
-	--color-danger: #ff5544;
-	--color-success: #66ff66;
-	--color-info: #66ffff;
-	--color-backplate: #000000;
-}
-
-*
-{
-	box-sizing: border-box;
+	display: block;
 }
 
 h1,
 .ui-title
 {
-	margin: 0px 0px var(--space-3) 0px;
-	color: var(--color-text);
-	font-size: 34px;
+	display: block;
+	margin: 0px 0px 12px 0px;
+	color: #f3eee4;
+	font-family: "WORR Display";
+	font-size: 30px;
 	line-height: 1.1;
 	font-weight: bold;
 }
@@ -91,9 +48,11 @@ h1,
 h2,
 .ui-heading
 {
-	margin: 0px 0px var(--space-2) 0px;
-	color: var(--color-text);
-	font-size: 24px;
+	display: block;
+	margin: 0px 0px 8px 0px;
+	color: #f3eee4;
+	font-family: "WORR Display";
+	font-size: 21px;
 	line-height: 1.15;
 	font-weight: bold;
 }
@@ -101,82 +60,122 @@ h2,
 p,
 .ui-copy
 {
-	margin: 0px 0px var(--space-3) 0px;
-	color: var(--color-text);
-	white-space: normal;
-	word-break: break-word;
-}
-
-.ui-muted
-{
-	color: var(--color-text-muted);
-}
-
-.ui-warning
-{
-	color: var(--color-accent-strong);
-}
-
-.ui-danger
-{
-	color: var(--color-danger);
-}
-
-.ui-success
-{
-	color: var(--color-success);
-}
-
-.ui-info
-{
-	color: var(--color-info);
+	display: block;
+	margin: 0px 0px 8px 0px;
+	color: #f3eee4;
 }
 
 ul,
 ol
 {
-	margin: 0px 0px var(--space-3) 0px;
-	padding-left: var(--space-5);
+	margin: 0px 0px 12px 0px;
+	padding-left: 24px;
 }
 
 li
 {
-	margin-bottom: var(--space-1);
-	white-space: normal;
-	word-break: break-word;
+	margin-bottom: 4px;
 }
 
+.ui-muted,
 .label
 {
-	color: var(--color-text-muted);
+	color: #c9beb0;
 	font-weight: bold;
 }
 
 .value
 {
-	color: var(--color-text);
-	white-space: normal;
-	word-break: break-word;
+	color: #f3eee4;
+}
+
+.ui-warning
+{
+	color: #ffd967;
+}
+
+.ui-danger
+{
+	color: #ee6758;
+}
+
+.ui-success
+{
+	color: #83d18f;
+}
+
+.ui-info
+{
+	color: #7ed4d8;
 }
 
 .ui-route,
 .screen
 {
-	width: 100%;
-	height: 100%;
-	padding: var(--space-5);
-	background-color: var(--color-canvas);
-	color: var(--color-text);
+	position: absolute;
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	left: 0px;
+	width: auto;
+	height: auto;
+	min-height: 0px;
+	padding: 18px;
+	background-color: #12110f;
+	color: #f3eee4;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.compact-screen
+{
+	padding: 14px;
+}
+
+.page-header,
+.menu-header
+{
+	flex: 0 0 auto;
+	margin-bottom: 8px;
+	padding-bottom: 8px;
+	border-bottom-width: 1px;
+	border-bottom-color: #332d23;
+}
+
+.page-header p,
+.menu-header p
+{
+	margin-bottom: 0px;
+}
+
+.menu-footer
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	flex: 0 0 auto;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top-width: 1px;
+	border-top-color: #332d23;
+}
+
+.menu-footer button,
+.menu-footer .ui-button
+{
+	margin-right: 8px;
+	margin-bottom: 8px;
 }
 
 .ui-panel,
 .contract
 {
-	padding: var(--space-4);
-	background-color: var(--color-surface);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-medium);
+	padding: 16px;
+	background-color: #1b1916;
+	border-width: 2px;
+	border-color: #756a5d;
+	border-radius: 6px;
 }
 
 .ui-row
@@ -184,14 +183,12 @@ li
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	gap: var(--space-3);
 }
 
 .ui-stack
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-3);
 }
 
 .ui-cluster,
@@ -201,7 +198,88 @@ li
 	flex-direction: row;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-2);
+	flex: 0 0 auto;
+}
+
+.actions
+{
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top-width: 1px;
+	border-top-color: #332d23;
+}
+
+.popup-screen
+{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	background-color: #0c0b0a;
+}
+
+.popup-dialog
+{
+	width: 390px;
+	max-width: 390px;
+	padding: 16px;
+	background-color: #171511;
+	border-width: 1px;
+	border-color: #3b3429;
+	border-left-width: 4px;
+	border-left-color: #ee6758;
+	border-radius: 6px;
+	transition: background-color border-color color 0.12s cubic-out;
+}
+
+.popup-header
+{
+	margin-bottom: 8px;
+	padding-bottom: 8px;
+	border-bottom-width: 1px;
+	border-bottom-color: #332d23;
+}
+
+.popup-header h1
+{
+	margin-bottom: 0px;
+	font-size: 24px;
+	color: #f3eee4;
+}
+
+.popup-kicker
+{
+	margin-bottom: 6px;
+	color: #c9beb0;
+	font-weight: bold;
+}
+
+.popup-message
+{
+	min-height: 36px;
+	margin-bottom: 14px;
+	color: #f3eee4;
+	font-size: 18px;
+	line-height: 1.2;
+}
+
+.popup-actions
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	padding-top: 10px;
+	border-top-width: 1px;
+	border-top-color: #332d23;
+}
+
+.popup-actions button,
+.popup-actions .ui-button
+{
+	width: 146px;
+	min-width: 146px;
+	margin-right: 8px;
+	margin-bottom: 0px;
 }
 
 button,
@@ -219,48 +297,154 @@ textarea,
 button,
 .ui-button
 {
-	display: inline-block;
-	min-height: 42px;
+	display: block;
+	min-height: 36px;
 	min-width: 96px;
-	padding: 8px 14px;
-	background-color: var(--color-surface-raised);
-	color: var(--color-text);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-small);
+	padding: 6px 12px;
+	background-color: #27231d;
+	color: #f3eee4;
+	border-width: 2px;
+	border-color: #756a5d;
+	border-radius: 3px;
 	text-align: center;
-	font-family: var(--font-body);
-	font-size: 18px;
+	font-family: "WORR Display";
+	font-size: 16px;
 	line-height: 1.1;
-	cursor: pointer;
+	transition: background-color border-color color 0.12s cubic-out;
 }
 
 button:hover,
 .ui-button:hover
 {
-	background-color: var(--color-surface-active);
-	border-color: var(--color-border-strong);
-	color: var(--color-accent-strong);
+	background-color: #332d23;
+	border-color: #b99b5b;
+	color: #ffd967;
 }
 
 button:active,
 .ui-button:active
 {
-	background-color: var(--color-accent);
-	border-color: var(--color-accent-strong);
+	background-color: #e5b64f;
+	border-color: #ffd967;
 	color: #000000;
 }
 
-button:focus-visible,
-.ui-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-.ui-focusable:focus-visible
+button:focus,
+.ui-button:focus,
+input:focus,
+select:focus,
+textarea:focus,
+.ui-focusable:focus
 {
-	background-color: var(--color-surface-active);
-	border-color: var(--color-accent-strong);
-	color: var(--color-accent-strong);
+	background-color: #332d23;
+	border-color: #ffd967;
+	color: #ffd967;
+}
+
+button[data-command="ui.back"],
+button[data-command="ui.close"],
+button[data-command="popmenu"],
+.ui-button[data-command="ui.back"],
+.ui-button[data-command="ui.close"],
+.ui-button[data-command="popmenu"]
+{
+	background-color: #1b1916;
+	border-color: #5f5548;
+	color: #c9beb0;
+}
+
+button[data-command="ui.back"]:hover,
+button[data-command="ui.close"]:hover,
+button[data-command="popmenu"]:hover,
+.ui-button[data-command="ui.back"]:hover,
+.ui-button[data-command="ui.close"]:hover,
+.ui-button[data-command="popmenu"]:hover,
+button[data-command="ui.back"]:focus,
+button[data-command="ui.close"]:focus,
+button[data-command="popmenu"]:focus,
+.ui-button[data-command="ui.back"]:focus,
+.ui-button[data-command="ui.close"]:focus,
+.ui-button[data-command="popmenu"]:focus
+{
+	background-color: #27231d;
+	border-color: #b99b5b;
+	color: #ffd967;
+}
+
+#game-resume,
+#players-apply,
+#startserver-begin,
+#singleplayer-start-episode,
+#singleplayer-start-level,
+#vote-menu-yes,
+#tourney-replay-yes
+{
+	background-color: #1f271d;
+	border-color: #5f8765;
+	border-left-width: 4px;
+	border-left-color: #83d18f;
+}
+
+#game-resume:hover,
+#players-apply:hover,
+#startserver-begin:hover,
+#singleplayer-start-episode:hover,
+#singleplayer-start-level:hover,
+#vote-menu-yes:hover,
+#tourney-replay-yes:hover,
+#game-resume:focus,
+#players-apply:focus,
+#startserver-begin:focus,
+#singleplayer-start-episode:focus,
+#singleplayer-start-level:focus,
+#vote-menu-yes:focus,
+#tourney-replay-yes:focus
+{
+	background-color: #263322;
+	border-color: #83d18f;
+	border-left-color: #a6e3ad;
+	color: #83d18f;
+}
+
+#main-quit,
+#game-quit,
+#game-disconnect,
+#download-status-cancel,
+#quit-confirm-yes,
+#dm-join-leave,
+#join-leave,
+#leave-match-yes,
+#forfeit-confirm-yes
+{
+	background-color: #281b18;
+	border-color: #895047;
+	border-left-width: 4px;
+	border-left-color: #ee6758;
+}
+
+#main-quit:hover,
+#game-quit:hover,
+#game-disconnect:hover,
+#download-status-cancel:hover,
+#quit-confirm-yes:hover,
+#dm-join-leave:hover,
+#join-leave:hover,
+#leave-match-yes:hover,
+#forfeit-confirm-yes:hover,
+#main-quit:focus,
+#game-quit:focus,
+#game-disconnect:focus,
+#download-status-cancel:focus,
+#quit-confirm-yes:focus,
+#dm-join-leave:focus,
+#join-leave:focus,
+#leave-match-yes:focus,
+#forfeit-confirm-yes:focus
+{
+	background-color: #321f1b;
+	border-color: #ee6758;
+	border-left-color: #ff9285;
+	color: #ee6758;
 }
 
 input,
@@ -268,72 +452,128 @@ select,
 textarea,
 .ui-field
 {
-	min-height: 40px;
-	padding: 7px 10px;
-	background-color: var(--color-surface);
-	color: var(--color-text);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-small);
-	font-family: var(--font-body);
-	font-size: 18px;
+	min-height: 36px;
+	padding: 6px 10px;
+	background-color: #1b1916;
+	color: #f3eee4;
+	border-width: 2px;
+	border-color: #756a5d;
+	border-radius: 3px;
+	font-family: "WORR UI";
+	font-size: 16px;
 	line-height: 1.2;
+	transition: background-color border-color color 0.12s cubic-out;
+}
+
+input[type="checkbox"],
+.worr-toggle
+{
+	width: 32px;
+	min-width: 32px;
+	height: 28px;
+	min-height: 28px;
+	padding: 0px;
+	background-color: #171511;
+	border-color: #756a5d;
+}
+
+input[type="range"],
+.worr-slider
+{
+	min-height: 28px;
+	padding: 0px;
+	background-color: #171511;
+	border-color: #5f5548;
+}
+
+progress,
+.worr-progress
+{
+	min-height: 28px;
+	padding: 0px;
+	background-color: #171511;
+	border-width: 2px;
+	border-color: #756a5d;
+	border-radius: 3px;
+	transition: background-color border-color 0.12s cubic-out;
+}
+
+input:hover,
+select:hover,
+textarea:hover,
+.ui-field:hover,
+progress:hover,
+.worr-progress:hover
+{
+	background-color: #211e19;
+	border-color: #b99b5b;
 }
 
 textarea
 {
 	min-height: 96px;
-	white-space: pre-wrap;
-	word-break: break-word;
 }
 
 [disabled],
 .is-disabled
 {
-	color: var(--color-text-disabled);
-	border-color: var(--color-border);
+	color: #81776a;
+	border-color: #756a5d;
 	opacity: 0.65;
-	pointer-events: none;
 }
 
 .ui-scroll
 {
+	min-height: 0px;
 	overflow: auto;
-	overscroll-behavior: contain;
 }
 
-.ui-wrap
+.content,
+.settings-form,
+.menu-stack,
+.menu-actions,
+.menu-list,
+.bind-group,
+.save-slot-list,
+.selector-section,
+.session-flow,
+.session-panel,
+.session-main,
+.session-player-list,
+.session-admin-list,
+.utility-content
 {
-	white-space: normal;
-	word-break: break-word;
+	min-height: 0px;
+	overflow: auto;
 }
 
-.ui-break-all
+.actions button,
+.actions .ui-button
 {
-	white-space: normal;
-	word-break: break-all;
-}
-
-.ui-truncate
-{
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
+	margin-right: 8px;
+	margin-bottom: 8px;
 }
 
 .ui-readable-backplate
 {
-	padding: var(--space-1) var(--space-2);
-	background-color: var(--color-backplate);
-	color: var(--color-text);
-	border-radius: var(--radius-small);
+	padding: 4px 8px;
+	background-color: #000000;
+	color: #f3eee4;
+	border-radius: 3px;
 }
 
-.ui-code
+.ui-code,
+.ui-monospace-wrap,
+.ui-command-line
 {
-	font-family: var(--font-mono);
-	white-space: pre-wrap;
-	word-break: break-all;
+	font-family: "WORR Mono";
+}
+
+body.ui-high-visibility,
+.ui-high-visibility
+{
+	background-color: #000000;
+	color: #ffffff;
 }
 
 .ui-high-visibility .ui-panel,
@@ -345,18 +585,19 @@ textarea
 .ui-high-visibility .ui-field,
 .ui-high-visibility .ui-focusable
 {
-	border-color: var(--color-border);
-	background-color: var(--color-surface);
+	border-color: #ffffff;
+	background-color: #000000;
+	color: #ffffff;
 }
 
-.ui-high-visibility button:focus-visible,
-.ui-high-visibility .ui-button:focus-visible,
-.ui-high-visibility input:focus-visible,
-.ui-high-visibility select:focus-visible,
-.ui-high-visibility textarea:focus-visible,
-.ui-high-visibility .ui-focusable:focus-visible
+.ui-high-visibility button:focus,
+.ui-high-visibility .ui-button:focus,
+.ui-high-visibility input:focus,
+.ui-high-visibility select:focus,
+.ui-high-visibility textarea:focus,
+.ui-high-visibility .ui-focusable:focus
 {
 	background-color: #202000;
-	border-color: var(--color-accent-strong);
-	color: var(--color-accent-strong);
+	border-color: #ffff00;
+	color: #ffff00;
 }

@@ -239,6 +239,7 @@ renderer_src = [
 
 renderer_vk_rtx_src = [
   'src/renderer/dds.c',
+  'src/renderer/rmlui_bridge.cpp',
   'src/renderer/shadow_frontend.c',
   'src/renderer/ui_scale.c',
   'src/renderer/view_setup.c',
@@ -288,6 +289,7 @@ renderer_vk_rtx_src = [
 
 renderer_vk_src = [
   'src/renderer/dds.c',
+  'src/renderer/rmlui_bridge.cpp',
   'src/renderer/shadow_frontend.c',
   'src/renderer/ui_scale.c',
   'src/renderer/view_setup.c',
@@ -1425,14 +1427,21 @@ if get_option('external-renderers')
 
   if vulkan.found()
     renderer_vk_deps = renderer_deps + [vulkan]
+    renderer_vk_rtx_deps = renderer_deps + [vulkan]
     if sdl3.found()
       renderer_vk_deps += sdl3
+    endif
+    if rmlui_runtime
+      renderer_vk_deps += rmlui_dep
+      renderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'
+      renderer_vk_rtx_deps += rmlui_dep
+      renderer_vk_rtx_cpp_args += '-DUI_RML_HAS_RUNTIME=1'
     endif
 
     renderer_vk_rtx_lib_src = renderer_vk_rtx_src + ['src/renderer/renderer_api.c']
     renderer_vk_rtx_lib_name = meson.project_name() + '_rtx_' + cpu
     renderer_vk_rtx_lib = shared_library(renderer_vk_rtx_lib_name, renderer_vk_rtx_lib_src,
-      dependencies:          renderer_deps + [vulkan],
+      dependencies:          renderer_vk_rtx_deps,
       include_directories:   ['inc', 'q2proto/inc', 'src/rend_vk/refresh/stb', 'src/rend_rtx/third_party'],
       gnu_symbol_visibility: 'hidden',
       link_args:             dll_link_args,

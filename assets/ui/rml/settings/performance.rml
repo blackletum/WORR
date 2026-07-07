@@ -3,8 +3,6 @@
     <title>WORR Performance Settings</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/settings.rcss" />
-    <link type="text/template" href="../common/components/menu_frame.rml" />
-    <link type="text/template" href="../common/components/cvar_controls.rml" />
   </head>
   <body id="settings-performance" data-route-id="performance" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2">
     <div class="screen settings-screen" id="performance-screen">

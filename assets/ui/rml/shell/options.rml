@@ -3,17 +3,15 @@
     <title>WORR Options Menu</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/shell.rcss" />
-    <link type="text/template" href="../common/components/menu_frame.rml" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
   <body id="shell-options" data-route-id="options" data-route-group="shell" data-route-version="1" data-document-status="first-round-scaffold">
     <div class="screen shell-screen" id="options-screen">
-      <header class="menu-header">
+      <div class="menu-header">
         <h1>Options</h1>
-      </header>
+      </div>
 
-      <main class="menu-stack" id="options-menu-stack" data-component="common.components.menu_frame">
-        <nav class="menu-actions" id="options-menu-actions">
+      <div class="menu-stack" id="options-menu-stack" data-component="common.components.menu_frame">
+        <div class="menu-actions" id="options-menu-actions">
           <button id="options-player" type="button" data-command="pushmenu players" data-route-target="players" data-owner="agent5">Player Setup</button>
           <button id="options-input" type="button" data-command="pushmenu input" data-route-target="input">Input Setup</button>
           <button id="options-keys" type="button" data-command="pushmenu keys" data-route-target="keys" data-owner="agent5">Key Bindings</button>
@@ -28,13 +26,13 @@
           <button id="options-language" type="button" data-command="pushmenu language" data-route-target="language">Language</button>
           <button id="options-downloads" type="button" data-command="pushmenu downloads" data-route-target="downloads">Download Options</button>
           <button id="options-addressbook" type="button" data-command="pushmenu addressbook" data-route-target="addressbook" data-owner="agent5">Address Book</button>
-        </nav>
-      </main>
+        </div>
+      </div>
 
-      <footer class="menu-footer" id="options-menu-footer">
+      <div class="menu-footer" id="options-menu-footer">
         <button id="options-back" type="button" data-command="ui.back">Back</button>
         <button id="options-close" type="button" data-command="ui.close">Close</button>
-      </footer>
+      </div>
     </div>
   </body>
 </rml>

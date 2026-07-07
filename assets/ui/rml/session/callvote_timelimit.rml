@@ -4,13 +4,12 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
   <body id="session-callvote-timelimit" data-route-id="callvote_timelimit" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame">
     <div class="screen compact-screen session-screen" id="callvote-timelimit-screen">
       <header class="page-header">
         <h1>Callvote: Timelimit</h1>
-        <p id="callvote-timelimit-current" class="status-message" data-bind="cvars.ui_callvote_timelimit_current" data-visible-if="ui_callvote_timelimit_current">Current timelimit binds here.</p>
+        <p id="callvote-timelimit-current" class="status-message" data-bind="cvars.ui_callvote_timelimit_current" data-visible-if="ui_callvote_timelimit_current">Current timelimit</p>
       </header>
 
       <nav class="menu-list" id="callvote-timelimit-menu" data-model="session.callvote.timelimit" data-owner-boundary="sgame-published-cvars">

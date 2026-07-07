@@ -4,19 +4,19 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
-  <body id="session-forfeit-confirm" data-route-id="forfeit_confirm" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame">
-    <div class="screen compact-screen session-screen" id="forfeit-confirm-screen" data-close-command="popmenu">
-      <header class="page-header">
-        <h1>Confirm Forfeit</h1>
-        <p id="forfeit-confirm-prompt">Are you sure you want to forfeit?</p>
-      </header>
-
-      <footer class="actions" id="forfeit-confirm-actions" data-model="session.forfeit" data-owner-boundary="sgame-commands">
-        <button id="forfeit-confirm-yes" type="button" data-command="worr_forfeit_yes">YES</button>
-        <button id="forfeit-confirm-no" type="button" data-command="popmenu">NO</button>
-      </footer>
+  <body id="session-forfeit-confirm" data-route-id="forfeit_confirm" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame" data-menu-presentation="popup" data-menu-sound-open="alert" data-menu-music="menu">
+    <div class="screen compact-screen session-screen popup-screen" id="forfeit-confirm-screen" data-close-command="popmenu">
+      <main class="popup-dialog confirmation-dialog" id="forfeit-confirm-dialog" data-model="session.forfeit" data-owner-boundary="sgame-commands">
+        <header class="popup-header">
+          <h1>CONFIRM FORFEIT</h1>
+        </header>
+        <p class="popup-message" id="forfeit-confirm-prompt">Are you sure you want to forfeit?</p>
+        <footer class="popup-actions" id="forfeit-confirm-actions">
+          <button id="forfeit-confirm-yes" type="button" data-command="worr_forfeit_yes" data-menu-sound="confirm">YES</button>
+          <button id="forfeit-confirm-no" type="button" data-command="popmenu" data-menu-sound="cancel">NO</button>
+        </footer>
+      </main>
     </div>
   </body>
 </rml>

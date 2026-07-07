@@ -25,6 +25,12 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/keys.h"
 #include "renderer/renderer.h"
 
+#if UI_RML_HAS_RUNTIME
+#define UI_RML_ENABLE_DEFAULT "1"
+#else
+#define UI_RML_ENABLE_DEFAULT "0"
+#endif
+
 static cvar_t *ui_rml_enable;
 static cvar_t *ui_rml_debug;
 static cvar_t *ui_rml_asset_root;
@@ -38,6 +44,9 @@ static bool ui_rml_runtime_started;
 static bool ui_rml_runtime_failed;
 static bool ui_rml_route_active;
 static char ui_rml_active_route[MAX_QPATH];
+#define UI_RML_ROUTE_HISTORY_MAX 16
+static char ui_rml_route_history[UI_RML_ROUTE_HISTORY_MAX][MAX_QPATH];
+static size_t ui_rml_route_history_count;
 typedef struct {
     unsigned opens;
     unsigned closes;
@@ -60,6 +69,14 @@ typedef struct {
 static ui_rml_route_metrics_t ui_rml_route_metrics;
 static ui_rml_renderer_interface_t ui_rml_renderer;
 static bool ui_rml_renderer_registered;
+static qhandle_t ui_rml_cursor_handle;
+static int ui_rml_cursor_width;
+static int ui_rml_cursor_height;
+static int ui_rml_mouse_x;
+static int ui_rml_mouse_y;
+static bool ui_rml_mouse_valid;
+static constexpr float UI_RML_REFERENCE_WIDTH = 960.0f;
+static constexpr float UI_RML_REFERENCE_HEIGHT = 720.0f;
 #endif
 
 typedef struct {
@@ -188,9 +205,7 @@ static const ui_rml_menu_route_t *UI_Rml_FindRuntimeMenuRoute(const char *route_
 
 static bool UI_Rml_RuntimeRouteIsAllowed(const char *route_id)
 {
-    return route_id &&
-           (!strcmp(route_id, "core.runtime_smoke") ||
-            UI_Rml_FindRuntimeMenuRoute(route_id) != NULL);
+    return UI_Rml_FindRoute(route_id) != NULL;
 }
 
 static const char *UI_Rml_AssetRoot(void)
@@ -219,6 +234,159 @@ static bool UI_Rml_BuildDocumentPath(const ui_rml_route_t *route,
 
     return len < size;
 }
+
+#if UI_RML_HAS_RUNTIME
+static float UI_Rml_CanvasPixelScale(void)
+{
+    const int framebuffer_width =
+        r_config.width > 0 ? r_config.width : (int)UI_RML_REFERENCE_WIDTH;
+    const int framebuffer_height =
+        r_config.height > 0 ? r_config.height : (int)UI_RML_REFERENCE_HEIGHT;
+    const float scale_x = (float)framebuffer_width / UI_RML_REFERENCE_WIDTH;
+    const float scale_y = (float)framebuffer_height / UI_RML_REFERENCE_HEIGHT;
+    float scale = min(scale_x, scale_y);
+
+    if (scale < 1.0f) {
+        scale = 1.0f;
+    }
+
+    return scale;
+}
+
+static int UI_Rml_RendererBaseScaleInt(void)
+{
+    const int framebuffer_width =
+        r_config.width > 0 ? r_config.width : VIRTUAL_SCREEN_WIDTH;
+    const int framebuffer_height =
+        r_config.height > 0 ? r_config.height : VIRTUAL_SCREEN_HEIGHT;
+    float scale_x = (float)framebuffer_width / VIRTUAL_SCREEN_WIDTH;
+    float scale_y = (float)framebuffer_height / VIRTUAL_SCREEN_HEIGHT;
+    float base_scale = max(scale_x, scale_y);
+    int base_scale_int;
+
+    if (base_scale < 1.0f) {
+        base_scale = 1.0f;
+    }
+
+    base_scale_int = (int)base_scale;
+    if (base_scale_int < 1) {
+        base_scale_int = 1;
+    }
+
+    return base_scale_int;
+}
+
+static float UI_Rml_RendererDrawScale(void)
+{
+    const float canvas_scale = UI_Rml_CanvasPixelScale();
+
+    if (canvas_scale <= 0.0f) {
+        return (float)UI_Rml_RendererBaseScaleInt();
+    }
+
+    return (float)UI_Rml_RendererBaseScaleInt() / canvas_scale;
+}
+
+static void UI_Rml_GetCanvas(int *width, int *height, float *pixel_scale)
+{
+    int framebuffer_width =
+        r_config.width > 0 ? r_config.width : (int)UI_RML_REFERENCE_WIDTH;
+    int framebuffer_height =
+        r_config.height > 0 ? r_config.height : (int)UI_RML_REFERENCE_HEIGHT;
+    float scale = UI_Rml_CanvasPixelScale();
+
+    if (scale <= 0.0f) {
+        scale = 1.0f;
+    }
+
+    if (width) {
+        *width = max(1, Q_rint((float)framebuffer_width / scale));
+    }
+    if (height) {
+        *height = max(1, Q_rint((float)framebuffer_height / scale));
+    }
+    if (pixel_scale) {
+        *pixel_scale = scale;
+    }
+}
+
+static void UI_Rml_ClampMouseToCanvas(void)
+{
+    int width;
+    int height;
+
+    UI_Rml_GetCanvas(&width, &height, NULL);
+    ui_rml_mouse_x = Q_clip(ui_rml_mouse_x, 0, max(0, width - 1));
+    ui_rml_mouse_y = Q_clip(ui_rml_mouse_y, 0, max(0, height - 1));
+
+    if (ui_rml_route_active) {
+        ui_rml_route_metrics.last_mouse_x = ui_rml_mouse_x;
+        ui_rml_route_metrics.last_mouse_y = ui_rml_mouse_y;
+    }
+}
+
+static void UI_Rml_EnsureMousePosition(void)
+{
+    if (!ui_rml_mouse_valid) {
+        int width;
+        int height;
+
+        UI_Rml_GetCanvas(&width, &height, NULL);
+        ui_rml_mouse_x = width / 2;
+        ui_rml_mouse_y = height / 2;
+        ui_rml_mouse_valid = true;
+    }
+
+    UI_Rml_ClampMouseToCanvas();
+}
+
+static void UI_Rml_MouseFromFramebuffer(int x, int y, int *out_x, int *out_y)
+{
+    int width;
+    int height;
+    float pixel_scale;
+
+    UI_Rml_GetCanvas(&width, &height, &pixel_scale);
+    if (pixel_scale <= 0.0f) {
+        pixel_scale = 1.0f;
+    }
+
+    if (out_x) {
+        *out_x = Q_clip(Q_rint((float)x / pixel_scale), 0, max(0, width - 1));
+    }
+    if (out_y) {
+        *out_y = Q_clip(Q_rint((float)y / pixel_scale), 0, max(0, height - 1));
+    }
+}
+
+static void UI_Rml_RegisterCursor(void)
+{
+    if (ui_rml_cursor_handle) {
+        return;
+    }
+
+    ui_rml_cursor_handle = R_RegisterPic("/gfx/cursor.png");
+    ui_rml_cursor_width = 12;
+    ui_rml_cursor_height = 12;
+}
+
+static void UI_Rml_DrawCursor(void)
+{
+    if (!ui_rml_cursor_handle) {
+        UI_Rml_RegisterCursor();
+    }
+    if (!ui_rml_cursor_handle) {
+        return;
+    }
+
+    UI_Rml_EnsureMousePosition();
+    R_SetClipRect(NULL);
+    R_SetScale(UI_Rml_RendererDrawScale());
+    R_DrawStretchPic(ui_rml_mouse_x, ui_rml_mouse_y,
+                     ui_rml_cursor_width, ui_rml_cursor_height,
+                     COLOR_WHITE, ui_rml_cursor_handle);
+}
+#endif
 
 static bool UI_Rml_RuntimeInterfaceAvailable(void)
 {
@@ -255,6 +423,50 @@ static bool UI_Rml_RuntimeCanOpenRoutes(void)
 static void UI_Rml_StopRuntime(void);
 static void UI_Rml_ClearActiveRoute(bool notify_runtime);
 static void UI_Rml_PrintRuntimeStatus(void);
+static bool UI_Rml_OpenRouteInternalEx(const char *route_id, bool record_history);
+static bool UI_Rml_OpenPopupRouteInternal(const char *route_id);
+
+#if UI_RML_HAS_RUNTIME
+static void UI_Rml_ClearRouteHistory(void)
+{
+    ui_rml_route_history_count = 0;
+}
+
+static void UI_Rml_PushRouteHistory(const char *route_id)
+{
+    if (!route_id || !route_id[0]) {
+        return;
+    }
+
+    if (ui_rml_route_history_count > 0 &&
+        !strcmp(ui_rml_route_history[ui_rml_route_history_count - 1], route_id)) {
+        return;
+    }
+
+    if (ui_rml_route_history_count == q_countof(ui_rml_route_history)) {
+        memmove(ui_rml_route_history,
+                ui_rml_route_history + 1,
+                sizeof(ui_rml_route_history[0]) * (q_countof(ui_rml_route_history) - 1));
+        ui_rml_route_history_count--;
+    }
+
+    Q_strlcpy(ui_rml_route_history[ui_rml_route_history_count++],
+              route_id,
+              sizeof(ui_rml_route_history[0]));
+}
+
+static bool UI_Rml_PopRouteHistory(char *route_id, size_t size)
+{
+    if (!route_id || !size || ui_rml_route_history_count == 0) {
+        return false;
+    }
+
+    ui_rml_route_history_count--;
+    Q_strlcpy(route_id, ui_rml_route_history[ui_rml_route_history_count], size);
+    ui_rml_route_history[ui_rml_route_history_count][0] = 0;
+    return route_id[0] != 0;
+}
+#endif
 
 static bool UI_Rml_StartRuntime(void)
 {
@@ -283,6 +495,7 @@ static void UI_Rml_StopRuntime(void)
 {
 #if UI_RML_HAS_RUNTIME
     UI_Rml_ClearActiveRoute(true);
+    UI_Rml_ClearRouteHistory();
 
     if (ui_rml_runtime_started && ui_rml_runtime.Shutdown) {
         ui_rml_runtime.Shutdown();
@@ -396,10 +609,17 @@ static bool UI_Rml_RuntimeProbeRoute(const char *route_id)
 
 static bool UI_Rml_OpenRouteInternal(const char *route_id)
 {
+    return UI_Rml_OpenRouteInternalEx(route_id, true);
+}
+
+static bool UI_Rml_OpenRouteInternalEx(const char *route_id, bool record_history)
+{
 #if UI_RML_HAS_RUNTIME
     const ui_rml_route_t *route = UI_Rml_FindRoute(route_id);
     const char *document;
     bool document_found;
+    bool had_previous_route = false;
+    char previous_route[MAX_QPATH];
 
     if (!route) {
         Com_Printf("RmlUi route '%s' is not registered.\n",
@@ -414,7 +634,7 @@ static bool UI_Rml_OpenRouteInternal(const char *route_id)
     }
 
     if (!UI_Rml_RuntimeRouteIsAllowed(route->id)) {
-        Com_Printf("RmlUi route '%s' is not enabled for runtime drawing yet; keeping legacy UI fallback active.\n",
+        Com_Printf("RmlUi route '%s' is not registered for runtime drawing; keeping legacy UI fallback active.\n",
                    route->id);
         return false;
     }
@@ -447,10 +667,21 @@ static bool UI_Rml_OpenRouteInternal(const char *route_id)
         return false;
     }
 
-    UI_Rml_ClearActiveRoute(true);
+    if (ui_rml_route_active && ui_rml_active_route[0] &&
+        strcmp(ui_rml_active_route, route->id)) {
+        had_previous_route = true;
+        Q_strlcpy(previous_route, ui_rml_active_route, sizeof(previous_route));
+    }
 
     if (ui_rml_runtime.OpenRoute(route->id, document)) {
+        if (record_history && had_previous_route) {
+            UI_Rml_PushRouteHistory(previous_route);
+        }
         UI_Rml_MarkRouteActive(route->id);
+        UI_Rml_GetCanvas(&ui_rml_route_metrics.width,
+                         &ui_rml_route_metrics.height,
+                         NULL);
+        UI_Rml_EnsureMousePosition();
         return true;
     }
 
@@ -553,6 +784,28 @@ static void UI_Rml_RuntimeOpenRoute_f(void)
     UI_Rml_OpenRouteInternal(route_id);
 }
 
+static bool UI_Rml_OpenPopupRouteInternal(const char *route_id)
+{
+#if UI_RML_HAS_RUNTIME
+    Com_Printf("RmlUi popup route '%s' requested.\n",
+               route_id && route_id[0] ? route_id : "<null>");
+    return UI_Rml_OpenRouteInternalEx(route_id, true);
+#else
+    (void)route_id;
+    return false;
+#endif
+}
+
+static void UI_Rml_RuntimePopupRoute_f(void)
+{
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: %s <route_id>\n", Cmd_Argv(0));
+        return;
+    }
+
+    UI_Rml_OpenPopupRouteInternal(Cmd_Argv(1));
+}
+
 static void UI_Rml_RuntimeCaptureMenu_f(void)
 {
 #if UI_RML_HAS_RUNTIME
@@ -589,6 +842,24 @@ static void UI_Rml_RuntimeCaptureMenu_f(void)
 
 static void UI_Rml_RuntimeCloseRoute_f(void)
 {
+    UI_Rml_CloseActiveRoute();
+}
+
+static void UI_Rml_RuntimeBackRoute_f(void)
+{
+#if UI_RML_HAS_RUNTIME
+    char route_id[MAX_QPATH];
+
+    if (UI_Rml_PopRouteHistory(route_id, sizeof(route_id))) {
+        if (UI_Rml_OpenRouteInternalEx(route_id, false)) {
+            return;
+        }
+
+        Com_Printf("RmlUi back route '%s' failed to reopen; closing active route.\n",
+                   route_id);
+    }
+#endif
+
     UI_Rml_CloseActiveRoute();
 }
 
@@ -684,6 +955,8 @@ static const cmdreg_t ui_rml_commands[] = {
     { "ui_rml_probe", UI_Rml_ProbeRoute_f, UI_Rml_ProbeRoute_c },
     { "ui_rml_runtime_probe", UI_Rml_RuntimeProbeRoute_f, UI_Rml_RuntimeProbeRoute_c },
     { "ui_rml_runtime_open", UI_Rml_RuntimeOpenRoute_f, UI_Rml_RuntimeOpenRoute_c },
+    { "ui_rml_runtime_popup", UI_Rml_RuntimePopupRoute_f, UI_Rml_RuntimeOpenRoute_c },
+    { "ui_rml_runtime_back", UI_Rml_RuntimeBackRoute_f },
     { "ui_rml_runtime_close", UI_Rml_RuntimeCloseRoute_f },
     { "ui_rml_runtime_status", UI_Rml_RuntimeStatus_f },
     { "ui_rml_runtime_capture", UI_Rml_RuntimeCapture_f },
@@ -698,12 +971,13 @@ void UI_Rml_Init(void)
         return;
     }
 
-    ui_rml_enable = Cvar_Get("ui_rml_enable", "0", 0);
+    ui_rml_enable = Cvar_Get("ui_rml_enable", UI_RML_ENABLE_DEFAULT, 0);
     ui_rml_debug = Cvar_Get("ui_rml_debug", "0", 0);
     ui_rml_asset_root = Cvar_Get("ui_rml_asset_root", "ui/rml", 0);
 
 #if UI_RML_HAS_RUNTIME
     UI_Rml_RegisterCompiledRuntime();
+    UI_Rml_RegisterCursor();
 #endif
 
     if (!Cmd_Exists("ui_rml_probe")) {
@@ -739,6 +1013,13 @@ void UI_Rml_Shutdown(void)
     }
 
     UI_Rml_StopRuntime();
+
+#if UI_RML_HAS_RUNTIME
+    ui_rml_cursor_handle = 0;
+    ui_rml_cursor_width = 0;
+    ui_rml_cursor_height = 0;
+    ui_rml_mouse_valid = false;
+#endif
 
     ui_rml_initialized = false;
     ui_rml_enable = NULL;
@@ -962,6 +1243,11 @@ bool UI_Rml_ProbeRoute(const char *route_id)
     return true;
 }
 
+bool UI_Rml_OpenRoute(const char *route_id)
+{
+    return UI_Rml_OpenRouteInternal(route_id);
+}
+
 bool UI_Rml_OpenMenu(uiMenu_t menu)
 {
     const char *route = UI_Rml_RouteForMenu(menu);
@@ -981,7 +1267,7 @@ bool UI_Rml_OpenMenu(uiMenu_t menu)
         }
 
         if (ui_rml_debug && ui_rml_debug->integer) {
-            Com_Printf("RmlUi route '%s' is not enabled for runtime drawing yet; keeping legacy UI fallback active.\n",
+            Com_Printf("RmlUi route '%s' is not registered for runtime drawing; keeping legacy UI fallback active.\n",
                        route);
         }
         return false;
@@ -996,6 +1282,30 @@ bool UI_Rml_IsRouteActive(void)
     return ui_rml_route_active;
 #else
     return false;
+#endif
+}
+
+void UI_Rml_ModeChanged(void)
+{
+#if UI_RML_HAS_RUNTIME
+    int width;
+    int height;
+
+    UI_Rml_ClampMouseToCanvas();
+
+    if (!ui_rml_route_active || !ui_rml_runtime_started ||
+        !ui_rml_runtime.Update) {
+        return;
+    }
+
+    UI_Rml_GetCanvas(&width, &height, NULL);
+    if (!ui_rml_runtime.Update(width, height, ui_rml_route_metrics.last_realtime)) {
+        UI_Rml_ClearActiveRoute(true);
+        return;
+    }
+
+    ui_rml_route_metrics.width = width;
+    ui_rml_route_metrics.height = height;
 #endif
 }
 
@@ -1015,8 +1325,7 @@ bool UI_Rml_Draw(unsigned realtime)
         return false;
     }
 
-    width = r_config.width > 0 ? r_config.width : VIRTUAL_SCREEN_WIDTH;
-    height = r_config.height > 0 ? r_config.height : VIRTUAL_SCREEN_HEIGHT;
+    UI_Rml_GetCanvas(&width, &height, NULL);
 
     if (!ui_rml_runtime.Update(width, height, realtime) ||
         !ui_rml_runtime.Render()) {
@@ -1025,6 +1334,8 @@ bool UI_Rml_Draw(unsigned realtime)
         UI_Rml_ClearActiveRoute(true);
         return false;
     }
+
+    UI_Rml_DrawCursor();
 
     ui_rml_route_metrics.updates++;
     ui_rml_route_metrics.renders++;
@@ -1057,7 +1368,8 @@ bool UI_Rml_KeyEvent(int key, bool down)
     }
 
     if (down && (key == K_ESCAPE || key == K_MOUSE2)) {
-        UI_Rml_CloseActiveRoute();
+        UI_StartFeedbackSound(UI_FEEDBACK_CLOSE);
+        UI_Rml_RuntimeBackRoute_f();
     }
 
     return true;
@@ -1090,17 +1402,25 @@ bool UI_Rml_CharEvent(int key)
 bool UI_Rml_MouseEvent(int x, int y)
 {
 #if UI_RML_HAS_RUNTIME
+    int canvas_x;
+    int canvas_y;
+
     if (!ui_rml_route_active) {
         return false;
     }
 
+    UI_Rml_MouseFromFramebuffer(x, y, &canvas_x, &canvas_y);
+    ui_rml_mouse_x = canvas_x;
+    ui_rml_mouse_y = canvas_y;
+    ui_rml_mouse_valid = true;
+
     if (ui_rml_runtime.MouseEvent) {
-        (void)ui_rml_runtime.MouseEvent(x, y);
+        (void)ui_rml_runtime.MouseEvent(canvas_x, canvas_y);
     }
 
     ui_rml_route_metrics.mouse_moves++;
-    ui_rml_route_metrics.last_mouse_x = x;
-    ui_rml_route_metrics.last_mouse_y = y;
+    ui_rml_route_metrics.last_mouse_x = canvas_x;
+    ui_rml_route_metrics.last_mouse_y = canvas_y;
     return true;
 #else
     (void)x;
@@ -1115,6 +1435,7 @@ void UI_Rml_CloseActiveRoute(void)
     if (ui_rml_route_active) {
         ui_rml_route_metrics.close_requests++;
     }
+    UI_Rml_ClearRouteHistory();
 #endif
     UI_Rml_ClearActiveRoute(true);
 }

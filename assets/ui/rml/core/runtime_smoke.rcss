@@ -82,7 +82,8 @@ p
 	margin-top: 10px;
 }
 
-#runtime-smoke-actions button
+#runtime-smoke-actions button,
+#runtime-smoke-actions .ui-button
 {
 	display: inline-block;
 	min-width: 140px;

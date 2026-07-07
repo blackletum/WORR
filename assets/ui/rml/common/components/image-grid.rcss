@@ -34,13 +34,14 @@
 .worr-image-grid-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
 }
 
 .worr-image-grid-item {
   width: 112px;
   min-height: 124px;
   padding: 6px;
+  margin-right: 8px;
+  margin-bottom: 8px;
   color: #f8f2e6;
   background-color: #202832;
   border-width: 1px;
@@ -101,13 +102,15 @@
 
 .worr-image-grid-actions {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
   margin-top: 10px;
 }
 
 .worr-image-grid-action {
   min-width: 112px;
   padding: 6px 10px;
+  margin-right: 8px;
+  margin-bottom: 8px;
   color: #f8f2e6;
   background-color: #28323d;
   border-width: 1px;

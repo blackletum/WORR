@@ -30,7 +30,7 @@ option('client-ui',
 
 option('rmlui',
   type: 'feature',
-  value: 'disabled',
+  value: 'auto',
   description: 'RmlUi menu runtime support')
 
 option('default-game',

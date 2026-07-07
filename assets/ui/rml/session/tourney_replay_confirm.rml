@@ -4,29 +4,24 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
-  <body id="session-tourney-replay-confirm" data-route-id="tourney_replay_confirm" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame">
-    <div class="screen compact-screen session-screen" id="tourney-replay-confirm-screen" data-close-command="popmenu">
-      <header class="page-header" id="tourney-replay-confirm-header">
-        <h1>Confirm Replay</h1>
-        <p id="tourney-replay-confirm-summary">
-          Replay confirmation keeps the dynamic prompt and command-cvar emitted
-          by sgame before rewinding a tournament game.
+  <body id="session-tourney-replay-confirm" data-route-id="tourney_replay_confirm" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame" data-menu-presentation="popup" data-menu-sound-open="alert" data-menu-music="menu">
+    <div class="screen compact-screen session-screen popup-screen" id="tourney-replay-confirm-screen" data-close-command="popmenu">
+      <main class="popup-dialog confirmation-dialog" id="tourney-replay-confirm-dialog" data-model="session.tournament.replay_confirm" data-owner-boundary="sgame-published-cvars">
+        <header class="popup-header" id="tourney-replay-confirm-header">
+          <h1>CONFIRM REPLAY</h1>
+        </header>
+        <p class="popup-kicker" id="tourney-replay-confirm-summary">
+          Replay Game
         </p>
-      </header>
-
-      <main class="session-vote-prompt" id="tourney-replay-confirm-content" data-model="session.tournament.replay_confirm" data-owner-boundary="sgame-published-cvars">
-        <h2 id="tourney-replay-prompt-title">Replay Game</h2>
-        <p id="tourney-replay-prompt" data-bind="cvars.ui_tourney_replay_prompt" data-label-cvar="ui_tourney_replay_prompt" data-visible-if="ui_tourney_replay_prompt">
+        <p class="popup-message" id="tourney-replay-prompt" data-bind="cvars.ui_tourney_replay_prompt" data-label-cvar="ui_tourney_replay_prompt" data-visible-if="ui_tourney_replay_prompt">
           Replay game?
         </p>
+        <footer class="popup-actions" id="tourney-replay-confirm-actions" data-controller="command.cvar">
+          <button id="tourney-replay-yes" type="button" data-command-cvar="ui_tourney_replay_yes_cmd" data-menu-sound="confirm">YES</button>
+          <button id="tourney-replay-no" type="button" data-command="popmenu" data-menu-sound="cancel">NO</button>
+        </footer>
       </main>
-
-      <footer class="actions" id="tourney-replay-confirm-actions" data-controller="command.cvar">
-        <button id="tourney-replay-yes" type="button" data-command-cvar="ui_tourney_replay_yes_cmd">YES</button>
-        <button id="tourney-replay-no" type="button" data-command="popmenu">NO</button>
-      </footer>
     </div>
   </body>
 </rml>

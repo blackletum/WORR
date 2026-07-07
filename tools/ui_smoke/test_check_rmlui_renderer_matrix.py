@@ -29,6 +29,10 @@ renderer_gl_deps = renderer_deps
 if rmlui_runtime
   renderer_gl_deps += rmlui_dep
   renderer_gl_cpp_args += '-DUI_RML_HAS_RUNTIME=1'
+  renderer_vk_rtx_deps += rmlui_dep
+  renderer_vk_rtx_cpp_args += '-DUI_RML_HAS_RUNTIME=1'
+  renderer_vk_deps += rmlui_dep
+  renderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'
 endif
 """,
     )
@@ -57,16 +61,6 @@ typedef struct renderer_export_s {
         repo_root / "src/renderer/renderer_api.c",
         """
 #if USE_REF != REF_GL
-static renderer_rmlui_family_t Renderer_RmlUiRendererFamily(void)
-{
-    return R_RENDERER_RMLUI_FAMILY_NONE;
-}
-
-static const char *Renderer_RmlUiRendererName(void)
-{
-    return "none";
-}
-
 static bool Renderer_RmlUiCanRender(void)
 {
     return false;
@@ -79,14 +73,12 @@ static void *Renderer_RmlUiNativeRenderInterface(void)
 #endif
 
 static const renderer_export_t renderer_exports = {
-#if USE_REF == REF_GL
     .RmlUiRendererFamily    = R_RmlUiRendererFamily,
     .RmlUiRendererName      = R_RmlUiRendererName,
+#if USE_REF == REF_GL
     .RmlUiCanRender         = R_RmlUiCanRender,
     .RmlUiNativeRenderInterface = R_RmlUiNativeRenderInterface,
 #else
-    .RmlUiRendererFamily    = Renderer_RmlUiRendererFamily,
-    .RmlUiRendererName      = Renderer_RmlUiRendererName,
     .RmlUiCanRender         = Renderer_RmlUiCanRender,
     .RmlUiNativeRenderInterface = Renderer_RmlUiNativeRenderInterface,
 #endif
@@ -113,10 +105,22 @@ public:
 static R_RmlUiOpenGLRenderInterface r_rmlui_opengl_render_interface;
 #endif
 
+#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_LEGACY)
+class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface {};
+#endif
+
+#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_RTX)
+class R_RmlUiRtxVkptRenderInterface final : public Rml::RenderInterface {};
+#endif
+
 renderer_rmlui_family_t R_RmlUiRendererFamily(void)
 {
-#if UI_RML_HAS_RUNTIME
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
     return R_RENDERER_RMLUI_FAMILY_OPENGL;
+#elif defined(RENDERER_VULKAN_LEGACY)
+    return R_RENDERER_RMLUI_FAMILY_VULKAN;
+#elif defined(RENDERER_VULKAN_RTX)
+    return R_RENDERER_RMLUI_FAMILY_RTX_VKPT;
 #else
     return R_RENDERER_RMLUI_FAMILY_NONE;
 #endif
@@ -124,7 +128,15 @@ renderer_rmlui_family_t R_RmlUiRendererFamily(void)
 
 const char *R_RmlUiRendererName(void)
 {
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
     return "OpenGL RmlUi render-interface primitives";
+#elif defined(RENDERER_VULKAN_LEGACY)
+    return "Vulkan RmlUi render-interface inactive";
+#elif defined(RENDERER_VULKAN_RTX)
+    return "RTX/vkpt RmlUi render-interface inactive";
+#else
+    return "none";
+#endif
 }
 
 bool R_RmlUiCanRender(void)
@@ -249,8 +261,9 @@ def test_json_report_exposes_renderer_lanes(
     assert payload["lanes"]["opengl"]["facts"]["native_render_interface_returned"] is True
     assert payload["lanes"]["vulkan"]["expected_status"] == "blocked_until_native"
     assert payload["lanes"]["vulkan"]["facts"]["renderer_api_non_gl_unavailable"] is True
+    assert payload["lanes"]["vulkan"]["facts"]["native_family_export_inactive"] is True
     assert payload["lanes"]["rtx_vkpt"]["expected_status"] == "blocked_until_native"
-    assert payload["lanes"]["rtx_vkpt"]["facts"]["meson_runtime_disabled"] is True
+    assert payload["lanes"]["rtx_vkpt"]["facts"]["runtime_dependency_inactive"] is True
     assert payload["counts"]["native_guarded_lanes"] == 1
     assert payload["counts"]["blocked_lanes"] == 2
     assert payload["counts"]["errors"] == 0
@@ -300,7 +313,7 @@ def test_vulkan_lane_must_not_map_to_opengl(
     assert "vulkan: client renderer must map the Vulkan family to the Vulkan UI lane" in captured.out
 
 
-def test_vulkan_runtime_dependency_before_native_bridge_fails(
+def test_vulkan_partial_runtime_dependency_fails(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -308,8 +321,10 @@ def test_vulkan_runtime_dependency_before_native_bridge_fails(
     write_valid_repo(repo_root)
     meson_path = repo_root / "meson.build"
     meson_path.write_text(
-        meson_path.read_text(encoding="utf-8")
-        + "\nrenderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'\n",
+        meson_path.read_text(encoding="utf-8").replace(
+            "  renderer_vk_deps += rmlui_dep\n",
+            "",
+        ),
         encoding="utf-8",
     )
 
@@ -317,7 +332,7 @@ def test_vulkan_runtime_dependency_before_native_bridge_fails(
 
     assert result == 1
     assert (
-        "vulkan: runtime dependency must stay disabled until a native Vulkan bridge exists"
+        "vulkan: Vulkan runtime dependency must stay inactive until native rendering is available"
         in captured.out
     )
 

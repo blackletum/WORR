@@ -13,6 +13,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import check_rmlui_renderer_matrix as renderer_matrix
+import check_rmlui_vulkan_bridge_readiness as bridge_readiness
+
 
 DEFAULT_INSTALL_DIR = Path(".install")
 DEFAULT_ENGINE_EXE = DEFAULT_INSTALL_DIR / "worr_x86_64.exe"
@@ -48,7 +51,8 @@ INPUT_MARKER = "RmlUi runtime input:"
 CAPTURE_MARKER = "RmlUi guarded capture route is active"
 MENU_CAPTURE_MARKER = "RmlUi guarded menu capture route"
 SYNTHETIC_INPUT_MARKER = "RmlUi synthetic input smoke:"
-FONT_GEOMETRY_MARKER = "RmlUi smoke font engine generated glyph geometry"
+FONT_GEOMETRY_MARKER = "RmlUi TTF font engine generated text texture"
+FONT_Q2R_SOURCE_MARKER = "loaded from Quake II Rerelease font"
 SCREENSHOT_MARKER = "Wrote "
 
 LAYOUT_COLORS = {
@@ -664,6 +668,7 @@ def validate_evidence(report: RuntimeCaptureReport, *, min_mtime: float | None =
             or MENU_CAPTURE_MARKER in combined_text,
             "synthetic_input_marker_seen": SYNTHETIC_INPUT_MARKER in combined_text,
             "font_geometry_marker_seen": FONT_GEOMETRY_MARKER in combined_text,
+            "font_q2r_source_marker_seen": FONT_Q2R_SOURCE_MARKER in combined_text,
             "guarded_opengl_status_seen": runtime_status_is_guarded_opengl(
                 combined_text,
                 report.route_id,
@@ -706,7 +711,8 @@ def validate_evidence(report: RuntimeCaptureReport, *, min_mtime: float | None =
         ("screenshot_exists", f"runtime capture screenshot missing: {report.screenshot_path}"),
         ("capture_marker_seen", "runtime capture marker was not found in log/condump evidence"),
         ("synthetic_input_marker_seen", "runtime synthetic input marker was not found"),
-        ("font_geometry_marker_seen", "RmlUi font glyph-geometry marker was not found"),
+        ("font_geometry_marker_seen", "RmlUi TTF font texture marker was not found"),
+        ("font_q2r_source_marker_seen", "RmlUi Quake II Rerelease font source marker was not found"),
         ("guarded_opengl_status_seen", "guarded OpenGL active-route status was not found"),
         ("inactive_status_seen", "runtime inactive status after synthetic back-close was not found"),
         ("frames_marker_seen", "runtime frame counter line was not found"),
@@ -800,6 +806,33 @@ def write_route_matrix_manifest(
     )
 
 
+def write_renderer_matrix_manifest(
+    route_reports: list[RuntimeCaptureReport],
+    renderer_report: renderer_matrix.RendererMatrixReport,
+    bridge_report: bridge_readiness.BridgeReadinessReport,
+    manifest_path: Path | None,
+    repo_root: Path,
+) -> None:
+    if not manifest_path:
+        return
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(
+            runtime_renderer_matrix_payload(
+                route_reports,
+                renderer_report,
+                bridge_report,
+                repo_root,
+                manifest_path,
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def json_report_payload(report: RuntimeCaptureReport) -> dict[str, Any]:
     return {
         "ok": report.ok,
@@ -887,6 +920,109 @@ def route_matrix_report_payload(
     }
 
 
+def build_renderer_guardrail_report(repo_root: Path) -> renderer_matrix.RendererMatrixReport:
+    return renderer_matrix.validate_renderer_matrix(
+        repo_root=repo_root,
+        meson_build_path=renderer_matrix.resolve_path(
+            renderer_matrix.DEFAULT_MESON_BUILD,
+            repo_root,
+        ),
+        renderer_header_path=renderer_matrix.resolve_path(
+            renderer_matrix.DEFAULT_RENDERER_HEADER,
+            repo_root,
+        ),
+        renderer_api_source_path=renderer_matrix.resolve_path(
+            renderer_matrix.DEFAULT_RENDERER_API_SOURCE,
+            repo_root,
+        ),
+        renderer_bridge_source_path=renderer_matrix.resolve_path(
+            renderer_matrix.DEFAULT_RENDERER_BRIDGE_SOURCE,
+            repo_root,
+        ),
+        client_renderer_source_path=renderer_matrix.resolve_path(
+            renderer_matrix.DEFAULT_CLIENT_RENDERER_SOURCE,
+            repo_root,
+        ),
+        capture_checker_path=renderer_matrix.resolve_path(
+            renderer_matrix.DEFAULT_CAPTURE_CHECKER,
+            repo_root,
+        ),
+    )
+
+
+def build_bridge_readiness_report(repo_root: Path) -> bridge_readiness.BridgeReadinessReport:
+    return bridge_readiness.validate_bridge_readiness(
+        repo_root=repo_root,
+        paths=bridge_readiness.DEFAULT_INPUTS,
+    )
+
+
+def runtime_renderer_matrix_payload(
+    route_reports: list[RuntimeCaptureReport],
+    renderer_report: renderer_matrix.RendererMatrixReport,
+    bridge_report: bridge_readiness.BridgeReadinessReport,
+    repo_root: Path,
+    manifest_path: Path | None = None,
+) -> dict[str, Any]:
+    route_payload = route_matrix_report_payload(route_reports, repo_root, manifest_path)
+    renderer_payload = renderer_matrix.json_report_payload(renderer_report)
+    bridge_payload = bridge_readiness.json_report_payload(bridge_report)
+    route_errors = [
+        {
+            "source": "opengl_route_matrix",
+            **error,
+        }
+        for error in route_payload["errors"]
+    ]
+    renderer_errors = [
+        {
+            "source": "renderer_guardrail",
+            "error": error,
+        }
+        for error in renderer_payload["errors"]
+    ]
+    bridge_errors = [
+        {
+            "source": "bridge_readiness",
+            "error": error,
+        }
+        for error in bridge_payload["errors"]
+    ]
+    errors = route_errors + renderer_errors + bridge_errors
+
+    return {
+        "ok": route_payload["ok"] and renderer_payload["ok"] and bridge_payload["ok"],
+        "paths": {
+            "repo_root": str(repo_root),
+            "manifest": display_path(manifest_path, repo_root) if manifest_path else None,
+        },
+        "counts": {
+            "routes": route_payload["counts"]["routes"],
+            "route_passed": route_payload["counts"]["passed"],
+            "route_failed": route_payload["counts"]["failed"],
+            "renderer_lanes": renderer_payload["counts"]["lanes"],
+            "native_guarded_lanes": renderer_payload["counts"]["native_guarded_lanes"],
+            "blocked_lanes": renderer_payload["counts"]["blocked_lanes"],
+            "bridge_lanes": bridge_payload["counts"]["lanes"],
+            "bridge_foundation_lanes": bridge_payload["counts"]["foundation_lanes"],
+            "native_bridge_lanes": bridge_payload["counts"]["native_bridge_lanes"],
+            "bridge_blocked_lanes": bridge_payload["counts"]["blocked_lanes"],
+            "bridge_activation_complete_lanes": bridge_payload["counts"]["activation_complete_lanes"],
+            "bridge_partial_activation_lanes": bridge_payload["counts"]["partial_activation_lanes"],
+            "bridge_inactive_activation_lanes": bridge_payload["counts"]["inactive_activation_lanes"],
+            "bridge_activation_requirements": bridge_payload["counts"]["activation_requirements"],
+            "bridge_satisfied_activation_requirements": bridge_payload["counts"]["satisfied_activation_requirements"],
+            "bridge_pending_activation_requirements": bridge_payload["counts"]["pending_activation_requirements"],
+            "missing_bridge_requirements": bridge_payload["counts"]["missing_bridge_requirements"],
+            "errors": len(errors),
+        },
+        "opengl_route_matrix": route_payload,
+        "renderer_guardrail": renderer_payload,
+        "bridge_readiness": bridge_payload,
+        "errors": errors,
+    }
+
+
 def print_report(report: RuntimeCaptureReport) -> None:
     yes_no = lambda value: "yes" if value else "no"
 
@@ -905,7 +1041,8 @@ def print_report(report: RuntimeCaptureReport) -> None:
         print(f"  Engine exit code: {report.exit_code}")
     print(f"  Capture marker: {yes_no(report.facts.get('capture_marker_seen'))}")
     print(f"  Synthetic input marker: {yes_no(report.facts.get('synthetic_input_marker_seen'))}")
-    print(f"  Font glyph geometry: {yes_no(report.facts.get('font_geometry_marker_seen'))}")
+    print(f"  TTF font texture: {yes_no(report.facts.get('font_geometry_marker_seen'))}")
+    print(f"  Q2R font source: {yes_no(report.facts.get('font_q2r_source_marker_seen'))}")
     print(f"  Guarded OpenGL status: {yes_no(report.facts.get('guarded_opengl_status_seen'))}")
     print(f"  Inactive close status: {yes_no(report.facts.get('inactive_status_seen'))}")
     print(f"  Frame counters: {yes_no(report.facts.get('frames_marker_seen'))}")
@@ -962,6 +1099,51 @@ def print_route_matrix_report(reports: list[RuntimeCaptureReport]) -> None:
         print("\nResult: RmlUi runtime capture route matrix passed.")
     else:
         print("\nResult: RmlUi runtime capture route matrix failed.")
+
+
+def print_runtime_renderer_matrix_report(
+    route_reports: list[RuntimeCaptureReport],
+    renderer_report: renderer_matrix.RendererMatrixReport,
+    bridge_report: bridge_readiness.BridgeReadinessReport,
+) -> None:
+    print("RmlUi runtime capture renderer matrix:")
+
+    renderer_result = "passed" if renderer_report.ok() else "failed"
+    print(f"  Renderer guardrail: {renderer_result}")
+    for lane in renderer_report.lanes.values():
+        lane_result = "passed" if lane.ok() else "failed"
+        print(f"    {lane.label}: {lane.expected_status}; {lane_result}")
+        for error in lane.errors:
+            print(f"      - {error}")
+
+    bridge_result = "passed" if bridge_report.ok() else "failed"
+    print(f"  Bridge readiness: {bridge_result}")
+    for lane in bridge_report.lanes.values():
+        lane_result = "passed" if lane.ok() else "failed"
+        foundation_result = "foundation=yes" if lane.foundation_ok() else "foundation=no"
+        native_result = "native=yes" if lane.native_bridge_claimed() else "native=no"
+        print(
+            f"    {lane.label}: {lane.expected_status}; "
+            f"{foundation_result}; {native_result}; {lane_result}"
+        )
+        for error in lane.errors:
+            print(f"      - {error}")
+
+    print("  OpenGL route matrix:")
+    for report in route_reports:
+        dimensions = report.facts.get("screenshot_dimensions") or "-"
+        result = "passed" if report.ok else "failed"
+        print(
+            f"    {report.route_id}: {result}; "
+            f"geometry={report.geometry or '-'}; dimensions={dimensions}"
+        )
+        for error in report.errors:
+            print(f"      - {error}")
+
+    if all(report.ok for report in route_reports) and renderer_report.ok() and bridge_report.ok():
+        print("\nResult: RmlUi runtime capture renderer matrix passed.")
+    else:
+        print("\nResult: RmlUi runtime capture renderer matrix failed.")
 
 
 def build_report(
@@ -1118,6 +1300,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--geometry", default=None, help="Windowed capture geometry as WIDTHxHEIGHT.")
     parser.add_argument("--matrix", action="store_true", help="Run or validate the default viewport matrix.")
     parser.add_argument("--route-matrix", action="store_true", help="Run or validate the guarded menu route matrix.")
+    parser.add_argument(
+        "--renderer-matrix",
+        action="store_true",
+        help="Run or validate the guarded OpenGL route matrix plus renderer-family guardrails.",
+    )
     parser.add_argument("--startup-wait", type=int, default=DEFAULT_STARTUP_WAIT)
     parser.add_argument("--capture-wait", type=int, default=DEFAULT_CAPTURE_WAIT)
     parser.add_argument("--status-wait", type=int, default=DEFAULT_STATUS_WAIT)
@@ -1140,8 +1327,9 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             parser.error(str(exc))
 
-    if args.matrix and args.route_matrix:
-        parser.error("--matrix and --route-matrix cannot be combined")
+    matrix_modes = [args.matrix, args.route_matrix, args.renderer_matrix]
+    if sum(1 for enabled in matrix_modes if enabled) > 1:
+        parser.error("--matrix, --route-matrix, and --renderer-matrix cannot be combined")
 
     if args.matrix:
         reports = build_matrix_reports(
@@ -1216,6 +1404,92 @@ def main(argv: list[str] | None = None) -> int:
             print_route_matrix_report(reports)
 
         return 0 if all(report.ok for report in reports) else 1
+
+    if args.renderer_matrix:
+        reports = build_route_reports(
+            repo_root,
+            install_dir,
+            engine_exe,
+            args.base_game,
+            evidence_dir,
+            args.evidence_id,
+            args.screenshot_format,
+            args.startup_wait,
+            args.capture_wait,
+            args.status_wait,
+        )
+        renderer_report = build_renderer_guardrail_report(repo_root)
+        bridge_report = build_bridge_readiness_report(repo_root)
+
+        if args.dry_run:
+            if args.format == "json":
+                print(
+                    json.dumps(
+                        runtime_renderer_matrix_payload(
+                            reports,
+                            renderer_report,
+                            bridge_report,
+                            repo_root,
+                            manifest_path,
+                        ),
+                        indent=2,
+                        sort_keys=True,
+                    )
+                )
+            else:
+                for report in reports:
+                    print(" ".join(report.command))
+                print(
+                    "# Renderer guardrail lanes: "
+                    "OpenGL=native_guarded, "
+                    "Vulkan=blocked_until_native, "
+                    "RTX/vkpt=blocked_until_native"
+                )
+                print(
+                    "# Bridge readiness lanes: "
+                    "Vulkan=foundation_present_blocked, "
+                    "RTX/vkpt=foundation_present_blocked"
+                )
+            return 0 if renderer_report.ok() and bridge_report.ok() else 1
+
+        for report in reports:
+            start_time = run_engine_for_report(report, args.timeout) if args.run else None
+            validate_evidence(report, min_mtime=start_time if args.run else None)
+            if report.ok:
+                collect_evidence(report)
+
+        write_renderer_matrix_manifest(
+            reports,
+            renderer_report,
+            bridge_report,
+            manifest_path,
+            repo_root,
+        )
+
+        if args.format == "json":
+            print(
+                json.dumps(
+                        runtime_renderer_matrix_payload(
+                            reports,
+                            renderer_report,
+                            bridge_report,
+                            repo_root,
+                            manifest_path,
+                        ),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            print_runtime_renderer_matrix_report(reports, renderer_report, bridge_report)
+
+        return (
+            0
+            if all(report.ok for report in reports)
+            and renderer_report.ok()
+            and bridge_report.ok()
+            else 1
+        )
 
     report = build_report(
         repo_root,

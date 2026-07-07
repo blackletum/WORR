@@ -79,13 +79,13 @@
 .worr-keybind-slots {
   display: flex;
   justify-content: flex-end;
-  gap: 6px;
   width: 56%;
 }
 
 .worr-keybind-slot {
   width: 120px;
   padding: 6px 8px;
+  margin-left: 6px;
   text-align: center;
   color: #f8f2e6;
   background-color: #202832;
@@ -103,6 +103,7 @@
 .worr-keybind-clear {
   width: 76px;
   padding: 6px 8px;
+  margin-left: 6px;
   text-align: center;
   color: #d9c48f;
   background-color: #1d232b;

@@ -3,9 +3,6 @@
     <title>WORR Save Game</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/singleplayer.rcss" />
-    <link type="text/template" href="../common/components/menu_frame.rml" />
-    <link type="text/template" href="../common/components/save_slot.rml" />
-    <link type="text/template" href="../common/components/save-load.rml" />
   </head>
   <body id="singleplayer-savegame" data-route-id="savegame" data-route-group="singleplayer" data-route-version="1" data-document-status="scaffolded-round3" data-banner="m_banner_save_game">
     <div class="screen singleplayer-screen" id="savegame-screen">

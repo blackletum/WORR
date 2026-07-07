@@ -4,7 +4,7 @@ Date: 2026-07-02
 
 Task IDs: `FR-09-T02`, `FR-09-T03`, `DV-06-T01`, `DV-03-T07`, `DV-07-T04`
 
-Decision status: active; native renderer/runtime route ownership not implemented beyond guarded OpenGL smoke/menu samples and renderer-family matrix guardrails; default route ownership, Vulkan/RTX bridges, full font/text services, responsive widescreen parity, broad input/navigation parity, runtime navigation, and parity remain pending.
+Decision status: active; native renderer/runtime route ownership not implemented beyond guarded OpenGL smoke/menu samples, renderer-family matrix guardrails, aggregate renderer-matrix capture manifests, native Vulkan/RTX bridge-readiness audits, aggregate bridge-readiness renderer manifests, native bridge activation checklists, native bridge activation status reporting, native bridge source-set activation requirements, inactive non-OpenGL bridge source wiring, inactive non-OpenGL bridge class stubs, inactive non-OpenGL family exports, and inactive non-OpenGL runtime dependencies; default route ownership, Vulkan/RTX bridges, full font/text services, responsive widescreen parity, broad input/navigation parity, runtime navigation, and parity remain pending.
 
 ## Summary
 
@@ -38,9 +38,34 @@ menu-route matrix evidence for `main`, `game`, and `download_status` through
 `UI_OpenMenu`. Round 30 adds a focused renderer-family matrix guardrail:
 OpenGL is the only current guarded native lane, Vulkan and RTX/vkpt remain
 explicitly blocked until native bridges exist, and Vulkan/RTX-to-OpenGL
-shortcut wiring fails validation. No default route ownership,
-Vulkan/RTX-vkpt bridge, full font/text service, responsive widescreen parity,
-broad input/navigation parity, runtime navigation, or parity claim is made.
+shortcut wiring fails validation. Round 31 adds a `--renderer-matrix` capture
+harness mode that reports the guarded OpenGL route matrix and blocked
+Vulkan/RTX lane facts in one aggregate manifest. Round 32 adds a static
+Vulkan/RTX bridge-readiness audit that records native renderer foundations and
+keeps both non-OpenGL lanes blocked until their renderer-owned RmlUi bridge
+requirements exist. Round 33 embeds that bridge-readiness audit into the
+aggregate renderer manifest with the OpenGL route matrix and renderer-family
+guardrail. Round 34 adds named native bridge activation requirements to the
+bridge-readiness and aggregate renderer manifests, recording `8` required
+Vulkan/RTX activation items, `0` satisfied items, and `8` pending items. Round
+35 adds native bridge activation status and next-blocker reporting,
+recording `activation_complete_lanes=0`, `partial_activation_lanes=0`, and
+`inactive_activation_lanes=2`. Round 36 adds native bridge source-set
+activation requirements, recording `10` required Vulkan/RTX activation items,
+`0` satisfied items, and `10` pending items. Round 37 wires the shared RmlUi
+bridge source into the Vulkan and RTX/vkpt renderer source sets in inactive
+mode, recording `10` required activation items, `2` satisfied items, and `8`
+pending items. Round 38 adds inactive Vulkan and RTX/vkpt bridge class stubs,
+recording `10` required activation items, `4` satisfied items, and `6`
+pending items. Round 39 adds inactive Vulkan and RTX/vkpt family exports,
+recording `10` required activation items, `6` satisfied items, and `4`
+pending items while moving the next blocker to `runtime_dependency_enabled`.
+Round 40 adds inactive Vulkan and RTX/vkpt runtime dependency wiring,
+recording `10` required activation items, `8` satisfied items, and `2`
+pending items while moving the next blocker to
+`native_interface_export_present`. No default route ownership, Vulkan/RTX-vkpt bridge, full
+font/text service, responsive widescreen parity, broad input/navigation parity,
+runtime navigation, or parity claim is made.
 
 Legacy UI remains authoritative until Gate G1 proves the vertical runtime path
 and later gates prove route parity. Any RmlUi runtime switch must remain opt-in
@@ -123,6 +148,48 @@ The accepted Round 15 baseline is:
   OpenGL as the only current guarded native lane, requires Vulkan and RTX/vkpt
   to stay unavailable until native bridges exist, and rejects Vulkan/RTX-to-
   OpenGL routing.
+- Round 31 adds `tools/ui_smoke/check_rmlui_runtime_capture.py --renderer-matrix`,
+  which writes one aggregate manifest for the guarded OpenGL menu-route
+  matrix plus the renderer-family guardrail lanes.
+- Round 32 adds `tools/ui_smoke/check_rmlui_vulkan_bridge_readiness.py`,
+  which records Vulkan and RTX/vkpt native UI/image/draw foundations while
+  requiring both lanes to stay blocked until native RmlUi bridge classes,
+  family exports, runtime dependencies, and non-null native interfaces exist.
+- Round 33 extends `tools/ui_smoke/check_rmlui_runtime_capture.py --renderer-matrix`
+  so the aggregate renderer manifest includes `bridge_readiness` alongside
+  the OpenGL route matrix and renderer-family guardrail.
+- Round 34 extends the bridge-readiness and aggregate renderer manifests with
+  native bridge activation requirement counts: `activation_requirements=8`,
+  `satisfied_activation_requirements=0`, and
+  `pending_activation_requirements=8`.
+- Round 35 extends the bridge-readiness and aggregate renderer manifests with
+  native bridge activation status counts:
+  `activation_complete_lanes=0`, `partial_activation_lanes=0`, and
+  `inactive_activation_lanes=2`.
+- Round 36 extends the bridge-readiness and aggregate renderer manifests with
+  native bridge source-set activation requirements:
+  `activation_requirements=10`, `satisfied_activation_requirements=0`, and
+  `pending_activation_requirements=10`.
+- Round 37 wires `src/renderer/rmlui_bridge.cpp` into the Vulkan and RTX/vkpt
+  renderer source sets while keeping their RmlUi runtime dependencies disabled.
+  The accepted state records `activation_requirements=10`,
+  `satisfied_activation_requirements=2`, and
+  `pending_activation_requirements=8`.
+- Round 38 adds inactive Vulkan and RTX/vkpt bridge class stubs while keeping
+  non-OpenGL family exports, runtime dependencies, and native interface
+  exports unavailable. The accepted state records `activation_requirements=10`,
+  `satisfied_activation_requirements=4`, and
+  `pending_activation_requirements=6`.
+- Round 39 adds inactive Vulkan and RTX/vkpt family exports while keeping
+  non-OpenGL runtime dependencies and native interface exports unavailable.
+  The accepted state records `activation_requirements=10`,
+  `satisfied_activation_requirements=6`, and
+  `pending_activation_requirements=4`.
+- Round 40 wires inactive Vulkan and RTX/vkpt runtime dependencies while
+  keeping non-OpenGL native interface exports unavailable. The accepted state
+  records `activation_requirements=10`,
+  `satisfied_activation_requirements=8`, and
+  `pending_activation_requirements=2`.
 - No default normal-route ownership, native Vulkan/RTX renderer backend, live
   controller execution, runtime navigation, broad route/input evidence,
   responsive widescreen parity, full font/text service, or legacy JSON removal
@@ -171,6 +238,11 @@ dimension validation. Round 29 proves that the same opt-in OpenGL runtime path
 can open the three guarded menu entrypoint routes through `UI_OpenMenu` and
 capture route-specific load/render/input/close evidence without making RmlUi
 the default menu owner.
+Rounds 30 through 38 prove renderer-family guardrails, aggregate manifests,
+Vulkan/RTX bridge-readiness, named activation requirements, activation status,
+source-set activation requirements, and inactive non-OpenGL bridge source
+wiring plus class stubs while keeping native Vulkan/RTX-vkpt rendering and
+default route ownership blocked.
 
 ## Round 23 Implementation Update
 
@@ -372,6 +444,268 @@ the renderer matrix, but the Vulkan and RTX/vkpt native RmlUi render bridges,
 default route ownership, final font/text services, controller behavior,
 runtime navigation, and parity proof remain pending.
 
+## Round 31 Implementation Update
+
+The guarded runtime capture harness now has an aggregate renderer-matrix mode.
+`tools/ui_smoke/check_rmlui_runtime_capture.py --renderer-matrix` builds the
+existing guarded OpenGL route matrix for `main`, `game`, and `download_status`
+and embeds the `check_rmlui_renderer_matrix.py` lane report in the same output.
+
+The accepted Round 31 manifest,
+`.tmp/rmlui/runtime-capture/renderer-matrix.json`, recorded `ok=true`,
+`routes=3`, `route_passed=3`, `route_failed=0`, `renderer_lanes=3`,
+`native_guarded_lanes=1`, `blocked_lanes=2`, and `errors=0`.
+
+This is useful automation evidence, not native Vulkan/RTX proof. The OpenGL
+lane still reuses the guarded menu-route captures, while Vulkan and RTX/vkpt
+remain `blocked_until_native` until renderer-owned RmlUi bridges and
+route-visible captures exist.
+
+## Round 32 Implementation Update
+
+The dependency boundary now includes a native Vulkan/RTX bridge-readiness
+audit. `tools/ui_smoke/check_rmlui_vulkan_bridge_readiness.py` scans the
+renderer-family contract, Meson runtime dependency wiring, OpenGL shortcut
+guardrails, and the existing Vulkan/RTX UI/image/draw primitives that future
+native bridges should use.
+
+The accepted Round 32 report recorded `ok=true`, `lanes=2`,
+`foundation_lanes=2`, `native_bridge_lanes=0`, `blocked_lanes=2`,
+`missing_bridge_requirements=8`, and `errors=0`. Vulkan foundation coverage
+includes UI draw entrypoints, frame recording, texture upload/update,
+descriptor-set access, and clip/scissor state. RTX/vkpt foundation coverage
+includes stretch-pic draw entrypoints, clear/submit flow, image registration,
+texture updates, descriptor texture sampling, clip state, and stretch-pic
+shaders.
+
+This is readiness evidence, not native renderer proof. The checker still
+requires both non-OpenGL lanes to remain blocked until each has a
+renderer-owned `Rml::RenderInterface`, renderer-family export, RmlUi runtime
+dependency, and non-null native render-interface export.
+
+## Round 33 Implementation Update
+
+The guarded runtime capture harness now embeds bridge-readiness in the
+aggregate renderer manifest. `tools/ui_smoke/check_rmlui_runtime_capture.py --renderer-matrix`
+builds the guarded OpenGL route matrix, the renderer-family guardrail, and the
+Vulkan/RTX bridge-readiness audit before writing one JSON/text report.
+
+The accepted Round 33 manifest,
+`.tmp/rmlui/runtime-capture/renderer-matrix.json`, recorded `ok=true`,
+`routes=3`, `route_passed=3`, `route_failed=0`, `renderer_lanes=3`,
+`native_guarded_lanes=1`, `blocked_lanes=2`, `bridge_lanes=2`,
+`bridge_foundation_lanes=2`, `native_bridge_lanes=0`,
+`bridge_blocked_lanes=2`, `missing_bridge_requirements=8`, and `errors=0`.
+
+This strengthens the manifest evidence, not the renderer implementation. The
+OpenGL route evidence still comes from guarded captures, while Vulkan and
+RTX/vkpt remain blocked until native renderer-owned RmlUi bridges and
+route-visible captures exist.
+
+## Round 34 Implementation Update
+
+The Vulkan/RTX bridge-readiness audit now exposes a named activation checklist
+for each non-OpenGL lane. Each lane reports whether the native bridge class,
+native family export, runtime dependency, and non-null native interface export
+are present.
+
+The accepted Round 34 standalone bridge-readiness report recorded `ok=true`,
+`lanes=2`, `foundation_lanes=2`, `native_bridge_lanes=0`,
+`blocked_lanes=2`, `activation_requirements=8`,
+`satisfied_activation_requirements=0`, `pending_activation_requirements=8`,
+`missing_bridge_requirements=8`, and `errors=0`.
+
+The accepted Round 34 aggregate renderer manifest recorded the same bridge
+activation counts as `bridge_activation_requirements=8`,
+`bridge_satisfied_activation_requirements=0`, and
+`bridge_pending_activation_requirements=8`.
+
+This is still blocked-lane evidence. It proves the activation checklist is
+machine-readable and regression-tested, not that Vulkan or RTX/vkpt can render
+RmlUi routes.
+
+## Round 35 Implementation Update
+
+The Vulkan/RTX bridge-readiness audit now exposes activation status for each
+non-OpenGL lane. Each lane reports whether activation has not started, is
+partially claimed but still blocked, or has all activation requirements
+satisfied.
+
+The accepted Round 35 standalone bridge-readiness report recorded `ok=true`,
+`lanes=2`, `foundation_lanes=2`, `native_bridge_lanes=0`,
+`blocked_lanes=2`, `activation_complete_lanes=0`,
+`partial_activation_lanes=0`, `inactive_activation_lanes=2`,
+`activation_requirements=8`, `satisfied_activation_requirements=0`,
+`pending_activation_requirements=8`, `missing_bridge_requirements=8`, and
+`errors=0`.
+
+The accepted Round 35 aggregate renderer manifest recorded the same bridge
+activation-status counts as `bridge_activation_complete_lanes=0`,
+`bridge_partial_activation_lanes=0`, and
+`bridge_inactive_activation_lanes=2`.
+
+This is still blocked-lane evidence. It makes partial native bridge work
+visible without treating it as renderer proof.
+
+## Round 36 Implementation Update
+
+The Vulkan/RTX bridge-readiness audit now treats source-set wiring as a native
+bridge activation requirement. A non-OpenGL lane cannot advance just because a
+bridge class name appears in source; the lane-specific renderer DLL must also
+compile `src/renderer/rmlui_bridge.cpp`.
+
+The accepted Round 36 standalone bridge-readiness report recorded `ok=true`,
+`lanes=2`, `foundation_lanes=2`, `native_bridge_lanes=0`,
+`blocked_lanes=2`, `activation_complete_lanes=0`,
+`partial_activation_lanes=0`, `inactive_activation_lanes=2`,
+`activation_requirements=10`, `satisfied_activation_requirements=0`,
+`pending_activation_requirements=10`, `missing_bridge_requirements=10`, and
+`errors=0`.
+
+The accepted Round 36 aggregate renderer manifest recorded the same source-set
+activation counts as `bridge_activation_requirements=10`,
+`bridge_satisfied_activation_requirements=0`, and
+`bridge_pending_activation_requirements=10`.
+
+This is still blocked-lane evidence. It proves the build/source boundary for
+future native bridge work is explicit; it does not compile or render a Vulkan
+or RTX/vkpt RmlUi bridge.
+
+## Round 37 Implementation Update
+
+The Vulkan and RTX/vkpt renderer source sets now include
+`src/renderer/rmlui_bridge.cpp` in inactive mode. This satisfies the
+`native_bridge_source_compiled` activation requirement for both non-OpenGL
+lanes without enabling RmlUi runtime dependencies or claiming native renderer
+availability.
+
+The accepted Round 37 standalone bridge-readiness report recorded `ok=true`,
+`lanes=2`, `foundation_lanes=2`, `native_bridge_lanes=0`,
+`blocked_lanes=2`, `activation_complete_lanes=0`,
+`partial_activation_lanes=2`, `inactive_activation_lanes=0`,
+`activation_requirements=10`, `satisfied_activation_requirements=2`,
+`pending_activation_requirements=8`, `missing_bridge_requirements=8`, and
+`errors=0`.
+
+The accepted Round 37 aggregate renderer manifest recorded the same inactive
+source-wiring counts as `bridge_activation_complete_lanes=0`,
+`bridge_partial_activation_lanes=2`, `bridge_inactive_activation_lanes=0`,
+`bridge_activation_requirements=10`,
+`bridge_satisfied_activation_requirements=2`, and
+`bridge_pending_activation_requirements=8`.
+
+Runtime-adapter validation now treats the shared bridge source as expected in
+the OpenGL, Vulkan, and RTX/vkpt renderer source sets rather than enforcing the
+old single-listing assumption. It records `renderer_bridge_meson_occurrences=3`
+and fails if `renderer_src`, `renderer_vk_rtx_src`, or `renderer_vk_src` drops
+the bridge source.
+
+This is still blocked-lane evidence. It proves the shared bridge source
+participates in the non-OpenGL renderer DLL source sets, but the next blocker
+for both lanes remains `native_bridge_class_present` and no Vulkan or
+RTX/vkpt route-visible capture exists.
+
+## Round 38 Implementation Update
+
+The shared bridge source now declares inactive Vulkan and RTX/vkpt
+`Rml::RenderInterface` class stubs. These stubs satisfy
+`native_bridge_class_present` for both non-OpenGL lanes, but the renderer API
+still exports family `NONE`, `CanRender=false`, and a null native interface
+for those lanes.
+
+The accepted Round 38 standalone bridge-readiness report recorded `ok=true`,
+`lanes=2`, `foundation_lanes=2`, `native_bridge_lanes=0`,
+`blocked_lanes=2`, `activation_complete_lanes=0`,
+`partial_activation_lanes=2`, `inactive_activation_lanes=0`,
+`activation_requirements=10`, `satisfied_activation_requirements=4`,
+`pending_activation_requirements=6`, `missing_bridge_requirements=6`, and
+`errors=0`.
+
+The accepted Round 38 aggregate renderer manifest recorded the same inactive
+class-stub counts as `bridge_activation_complete_lanes=0`,
+`bridge_partial_activation_lanes=2`, `bridge_inactive_activation_lanes=0`,
+`bridge_activation_requirements=10`,
+`bridge_satisfied_activation_requirements=4`, and
+`bridge_pending_activation_requirements=6`.
+
+The bridge-readiness audit now accepts class stubs only while they remain
+inactive. It still fails premature non-OpenGL family exports, RmlUi runtime
+dependency enablement, non-null native interface exports, or
+Vulkan/RTX-to-OpenGL routing.
+
+This is still blocked-lane evidence. It proves the class names and source-set
+participation are in place, but the next blocker for both lanes remains
+`native_family_export_present` and no Vulkan or RTX/vkpt route-visible capture
+exists.
+
+## Round 39 Implementation Update
+
+The shared bridge source now reports inactive Vulkan and RTX/vkpt renderer
+family identities when it is compiled into those renderer DLLs. The renderer
+API exports `R_RmlUiRendererFamily` and `R_RmlUiRendererName` for every
+renderer family, while non-OpenGL builds still export `CanRender=false` and a
+null native render-interface pointer.
+
+The accepted Round 39 standalone bridge-readiness report records `ok=true`,
+`lanes=2`, `foundation_lanes=2`, `native_bridge_lanes=0`,
+`blocked_lanes=2`, `activation_complete_lanes=0`,
+`partial_activation_lanes=2`, `inactive_activation_lanes=0`,
+`activation_requirements=10`, `satisfied_activation_requirements=6`,
+`pending_activation_requirements=4`, `missing_bridge_requirements=4`, and
+`errors=0`.
+
+The accepted Round 39 aggregate renderer manifest records the same inactive
+family-export counts as `bridge_activation_complete_lanes=0`,
+`bridge_partial_activation_lanes=2`, `bridge_inactive_activation_lanes=0`,
+`bridge_activation_requirements=10`,
+`bridge_satisfied_activation_requirements=6`, and
+`bridge_pending_activation_requirements=4`.
+
+The bridge-readiness and renderer-family matrix guardrails now accept inactive
+family exports only while the non-OpenGL runtime dependencies remain disabled
+and native render-interface exports remain unavailable. They still fail
+Vulkan/RTX-to-OpenGL routing, premature runtime enablement, or non-null native
+interface exports before renderer-owned native methods exist.
+
+This is still blocked-lane evidence. It proves lane identity can now be
+reported by the Vulkan and RTX/vkpt renderer DLLs, but the next blocker for
+both lanes is `runtime_dependency_enabled` and no Vulkan or RTX/vkpt
+route-visible capture exists.
+
+## Round 40 Implementation Update
+
+The Vulkan and RTX/vkpt renderer DLL lanes now receive the optional RmlUi
+runtime dependency when `rmlui_runtime` is enabled. `meson.build` attaches
+`rmlui_dep` and `-DUI_RML_HAS_RUNTIME=1` to both `renderer_vk` and
+`renderer_vk_rtx` while keeping non-OpenGL `CanRender=false` and native
+render-interface exports null.
+
+The accepted Round 40 standalone bridge-readiness report records `ok=true`,
+`lanes=2`, `foundation_lanes=2`, `native_bridge_lanes=0`,
+`blocked_lanes=2`, `activation_complete_lanes=0`,
+`partial_activation_lanes=2`, `inactive_activation_lanes=0`,
+`activation_requirements=10`, `satisfied_activation_requirements=8`,
+`pending_activation_requirements=2`, `missing_bridge_requirements=2`, and
+`errors=0`.
+
+The accepted Round 40 aggregate renderer manifest records the same inactive
+runtime-dependency counts as `bridge_activation_complete_lanes=0`,
+`bridge_partial_activation_lanes=2`, `bridge_inactive_activation_lanes=0`,
+`bridge_activation_requirements=10`,
+`bridge_satisfied_activation_requirements=8`, and
+`bridge_pending_activation_requirements=2`.
+
+The bridge-readiness, renderer-family matrix, and runtime-adapter guardrails
+now accept non-OpenGL runtime dependency wiring only while the renderer API
+keeps those lanes render-unavailable. They still fail Vulkan/RTX-to-OpenGL
+routing, partial runtime dependency wiring, or non-null native interface
+exports before renderer-owned native methods exist.
+
+This is still blocked-lane evidence. It proves the non-OpenGL renderer DLLs
+can compile against RmlUi when the optional runtime is enabled, but the next
+blocker for both lanes is `native_interface_export_present` and no Vulkan or
+RTX/vkpt route-visible capture exists.
+
 ## Required Gate G1 Interfaces
 
 Before Gate G1 can pass, `FR-09-T03` must provide native runtime interfaces
@@ -453,6 +787,77 @@ rejects Vulkan/RTX-to-OpenGL mapping or premature non-OpenGL RmlUi runtime
 dependency enablement. It still does not satisfy Gate G1 because it proves
 guardrails rather than native Vulkan/RTX-vkpt drawing.
 
+Round 31 adds aggregate renderer-matrix capture manifests. The report combines
+the guarded OpenGL menu-route matrix with the renderer-family lane guardrail,
+so OpenGL route-visible evidence and blocked Vulkan/RTX facts can be reviewed
+together. It still does not satisfy Gate G1 because Vulkan and RTX/vkpt remain
+blocked rather than natively rendered.
+
+Round 32 adds Vulkan/RTX bridge-readiness auditing. The report proves that
+both non-OpenGL renderer families still have native UI/image/draw foundations
+available for future RmlUi bridges, while also requiring their RmlUi runtime
+dependencies, native family claims, and native render-interface exports to
+stay absent. It still does not satisfy Gate G1 because no Vulkan or RTX/vkpt
+`Rml::RenderInterface` exists and no non-OpenGL route-visible capture has been
+accepted.
+
+Round 33 embeds the bridge-readiness audit in the aggregate renderer manifest.
+The report now reviews OpenGL route evidence, renderer-family guardrails, and
+Vulkan/RTX bridge-readiness facts together. It still does not satisfy Gate G1
+because the bridge-readiness section records `native_bridge_lanes=0` and no
+Vulkan or RTX/vkpt route-visible capture exists.
+
+Round 34 adds native bridge activation checklist counts to that same evidence
+path. The accepted state records `8` activation requirements, `0` satisfied
+requirements, and `8` pending requirements across the Vulkan and RTX/vkpt
+lanes. It still does not satisfy Gate G1 because neither non-OpenGL lane has a
+complete native bridge, non-null native interface, or route-visible capture.
+
+Round 35 adds activation status and next-blocker reporting to the native bridge
+checklist. The accepted state records `activation_complete_lanes=0`,
+`partial_activation_lanes=0`, and `inactive_activation_lanes=2`, with both
+non-OpenGL lanes reporting `blocked_no_activation`. It still does not satisfy
+Gate G1 because no Vulkan or RTX/vkpt lane has started, completed, or captured
+native RmlUi rendering.
+
+Round 36 adds source-set wiring to the native bridge activation checklist. The
+accepted state records `10` activation requirements, `0` satisfied
+requirements, and `10` pending requirements across the Vulkan and RTX/vkpt
+lanes. It still does not satisfy Gate G1 because neither non-OpenGL renderer
+DLL compiles a native RmlUi bridge source, and no native route-visible capture
+exists.
+
+Round 37 wires the shared bridge source into the Vulkan and RTX/vkpt renderer
+DLL source sets in inactive mode. The accepted state records `10` activation
+requirements, `2` satisfied requirements, and `8` pending requirements across
+the Vulkan and RTX/vkpt lanes. It still does not satisfy Gate G1 because
+neither non-OpenGL lane has a native `Rml::RenderInterface` class, a native
+renderer-family export, RmlUi runtime dependency enablement, a non-null native
+interface export, or route-visible capture evidence.
+
+Round 38 adds inactive Vulkan and RTX/vkpt `Rml::RenderInterface` class stubs
+to that shared bridge source. The accepted state records `10` activation
+requirements, `4` satisfied requirements, and `6` pending requirements across
+the Vulkan and RTX/vkpt lanes. It still does not satisfy Gate G1 because
+neither non-OpenGL lane has a native renderer-family export, RmlUi runtime
+dependency enablement, a non-null native interface export, implemented Vulkan
+or RTX/vkpt render methods, or route-visible capture evidence.
+
+Round 39 adds inactive Vulkan and RTX/vkpt renderer-family exports to that
+shared bridge source. The accepted state records `10` activation requirements,
+`6` satisfied requirements, and `4` pending requirements across the Vulkan and
+RTX/vkpt lanes. It still does not satisfy Gate G1 because neither
+non-OpenGL lane has RmlUi runtime dependency enablement, a non-null native
+interface export, implemented Vulkan or RTX/vkpt render methods, or
+route-visible capture evidence.
+
+Round 40 wires inactive RmlUi runtime dependencies into the Vulkan and
+RTX/vkpt renderer DLL lanes. The accepted state records `10` activation
+requirements, `8` satisfied requirements, and `2` pending requirements across
+the Vulkan and RTX/vkpt lanes. It still does not satisfy Gate G1 because
+neither non-OpenGL lane has a non-null native interface export, implemented
+Vulkan or RTX/vkpt render methods, or route-visible capture evidence.
+
 ## Packaging And Staging Requirements
 
 Before any runtime switch can be enabled by default, asset packaging must prove
@@ -489,6 +894,7 @@ python tools\ui_smoke\check_rmlui_menu_entrypoints.py
 python tools\ui_smoke\check_rmlui_runtime_stub_eligibility.py
 python tools\ui_smoke\check_rmlui_runtime_registry.py
 python tools\ui_smoke\check_rmlui_renderer_matrix.py --format json
+python tools\ui_smoke\check_rmlui_vulkan_bridge_readiness.py --format json
 python tools\ui_smoke\report_rmlui_progress.py --format json
 ```
 
@@ -514,6 +920,9 @@ Build and runtime checks:
   RmlUi is disabled or cannot load a document.
 - For guarded smoke evidence before Gate G1, run
   `python tools\ui_smoke\check_rmlui_runtime_capture.py --run --engine-exe .tmp\rmlui\round17-rmlui-enabled3\worr_x86_64.exe --install-dir .install --write-manifest .tmp\rmlui\runtime-capture\manifest.json --format json`.
+- For aggregate renderer-matrix evidence, including bridge-readiness facts
+  before native Vulkan/RTX bridges exist, run
+  `python tools\ui_smoke\check_rmlui_runtime_capture.py --renderer-matrix --install-dir .install --write-manifest .tmp\rmlui\runtime-capture\renderer-matrix.json --format json`.
 
 ## Risks
 
@@ -558,7 +967,14 @@ Build and runtime checks:
 - No broad screenshot matrix, runtime navigation, or end-user parity claim is
   made by this record beyond the explicit guarded OpenGL smoke and menu-route
   TGA evidence recorded in Rounds 24 through 29 and the renderer-family
-  guardrail recorded in Round 30.
+  guardrail recorded in Round 30, the aggregate manifest recorded in Round 31,
+  the bridge-readiness audit recorded in Round 32, and the bridge-readiness
+  aggregate manifest recorded in Round 33 plus activation checklist recorded
+  in Round 34, activation status recorded in Round 35, and source-set
+  activation recorded in Round 36 plus inactive non-OpenGL bridge source
+  wiring recorded in Round 37, inactive non-OpenGL bridge class stubs
+  recorded in Round 38, and inactive non-OpenGL family exports recorded in
+  Round 39, and inactive non-OpenGL runtime dependencies recorded in Round 40.
 - No legacy JSON path is removed or deprecated by this record.
 
 ## Round 17 Implementation Update
@@ -708,15 +1124,15 @@ Round 22 landed the first guarded RmlUi context route:
 
 | Task | Status after this record | Next required evidence |
 | --- | --- | --- |
-| `DV-06-T01` | Upstream RmlUi `6.2` source, hash, license/provenance notes, optional dependency state, wrap provide aliases, CMake fallback options, scratch compile/link evidence, WORR-backed system/file bridge evidence, renderer-contract dependency boundary, OpenGL-scoped renderer scaffold/primitive/context/input/capture/glyph/layout/input-back/viewport/menu-route dependency wiring, and renderer-family matrix guardrails documented. | Final notice/update policy, local patch policy, supported-matrix acceptance, full font/text policy, and renderer/runtime dependency policy. |
+| `DV-06-T01` | Upstream RmlUi `6.2` source, hash, license/provenance notes, optional dependency state, wrap provide aliases, CMake fallback options, scratch compile/link evidence, WORR-backed system/file bridge evidence, renderer-contract dependency boundary, OpenGL-scoped renderer scaffold/primitive/context/input/capture/glyph/layout/input-back/viewport/menu-route dependency wiring, renderer-family matrix guardrails, aggregate renderer-matrix capture manifests, native Vulkan/RTX bridge-readiness audit, bridge-readiness aggregate manifest, native bridge activation checklist, native bridge activation status, native bridge source-set activation, inactive non-OpenGL bridge source wiring, inactive non-OpenGL bridge class stubs, inactive non-OpenGL family exports, and inactive non-OpenGL runtime dependencies documented. | Final notice/update policy, local patch policy, supported-matrix acceptance, full font/text policy, and renderer/runtime dependency policy. |
 | `FR-09-T02` | Source wrap, default-disabled Meson feature option, optional probes, CMake fallback, and enabled scratch RmlUi Core link proof landed. | Supported build matrix and `.install` refresh prove the selected integration path beyond the scratch build. |
-| `FR-09-T03` | Runtime/native renderer requirements documented; dependency-free hook boundary, compiled Core adapter boundary, RmlUi system/file bridge, native renderer bridge contract, OpenGL render-interface scaffold, OpenGL primitive bridge, guarded `core.runtime_smoke` context draw/input/glyph path, guarded screenshot/layout/input-back/viewport proof, guarded OpenGL menu-route matrix proof, and renderer-family matrix guardrails prepared. | Normal menu routes draw natively in OpenGL, Vulkan, and RTX/vkpt with full text rendering, controllers, navigation, and default-ownership fallback behavior proven. |
-| `DV-03-T07` | Required validation command set documented; dependency-integration and runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input/capture/glyph plus guarded screenshot/layout/input/viewport/menu-route harness checks and renderer-family matrix checks added. | Runtime navigation, broader screenshot/layout/input capture, and live renderer-specific automation join the existing static checks. |
-| `DV-07-T04` | Parity evidence expectations and developer-side OpenGL primitive/context/input/capture/glyph/layout/input-back/viewport/menu-route plus renderer-family matrix guardrails documented for future user-visible migration. | User-facing docs update only after runtime behavior and parity evidence are accepted. |
+| `FR-09-T03` | Runtime/native renderer requirements documented; dependency-free hook boundary, compiled Core adapter boundary, RmlUi system/file bridge, native renderer bridge contract, OpenGL render-interface scaffold, OpenGL primitive bridge, guarded `core.runtime_smoke` context draw/input/glyph path, guarded screenshot/layout/input-back/viewport proof, guarded OpenGL menu-route matrix proof, renderer-family matrix guardrails, aggregate renderer-matrix manifests, Vulkan/RTX bridge-readiness audit, bridge-readiness aggregate manifest, native bridge activation checklist, native bridge activation status, native bridge source-set activation, inactive non-OpenGL bridge source wiring, inactive non-OpenGL bridge class stubs, inactive non-OpenGL family exports, and inactive non-OpenGL runtime dependencies prepared. | Normal menu routes draw natively in OpenGL, Vulkan, and RTX/vkpt with full text rendering, controllers, navigation, and default-ownership fallback behavior proven. |
+| `DV-03-T07` | Required validation command set documented; dependency-integration and runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input/capture/glyph plus guarded screenshot/layout/input/viewport/menu-route harness checks, renderer-family matrix checks, aggregate renderer-matrix manifests, Vulkan/RTX bridge-readiness checks, bridge-readiness aggregate-manifest checks, native bridge activation checklist checks, native bridge activation status checks, native bridge source-set activation checks, inactive non-OpenGL bridge source wiring checks, inactive non-OpenGL bridge class-stub checks, inactive non-OpenGL family-export checks, and inactive non-OpenGL runtime-dependency checks added. | Runtime navigation, broader screenshot/layout/input capture, and live renderer-specific automation join the existing static checks. |
+| `DV-07-T04` | Parity evidence expectations and developer-side OpenGL primitive/context/input/capture/glyph/layout/input-back/viewport/menu-route plus renderer-family matrix guardrails, aggregate manifests, bridge-readiness evidence, bridge-readiness aggregate manifests, activation checklist evidence, activation status evidence, source-set activation evidence, inactive non-OpenGL bridge source wiring evidence, inactive non-OpenGL bridge class-stub evidence, inactive non-OpenGL family-export evidence, and inactive non-OpenGL runtime-dependency evidence documented for future user-visible migration. | User-facing docs update only after runtime behavior and parity evidence are accepted. |
 
 ## Acceptance Rule
 
-This record is accepted as planning plus Round 30 build/system-file/renderer-contract/OpenGL-primitive/guarded-context/input/capture/glyph/layout/input-back/viewport/menu-route/renderer-family boundary evidence. It
+This record is accepted as planning plus Round 40 build/system-file/renderer-contract/OpenGL-primitive/guarded-context/input/capture/glyph/layout/input-back/viewport/menu-route/renderer-family/aggregate-manifest/bridge-readiness/bridge-readiness-manifest/activation-checklist/activation-status/source-set-activation/inactive-source-wiring/inactive-class-stub/inactive-family-export/inactive-runtime-dependency boundary evidence. It
 should be updated or superseded when `FR-09-T02` completes supported-matrix
 dependency acceptance and when `FR-09-T03` lands default route-owning native
 renderer proof across the supported renderer matrix.

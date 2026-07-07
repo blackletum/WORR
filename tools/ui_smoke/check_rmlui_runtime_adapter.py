@@ -23,6 +23,11 @@ DEFAULT_UI_BRIDGE_SOURCE = Path("src/client/ui_bridge.cpp")
 DEFAULT_WRAP = Path("subprojects/rmlui.wrap")
 PATH_SEP_RE = re.compile(r"[\\/]+")
 GUARDED_RUNTIME_ROUTES = ("core.runtime_smoke", "main", "game", "download_status")
+REQUIRED_RENDERER_BRIDGE_SOURCE_SETS = (
+    "renderer_src",
+    "renderer_vk_rtx_src",
+    "renderer_vk_src",
+)
 
 
 @dataclass
@@ -51,8 +56,11 @@ class RuntimeAdapterReport:
     adapter_listed_in_meson: bool = False
     renderer_bridge_listed_in_meson: bool = False
     renderer_bridge_listed_once_in_meson: bool = False
+    renderer_bridge_meson_occurrences: int = 0
+    renderer_bridge_required_source_sets: list[str] = field(default_factory=list)
+    renderer_bridge_required_source_sets_present: bool = False
     renderer_cpp_args_configured: bool = False
-    renderer_gl_runtime_dependency: bool = False
+    renderer_runtime_dependencies: bool = False
     adapter_runtime_guard_present: bool = False
     rmlui_core_include_guarded: bool = False
     rmlui_system_file_includes_guarded: bool = False
@@ -62,6 +70,7 @@ class RuntimeAdapterReport:
     rmlui_core_interface_symbols: list[str] = field(default_factory=list)
     rmlui_render_interface_symbols: list[str] = field(default_factory=list)
     runtime_font_engine_adapter_present: bool = False
+    runtime_font_engine_q2r_fonts_present: bool = False
     worr_file_symbols: list[str] = field(default_factory=list)
     worr_system_symbols: list[str] = field(default_factory=list)
     runtime_registration_declared: bool = False
@@ -84,7 +93,7 @@ class RuntimeAdapterReport:
     renderer_api_contract_declared: bool = False
     renderer_api_exports_declared: bool = False
     renderer_api_opengl_only: bool = False
-    renderer_api_non_gl_none: bool = False
+    renderer_api_non_gl_unavailable: bool = False
     client_renderer_bridge_registered: bool = False
     client_renderer_bridge_cleared: bool = False
     client_renderer_family_mapping: bool = False
@@ -169,6 +178,55 @@ def source_occurrences(meson_build_text: str, source_path: Path, repo_root: Path
         pass
     normalized_meson = normalize_repo_path(meson_build_text)
     return max(normalized_meson.count(candidate) for candidate in candidates)
+
+
+def meson_variable_mentions_source(
+    meson_build_text: str,
+    variable_name: str,
+    source_path: Path,
+    repo_root: Path,
+) -> bool:
+    candidates = [normalize_repo_path(source_path.as_posix())]
+    try:
+        candidates.append(
+            normalize_repo_path(
+                source_path.resolve(strict=False)
+                .relative_to(repo_root.resolve())
+                .as_posix()
+            )
+        )
+    except ValueError:
+        pass
+
+    for candidate in candidates:
+        source_pattern = rf"['\"]{re.escape(candidate)}['\"]"
+        if re.search(
+            rf"\b{re.escape(variable_name)}\s*(?:\+?=|=).*{source_pattern}",
+            meson_build_text,
+        ):
+            return True
+
+        list_match = re.search(
+            rf"\b{re.escape(variable_name)}\s*(?:\+?=|=)\s*\[(?P<body>.*?)\]",
+            meson_build_text,
+            re.DOTALL,
+        )
+        if list_match and candidate in normalize_repo_path(list_match.group("body")):
+            return True
+
+    return False
+
+
+def renderer_bridge_source_sets(
+    meson_build_text: str,
+    source_path: Path,
+    repo_root: Path,
+) -> list[str]:
+    return [
+        variable_name
+        for variable_name in REQUIRED_RENDERER_BRIDGE_SOURCE_SETS
+        if meson_variable_mentions_source(meson_build_text, variable_name, source_path, repo_root)
+    ]
 
 
 def guarded_include_present(source_text: str, include_token: str) -> bool:
@@ -306,6 +364,12 @@ def validate_runtime_adapter(
             r"UI_RML_RENDERER_FAMILY_VULKAN[^{};]*opengl",
         )
     )
+    bridge_meson_occurrences = source_occurrences(
+        meson_build_text, renderer_bridge_source_path, repo_root
+    )
+    bridge_required_source_sets = renderer_bridge_source_sets(
+        meson_build_text, renderer_bridge_source_path, repo_root
+    )
 
     report = RuntimeAdapterReport(
         repo_root=repo_root,
@@ -333,8 +397,11 @@ def validate_runtime_adapter(
         renderer_bridge_listed_in_meson=source_listed(
             meson_build_text, renderer_bridge_source_path, repo_root
         ),
-        renderer_bridge_listed_once_in_meson=(
-            source_occurrences(meson_build_text, renderer_bridge_source_path, repo_root) == 1
+        renderer_bridge_listed_once_in_meson=(bridge_meson_occurrences == 1),
+        renderer_bridge_meson_occurrences=bridge_meson_occurrences,
+        renderer_bridge_required_source_sets=bridge_required_source_sets,
+        renderer_bridge_required_source_sets_present=(
+            tuple(bridge_required_source_sets) == REQUIRED_RENDERER_BRIDGE_SOURCE_SETS
         ),
         renderer_cpp_args_configured=(
             "renderer_cpp_args" in meson_build_text
@@ -344,11 +411,13 @@ def validate_runtime_adapter(
             and "renderer_vk_rtx_cpp_args = renderer_cpp_args + ['-DUSE_REF=REF_VKPT'" in meson_build_text
             and "renderer_vk_cpp_args = renderer_cpp_args + ['-DUSE_REF=REF_VKPT'" in meson_build_text
         ),
-        renderer_gl_runtime_dependency=(
+        renderer_runtime_dependencies=(
             "renderer_gl_deps += rmlui_dep" in meson_build_text
             and "renderer_gl_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" in meson_build_text
-            and "renderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" not in meson_build_text
-            and "renderer_vk_rtx_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" not in meson_build_text
+            and "renderer_vk_deps += rmlui_dep" in meson_build_text
+            and "renderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" in meson_build_text
+            and "renderer_vk_rtx_deps += rmlui_dep" in meson_build_text
+            and "renderer_vk_rtx_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" in meson_build_text
         ),
         adapter_runtime_guard_present="#if UI_RML_HAS_RUNTIME" in adapter_text,
         rmlui_core_include_guarded=guarded_include_present(
@@ -384,7 +453,6 @@ def validate_runtime_adapter(
             and all(
                 symbol in adapter_text
                 for symbol in (
-                    "UI_Rml_SmokeFontEngineInterface",
                     "Rml::FontEngineInterface",
                     "Rml::SetFontEngineInterface",
                     "Rml::TexturedMesh",
@@ -392,10 +460,27 @@ def validate_runtime_adapter(
                     "GetFontMetrics",
                     "GetStringWidth",
                     "GenerateString",
-                    "generated glyph geometry",
                     "ui_rml_font_interface",
                 )
             )
+            and (
+                (
+                    "UI_Rml_TtfFontEngineInterface" in adapter_text
+                    and "RmlUi TTF font engine generated text texture" in adapter_text
+                    and "Rml::CallbackTexture" in adapter_text
+                )
+                or (
+                    "UI_Rml_SmokeFontEngineInterface" in adapter_text
+                    and "generated glyph geometry" in adapter_text
+                )
+            )
+        ),
+        runtime_font_engine_q2r_fonts_present=(
+            "loaded from Quake II Rerelease font" in adapter_text
+            and "fonts/RussoOne-Regular.ttf" in adapter_text
+            and "fonts/Montserrat-Regular.ttf" in adapter_text
+            and "fonts/RobotoMono-Regular.ttf" in adapter_text
+            and "Quake II Rerelease:" in adapter_text
         ),
         worr_file_symbols=worr_file_symbols,
         worr_system_symbols=worr_system_symbols,
@@ -571,10 +656,15 @@ def validate_runtime_adapter(
             and ".RmlUiRendererFamily    = R_RmlUiRendererFamily" in renderer_api_text
             and ".RmlUiNativeRenderInterface = R_RmlUiNativeRenderInterface" in renderer_api_text
         ),
-        renderer_api_non_gl_none=(
+        renderer_api_non_gl_unavailable=(
             "#if USE_REF != REF_GL" in renderer_api_text
-            and "return R_RENDERER_RMLUI_FAMILY_NONE;" in renderer_api_text
+            and ".RmlUiRendererFamily    = R_RmlUiRendererFamily" in renderer_api_text
+            and ".RmlUiRendererName      = R_RmlUiRendererName" in renderer_api_text
+            and ".RmlUiCanRender         = Renderer_RmlUiCanRender" in renderer_api_text
+            and ".RmlUiNativeRenderInterface = Renderer_RmlUiNativeRenderInterface" in renderer_api_text
+            and "static bool Renderer_RmlUiCanRender" in renderer_api_text
             and "return false;" in renderer_api_text
+            and "static void *Renderer_RmlUiNativeRenderInterface" in renderer_api_text
             and "return NULL;" in renderer_api_text
         ),
         client_renderer_bridge_registered=(
@@ -715,7 +805,10 @@ def validate_runtime_adapter(
             and "UI_Rml_RuntimeRouteIsAllowed" in scaffold_text
             and "UI_Rml_FindRuntimeMenuRoute" in scaffold_text
             and "ui_rml_runtime_menu_routes" in scaffold_text
-            and all(route in adapter_text for route in GUARDED_RUNTIME_ROUTES)
+            and (
+                all(route in adapter_text for route in GUARDED_RUNTIME_ROUTES)
+                or "return route_id && route_id[0];" in adapter_text
+            )
             and all(route in scaffold_text for route in GUARDED_RUNTIME_ROUTES)
             and "UI_RML_RENDERER_FAMILY_OPENGL" in adapter_text
         ),
@@ -780,12 +873,23 @@ def add_consistency_findings(report: RuntimeAdapterReport) -> None:
         report.errors.append("renderer bridge: source exists but is not listed in meson.build")
     if report.renderer_bridge_listed_in_meson and not report.renderer_bridge_source_exists:
         report.errors.append("renderer bridge: source is listed in meson.build but missing")
-    if report.renderer_bridge_source_exists and not report.renderer_bridge_listed_once_in_meson:
-        report.errors.append("renderer bridge: source must be listed exactly once in meson.build")
+    if (
+        report.renderer_bridge_source_exists
+        and not report.renderer_bridge_required_source_sets_present
+    ):
+        missing_source_sets = [
+            source_set
+            for source_set in REQUIRED_RENDERER_BRIDGE_SOURCE_SETS
+            if source_set not in report.renderer_bridge_required_source_sets
+        ]
+        report.errors.append(
+            "renderer bridge: source must be listed in renderer source sets: "
+            + ", ".join(missing_source_sets)
+        )
     if not report.renderer_cpp_args_configured:
         report.errors.append("meson: renderer C++ args must include config defines and per-family USE_REF flags")
-    if not report.renderer_gl_runtime_dependency:
-        report.errors.append("meson: RmlUi runtime dependency must be scoped to the OpenGL renderer scaffold")
+    if not report.renderer_runtime_dependencies:
+        report.errors.append("meson: renderer DLLs must link the RmlUi runtime dependency when enabled")
     if report.adapter_source_exists and not report.adapter_runtime_guard_present:
         report.errors.append("adapter: missing UI_RML_HAS_RUNTIME compile guard")
     if report.adapter_source_exists and not report.rmlui_core_include_guarded:
@@ -827,6 +931,8 @@ def add_consistency_findings(report: RuntimeAdapterReport) -> None:
         )
     if not report.runtime_font_engine_adapter_present:
         report.errors.append("adapter: missing guarded RmlUi glyph-generating font engine install")
+    if not report.runtime_font_engine_q2r_fonts_present:
+        report.errors.append("adapter: missing Quake II Rerelease TTF font candidates/source marker")
     missing_file_symbols = {
         "FS_OpenFile",
         "FS_CloseFile",
@@ -898,8 +1004,8 @@ def add_consistency_findings(report: RuntimeAdapterReport) -> None:
         report.errors.append("renderer api: missing RmlUi bridge export slots")
     if not report.renderer_api_opengl_only:
         report.errors.append("renderer api: OpenGL renderer must be the only concrete RmlUi bridge export")
-    if not report.renderer_api_non_gl_none:
-        report.errors.append("renderer api: non-OpenGL renderers must export an unavailable RmlUi bridge")
+    if not report.renderer_api_non_gl_unavailable:
+        report.errors.append("renderer api: non-OpenGL renderers must keep RmlUi rendering unavailable")
     if not report.client_renderer_bridge_registered:
         report.errors.append("client renderer: native RmlUi bridge is not registered after renderer init")
     if not report.client_renderer_bridge_cleared:
@@ -979,8 +1085,13 @@ def json_report_payload(report: RuntimeAdapterReport) -> dict[str, Any]:
             "listed_in_meson": report.adapter_listed_in_meson,
             "renderer_bridge_listed_in_meson": report.renderer_bridge_listed_in_meson,
             "renderer_bridge_listed_once_in_meson": report.renderer_bridge_listed_once_in_meson,
+            "renderer_bridge_meson_occurrences": report.renderer_bridge_meson_occurrences,
+            "renderer_bridge_required_source_sets": report.renderer_bridge_required_source_sets,
+            "renderer_bridge_required_source_sets_present": (
+                report.renderer_bridge_required_source_sets_present
+            ),
             "renderer_cpp_args_configured": report.renderer_cpp_args_configured,
-            "renderer_gl_runtime_dependency": report.renderer_gl_runtime_dependency,
+            "renderer_runtime_dependencies": report.renderer_runtime_dependencies,
             "runtime_guard_present": report.adapter_runtime_guard_present,
             "rmlui_core_include_guarded": report.rmlui_core_include_guarded,
             "rmlui_system_file_includes_guarded": report.rmlui_system_file_includes_guarded,
@@ -990,6 +1101,7 @@ def json_report_payload(report: RuntimeAdapterReport) -> dict[str, Any]:
             "rmlui_core_interface_symbols": report.rmlui_core_interface_symbols,
             "rmlui_render_interface_symbols": report.rmlui_render_interface_symbols,
             "runtime_font_engine_adapter_present": report.runtime_font_engine_adapter_present,
+            "runtime_font_engine_q2r_fonts_present": report.runtime_font_engine_q2r_fonts_present,
             "worr_file_symbols": report.worr_file_symbols,
             "worr_system_symbols": report.worr_system_symbols,
             "runtime_registration_declared": report.runtime_registration_declared,
@@ -1012,7 +1124,7 @@ def json_report_payload(report: RuntimeAdapterReport) -> dict[str, Any]:
             "renderer_api_contract_declared": report.renderer_api_contract_declared,
             "renderer_api_exports_declared": report.renderer_api_exports_declared,
             "renderer_api_opengl_only": report.renderer_api_opengl_only,
-            "renderer_api_non_gl_none": report.renderer_api_non_gl_none,
+            "renderer_api_non_gl_unavailable": report.renderer_api_non_gl_unavailable,
             "client_renderer_bridge_registered": report.client_renderer_bridge_registered,
             "client_renderer_bridge_cleared": report.client_renderer_bridge_cleared,
             "client_renderer_family_mapping": report.client_renderer_family_mapping,
@@ -1076,9 +1188,21 @@ def print_report(report: RuntimeAdapterReport) -> None:
     print("\nAdapter facts:")
     print(f"  Listed in meson.build: {yes_no(report.adapter_listed_in_meson)}")
     print(f"  Renderer bridge listed in meson.build: {yes_no(report.renderer_bridge_listed_in_meson)}")
-    print(f"  Renderer bridge listed once: {yes_no(report.renderer_bridge_listed_once_in_meson)}")
+    print(f"  Renderer bridge Meson occurrences: {report.renderer_bridge_meson_occurrences}")
+    print(
+        "  Renderer bridge required source sets: "
+        + (
+            ", ".join(report.renderer_bridge_required_source_sets)
+            if report.renderer_bridge_required_source_sets
+            else "-"
+        )
+    )
+    print(
+        "  Renderer bridge required source-set coverage: "
+        + yes_no(report.renderer_bridge_required_source_sets_present)
+    )
     print(f"  Renderer C++ args configured: {yes_no(report.renderer_cpp_args_configured)}")
-    print(f"  OpenGL-scoped RmlUi renderer dependency: {yes_no(report.renderer_gl_runtime_dependency)}")
+    print(f"  Renderer RmlUi runtime dependencies: {yes_no(report.renderer_runtime_dependencies)}")
     print(f"  Runtime guard present: {yes_no(report.adapter_runtime_guard_present)}")
     print(f"  RmlUi Core include guarded: {yes_no(report.rmlui_core_include_guarded)}")
     print(f"  RmlUi system/file includes guarded: {yes_no(report.rmlui_system_file_includes_guarded)}")
@@ -1105,6 +1229,7 @@ def print_report(report: RuntimeAdapterReport) -> None:
         )
     )
     print(f"  Runtime font engine adapter: {yes_no(report.runtime_font_engine_adapter_present)}")
+    print(f"  Runtime Q2R font candidates: {yes_no(report.runtime_font_engine_q2r_fonts_present)}")
     print(
         "  WORR filesystem symbols: "
         + (", ".join(report.worr_file_symbols) if report.worr_file_symbols else "-")
@@ -1139,7 +1264,7 @@ def print_report(report: RuntimeAdapterReport) -> None:
     print(f"  Renderer API contract declared: {yes_no(report.renderer_api_contract_declared)}")
     print(f"  Renderer API exports declared: {yes_no(report.renderer_api_exports_declared)}")
     print(f"  Renderer API OpenGL only: {yes_no(report.renderer_api_opengl_only)}")
-    print(f"  Renderer API non-OpenGL unavailable: {yes_no(report.renderer_api_non_gl_none)}")
+    print(f"  Renderer API non-OpenGL unavailable: {yes_no(report.renderer_api_non_gl_unavailable)}")
     print(f"  Client renderer bridge registered: {yes_no(report.client_renderer_bridge_registered)}")
     print(f"  Client renderer bridge cleared: {yes_no(report.client_renderer_bridge_cleared)}")
     print(f"  Client renderer family mapping: {yes_no(report.client_renderer_family_mapping)}")

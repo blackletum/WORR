@@ -4,7 +4,6 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
   <body id="session-dm-join" data-route-id="dm_join" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame">
     <div class="screen compact-screen session-screen" id="dm-join-screen" data-close-command="forcemenuoff; worr_dm_join_close">
@@ -26,12 +25,12 @@
         <button id="dm-join-callvote" type="button" data-command="worr_callvote_menu" data-visible-if="ui_dm_show_callvote=1" data-route-target="callvote_main">Call a Vote</button>
         <button id="dm-join-mymap" type="button" data-command="worr_mymap_menu" data-visible-if="ui_dm_show_mymap=1" data-route-target="mymap_main">MyMap</button>
         <button id="dm-join-hostinfo" type="button" data-command="worr_dm_hostinfo" data-route-target="dm_hostinfo">Host Info</button>
-        <button id="dm-join-forfeit" type="button" data-command="worr_forfeit_menu" data-visible-if="ui_dm_show_forfeit=1" data-route-target="forfeit_confirm">Forfeit</button>
+        <button id="dm-join-forfeit" type="button" data-command="ui.popup" data-source-command="worr_forfeit_menu" data-visible-if="ui_dm_show_forfeit=1" data-route-target="forfeit_confirm" data-menu-sound="alert">Forfeit</button>
         <button id="dm-join-matchinfo" type="button" data-command="worr_dm_matchinfo" data-route-target="dm_matchinfo">Match Info</button>
         <button id="dm-join-matchstats" type="button" data-command="worr_matchstats_menu" data-visible-if="ui_dm_show_matchstats=1">Player Stats</button>
         <button id="dm-join-admin" type="button" data-command="worr_admin_menu" data-visible-if="ui_dm_show_admin=1" data-route-target="admin_menu">Admin</button>
         <button id="dm-join-settings" type="button" data-loc-key="m_settings" data-command="pushmenu options">Settings</button>
-        <button id="dm-join-leave" type="button" data-loc-key="m_leave_match" data-command="pushmenu leave_match_confirm" data-route-target="leave_match_confirm">Leave Match</button>
+        <button id="dm-join-leave" type="button" data-loc-key="m_leave_match" data-command="ui.popup" data-route-target="leave_match_confirm" data-menu-sound="alert">Leave Match</button>
       </nav>
 
       <section class="session-card" id="dm-join-community-links">

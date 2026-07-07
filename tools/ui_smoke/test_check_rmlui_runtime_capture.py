@@ -11,11 +11,40 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import check_rmlui_runtime_capture as runtime_capture  # noqa: E402
+import test_check_rmlui_renderer_matrix as renderer_matrix_fixture  # noqa: E402
+import test_check_rmlui_vulkan_bridge_readiness as bridge_readiness_fixture  # noqa: E402
 
 
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def write_renderer_matrix_repo(repo_root: Path) -> None:
+    bridge_readiness_fixture.write_valid_repo(repo_root)
+    renderer_matrix_fixture.write_valid_repo(repo_root)
+    bridge_path = repo_root / "src/renderer/rmlui_bridge.cpp"
+    bridge_path.write_text(
+        bridge_path.read_text(encoding="utf-8")
+        + """
+class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface {};
+class R_RmlUiRtxVkptRenderInterface final : public Rml::RenderInterface {};
+""",
+        encoding="utf-8",
+    )
+    meson_path = repo_root / "meson.build"
+    meson_path.write_text(
+        """
+renderer_vk_rtx_src = [
+  'src/renderer/rmlui_bridge.cpp',
+]
+renderer_vk_src = [
+  'src/renderer/rmlui_bridge.cpp',
+]
+"""
+        + meson_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
 
 
 def fill_rect(
@@ -108,7 +137,8 @@ def write_valid_evidence(
     )
     evidence_text = f"""
 {capture_marker}
-RmlUi smoke font engine generated glyph geometry: strings=1 glyphs=24 size=18.
+RmlUi TTF font face 'WORR Display' loaded from Quake II Rerelease font fonts/RussoOne-Regular.ttf.
+RmlUi TTF font engine generated text texture: strings=1 size=18 source='Quake II Rerelease: fonts/RussoOne-Regular.ttf'.
 RmlUi runtime status: active=yes route='{route_id}' availability='ready' runtime='RmlUi' renderer='OpenGL RmlUi render-interface primitives' family='opengl'.
 RmlUi runtime frames: updates=2 renders=2 last_realtime=123 dimensions={width}x{height}.
 RmlUi runtime route counters: opens=1 closes=0 close_requests=0 synthetic_inputs=0.
@@ -182,6 +212,26 @@ def test_dry_run_route_matrix_prints_guarded_menu_commands(
     assert "+screenshottga rmlui_runtime_smoke_round29_download_status" in captured.out
 
 
+def test_dry_run_renderer_matrix_prints_opengl_commands_and_blocked_lanes(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+    write_renderer_matrix_repo(repo_root)
+
+    result, captured = run_checker(repo_root, capsys, "--dry-run", "--renderer-matrix")
+
+    assert result == 0
+    assert "+ui_rml_runtime_capture_menu main" in captured.out
+    assert "+ui_rml_runtime_capture_menu game" in captured.out
+    assert "+ui_rml_runtime_capture_menu download_status" in captured.out
+    assert "OpenGL=native_guarded" in captured.out
+    assert "Vulkan=blocked_until_native" in captured.out
+    assert "RTX/vkpt=blocked_until_native" in captured.out
+    assert "Vulkan=foundation_present_blocked" in captured.out
+    assert "RTX/vkpt=foundation_present_blocked" in captured.out
+
+
 def test_valid_runtime_capture_evidence_passes(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -204,6 +254,7 @@ def test_valid_runtime_capture_evidence_passes(
     assert payload["facts"]["capture_marker_seen"] is True
     assert payload["facts"]["synthetic_input_marker_seen"] is True
     assert payload["facts"]["font_geometry_marker_seen"] is True
+    assert payload["facts"]["font_q2r_source_marker_seen"] is True
     assert payload["facts"]["guarded_opengl_status_seen"] is True
     assert payload["facts"]["inactive_status_seen"] is True
     assert payload["facts"]["frame_updates"] == 2
@@ -272,6 +323,153 @@ def test_route_matrix_evidence_passes_for_guarded_menu_entrypoints(
             f"rmlui_runtime_smoke_round29_{route_id}.tga"
         )
     assert (repo_root / ".tmp/rmlui/runtime-capture/manifest.json").is_file()
+
+
+def test_renderer_matrix_evidence_combines_opengl_routes_and_static_lanes(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+    write_renderer_matrix_repo(repo_root)
+    for route_id in runtime_capture.DEFAULT_ROUTE_MATRIX:
+        write_valid_evidence(
+            repo_root,
+            evidence_id=f"rmlui_runtime_smoke_round29_{route_id}",
+            route_id=route_id,
+            width=960,
+            height=720,
+        )
+
+    result, captured = run_checker(
+        repo_root,
+        capsys,
+        "--renderer-matrix",
+        "--format",
+        "json",
+        "--write-manifest",
+        ".tmp/rmlui/runtime-capture/renderer-matrix.json",
+    )
+
+    payload = json.loads(captured.out)
+    assert result == 0
+    assert payload["ok"] is True
+    assert payload["counts"]["routes"] == 3
+    assert payload["counts"]["route_passed"] == 3
+    assert payload["counts"]["renderer_lanes"] == 3
+    assert payload["counts"]["native_guarded_lanes"] == 1
+    assert payload["counts"]["blocked_lanes"] == 2
+    assert payload["counts"]["bridge_lanes"] == 2
+    assert payload["counts"]["bridge_foundation_lanes"] == 2
+    assert payload["counts"]["native_bridge_lanes"] == 0
+    assert payload["counts"]["bridge_blocked_lanes"] == 2
+    assert payload["counts"]["bridge_activation_complete_lanes"] == 0
+    assert payload["counts"]["bridge_partial_activation_lanes"] == 2
+    assert payload["counts"]["bridge_inactive_activation_lanes"] == 0
+    assert payload["counts"]["bridge_activation_requirements"] == 10
+    assert payload["counts"]["bridge_satisfied_activation_requirements"] == 8
+    assert payload["counts"]["bridge_pending_activation_requirements"] == 2
+    assert payload["counts"]["missing_bridge_requirements"] == 2
+    assert payload["renderer_guardrail"]["lanes"]["opengl"]["expected_status"] == "native_guarded"
+    assert payload["renderer_guardrail"]["lanes"]["vulkan"]["expected_status"] == "blocked_until_native"
+    assert payload["renderer_guardrail"]["lanes"]["rtx_vkpt"]["expected_status"] == "blocked_until_native"
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["foundation_ok"] is True
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["native_bridge_claimed"] is False
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_status"] == "partial_activation_blocked"
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["next_activation_requirement"] == "native_interface_export_present"
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_requirements"]["runtime_dependency_enabled"] is True
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_requirements"]["native_bridge_class_present"] is True
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_requirements"]["native_interface_export_present"] is False
+    assert payload["bridge_readiness"]["lanes"]["rtx_vkpt"]["foundation_ok"] is True
+    assert payload["opengl_route_matrix"]["counts"]["passed"] == 3
+    assert payload["opengl_route_matrix"]["routes"][0]["facts"]["layout_required"] is False
+    assert (repo_root / ".tmp/rmlui/runtime-capture/renderer-matrix.json").is_file()
+
+
+def test_renderer_matrix_fails_when_static_lane_guard_fails(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+    write_renderer_matrix_repo(repo_root)
+    client_path = repo_root / "src/client/renderer.cpp"
+    client_path.write_text(
+        client_path.read_text(encoding="utf-8").replace(
+            "case R_RENDERER_RMLUI_FAMILY_VULKAN:\n        return UI_RML_RENDERER_FAMILY_VULKAN;",
+            "case R_RENDERER_RMLUI_FAMILY_VULKAN:\n        return UI_RML_RENDERER_FAMILY_OPENGL;",
+        ),
+        encoding="utf-8",
+    )
+    for route_id in runtime_capture.DEFAULT_ROUTE_MATRIX:
+        write_valid_evidence(
+            repo_root,
+            evidence_id=f"rmlui_runtime_smoke_round29_{route_id}",
+            route_id=route_id,
+            width=960,
+            height=720,
+        )
+
+    result, captured = run_checker(
+        repo_root,
+        capsys,
+        "--renderer-matrix",
+        "--format",
+        "json",
+    )
+
+    payload = json.loads(captured.out)
+    assert result == 1
+    assert payload["ok"] is False
+    assert payload["opengl_route_matrix"]["ok"] is True
+    assert payload["renderer_guardrail"]["ok"] is False
+    assert payload["bridge_readiness"]["ok"] is False
+    assert any(
+        "Vulkan/RTX RmlUi lanes must not map to OpenGL" in error["error"]
+        for error in payload["errors"]
+    )
+
+
+def test_renderer_matrix_fails_when_bridge_readiness_fails(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+    write_renderer_matrix_repo(repo_root)
+    vk_main_path = repo_root / "src/rend_vk/vk_main.c"
+    vk_main_path.write_text(
+        vk_main_path.read_text(encoding="utf-8").replace(
+            "R_DrawStretchPic",
+            "R_DrawStretchPicMissing",
+        ),
+        encoding="utf-8",
+    )
+    for route_id in runtime_capture.DEFAULT_ROUTE_MATRIX:
+        write_valid_evidence(
+            repo_root,
+            evidence_id=f"rmlui_runtime_smoke_round29_{route_id}",
+            route_id=route_id,
+            width=960,
+            height=720,
+        )
+
+    result, captured = run_checker(
+        repo_root,
+        capsys,
+        "--renderer-matrix",
+        "--format",
+        "json",
+    )
+
+    payload = json.loads(captured.out)
+    assert result == 1
+    assert payload["ok"] is False
+    assert payload["opengl_route_matrix"]["ok"] is True
+    assert payload["renderer_guardrail"]["ok"] is True
+    assert payload["bridge_readiness"]["ok"] is False
+    assert any(
+        error["source"] == "bridge_readiness"
+        and "native Vulkan UI draw entrypoints must remain available" in error["error"]
+        for error in payload["errors"]
+    )
 
 
 def test_matrix_evidence_passes_for_expected_viewports(
@@ -366,7 +564,7 @@ Wrote rmlui_runtime_smoke_round29.tga
     result, captured = run_checker(repo_root, capsys)
 
     assert result == 1
-    assert "RmlUi font glyph-geometry marker was not found" in captured.out
+    assert "RmlUi TTF font texture marker was not found" in captured.out
 
 
 def test_layout_assertions_fail_for_nonblank_wrong_tga(
@@ -397,7 +595,8 @@ def test_missing_guarded_opengl_status_fails(
         repo_root / ".install/basew/logs/rmlui_runtime_smoke_round29.log",
         """
 RmlUi guarded capture route is active; capture after the next rendered frame.
-RmlUi smoke font engine generated glyph geometry: strings=1 glyphs=24 size=18.
+RmlUi TTF font face 'WORR Display' loaded from Quake II Rerelease font fonts/RussoOne-Regular.ttf.
+RmlUi TTF font engine generated text texture: strings=1 size=18 source='Quake II Rerelease: fonts/RussoOne-Regular.ttf'.
 RmlUi runtime frames: updates=2 renders=2 last_realtime=123 dimensions=640x480.
 RmlUi runtime route counters: opens=1 closes=1 close_requests=1 synthetic_inputs=1.
 RmlUi runtime input: keys=2 chars=1 mouse_moves=1 mouse_buttons=1 mouse_wheels=1 last_mouse=128,192.
@@ -422,7 +621,8 @@ def test_missing_synthetic_input_close_evidence_fails(
     write_valid_evidence(repo_root)
     evidence_text = """
 RmlUi guarded capture route is active; capture after the next rendered frame.
-RmlUi smoke font engine generated glyph geometry: strings=1 glyphs=24 size=18.
+RmlUi TTF font face 'WORR Display' loaded from Quake II Rerelease font fonts/RussoOne-Regular.ttf.
+RmlUi TTF font engine generated text texture: strings=1 size=18 source='Quake II Rerelease: fonts/RussoOne-Regular.ttf'.
 RmlUi runtime status: active=yes route='core.runtime_smoke' availability='ready' runtime='RmlUi' renderer='OpenGL RmlUi render-interface primitives' family='opengl'.
 RmlUi runtime frames: updates=2 renders=2 last_realtime=123 dimensions=640x480.
 RmlUi runtime route counters: opens=1 closes=0 close_requests=0 synthetic_inputs=0.

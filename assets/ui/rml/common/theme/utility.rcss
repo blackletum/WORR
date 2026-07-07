@@ -1,27 +1,53 @@
 /*
  * WORR RmlUi utility-page theme contract.
  *
- * Import after common/theme/base.rcss. These rules cover table browsers,
- * toolbar-driven utilities, and preview/form layouts without binding to any
- * renderer implementation.
+ * Import after common/theme/base.rcss. Keep this file in literal RmlUi RCSS:
+ * no browser custom properties, no var() expansion, and no layout that needs
+ * content to extend beyond the active menu viewport.
  */
 
 .utility-screen,
+#addressbook-screen,
+#keys-screen,
+#legacykeys-screen,
 #servers-screen,
 #demos-screen,
-#players-screen
+#players-screen,
+#ui-list-screen,
+#weapons-screen
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-4);
-	min-height: 100%;
+	min-height: 0px;
+}
+
+#ui-list-extra-actions
+{
+	width: 560px;
+}
+
+#ui-list-content
+{
+	flex: 0 0 auto;
+	width: 560px;
+	height: 420px;
+	overflow: auto;
+}
+
+#ui-list-content button
+{
+	width: 520px;
+	min-height: 34px;
+	padding: 5px 10px;
+	font-size: 15px;
+	line-height: 1.1;
+	margin-bottom: 4px;
 }
 
 .page-header
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-1);
 	max-width: 920px;
 }
 
@@ -29,7 +55,7 @@
 {
 	max-width: 760px;
 	margin-bottom: 0px;
-	color: var(--color-text-muted);
+	color: #c9beb0;
 }
 
 .toolbar,
@@ -39,12 +65,23 @@
 	flex-direction: row;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-2);
-	padding: var(--space-2);
-	background-color: var(--color-surface);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-medium);
+	flex: 0 0 auto;
+	padding: 8px;
+	background-color: #1b1916;
+	border-width: 1px;
+	border-color: #332d23;
+	border-left-width: 3px;
+	border-left-color: #4b4235;
+	border-radius: 5px;
+	margin-bottom: 10px;
+	transition: background-color border-color 0.12s cubic-out;
+}
+
+.toolbar:hover,
+.utility-toolbar:hover
+{
+	background-color: #211e19;
+	border-color: #8b7c6a;
 }
 
 .toolbar button,
@@ -53,6 +90,8 @@
 .utility-toolbar .ui-button
 {
 	min-width: 112px;
+	margin-right: 6px;
+	margin-bottom: 6px;
 }
 
 .content,
@@ -60,8 +99,10 @@
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-3);
+	flex: 1 1 auto;
 	min-height: 0px;
+	padding-right: 6px;
+	overflow: auto;
 }
 
 .content.two-column,
@@ -70,7 +111,7 @@
 	display: flex;
 	flex-direction: row;
 	align-items: stretch;
-	gap: var(--space-4);
+	overflow: hidden;
 }
 
 .form-panel,
@@ -79,39 +120,58 @@
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-2);
-	padding: var(--space-4);
-	background-color: var(--color-surface);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-medium);
+	padding: 12px;
+	background-color: #1b1916;
+	border-width: 1px;
+	border-color: #332d23;
+	border-left-width: 3px;
+	border-left-color: #4b4235;
+	border-radius: 5px;
+	margin-bottom: 10px;
+	min-height: 0px;
+	transition: background-color border-color 0.12s cubic-out;
+}
+
+.form-panel:hover,
+.preview-panel:hover,
+.utility-panel:hover
+{
+	background-color: #211e19;
+	border-color: #8b7c6a;
+	border-left-color: #b99b5b;
 }
 
 .form-panel
 {
-	width: 360px;
-	min-width: 300px;
+	width: 304px;
+	min-width: 304px;
+	margin-right: 14px;
+	overflow: auto;
 }
 
 .preview-panel
 {
 	flex: 1 1 auto;
-	min-width: 360px;
-	min-height: 320px;
+	min-width: 280px;
+	min-height: 0px;
+	overflow: auto;
 }
 
 .form-panel label,
 .utility-label
 {
-	color: var(--color-text-muted);
+	display: block;
+	width: 280px;
+	color: #c9beb0;
 	font-weight: bold;
+	margin-bottom: 3px;
 }
 
 .form-panel input,
 .form-panel select
 {
-	width: 100%;
-	margin-bottom: var(--space-2);
+	width: 280px;
+	margin-bottom: 10px;
 }
 
 .preview-surface,
@@ -121,13 +181,13 @@
 	align-items: center;
 	justify-content: center;
 	flex: 1 1 auto;
-	min-height: 220px;
-	padding: var(--space-4);
+	min-height: 160px;
+	padding: 12px;
 	background-color: #090909;
-	color: var(--color-text-muted);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-small);
+	color: #c9beb0;
+	border-width: 1px;
+	border-color: #5f5548;
+	border-radius: 5px;
 	text-align: center;
 	white-space: normal;
 	word-break: break-word;
@@ -137,8 +197,7 @@
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-1);
-	color: var(--color-text-muted);
+	color: #c9beb0;
 }
 
 .utility-preview-actions
@@ -146,29 +205,120 @@
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
-	gap: var(--space-2);
-	margin-top: var(--space-2);
+	margin-top: 8px;
+}
+
+.utility-preview-actions button,
+.utility-preview-actions .ui-button
+{
+	margin-right: 6px;
+	margin-bottom: 6px;
+}
+
+.bind-group
+{
+	display: flex;
+	flex-direction: column;
+	flex: 0 0 auto;
+	max-width: 520px;
+	margin-bottom: 12px;
+	overflow: visible;
+}
+
+#keys-content,
+#weapons-content,
+#legacykeys-content
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	padding-bottom: 4px;
+	overflow: auto;
+}
+
+#keys-content
+{
+	height: 548px;
+}
+
+#keys-content .bind-group,
+#weapons-content .bind-group,
+#legacykeys-content .bind-group
+{
+	width: 260px;
+	max-width: 260px;
+	margin-right: 12px;
+	margin-bottom: 10px;
+}
+
+#keys-content .bind-group
+{
+	width: 242px;
+	max-width: 242px;
+	margin-right: 10px;
+	margin-bottom: 8px;
+}
+
+#weapons-content .bind-group
+{
+	width: 300px;
+	max-width: 300px;
+}
+
+.bind-group h2
+{
+	margin-bottom: 6px;
+	font-size: 19px;
+}
+
+.bind-group button,
+.bind-group .ui-button
+{
+	width: 236px;
+	min-height: 32px;
+	padding: 5px 10px;
+	font-size: 15px;
+	text-align: left;
+	margin-bottom: 4px;
+	transition: background-color border-color color 0.12s cubic-out;
+}
+
+#keys-content .bind-group button,
+#keys-content .bind-group .ui-button
+{
+	width: 220px;
+	min-height: 29px;
+	padding: 4px 10px;
+	font-size: 14px;
+	margin-bottom: 3px;
+}
+
+#weapons-content .bind-group button,
+#weapons-content .bind-group .ui-button
+{
+	width: 276px;
 }
 
 .data-table,
 .utility-table
 {
 	width: 100%;
-	background-color: var(--color-surface);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-small);
-	color: var(--color-text);
+	background-color: #1b1916;
+	border-width: 2px;
+	border-color: #756a5d;
+	border-radius: 3px;
+	color: #f3eee4;
 }
 
 .data-table th,
 .utility-table th
 {
-	padding: var(--space-2);
-	background-color: var(--color-surface-raised);
-	color: var(--color-accent-strong);
-	border-bottom-width: var(--control-border-width);
-	border-bottom-color: var(--color-border);
+	padding: 8px;
+	background-color: #27231d;
+	color: #ffd967;
+	border-bottom-width: 2px;
+	border-bottom-color: #756a5d;
 	text-align: left;
 	font-weight: bold;
 	white-space: nowrap;
@@ -177,10 +327,10 @@
 .data-table td,
 .utility-table td
 {
-	padding: var(--space-2);
-	color: var(--color-text);
+	padding: 8px;
+	color: #f3eee4;
 	border-bottom-width: 1px;
-	border-bottom-color: var(--color-border);
+	border-bottom-color: #756a5d;
 	white-space: normal;
 	word-break: break-word;
 }
@@ -190,8 +340,8 @@
 .data-table tr.is-selected td,
 .utility-table tr.is-selected td
 {
-	background-color: var(--color-surface-active);
-	color: var(--color-accent-strong);
+	background-color: #332d23;
+	color: #ffd967;
 }
 
 .data-table th[data-sort-key],
@@ -206,15 +356,15 @@
 .utility-table th[data-sort-state="ascending"],
 .utility-table th[data-sort-state="descending"]
 {
-	background-color: var(--color-accent);
+	background-color: #e5b64f;
 	color: #000000;
 }
 
 .placeholder-row td,
 .utility-empty-state
 {
-	padding: var(--space-4);
-	color: var(--color-text-muted);
+	padding: 12px;
+	color: #c9beb0;
 	text-align: center;
 	white-space: normal;
 	word-break: break-word;
@@ -223,13 +373,14 @@
 .status-bar,
 .utility-status-bar
 {
-	min-height: 34px;
-	padding: var(--space-2) var(--space-3);
-	background-color: var(--color-surface);
-	color: var(--color-text-muted);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-small);
+	flex: 0 0 auto;
+	min-height: 30px;
+	padding: 8px 10px;
+	background-color: #1b1916;
+	color: #c9beb0;
+	border-width: 2px;
+	border-color: #756a5d;
+	border-radius: 3px;
 	white-space: normal;
 	word-break: break-word;
 }
@@ -237,20 +388,20 @@
 .utility-status-bar.is-busy,
 .status-bar.is-busy
 {
-	color: var(--color-info);
+	color: #7ed4d8;
 }
 
 .utility-status-bar.is-error,
 .status-bar.is-error
 {
-	color: var(--color-danger);
-	border-color: var(--color-danger);
+	color: #ee6758;
+	border-color: #ee6758;
 }
 
 .utility-status-bar.is-ready,
 .status-bar.is-ready
 {
-	color: var(--color-success);
+	color: #83d18f;
 }
 
 .ui-high-visibility .toolbar,
@@ -263,16 +414,16 @@
 .ui-high-visibility .status-bar,
 .ui-high-visibility .utility-status-bar
 {
-	background-color: var(--color-surface);
-	border-color: var(--color-border);
+	background-color: #000000;
+	border-color: #ffffff;
 }
 
 .ui-high-visibility .data-table th,
 .ui-high-visibility .utility-table th
 {
 	background-color: #000000;
-	color: var(--color-accent-strong);
-	border-color: var(--color-border);
+	color: #ffff00;
+	border-color: #ffffff;
 }
 
 .ui-high-visibility .data-table tr:hover td,
@@ -281,5 +432,5 @@
 .ui-high-visibility .utility-table tr.is-selected td
 {
 	background-color: #202000;
-	color: var(--color-accent-strong);
+	color: #ffff00;
 }

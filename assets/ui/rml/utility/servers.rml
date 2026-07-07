@@ -2,16 +2,15 @@
   <head>
     <title>WORR Server Browser</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/list-table.rml" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/utility.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="utility-servers" data-route-id="servers" data-route-version="1">
     <div class="screen" id="servers-screen">
       <header class="page-header">
         <h1>Servers</h1>
         <p id="servers-summary">
-          Browse, refresh, sort, and connect to multiplayer servers through the
-          future RmlUi list controller.
+          Browse, refresh, sort, and connect to multiplayer servers.
         </p>
       </header>
 
@@ -34,14 +33,14 @@
           </thead>
           <tbody>
             <tr class="placeholder-row">
-              <td colspan="4">Server rows bind here once the browser bridge is available.</td>
+              <td colspan="4">No servers listed.</td>
             </tr>
           </tbody>
         </table>
       </section>
 
       <footer class="status-bar" id="servers-status" data-bind="server_browser.status">
-        Waiting for server browser data.
+        Server list ready.
       </footer>
     </div>
   </body>

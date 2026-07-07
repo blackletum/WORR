@@ -4,15 +4,13 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
   <body id="session-map-selector" data-route-id="map_selector" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame">
     <div class="screen compact-screen session-screen" id="map-selector-screen" data-close-command="popmenu; worr_mapselector_close">
       <header class="page-header" id="map-selector-header" data-model="session.map_selector" data-owner-boundary="sgame-published-cvars">
         <h1 data-bind="cvars.ui_mapselector_title" data-bind-cvar="ui_mapselector_title" data-visible-if="ui_mapselector_title">Vote for the next arena:</h1>
         <p id="map-selector-summary">
-          End-of-match candidate maps, vote acknowledgement, and countdown bar
-          bind from ui_mapselector_* cvars.
+          Choose one of the candidate maps for the next round.
         </p>
       </header>
 

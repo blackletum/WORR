@@ -11,8 +11,7 @@
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-4);
-	min-height: 100%;
+	min-height: 0px;
 }
 
 .session-layout
@@ -20,8 +19,9 @@
 	display: flex;
 	flex-direction: row;
 	align-items: stretch;
-	gap: var(--space-4);
+	flex: 1 1 auto;
 	min-height: 0px;
+	overflow: hidden;
 }
 
 .session-main
@@ -29,17 +29,21 @@
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
-	gap: var(--space-3);
 	min-width: 0px;
+	min-height: 0px;
+	overflow: auto;
 }
 
 .session-side
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-3);
-	width: 320px;
-	min-width: 280px;
+	width: 260px;
+	min-width: 220px;
+	max-width: 300px;
+	min-height: 0px;
+	margin-left: 16px;
+	overflow: auto;
 }
 
 .session-panel,
@@ -48,18 +52,28 @@
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-2);
-	padding: var(--space-4);
-	background-color: var(--color-surface);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-medium);
+	padding: 16px;
+	background-color: #1b1916;
+	border-width: 2px;
+	border-color: #756a5d;
+	border-radius: 6px;
+	margin-bottom: 12px;
+	min-height: 0px;
+	transition: background-color border-color 0.12s cubic-out;
+}
+
+.session-panel:hover,
+.status-panel:hover,
+.session-card:hover
+{
+	background-color: #211e19;
+	border-color: #8b7c6a;
 }
 
 .status-panel p
 {
 	margin-bottom: 0px;
-	color: var(--color-text-muted);
+	color: #c9beb0;
 }
 
 .menu-list,
@@ -67,8 +81,282 @@
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-2);
-	max-width: 420px;
+	flex: 1 1 auto;
+	min-height: 0px;
+	max-width: 604px;
+	overflow: auto;
+}
+
+#multiplayer-menu
+{
+	position: relative;
+	flex: 0 0 auto;
+	width: 604px;
+	min-width: 604px;
+	max-width: 604px;
+	height: 150px;
+	margin-bottom: 12px;
+	padding-right: 8px;
+	overflow: hidden;
+}
+
+#multiplayer-menu button
+{
+	position: absolute;
+	width: 272px;
+	min-width: 272px;
+	height: 30px;
+	min-height: 30px;
+	padding: 5px 12px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+	background-color: #211e19;
+	border-left-width: 4px;
+	border-left-color: #4b4235;
+	border-radius: 5px;
+}
+
+#multiplayer-session-status
+{
+	width: 584px;
+}
+
+#callvote-main-menu
+{
+	position: relative;
+	flex: 0 0 auto;
+	width: 604px;
+	min-width: 604px;
+	height: 332px;
+	padding-right: 8px;
+	margin-bottom: 8px;
+	overflow: hidden;
+}
+
+#callvote-main-menu button
+{
+	position: absolute;
+	width: 272px;
+	min-width: 272px;
+	height: 26px;
+	min-height: 26px;
+	padding: 5px 12px;
+	background-color: #211e19;
+	border-left-width: 4px;
+	border-left-color: #4b4235;
+	border-radius: 5px;
+	font-size: 16px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+}
+
+#dm-join-team-actions,
+#join-team-actions
+{
+	position: relative;
+	flex: 0 0 auto;
+	width: 604px;
+	min-width: 604px;
+	height: 92px;
+	padding: 8px;
+	margin-bottom: 10px;
+	overflow: hidden;
+}
+
+#dm-join-team-actions button,
+#join-team-actions button
+{
+	position: absolute;
+	width: 272px;
+	min-width: 272px;
+	height: 26px;
+	min-height: 26px;
+	padding: 5px 12px;
+	background-color: #211e19;
+	border-left-width: 4px;
+	border-left-color: #4b4235;
+	border-radius: 5px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+}
+
+#dm-join-session-menu,
+#join-session-menu
+{
+	position: relative;
+	flex: 0 0 auto;
+	width: 604px;
+	min-width: 604px;
+	height: 286px;
+	padding-right: 8px;
+	margin-bottom: 8px;
+	overflow: hidden;
+}
+
+#dm-join-session-menu button,
+#join-session-menu button
+{
+	position: absolute;
+	width: 272px;
+	min-width: 272px;
+	height: 26px;
+	min-height: 26px;
+	padding: 5px 12px;
+	background-color: #211e19;
+	border-left-width: 4px;
+	border-left-color: #4b4235;
+	border-radius: 5px;
+	font-size: 16px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+}
+
+#dm-join-community-links,
+#join-community-links
+{
+	width: 584px;
+	padding: 8px 10px;
+	margin-bottom: 8px;
+}
+
+#dm-join-community-links p
+{
+	margin-bottom: 2px;
+	font-size: 14px;
+}
+
+#multiplayer-servers,
+#multiplayer-startserver,
+#multiplayer-demos,
+#callvote-main-map,
+#callvote-main-restart,
+#callvote-main-ruleset,
+#callvote-main-scorelimit,
+#callvote-main-balance,
+#callvote-main-cointoss,
+#callvote-main-arena,
+#dm-join-red,
+#dm-join-free,
+#join-red,
+#join-free,
+#dm-join-info,
+#dm-join-callvote,
+#dm-join-hostinfo,
+#dm-join-matchinfo,
+#dm-join-admin,
+#dm-join-leave,
+#join-info,
+#join-callvote,
+#join-hostinfo,
+#join-matchinfo,
+#join-admin,
+#join-leave
+{
+	left: 0px;
+}
+
+#multiplayer-connect,
+#multiplayer-player,
+#multiplayer-back,
+#callvote-main-nextmap,
+#callvote-main-gametype,
+#callvote-main-timelimit,
+#callvote-main-shuffle,
+#callvote-main-unlagged,
+#callvote-main-random,
+#dm-join-blue,
+#dm-join-spectate,
+#join-blue,
+#join-spectate,
+#dm-join-maps,
+#dm-join-mymap,
+#dm-join-forfeit,
+#dm-join-matchstats,
+#dm-join-settings,
+#join-maps,
+#join-mymap,
+#join-forfeit,
+#join-matchstats,
+#join-settings
+{
+	left: 304px;
+}
+
+#multiplayer-servers,
+#multiplayer-connect,
+#callvote-main-map,
+#callvote-main-nextmap,
+#dm-join-red,
+#dm-join-blue,
+#join-red,
+#join-blue,
+#dm-join-info,
+#dm-join-maps,
+#join-info,
+#join-maps
+{
+	top: 0px;
+}
+
+#multiplayer-startserver,
+#multiplayer-player,
+#callvote-main-restart,
+#callvote-main-gametype,
+#dm-join-free,
+#dm-join-spectate,
+#join-free,
+#join-spectate,
+#dm-join-callvote,
+#dm-join-mymap,
+#join-callvote,
+#join-mymap
+{
+	top: 48px;
+}
+
+#multiplayer-demos,
+#multiplayer-back,
+#callvote-main-ruleset,
+#callvote-main-timelimit,
+#dm-join-hostinfo,
+#dm-join-forfeit,
+#join-hostinfo,
+#join-forfeit
+{
+	top: 96px;
+}
+
+#callvote-main-scorelimit,
+#callvote-main-shuffle,
+#dm-join-matchinfo,
+#dm-join-matchstats,
+#join-matchinfo,
+#join-matchstats
+{
+	top: 144px;
+}
+
+#callvote-main-balance,
+#callvote-main-unlagged,
+#dm-join-admin,
+#dm-join-settings,
+#join-admin,
+#join-settings
+{
+	top: 192px;
+}
+
+#callvote-main-cointoss,
+#callvote-main-random,
+#dm-join-leave,
+#join-leave
+{
+	top: 240px;
+}
+
+#callvote-main-arena
+{
+	top: 288px;
 }
 
 .menu-list button,
@@ -76,6 +364,7 @@
 {
 	width: 100%;
 	text-align: left;
+	margin-bottom: 6px;
 }
 
 .session-command-strip
@@ -83,43 +372,52 @@
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
-	gap: var(--space-2);
+	margin-bottom: 8px;
 }
 
 .session-flow
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-3);
+	flex: 1 1 auto;
+	min-height: 0px;
+	overflow: auto;
 }
 
 .session-flow-step
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-1);
-	padding: var(--space-3);
-	background-color: var(--color-surface-raised);
+	padding: 12px;
+	background-color: #27231d;
 	border-left-width: 4px;
-	border-left-color: var(--color-border);
-	border-radius: var(--radius-small);
+	border-left-color: #756a5d;
+	border-radius: 3px;
+	margin-bottom: 8px;
+	transition: background-color border-color color 0.12s cubic-out;
+}
+
+.session-flow-step:hover
+{
+	background-color: #30291f;
+	border-left-color: #b99b5b;
 }
 
 .session-flow-step.is-active
 {
-	background-color: var(--color-surface-active);
-	border-left-color: var(--color-accent-strong);
+	background-color: #332d23;
+	border-left-color: #ffd967;
 }
 
 .session-flow-step.is-complete
 {
-	border-left-color: var(--color-success);
+	border-left-color: #83d18f;
 }
 
 .session-flow-step.is-blocked,
 .session-flow-step.is-danger
 {
-	border-left-color: var(--color-danger);
+	border-left-color: #ee6758;
 }
 
 .vote-status,
@@ -128,13 +426,13 @@
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
-	gap: var(--space-2);
 	margin: 0px;
-	padding: var(--space-3);
-	background-color: var(--color-surface);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border);
-	border-radius: var(--radius-small);
+	padding: 12px;
+	background-color: #1b1916;
+	border-width: 2px;
+	border-color: #756a5d;
+	border-radius: 3px;
+	margin-bottom: 12px;
 }
 
 .vote-status dt,
@@ -143,7 +441,7 @@
 {
 	width: 160px;
 	margin: 0px;
-	color: var(--color-text-muted);
+	color: #c9beb0;
 	font-weight: bold;
 	white-space: normal;
 	word-break: break-word;
@@ -155,7 +453,7 @@
 {
 	flex: 1 1 220px;
 	margin: 0px;
-	color: var(--color-text);
+	color: #f3eee4;
 	white-space: normal;
 	word-break: break-word;
 }
@@ -163,13 +461,13 @@
 .vote-status .is-winning,
 .session-stat-value.is-winning
 {
-	color: var(--color-success);
+	color: #83d18f;
 }
 
 .vote-status .is-losing,
 .session-stat-value.is-losing
 {
-	color: var(--color-danger);
+	color: #ee6758;
 }
 
 .session-vote-prompt,
@@ -178,12 +476,12 @@
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-2);
-	padding: var(--space-4);
-	background-color: var(--color-surface-raised);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border-strong);
-	border-radius: var(--radius-medium);
+	padding: 16px;
+	background-color: #27231d;
+	border-width: 2px;
+	border-color: #b99b5b;
+	border-radius: 6px;
+	margin-bottom: 12px;
 }
 
 .session-vote-prompt h2,
@@ -197,14 +495,14 @@
 {
 	display: inline-block;
 	min-width: 64px;
-	padding: var(--space-1) var(--space-2);
-	background-color: var(--color-backplate);
-	color: var(--color-accent-strong);
-	border-width: var(--control-border-width);
-	border-color: var(--color-border-strong);
-	border-radius: var(--radius-small);
+	padding: 4px 8px;
+	background-color: #000000;
+	color: #ffd967;
+	border-width: 2px;
+	border-color: #b99b5b;
+	border-radius: 3px;
 	text-align: center;
-	font-family: var(--font-mono);
+	font-family: "WORR Mono";
 }
 
 .session-player-list,
@@ -212,7 +510,8 @@
 {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-1);
+	min-height: 0px;
+	overflow: auto;
 }
 
 .session-player-row,
@@ -221,21 +520,30 @@
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	gap: var(--space-2);
+	flex: 0 0 auto;
 	min-height: 36px;
-	padding: var(--space-2);
-	background-color: var(--color-surface);
+	padding: 8px;
+	background-color: #1b1916;
 	border-width: 1px;
-	border-color: var(--color-border);
-	border-radius: var(--radius-small);
+	border-color: #756a5d;
+	border-radius: 3px;
+	margin-bottom: 4px;
+	transition: background-color border-color color 0.12s cubic-out;
+}
+
+.session-player-row:hover,
+.session-admin-row:hover
+{
+	background-color: #211e19;
+	border-color: #b99b5b;
 }
 
 .session-player-row.is-selected,
 .session-admin-row.is-selected
 {
-	background-color: var(--color-surface-active);
-	border-color: var(--color-accent-strong);
-	color: var(--color-accent-strong);
+	background-color: #332d23;
+	border-color: #ffd967;
+	color: #ffd967;
 }
 
 .session-player-name,
@@ -247,35 +555,82 @@
 	word-break: break-word;
 }
 
+#admin-commands-screen .page-header
+{
+	margin-bottom: 8px;
+}
+
+#admin-commands-screen .page-header h1
+{
+	margin-bottom: 2px;
+}
+
+#admin-commands-list
+{
+	flex: 0 0 auto;
+	max-width: 620px;
+	height: 520px;
+	padding-right: 6px;
+	margin-bottom: 8px;
+	overflow: auto;
+}
+
+#admin-commands-list .session-admin-row
+{
+	width: 584px;
+	min-height: 28px;
+	padding: 5px 8px;
+}
+
+#admin-commands-list .session-admin-label
+{
+	flex: 0 0 auto;
+	width: 130px;
+}
+
+#admin-commands-list .session-admin-row span
+{
+	flex: 0 0 auto;
+	width: 210px;
+	white-space: normal;
+	word-break: break-word;
+}
+
+#admin-commands-list .session-admin-row .ui-command-line
+{
+	width: 220px;
+	font-size: 13px;
+}
+
 .session-badge
 {
 	display: inline-block;
 	min-width: 72px;
-	padding: var(--space-1) var(--space-2);
-	background-color: var(--color-surface-raised);
-	color: var(--color-text-muted);
+	padding: 4px 8px;
+	background-color: #27231d;
+	color: #c9beb0;
 	border-width: 1px;
-	border-color: var(--color-border);
-	border-radius: var(--radius-small);
+	border-color: #756a5d;
+	border-radius: 3px;
 	text-align: center;
 }
 
 .session-badge.is-live
 {
-	color: var(--color-success);
-	border-color: var(--color-success);
+	color: #83d18f;
+	border-color: #83d18f;
 }
 
 .session-badge.is-warning
 {
-	color: var(--color-accent-strong);
-	border-color: var(--color-accent-strong);
+	color: #ffd967;
+	border-color: #ffd967;
 }
 
 .session-badge.is-danger
 {
-	color: var(--color-danger);
-	border-color: var(--color-danger);
+	color: #ee6758;
+	border-color: #ee6758;
 }
 
 .session-admin-actions
@@ -283,18 +638,18 @@
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
-	gap: var(--space-2);
+	margin-top: 8px;
 }
 
 .session-pending
 {
-	color: var(--color-text-muted);
+	color: #c9beb0;
 	font-style: italic;
 }
 
 .session-error
 {
-	color: var(--color-danger);
+	color: #ee6758;
 }
 
 .actions
@@ -302,7 +657,6 @@
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
-	gap: var(--space-2);
 }
 
 .ui-high-visibility .session-panel,
@@ -316,8 +670,8 @@
 .ui-high-visibility .session-player-row,
 .ui-high-visibility .session-admin-row
 {
-	background-color: var(--color-surface);
-	border-color: var(--color-border);
+	background-color: #1b1916;
+	border-color: #756a5d;
 }
 
 .ui-high-visibility .session-flow-step.is-active,
@@ -325,6 +679,32 @@
 .ui-high-visibility .session-admin-row.is-selected
 {
 	background-color: #202000;
-	border-color: var(--color-accent-strong);
-	color: var(--color-accent-strong);
+	border-color: #ffd967;
+	color: #ffd967;
+}
+
+#dm-join-session-menu #dm-join-leave,
+#join-session-menu #join-leave,
+#leave-match-yes,
+#forfeit-confirm-yes
+{
+	background-color: #281b18;
+	border-color: #895047;
+	border-left-width: 4px;
+	border-left-color: #ee6758;
+}
+
+#dm-join-session-menu #dm-join-leave:hover,
+#join-session-menu #join-leave:hover,
+#leave-match-yes:hover,
+#forfeit-confirm-yes:hover,
+#dm-join-session-menu #dm-join-leave:focus,
+#join-session-menu #join-leave:focus,
+#leave-match-yes:focus,
+#forfeit-confirm-yes:focus
+{
+	background-color: #321f1b;
+	border-color: #ee6758;
+	border-left-color: #ff9285;
+	color: #ee6758;
 }

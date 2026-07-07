@@ -3,28 +3,26 @@
     <title>WORR Main Menu</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/shell.rcss" />
-    <link type="text/template" href="../common/components/menu_frame.rml" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
   <body id="shell-main" data-route-id="main" data-route-group="shell" data-route-version="1" data-document-status="first-round-scaffold">
     <div class="screen shell-screen" id="main-screen">
-      <header class="menu-header">
+      <div class="menu-header">
         <h1>WORR</h1>
-      </header>
+      </div>
 
-      <main class="menu-stack" id="main-menu-stack" data-component="common.components.menu_frame">
-        <nav class="menu-actions" id="main-menu-actions">
+      <div class="menu-stack" id="main-menu-stack" data-component="common.components.menu_frame">
+        <div class="menu-actions" id="main-menu-actions">
           <button id="main-singleplayer" type="button" data-command="pushmenu singleplayer" data-route-target="singleplayer">Single Player</button>
           <button id="main-multiplayer" type="button" data-command="pushmenu multiplayer" data-route-target="multiplayer" data-owner="agent5">Multiplayer</button>
           <button id="main-options" type="button" data-command="pushmenu options" data-route-target="options">Options</button>
           <button id="main-video" type="button" data-command="pushmenu video" data-route-target="video">Video</button>
-          <button id="main-quit" type="button" data-command="pushmenu quit_confirm" data-route-target="quit_confirm">Quit</button>
-        </nav>
-      </main>
+          <button id="main-quit" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert">Quit</button>
+        </div>
+      </div>
 
-      <footer class="menu-footer" id="main-menu-footer">
+      <div class="menu-footer" id="main-menu-footer">
         <button id="main-close" type="button" data-command="ui.close">Close</button>
-      </footer>
+      </div>
     </div>
   </body>
 </rml>

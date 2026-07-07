@@ -2,16 +2,15 @@
   <head>
     <title>WORR Key Bindings</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/controls.rml" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/utility.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="utility-keys" data-route-id="keys" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5">
     <div class="screen" id="keys-screen">
       <header class="page-header">
         <h1>Key Bindings</h1>
         <p id="keys-summary">
-          Primary bind surface preserving the current command names while the
-          shared key-capture controller is introduced.
+          Set movement, combat, inventory, and interface controls.
         </p>
       </header>
 

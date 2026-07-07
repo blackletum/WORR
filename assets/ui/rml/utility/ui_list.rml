@@ -2,8 +2,8 @@
   <head>
     <title>WORR Session List</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/list-table.rml" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/utility.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="utility-ui-list" data-route-id="ui_list" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5">
     <div class="screen compact-screen" id="ui-list-screen" data-close-command="popmenu; worr_ui_list_close">

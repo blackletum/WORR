@@ -4,15 +4,13 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
   <body id="session-tourney-veto" data-route-id="tourney_veto" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame">
     <div class="screen compact-screen session-screen" id="tourney-veto-screen">
       <header class="page-header" id="tourney-veto-header">
         <h1>Tournament Veto</h1>
         <p id="tourney-veto-summary">
-          Turn, waiting, pick, and ban state remain bound to ui_tourney_veto_*
-          cvars published when sgame opens the menu.
+          Track the active side, pick or ban maps, and watch remaining choices.
         </p>
       </header>
 
@@ -26,7 +24,7 @@
 
         <section class="session-flow-step is-active" id="tourney-veto-turn-panel" data-visible-if="ui_tourney_veto_turn">
           <h2>Current Turn</h2>
-          <p id="tourney-veto-turn" data-bind="cvars.ui_tourney_veto_turn" data-label-cvar="ui_tourney_veto_turn">Turn binds here.</p>
+          <p id="tourney-veto-turn" data-bind="cvars.ui_tourney_veto_turn" data-label-cvar="ui_tourney_veto_turn">Waiting for turn details.</p>
         </section>
 
         <section class="session-flow-step" id="tourney-veto-wait-panel" data-visible-if="ui_tourney_veto_show_wait=1">

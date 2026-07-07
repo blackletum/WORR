@@ -2,15 +2,15 @@
   <head>
     <title>WORR Callvote Ruleset</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/session.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="session-callvote-ruleset" data-route-id="callvote_ruleset" data-route-group="session" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5" data-session-owner="sgame">
     <div class="screen compact-screen" id="callvote-ruleset-screen">
       <header class="page-header">
         <h1>Callvote: Ruleset</h1>
         <p id="callvote-ruleset-summary">
-          Ruleset choices dispatch the existing worr_callvote_ruleset command
-          with q1, q2, or q3 arguments.
+          Pick the ruleset to put to a server vote.
         </p>
       </header>
 

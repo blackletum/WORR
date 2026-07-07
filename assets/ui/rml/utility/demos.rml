@@ -2,16 +2,15 @@
   <head>
     <title>WORR Demo Browser</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/list-table.rml" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/utility.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="utility-demos" data-route-id="demos" data-route-version="1">
     <div class="screen" id="demos-screen">
       <header class="page-header">
         <h1>Demos</h1>
         <p id="demos-summary">
-          Browse recorded demos with directory navigation, sorting, and playback
-          commands preserved for the RmlUi migration.
+          Browse recorded demos, move through folders, and start playback.
         </p>
       </header>
 
@@ -34,14 +33,14 @@
           </thead>
           <tbody>
             <tr class="placeholder-row">
-              <td colspan="4">Demo and folder entries bind here once the demo bridge is available.</td>
+              <td colspan="4">No demos listed.</td>
             </tr>
           </tbody>
         </table>
       </section>
 
       <footer class="status-bar" id="demos-status" data-bind="demo_browser.status">
-        Waiting for demo browser data.
+        Demo browser ready.
       </footer>
     </div>
   </body>

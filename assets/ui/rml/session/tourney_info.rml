@@ -4,15 +4,13 @@
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
   </head>
   <body id="session-tourney-info" data-route-id="tourney_info" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-owner="agent5" data-session-owner="sgame" data-open-command="worr_tourney_info">
     <div class="screen compact-screen session-screen" id="tourney-info-screen">
       <header class="page-header" id="tourney-info-header">
         <h1>Tournament Info</h1>
         <p id="tourney-info-summary">
-          Best-of tournament guidance stays available from the multiplayer menu
-          while live series state remains owned by sgame.
+          Check format, roster, and veto guidance for the tournament.
         </p>
       </header>
 
@@ -38,7 +36,7 @@
         <section class="status-panel" id="tourney-info-status">
           <h2>Live Updates</h2>
           <p>
-            Console command placeholder: <span id="tourney-info-status-command" class="ui-command-line" data-command-ref="tourney_status" data-command="tourney_status">tourney_status</span>
+            Use <span id="tourney-info-status-command" class="ui-command-line" data-command-ref="tourney_status" data-command="tourney_status">tourney_status</span> for current server status.
           </p>
         </section>
       </main>

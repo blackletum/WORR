@@ -22,16 +22,6 @@ renderer_import_t ri;
 extern uint32_t d_8to24table[256];
 
 #if USE_REF != REF_GL
-static renderer_rmlui_family_t Renderer_RmlUiRendererFamily(void)
-{
-    return R_RENDERER_RMLUI_FAMILY_NONE;
-}
-
-static const char *Renderer_RmlUiRendererName(void)
-{
-    return "none";
-}
-
 static bool Renderer_RmlUiCanRender(void)
 {
     return false;
@@ -98,14 +88,12 @@ static const renderer_export_t renderer_exports = {
     .ExpireDebugObjects     = GL_ExpireDebugObjects,
     .SupportsPerPixelLighting = R_SupportsPerPixelLighting,
     .GetGLConfig            = R_GetGLConfig,
-#if USE_REF == REF_GL
     .RmlUiRendererFamily    = R_RmlUiRendererFamily,
     .RmlUiRendererName      = R_RmlUiRendererName,
+#if USE_REF == REF_GL
     .RmlUiCanRender         = R_RmlUiCanRender,
     .RmlUiNativeRenderInterface = R_RmlUiNativeRenderInterface,
 #else
-    .RmlUiRendererFamily    = Renderer_RmlUiRendererFamily,
-    .RmlUiRendererName      = Renderer_RmlUiRendererName,
     .RmlUiCanRender         = Renderer_RmlUiCanRender,
     .RmlUiNativeRenderInterface = Renderer_RmlUiNativeRenderInterface,
 #endif

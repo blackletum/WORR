@@ -2,16 +2,15 @@
   <head>
     <title>WORR Address Book</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/controls.rml" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/utility.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="utility-addressbook" data-route-id="addressbook" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5">
     <div class="screen" id="addressbook-screen">
       <header class="page-header">
         <h1>Address Book</h1>
         <p id="addressbook-summary">
-          Edit saved server addresses through the existing adr0 through adr15
-          cvar contract until the RmlUi cvar field bridge is live.
+          Save favorite server addresses for quick browsing and direct joins.
         </p>
       </header>
 

@@ -18,12 +18,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "shared/shared.h"
 #include "renderer/renderer.h"
+#include "renderer/ui_scale.h"
 
-#if UI_RML_HAS_RUNTIME
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
 
 extern "C" {
 #include "../rend_gl/gl.h"
 }
+
+#endif
+
+#if UI_RML_HAS_RUNTIME
 
 #include <limits>
 #include <memory>
@@ -42,7 +47,7 @@ extern "C" {
 
 #endif
 
-#if UI_RML_HAS_RUNTIME
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
 
 class R_RmlUiOpenGLRenderInterface final : public Rml::RenderInterface {
 public:
@@ -241,13 +246,29 @@ public:
         const int y = region.Top();
         const int width = region.Width();
         const int height = region.Height();
-        if (width <= 0 || height <= 0) {
+        clipRect_t clip = {};
+        clip.left = x;
+        clip.top = y;
+        clip.right = x + width;
+        clip.bottom = y + height;
+
+        if (clip.right <= clip.left || clip.bottom <= clip.top) {
+            qglScissor(0, 0, 0, 0);
+            return;
+        }
+
+        clipRect_t pixel_clip = {};
+        if (!R_UIScaleClipToPixels(&clip, draw.base_scale, draw.scale,
+                                   r_config.width, r_config.height,
+                                   &pixel_clip)) {
             qglScissor(0, 0, 0, 0);
             return;
         }
 
         qglEnable(GL_SCISSOR_TEST);
-        qglScissor(x, r_config.height - (y + height), width, height);
+        qglScissor(pixel_clip.left, r_config.height - pixel_clip.bottom,
+                   pixel_clip.right - pixel_clip.left,
+                   pixel_clip.bottom - pixel_clip.top);
         draw.scissor = true;
     }
 
@@ -325,10 +346,26 @@ static R_RmlUiOpenGLRenderInterface r_rmlui_opengl_render_interface;
 
 #endif
 
+#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_LEGACY)
+
+class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface {};
+
+#endif
+
+#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_RTX)
+
+class R_RmlUiRtxVkptRenderInterface final : public Rml::RenderInterface {};
+
+#endif
+
 extern "C" renderer_rmlui_family_t R_RmlUiRendererFamily(void)
 {
-#if UI_RML_HAS_RUNTIME
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
     return R_RENDERER_RMLUI_FAMILY_OPENGL;
+#elif defined(RENDERER_VULKAN_LEGACY)
+    return R_RENDERER_RMLUI_FAMILY_VULKAN;
+#elif defined(RENDERER_VULKAN_RTX)
+    return R_RENDERER_RMLUI_FAMILY_RTX_VKPT;
 #else
     return R_RENDERER_RMLUI_FAMILY_NONE;
 #endif
@@ -336,8 +373,12 @@ extern "C" renderer_rmlui_family_t R_RmlUiRendererFamily(void)
 
 extern "C" const char *R_RmlUiRendererName(void)
 {
-#if UI_RML_HAS_RUNTIME
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
     return "OpenGL RmlUi render-interface primitives";
+#elif defined(RENDERER_VULKAN_LEGACY)
+    return "Vulkan RmlUi render-interface inactive";
+#elif defined(RENDERER_VULKAN_RTX)
+    return "RTX/vkpt RmlUi render-interface inactive";
 #else
     return "none";
 #endif
@@ -345,7 +386,7 @@ extern "C" const char *R_RmlUiRendererName(void)
 
 extern "C" bool R_RmlUiCanRender(void)
 {
-#if UI_RML_HAS_RUNTIME
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
     return true;
 #else
     return false;
@@ -354,7 +395,7 @@ extern "C" bool R_RmlUiCanRender(void)
 
 extern "C" void *R_RmlUiNativeRenderInterface(void)
 {
-#if UI_RML_HAS_RUNTIME
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
     return &r_rmlui_opengl_render_interface;
 #else
     return NULL;

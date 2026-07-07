@@ -2,22 +2,22 @@
   <head>
     <title>WORR Vote</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/session.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="session-vote-menu" data-route-id="vote_menu" data-route-version="1">
     <div class="screen" id="vote-menu-screen">
       <header class="page-header">
         <h1>Vote</h1>
         <p id="vote-menu-summary">
-          Session vote prompt for preserving current yes/no voting and status
-          feedback through the RmlUi session data bridge.
+          Cast your vote before the timer runs out.
         </p>
       </header>
 
       <section class="content" id="vote-menu-content" data-model="session_vote">
         <h2 id="vote-menu-title" data-bind="session_vote.title">Vote in progress</h2>
         <p id="vote-menu-description" data-bind="session_vote.description">
-          Vote details bind here once sgame publishes the active vote state.
+          Review the current proposal and choose yes or no.
         </p>
 
         <dl class="vote-status" id="vote-menu-status">

@@ -2,16 +2,15 @@
   <head>
     <title>WORR Legacy Key Bindings</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
-    <link type="text/template" href="../common/components/controls.rml" />
-    <link type="text/template" href="../common/components/command_button.rml" />
+    <link type="text/rcss" href="../common/theme/utility.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
   <body id="utility-legacykeys" data-route-id="legacykeys" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-owner="agent5">
     <div class="screen" id="legacykeys-screen">
       <header class="page-header">
         <h1>Legacy Key Bindings</h1>
         <p id="legacykeys-summary">
-          Legacy look and turn binds kept separate from the primary key binding
-          page to preserve the current menu split.
+          Adjust classic turn, look, and sidestep controls.
         </p>
       </header>
 
