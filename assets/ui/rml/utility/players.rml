@@ -27,7 +27,7 @@
           <div class="utility-field" data-control="select">
             <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
             <label for="players-model">Model</label>
-            <select id="players-model" data-bind="player_config.model" data-options="player_config.models" data-menu-sound-change="change">
+            <select id="players-model" data-menu-sound-change="change">
               <option value="">Choose Model</option>
             </select>
           </div>
@@ -35,8 +35,16 @@
           <div class="utility-field" data-control="select">
             <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
             <label for="players-skin">Skin</label>
-            <select id="players-skin" data-bind="player_config.skin" data-options="player_config.skins" data-menu-sound-change="change">
+            <select id="players-skin" data-menu-sound-change="change">
               <option value="">Choose Skin</option>
+            </select>
+          </div>
+
+          <div class="utility-field" data-control="select">
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
+            <label for="players-dogtag">Dogtag</label>
+            <select id="players-dogtag" data-cvar="dogtag" data-source-dir="tags" data-menu-sound-change="change">
+              <option value="default">default</option>
             </select>
           </div>
 
@@ -54,7 +62,7 @@
         <div class="preview-panel" id="players-preview" data-component="player_preview" data-model="player_config.preview">
           <h2>Preview</h2>
           <div id="players-preview-surface" class="preview-surface">
-            Player preview
+            <span id="players-preview-placeholder">Player preview</span>
           </div>
         </div>
       </section>

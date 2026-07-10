@@ -93,6 +93,7 @@
                   <option value="4">4x</option>
                 </select>
               </div>
+              <div class="setting-hint">Magnifies the menus; Auto fits the screen.</div>
             </section>
           </div>
         </div>

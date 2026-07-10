@@ -2852,53 +2852,12 @@ static Rml::Vector2i UI_Rml_CompiledRuntimeDimensions(int width, int height)
 
 static float UI_Rml_CompiledRuntimeCanvasPixelScale(void)
 {
-    const int framebuffer_width =
-        r_config.width > 0 ? r_config.width : (int)UI_RML_REFERENCE_WIDTH;
-    const int framebuffer_height =
-        r_config.height > 0 ? r_config.height : (int)UI_RML_REFERENCE_HEIGHT;
-    const float scale_x = (float)framebuffer_width / UI_RML_REFERENCE_WIDTH;
-    const float scale_y = (float)framebuffer_height / UI_RML_REFERENCE_HEIGHT;
-    float scale = min(scale_x, scale_y);
-
-    if (scale < 1.0f) {
-        scale = 1.0f;
-    }
-
-    return scale;
-}
-
-static int UI_Rml_CompiledRuntimeRendererBaseScaleInt(void)
-{
-    const int framebuffer_width =
-        r_config.width > 0 ? r_config.width : VIRTUAL_SCREEN_WIDTH;
-    const int framebuffer_height =
-        r_config.height > 0 ? r_config.height : VIRTUAL_SCREEN_HEIGHT;
-    float scale_x = (float)framebuffer_width / VIRTUAL_SCREEN_WIDTH;
-    float scale_y = (float)framebuffer_height / VIRTUAL_SCREEN_HEIGHT;
-    float base_scale = max(scale_x, scale_y);
-    int base_scale_int;
-
-    if (base_scale < 1.0f) {
-        base_scale = 1.0f;
-    }
-
-    base_scale_int = (int)base_scale;
-    if (base_scale_int < 1) {
-        base_scale_int = 1;
-    }
-
-    return base_scale_int;
+    return UI_Rml_CanvasScale();
 }
 
 static float UI_Rml_CompiledRuntimeRendererDrawScale(void)
 {
-    const float canvas_scale = UI_Rml_CompiledRuntimeCanvasPixelScale();
-
-    if (canvas_scale <= 0.0f) {
-        return (float)UI_Rml_CompiledRuntimeRendererBaseScaleInt();
-    }
-
-    return (float)UI_Rml_CompiledRuntimeRendererBaseScaleInt() / canvas_scale;
+    return UI_Rml_DrawScale();
 }
 
 static Rml::Vector2i UI_Rml_CompiledRuntimeCurrentDimensions(void)
@@ -3170,6 +3129,40 @@ static void UI_Rml_ExpandSourceLists(Rml::ElementDocument *document)
             continue;
         }
 
+        if (source == "$$r_modelist") {
+            // Fullscreen video modes: r_fullscreen selects a 1-based index
+            // into the r_modelist cvar; value 0 (windowed) stays authored.
+            const char *modes = Cvar_VariableString("r_modelist");
+            char token[64];
+            int mode_index = 1;
+
+            while (select->GetNumOptions() > 1) {
+                select->Remove(select->GetNumOptions() - 1);
+            }
+
+            while (*modes) {
+                size_t token_len = 0;
+
+                while (*modes == ' ' || *modes == '\t') {
+                    modes++;
+                }
+                while (*modes && *modes != ' ' && *modes != '\t' &&
+                       token_len < sizeof(token) - 1) {
+                    token[token_len++] = *modes++;
+                }
+                token[token_len] = '\0';
+
+                if (!token_len) {
+                    break;
+                }
+
+                select->Add(UI_Rml_EscapeTextForInnerRml(token),
+                            va("%d", mode_index));
+                mode_index++;
+            }
+            continue;
+        }
+
         if (source != "$$com_maplist") {
             Com_WPrintf("RmlUi data-source-list '%s' is not supported.\n",
                         source.c_str());
@@ -3211,7 +3204,23 @@ static void UI_Rml_ExpandSourceLists(Rml::ElementDocument *document)
     }
 }
 
+static void UI_Rml_SetSelectPlaceholderLabel(Rml::ElementFormControlSelect *select,
+                                             const char *label)
+{
+    if (!select || select->GetNumOptions() < 1) {
+        return;
+    }
+
+    if (Rml::Element *option = select->GetOption(0)) {
+        if (option->GetAttribute<Rml::String>("value", "").empty()) {
+            UI_Rml_SetElementInnerText(option, label);
+        }
+    }
+}
+
 // Populates the single-player episode/level selects from the map database.
+// The authored empty-value placeholder stays as the first option so the
+// visible selection matches the '-1' (nothing chosen) cvar sentinel.
 static void UI_Rml_PopulateMapDbSelects(Rml::ElementDocument *document)
 {
     const mapdb_t *mapdb = MapDB_Get();
@@ -3221,16 +3230,29 @@ static void UI_Rml_PopulateMapDbSelects(Rml::ElementDocument *document)
 
     if (Rml::ElementFormControlSelect *episodes = UI_Rml_SelectFromElement(
             document->QuerySelector("select[data-model='singleplayer.episodes']"))) {
-        episodes->RemoveAll();
-        for (size_t i = 0; i < mapdb->num_episodes; i++) {
-            episodes->Add(UI_Rml_EscapeTextForInnerRml(mapdb->episodes[i].name),
-                          va("%zu", i));
+        while (episodes->GetNumOptions() > 1) {
+            episodes->Remove(episodes->GetNumOptions() - 1);
+        }
+
+        if (mapdb->num_episodes) {
+            UI_Rml_SetSelectPlaceholderLabel(episodes, "Select an episode...");
+            for (size_t i = 0; i < mapdb->num_episodes; i++) {
+                episodes->Add(UI_Rml_EscapeTextForInnerRml(mapdb->episodes[i].name),
+                              va("%zu", i));
+            }
+        } else {
+            UI_Rml_SetSelectPlaceholderLabel(episodes, "No campaigns found");
         }
     }
 
     if (Rml::ElementFormControlSelect *units = UI_Rml_SelectFromElement(
             document->QuerySelector("select[data-model='singleplayer.units']"))) {
-        units->RemoveAll();
+        size_t num_sp_maps = 0;
+
+        while (units->GetNumOptions() > 1) {
+            units->Remove(units->GetNumOptions() - 1);
+        }
+
         for (size_t i = 0; i < mapdb->num_maps; i++) {
             if (!mapdb->maps[i].sp) {
                 continue;
@@ -3240,7 +3262,12 @@ static void UI_Rml_PopulateMapDbSelects(Rml::ElementDocument *document)
             // MapDB_Run_f expects from _mapdb_level.
             units->Add(UI_Rml_EscapeTextForInnerRml(mapdb->maps[i].title),
                        va("%zu", i));
+            num_sp_maps++;
         }
+
+        UI_Rml_SetSelectPlaceholderLabel(units,
+                                         num_sp_maps ? "Select a level..."
+                                                     : "No levels found");
     }
 }
 
@@ -3323,6 +3350,457 @@ static void UI_Rml_PopulateImageValueSelects(Rml::ElementDocument *document)
             select->Add(va("%s%d", value_prefix.c_str(), value), va("%d", value));
         }
     }
+}
+
+// ---- Player setup: model/skin enumeration, dogtags, and 3D preview ----
+
+struct UI_Rml_PlayerModelInfo {
+    Rml::String directory;
+    std::vector<Rml::String> skins;
+};
+
+static std::vector<UI_Rml_PlayerModelInfo> ui_rml_player_models;
+static bool ui_rml_player_models_loaded;
+static bool ui_rml_player_preview_active;
+static qhandle_t ui_rml_player_preview_model;
+static qhandle_t ui_rml_player_preview_skin;
+static int ui_rml_player_preview_frame;
+static int ui_rml_player_preview_oldframe;
+static unsigned ui_rml_player_preview_time;
+static unsigned ui_rml_player_preview_oldtime;
+static unsigned ui_rml_player_preview_realtime;
+
+// Classic Q2 player model stand cycle (FRAME_stand01..FRAME_stand40).
+static constexpr int UI_RML_PLAYER_STAND_FIRST = 0;
+static constexpr int UI_RML_PLAYER_STAND_LAST = 39;
+static constexpr int UI_RML_PLAYER_FRAME_MSEC = 120;
+
+static void UI_Rml_LoadPlayerModels(void)
+{
+    if (ui_rml_player_models_loaded) {
+        return;
+    }
+    ui_rml_player_models_loaded = true;
+
+    int num_dirs = 0;
+    void **dirs = FS_ListFiles("players", NULL, FS_SEARCH_DIRSONLY, &num_dirs);
+    if (!dirs) {
+        return;
+    }
+
+    for (int i = 0; i < num_dirs; i++) {
+        const char *dir = static_cast<const char *>(dirs[i]);
+        char scratch[MAX_QPATH];
+
+        Q_concat(scratch, sizeof(scratch), "players/", dir, "/tris.md2");
+        if (!FS_FileExists(scratch)) {
+            continue;
+        }
+
+        Q_concat(scratch, sizeof(scratch), "players/", dir);
+        int num_pcx = 0;
+        void **pcx = FS_ListFiles(scratch, ".pcx", 0, &num_pcx);
+        if (!pcx) {
+            continue;
+        }
+
+        UI_Rml_PlayerModelInfo info;
+        info.directory = dir;
+
+        for (int k = 0; k < num_pcx; k++) {
+            const char *name = static_cast<const char *>(pcx[k]);
+            if (strstr(name, "_i.")) {
+                continue;
+            }
+
+            char stem[MAX_QPATH];
+            char icon[MAX_QPATH];
+            COM_StripExtension(stem, name, sizeof(stem));
+            Q_concat(icon, sizeof(icon), stem, "_i.pcx");
+
+            for (int j = 0; j < num_pcx; j++) {
+                if (!Q_stricmp(static_cast<const char *>(pcx[j]), icon)) {
+                    info.skins.push_back(stem);
+                    break;
+                }
+            }
+        }
+
+        FS_FreeList(pcx);
+
+        if (!info.skins.empty()) {
+            ui_rml_player_models.push_back(std::move(info));
+        }
+    }
+
+    FS_FreeList(dirs);
+
+    // male, then female, then the rest alphabetically (legacy ordering).
+    std::sort(ui_rml_player_models.begin(), ui_rml_player_models.end(),
+              [](const UI_Rml_PlayerModelInfo &a, const UI_Rml_PlayerModelInfo &b) {
+                  if (!Q_stricmp(a.directory.c_str(), "male")) return true;
+                  if (!Q_stricmp(b.directory.c_str(), "male")) return false;
+                  if (!Q_stricmp(a.directory.c_str(), "female")) return true;
+                  if (!Q_stricmp(b.directory.c_str(), "female")) return false;
+                  return Q_stricmp(a.directory.c_str(), b.directory.c_str()) < 0;
+              });
+}
+
+static const UI_Rml_PlayerModelInfo *UI_Rml_FindPlayerModel(const Rml::String &directory)
+{
+    for (const UI_Rml_PlayerModelInfo &info : ui_rml_player_models) {
+        if (!Q_stricmp(info.directory.c_str(), directory.c_str())) {
+            return &info;
+        }
+    }
+
+    return nullptr;
+}
+
+static void UI_Rml_ReloadPlayerPreviewMedia(const Rml::String &model,
+                                            const Rml::String &skin)
+{
+    char scratch[MAX_QPATH];
+
+    ui_rml_player_preview_active = false;
+    ui_rml_player_preview_model = 0;
+    ui_rml_player_preview_skin = 0;
+
+    if (model.empty() || skin.empty()) {
+        return;
+    }
+
+    Q_concat(scratch, sizeof(scratch), "players/", model.c_str(), "/tris.md2");
+    ui_rml_player_preview_model = R_RegisterModel(scratch);
+    if (!ui_rml_player_preview_model) {
+        return;
+    }
+
+    Q_concat(scratch, sizeof(scratch), "players/", model.c_str(), "/",
+             skin.c_str(), ".pcx");
+    ui_rml_player_preview_skin = R_RegisterSkin(scratch);
+
+    ui_rml_player_preview_frame = UI_RML_PLAYER_STAND_FIRST;
+    ui_rml_player_preview_oldframe = UI_RML_PLAYER_STAND_FIRST;
+    ui_rml_player_preview_time = ui_rml_player_preview_realtime;
+    ui_rml_player_preview_oldtime = ui_rml_player_preview_realtime;
+    ui_rml_player_preview_active = true;
+}
+
+static void UI_Rml_ApplyPlayerConfigSelection(bool model_changed)
+{
+    if (!ui_rml_document) {
+        return;
+    }
+
+    auto *model_select = UI_Rml_SelectFromElement(
+        ui_rml_document->GetElementById("players-model"));
+    auto *skin_select = UI_Rml_SelectFromElement(
+        ui_rml_document->GetElementById("players-skin"));
+    if (!model_select || !skin_select) {
+        return;
+    }
+
+    const Rml::String model = model_select->GetValue();
+    const UI_Rml_PlayerModelInfo *info = UI_Rml_FindPlayerModel(model);
+    if (!info) {
+        return;
+    }
+
+    Rml::String skin = skin_select->GetValue();
+
+    if (model_changed) {
+        // Repopulate the skin list for the newly selected model, keeping
+        // the current skin name when the model also provides it.
+        bool skin_exists = false;
+
+        skin_select->RemoveAll();
+        for (const Rml::String &name : info->skins) {
+            skin_select->Add(UI_Rml_EscapeTextForInnerRml(name.c_str()), name);
+            if (!Q_stricmp(name.c_str(), skin.c_str())) {
+                skin_exists = true;
+            }
+        }
+
+        if (!skin_exists) {
+            skin = info->skins[0];
+        }
+
+        ui_rml_applying_cvar_bindings = true;
+        skin_select->SetValue(skin);
+        ui_rml_applying_cvar_bindings = false;
+    }
+
+    if (skin.empty()) {
+        return;
+    }
+
+    cvar_t *skin_var = Cvar_Get("skin", "male/grunt",
+                                CVAR_USERINFO | CVAR_ARCHIVE);
+    Cvar_SetByVar(skin_var, va("%s/%s", model.c_str(), skin.c_str()),
+                  FROM_MENU);
+
+    UI_Rml_ReloadPlayerPreviewMedia(model, skin);
+}
+
+class UI_Rml_PlayerConfigEventListener final : public Rml::EventListener {
+public:
+    void ProcessEvent(Rml::Event &event) override
+    {
+        if (ui_rml_applying_cvar_bindings ||
+            event.GetId() != Rml::EventId::Change) {
+            return;
+        }
+
+        Rml::Element *element = event.GetTargetElement();
+        const bool model_changed =
+            element && element->GetId() == "players-model";
+
+        UI_Rml_ApplyPlayerConfigSelection(model_changed);
+    }
+};
+
+static UI_Rml_PlayerConfigEventListener ui_rml_player_config_listener;
+
+static void UI_Rml_PopulatePlayerConfig(Rml::ElementDocument *document)
+{
+    auto *model_select = UI_Rml_SelectFromElement(
+        document->GetElementById("players-model"));
+    auto *skin_select = UI_Rml_SelectFromElement(
+        document->GetElementById("players-skin"));
+    Rml::Element *placeholder =
+        document->GetElementById("players-preview-placeholder");
+
+    if (!model_select || !skin_select) {
+        return;
+    }
+
+    UI_Rml_LoadPlayerModels();
+
+    if (ui_rml_player_models.empty()) {
+        if (placeholder) {
+            UI_Rml_SetElementInnerText(placeholder, "No player models found.");
+        }
+        return;
+    }
+
+    // Split the current userinfo skin ("male/grunt") into model and skin.
+    char current_model[MAX_QPATH] = "male";
+    char current_skin[MAX_QPATH] = "grunt";
+    Cvar_VariableStringBuffer("skin", current_model, sizeof(current_model));
+    if (char *slash = strpbrk(current_model, "/\\")) {
+        *slash++ = 0;
+        Q_strlcpy(current_skin, slash, sizeof(current_skin));
+    }
+
+    const UI_Rml_PlayerModelInfo *current_info =
+        UI_Rml_FindPlayerModel(current_model);
+    if (!current_info) {
+        current_info = &ui_rml_player_models[0];
+    }
+
+    model_select->RemoveAll();
+    for (const UI_Rml_PlayerModelInfo &info : ui_rml_player_models) {
+        model_select->Add(UI_Rml_EscapeTextForInnerRml(info.directory.c_str()),
+                          info.directory);
+    }
+
+    Rml::String skin = current_info->skins[0];
+    skin_select->RemoveAll();
+    for (const Rml::String &name : current_info->skins) {
+        skin_select->Add(UI_Rml_EscapeTextForInnerRml(name.c_str()), name);
+        if (!Q_stricmp(name.c_str(), current_skin)) {
+            skin = name;
+        }
+    }
+
+    ui_rml_applying_cvar_bindings = true;
+    model_select->SetValue(current_info->directory);
+    skin_select->SetValue(skin);
+    ui_rml_applying_cvar_bindings = false;
+
+    model_select->AddEventListener(Rml::EventId::Change,
+                                   &ui_rml_player_config_listener);
+    skin_select->AddEventListener(Rml::EventId::Change,
+                                  &ui_rml_player_config_listener);
+
+    if (placeholder) {
+        UI_Rml_SetElementInnerText(placeholder, "");
+    }
+
+    UI_Rml_ReloadPlayerPreviewMedia(current_info->directory, skin);
+}
+
+// Populates selects marked data-source-dir="<path>" with the file stems of
+// that directory (used by the dogtag picker).
+static void UI_Rml_PopulateDirectorySelects(Rml::ElementDocument *document)
+{
+    Rml::ElementList elements;
+    document->QuerySelectorAll(elements, "select[data-source-dir]");
+
+    for (Rml::Element *element : elements) {
+        Rml::ElementFormControlSelect *select = UI_Rml_SelectFromElement(element);
+        if (!select) {
+            continue;
+        }
+
+        const Rml::String directory =
+            element->GetAttribute<Rml::String>("data-source-dir", "");
+        if (directory.empty()) {
+            continue;
+        }
+
+        int num_files = 0;
+        void **files = FS_ListFiles(directory.c_str(), NULL, 0, &num_files);
+        if (!files || num_files <= 0) {
+            if (files) {
+                FS_FreeList(files);
+            }
+            continue;
+        }
+
+        std::vector<Rml::String> stems;
+        for (int i = 0; i < num_files; i++) {
+            char stem[MAX_QPATH];
+            COM_StripExtension(stem, static_cast<const char *>(files[i]),
+                               sizeof(stem));
+            if (!stem[0]) {
+                continue;
+            }
+
+            bool seen = false;
+            for (const Rml::String &existing : stems) {
+                if (!Q_stricmp(existing.c_str(), stem)) {
+                    seen = true;
+                    break;
+                }
+            }
+            if (!seen) {
+                stems.push_back(stem);
+            }
+        }
+        FS_FreeList(files);
+
+        std::sort(stems.begin(), stems.end(),
+                  [](const Rml::String &a, const Rml::String &b) {
+                      return Q_stricmp(a.c_str(), b.c_str()) < 0;
+                  });
+
+        // Keep authored options (e.g. the 'default' entry) and skip
+        // duplicates from the enumeration.
+        for (const Rml::String &stem : stems) {
+            bool authored = false;
+            for (int i = 0; i < select->GetNumOptions(); i++) {
+                Rml::Element *option = select->GetOption(i);
+                if (option &&
+                    !Q_stricmp(option->GetAttribute<Rml::String>("value", "").c_str(),
+                               stem.c_str())) {
+                    authored = true;
+                    break;
+                }
+            }
+            if (!authored) {
+                select->Add(UI_Rml_EscapeTextForInnerRml(stem.c_str()), stem);
+            }
+        }
+    }
+}
+
+static void UI_Rml_ResetPlayerPreview(void)
+{
+    ui_rml_player_preview_active = false;
+    ui_rml_player_preview_model = 0;
+    ui_rml_player_preview_skin = 0;
+}
+
+static void UI_Rml_AdvancePlayerPreview(unsigned realtime)
+{
+    ui_rml_player_preview_realtime = realtime;
+
+    if (!ui_rml_player_preview_active) {
+        return;
+    }
+
+    if (ui_rml_player_preview_time < realtime) {
+        ui_rml_player_preview_oldtime = ui_rml_player_preview_time;
+        ui_rml_player_preview_time += UI_RML_PLAYER_FRAME_MSEC;
+        if (ui_rml_player_preview_time < realtime) {
+            ui_rml_player_preview_time = realtime;
+        }
+
+        ui_rml_player_preview_oldframe = ui_rml_player_preview_frame;
+        ui_rml_player_preview_frame++;
+        if (ui_rml_player_preview_frame > UI_RML_PLAYER_STAND_LAST) {
+            ui_rml_player_preview_frame = UI_RML_PLAYER_STAND_FIRST;
+        }
+    }
+}
+
+static void UI_Rml_RenderPlayerPreview(void)
+{
+    if (!ui_rml_player_preview_active || !ui_rml_document ||
+        Q_stricmp(ui_rml_active_route.c_str(), "players")) {
+        return;
+    }
+
+    Rml::Element *surface =
+        ui_rml_document->GetElementById("players-preview-surface");
+    if (!surface) {
+        return;
+    }
+
+    const Rml::Vector2f offset =
+        surface->GetAbsoluteOffset(Rml::BoxArea::Padding);
+    const Rml::Vector2f size =
+        surface->GetBox().GetSize(Rml::BoxArea::Padding);
+    const float canvas_scale = UI_Rml_CanvasScale();
+
+    const int x = Q_rint(offset.x * canvas_scale);
+    const int y = Q_rint(offset.y * canvas_scale);
+    const int width = Q_rint(size.x * canvas_scale);
+    const int height = Q_rint(size.y * canvas_scale);
+
+    if (width < 16 || height < 16) {
+        return;
+    }
+
+    float backlerp = 0.0f;
+    if (ui_rml_player_preview_time != ui_rml_player_preview_oldtime) {
+        backlerp = 1.0f -
+            static_cast<float>(ui_rml_player_preview_realtime -
+                               ui_rml_player_preview_oldtime) /
+            static_cast<float>(ui_rml_player_preview_time -
+                               ui_rml_player_preview_oldtime);
+        backlerp = Q_clipf(backlerp, 0.0f, 1.0f);
+    }
+
+    entity_t entity = {};
+    entity.model = ui_rml_player_preview_model;
+    entity.skin = ui_rml_player_preview_skin;
+    entity.flags = RF_FULLBRIGHT;
+    entity.frame = ui_rml_player_preview_frame;
+    entity.oldframe = ui_rml_player_preview_oldframe;
+    entity.backlerp = backlerp;
+    VectorSet(entity.origin, 80.0f, 0.0f, -6.0f);
+    VectorCopy(entity.origin, entity.oldorigin);
+    VectorSet(entity.scale, 1.0f, 1.0f, 1.0f);
+    entity.angles[1] =
+        fmodf(260.0f + ui_rml_player_preview_realtime * 0.02f, 360.0f);
+
+    refdef_t refdef = {};
+    refdef.x = x;
+    refdef.y = y;
+    refdef.width = width;
+    refdef.height = height;
+    refdef.fov_x = 40.0f;
+    refdef.fov_y = V_CalcFov(refdef.fov_x, refdef.width, refdef.height);
+    refdef.time = ui_rml_player_preview_realtime * 0.001f;
+    refdef.rdflags = RDF_NOWORLDMODEL;
+    refdef.num_entities = 1;
+    refdef.entities = &entity;
+
+    R_RenderFrame(&refdef);
+    R_SetScale(UI_Rml_DrawScale());
 }
 
 static void UI_Rml_ApplyAccessibilityClasses(Rml::ElementDocument *document)
@@ -3454,6 +3932,8 @@ static bool UI_Rml_CompiledRuntimeOpenRoute(const char *route_id, const char *do
     UI_Rml_ExpandSourceLists(ui_rml_document);
     UI_Rml_PopulateMapDbSelects(ui_rml_document);
     UI_Rml_PopulateImageValueSelects(ui_rml_document);
+    UI_Rml_PopulateDirectorySelects(ui_rml_document);
+    UI_Rml_PopulatePlayerConfig(ui_rml_document);
     UI_Rml_ApplyDocumentCvarBindings(ui_rml_document);
     UI_Rml_ApplyAccessibilityClasses(ui_rml_document);
     UI_Rml_RefreshKeybindDisplays(ui_rml_document);
@@ -3499,6 +3979,7 @@ static void UI_Rml_CompiledRuntimeCloseActiveDocument(void)
 {
     ui_rml_keybind_capture_element = nullptr;
     ui_rml_keybind_capture_command.clear();
+    UI_Rml_ResetPlayerPreview();
 
     if (ui_rml_document) {
         Rml::ElementDocument *document = ui_rml_document;
@@ -3527,11 +4008,11 @@ static void UI_Rml_CompiledRuntimeCloseRoute(void)
 
 static bool UI_Rml_CompiledRuntimeUpdate(int width, int height, unsigned realtime)
 {
-    (void)realtime;
-
     if (!ui_rml_context || !ui_rml_document) {
         return false;
     }
+
+    UI_Rml_AdvancePlayerPreview(realtime);
 
     if (!UI_Rml_CompiledRuntimeEnsureContext(width, height)) {
         return false;
@@ -3551,7 +4032,13 @@ static bool UI_Rml_CompiledRuntimeRender(void)
 
     R_SetClipRect(NULL);
     R_SetScale(UI_Rml_CompiledRuntimeRendererDrawScale());
-    return ui_rml_context->Render();
+    if (!ui_rml_context->Render()) {
+        return false;
+    }
+
+    // The 3D player preview draws over its panel after the document.
+    UI_Rml_RenderPlayerPreview();
+    return true;
 }
 
 static bool UI_Rml_CompiledRuntimeKeyEvent(int key, bool down)

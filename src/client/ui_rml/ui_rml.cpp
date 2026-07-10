@@ -264,7 +264,10 @@ static bool UI_Rml_BuildDocumentPath(const ui_rml_route_t *route,
 }
 
 #if UI_RML_HAS_RUNTIME
-static float UI_Rml_CanvasPixelScale(void)
+// Single source of truth for the canvas/framebuffer scale. The runtime and
+// the mouse/cursor/scissor math all derive from these two functions, so any
+// change here stays consistent across the whole pipeline.
+float UI_Rml_CanvasScale(void)
 {
     const int framebuffer_width =
         r_config.width > 0 ? r_config.width : (int)UI_RML_REFERENCE_WIDTH;
@@ -272,9 +275,27 @@ static float UI_Rml_CanvasPixelScale(void)
         r_config.height > 0 ? r_config.height : (int)UI_RML_REFERENCE_HEIGHT;
     const float scale_x = (float)framebuffer_width / UI_RML_REFERENCE_WIDTH;
     const float scale_y = (float)framebuffer_height / UI_RML_REFERENCE_HEIGHT;
+    // No lower clamp: framebuffers smaller than the 960x720 design canvas
+    // render the full canvas scaled down instead of clipping content.
     float scale = min(scale_x, scale_y);
 
-    if (scale < 1.0f) {
+    // Menu scale preference (Screen Setup): 0 = auto (fit), otherwise a
+    // magnification multiplier. The canvas is kept at least 960 units wide
+    // so fixed-width layouts never clip horizontally.
+    cvar_t *menu_scale = Cvar_FindVar("ui_scale");
+    if (menu_scale && menu_scale->value > 0.0f) {
+        float extra = menu_scale->value;
+
+        if (extra < 0.25f) {
+            extra = 0.25f;
+        } else if (extra > 10.0f) {
+            extra = 10.0f;
+        }
+
+        scale = min(scale * extra, scale_x);
+    }
+
+    if (scale <= 0.0f) {
         scale = 1.0f;
     }
 
@@ -304,15 +325,25 @@ static int UI_Rml_RendererBaseScaleInt(void)
     return base_scale_int;
 }
 
-static float UI_Rml_RendererDrawScale(void)
+float UI_Rml_DrawScale(void)
 {
-    const float canvas_scale = UI_Rml_CanvasPixelScale();
+    const float canvas_scale = UI_Rml_CanvasScale();
 
     if (canvas_scale <= 0.0f) {
         return (float)UI_Rml_RendererBaseScaleInt();
     }
 
     return (float)UI_Rml_RendererBaseScaleInt() / canvas_scale;
+}
+
+static float UI_Rml_CanvasPixelScale(void)
+{
+    return UI_Rml_CanvasScale();
+}
+
+static float UI_Rml_RendererDrawScale(void)
+{
+    return UI_Rml_DrawScale();
 }
 
 static void UI_Rml_GetCanvas(int *width, int *height, float *pixel_scale)

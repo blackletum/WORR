@@ -570,6 +570,44 @@
 	padding: 4px 10px;
 }
 
+/* Narrow-canvas fallback: stack the column layouts vertically instead of
+   clipping. The canvas never drops below 960 units wide under the shipped
+   scale math, so this guards nonstandard contexts and future scale modes. */
+@media (max-width: 940px)
+{
+	.form-compact .settings-columns,
+	.cols-2 .settings-columns,
+	.cols-3 .settings-columns
+	{
+		flex-direction: column;
+		width: auto;
+	}
+
+	.cols-2 .settings-column,
+	.cols-3 .settings-column
+	{
+		width: auto;
+		margin-right: 0px;
+	}
+
+	.settings-form.cols-2,
+	.settings-form.cols-3
+	{
+		width: auto;
+	}
+}
+
+/* Short-canvas fallback (e.g. Menu Scale magnification on 16:9): tighten
+   the fixed chrome so more of the scrolling content stays visible. */
+@media (max-height: 640px)
+{
+	.form-compact .settings-section
+	{
+		margin-bottom: 6px;
+		padding-bottom: 4px;
+	}
+}
+
 /* Page-specific exceptions. */
 
 #downloads-settings-form

@@ -19,9 +19,8 @@
               <div class="setting-row" data-control="select" data-cvar="r_fullscreen">
                 <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
                 <label for="video-mode">Video Mode</label>
-                <select id="video-mode" data-cvar="r_fullscreen">
+                <select id="video-mode" data-cvar="r_fullscreen" data-source-list="$$r_modelist">
                   <option value="0">Windowed</option>
-                  <option value="1">Fullscreen</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="r_borderless">

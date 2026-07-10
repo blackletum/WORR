@@ -1164,13 +1164,15 @@ static R_RmlUiOpenGLRenderInterface r_rmlui_opengl_render_interface;
 
 #if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_LEGACY)
 
-class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface {};
+// Intentionally abstract until the native Vulkan methods are implemented.
+class R_RmlUiVulkanRenderInterface : public Rml::RenderInterface {};
 
 #endif
 
 #if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_RTX)
 
-class R_RmlUiRtxVkptRenderInterface final : public Rml::RenderInterface {};
+// Intentionally abstract until the native RTX/vkpt methods are implemented.
+class R_RmlUiRtxVkptRenderInterface : public Rml::RenderInterface {};
 
 #endif
 

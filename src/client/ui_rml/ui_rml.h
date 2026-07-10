@@ -91,6 +91,10 @@ const ui_rml_file_interface_t *UI_Rml_FileInterface(void);
 const char *UI_Rml_RouteForMenu(uiMenu_t menu);
 const char *UI_Rml_DocumentForRoute(const char *route_id);
 bool UI_Rml_RouteIsPopup(const char *route_id);
+// Shared canvas/framebuffer scale factors (single source of truth for the
+// runtime, mouse mapping, cursor, and render scale).
+float UI_Rml_CanvasScale(void);
+float UI_Rml_DrawScale(void);
 bool UI_Rml_ProbeRoute(const char *route_id);
 bool UI_Rml_OpenRoute(const char *route_id);
 bool UI_Rml_OpenPopupRoute(const char *route_id);

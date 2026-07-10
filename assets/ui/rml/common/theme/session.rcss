@@ -137,8 +137,12 @@
 	height: auto;
 	min-height: 0px;
 	max-height: 126px;
-	padding: 8px 0px 0px 8px;
-	margin-bottom: 10px;
+	/* Chrome-less container: collapses invisibly when every conditional
+	   team action is hidden. */
+	padding: 0px;
+	margin-bottom: 2px;
+	background-color: transparent;
+	border-width: 0px;
 	overflow: auto;
 }
 

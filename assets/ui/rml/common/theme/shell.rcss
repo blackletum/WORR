@@ -50,6 +50,56 @@
 	align-items: center;
 }
 
+#main-logo
+{
+	display: block;
+	width: 220px;
+	max-width: 100%;
+	margin-bottom: 20px;
+}
+
+#main-player-name
+{
+	margin-top: 16px;
+	margin-bottom: 0px;
+	font-size: 14px;
+	color: #c9beb0;
+}
+
+#main-player-name .label
+{
+	margin-right: 6px;
+}
+
+#main-version
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	align-items: flex-end;
+	justify-content: center;
+	min-width: 0px;
+}
+
+#main-version-title
+{
+	margin-bottom: 2px;
+	color: #8f9f7a;
+	font-size: 12px;
+	font-weight: bold;
+	text-align: right;
+}
+
+#main-version-value
+{
+	margin-bottom: 0px;
+	color: #7f7f7f;
+	font-size: 11px;
+	text-align: right;
+	white-space: normal;
+	word-break: break-word;
+}
+
 #main-menu-actions
 {
 	width: 268px;

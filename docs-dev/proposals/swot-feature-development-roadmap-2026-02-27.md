@@ -2703,6 +2703,12 @@ Tasks:
   a contained idle state and explicit percent meter unit. Live
   session/tournament/download controllers, real match-state updates,
   focus/scroll behavior, and parity remain pending.
+  2026-07-10 build-warning note: the inactive Vulkan and RTX/vkpt RmlUi
+  render-interface placeholders are now non-final abstract classes, matching
+  their intentionally incomplete state and eliminating Clang's
+  `-Wabstract-final-class` diagnostics without activating or redirecting either
+  native renderer path. Implementation log:
+  `docs-dev/rmlui-inactive-vulkan-stub-build-warning-cleanup-2026-07-10.md`.
 - [ ] `FR-09-T09` Add migration-specific validation for navigation, scaling,
   localization, and renderer parity.
   Dependency: `FR-09-T06`, `FR-09-T07`, `FR-09-T08`, `DV-03-T07`.

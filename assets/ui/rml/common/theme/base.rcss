@@ -151,6 +151,29 @@ li
 	animation: none;
 }
 
+/* Short-canvas fallback: reclaim vertical space from fixed chrome. */
+@media (max-height: 640px)
+{
+	.ui-route,
+	.screen
+	{
+		padding: 10px;
+	}
+
+	.page-header,
+	.menu-header
+	{
+		margin-bottom: 6px;
+		padding-bottom: 6px;
+	}
+
+	.menu-footer
+	{
+		margin-top: 6px;
+		padding-top: 6px;
+	}
+}
+
 .compact-screen
 {
 	padding: 14px;
@@ -210,6 +233,13 @@ li
 {
 	margin-right: 8px;
 	margin-bottom: 8px;
+	white-space: nowrap;
+}
+
+.actions button,
+.actions .ui-button
+{
+	white-space: nowrap;
 }
 
 .ui-panel,
