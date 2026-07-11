@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Callvote Random</title>
+    <title>WORR Vote: Random</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
@@ -8,7 +8,10 @@
   <body id="session-callvote-random" data-route-id="callvote_random" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="callvote-random-screen">
       <header class="page-header">
-        <h1>Callvote: Random</h1>
+        <h1>Vote: Random</h1>
+        <p id="callvote-random-summary">
+          Propose a randomized map or setting.
+        </p>
       </header>
 
       <nav class="menu-list" id="callvote-random-menu" data-model="session.callvote.random" data-owner-boundary="sgame-published-cvars">
@@ -35,7 +38,7 @@
       </nav>
 
       <footer class="actions" id="callvote-random-actions">
-        <button id="callvote-random-return" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="callvote-random-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

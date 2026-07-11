@@ -26,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // game.h -- game dll information visible to server
 //
 
-#define GAME_API_VERSION    2023
+#define GAME_API_VERSION    2024
 
 #endif // !defined(GAME3_INCLUDE)
 
@@ -563,7 +563,7 @@ typedef struct {
 
 //===============================================================
 
-#define CGAME_API_VERSION   2026
+#define CGAME_API_VERSION   2027
 
 typedef enum
 {

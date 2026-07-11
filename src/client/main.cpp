@@ -759,6 +759,11 @@ void CL_ClearState(void)
     memset(&cl, 0, sizeof(cl));
     memset(&cl_entities, 0, sizeof(cl_entities));
 
+    // Server-authored menu capabilities and ownership markers must never
+    // leak across disconnects or server changes.
+    Cvar_SetInteger(Cvar_Get("ui_worr_match_hub", "0", 0), 0, FROM_CODE);
+    Cvar_SetInteger(Cvar_Get("ui_dm_menu_active", "0", 0), 0, FROM_CODE);
+
     if (cls.state > ca_connected) {
         cls.state = ca_connected;
         CL_CheckForPause();

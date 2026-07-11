@@ -8,7 +8,7 @@
   <body id="session-map-selector" data-route-id="map_selector" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="map-selector-screen" data-close-command="popmenu; worr_mapselector_close">
       <header class="page-header" id="map-selector-header" data-model="session.map_selector" data-owner-boundary="sgame-published-cvars">
-        <h1 data-bind="cvars.ui_mapselector_title" data-bind-cvar="ui_mapselector_title">Vote for the next arena:</h1>
+        <h1 data-bind="cvars.ui_mapselector_title" data-bind-cvar="ui_mapselector_title">Map Vote</h1>
         <p id="map-selector-summary">
           Choose one of the candidate maps for the next round.
         </p>

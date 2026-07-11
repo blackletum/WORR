@@ -18,7 +18,7 @@
       </nav>
 
       <footer class="actions" id="admin-menu-footer">
-        <button id="admin-menu-return" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="admin-menu-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

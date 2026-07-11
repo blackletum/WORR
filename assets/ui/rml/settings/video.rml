@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Video Settings</title>
+    <title>WORR Video Setup</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/settings.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />

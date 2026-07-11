@@ -1890,6 +1890,7 @@ void VK_Shadow_BeginFrame(void *userdata,
     vk_shadow.uniform.dlight_count[3] = 1.0f;
     vk_shadow.uniform.moment_tuning[0] = VK_SHADOW_MOMENT_MIN_VARIANCE;
     vk_shadow.uniform.moment_tuning[1] = VK_SHADOW_EVSM_EXPONENT;
+    vk_shadow.uniform.moment_tuning[2] = 1.0f;
     for (int i = 0; i < MAX_DLIGHTS; i++) {
         for (int j = 0; j < SHADOW_FRONTEND_POINT_FACES; j++) {
             vk_shadow.lights[i].pages[j] = -1;
@@ -2009,6 +2010,9 @@ void VK_Shadow_EndFrame(void *userdata,
     vk_shadow.uniform.dlight_count[1] = VK_World_LightmapModulate();
     vk_shadow.uniform.dlight_count[2] = VK_World_LightmapAdd();
     vk_shadow.uniform.dlight_count[3] = VK_World_EntityModulate();
+    // z is spare in the moment-tuning vector and carries the legacy texture
+    // intensity uniformly to both native Vulkan receiver shaders.
+    vk_shadow.uniform.moment_tuning[2] = VK_World_Intensity();
     VK_Shadow_UploadUniform();
 
     if (!vk_shadow.vertex_count) {
@@ -2311,6 +2315,7 @@ void VK_Shadow_Record(VkCommandBuffer cmd)
         { .color = { .float32 = { 1.0f, 1.0f, 0.0f, 1.0f } } },
         { .depthStencil = { 1.0f, 0 } },
     };
+    const float evsm_clear_moment = expf(VK_SHADOW_EVSM_EXPONENT);
     VkClearValue clear = {
         .depthStencil = { 1.0f, 0 },
     };
@@ -2319,6 +2324,15 @@ void VK_Shadow_Record(VkCommandBuffer cmd)
         if (!job->vertex_count || job->page >= VK_SHADOW_MAX_PAGES ||
             !vk_shadow.framebuffers[job->page]) {
             continue;
+        }
+
+        if ((int)(job->push.filter + 0.5f) == SHADOW_FILTER_EVSM) {
+            clear_values[0].color.float32[0] = evsm_clear_moment;
+            clear_values[0].color.float32[1] =
+                evsm_clear_moment * evsm_clear_moment;
+        } else {
+            clear_values[0].color.float32[0] = 1.0f;
+            clear_values[0].color.float32[1] = 1.0f;
         }
 
         VkRenderPassBeginInfo begin = {

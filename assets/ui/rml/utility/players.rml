@@ -44,7 +44,7 @@
             <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
             <label for="players-dogtag">Dogtag</label>
             <select id="players-dogtag" data-cvar="dogtag" data-source-dir="tags" data-menu-sound-change="change">
-              <option value="default">default</option>
+              <option value="default">Default</option>
             </select>
           </div>
 

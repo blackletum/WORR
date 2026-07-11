@@ -53,6 +53,7 @@
 	display: flex;
 	flex-direction: row;
 	align-items: center;
+	box-sizing: border-box;
 	width: 584px;
 	min-height: 38px;
 	margin-bottom: 6px;
@@ -197,23 +198,23 @@
 .setting-row[data-control="field"] input
 {
 	width: 220px;
-	decorator: image(../skins/widgets/textbox-normal.svg);
+	decorator: ninepatch(field, field-inner);
 }
 
 .setting-row[data-control="field"] input:hover
 {
-	decorator: image(../skins/widgets/textbox-hover.svg);
+	decorator: ninepatch(field-hover, field-hover-inner);
 }
 
 .setting-row[data-control="field"] input:focus
 {
-	decorator: image(../skins/widgets/textbox-focus.svg);
+	decorator: ninepatch(field-focus, field-focus-inner);
 }
 
 .setting-row[data-control="field"] input:disabled,
 .setting-row[data-control="field"] input[disabled]
 {
-	decorator: image(../skins/widgets/textbox-disabled.svg);
+	decorator: ninepatch(field-disabled, field-disabled-inner);
 }
 
 .setting-row[data-control="field"] input[type="number"]
@@ -231,19 +232,19 @@
 .setting-row[data-control="combo"] select,
 .setting-row[data-control="imagevalues"] select
 {
-	decorator: image(../skins/widgets/combo-normal.svg);
+	decorator: ninepatch(field, field-inner);
 }
 
 .setting-row[data-control="combo"] select:hover,
 .setting-row[data-control="imagevalues"] select:hover
 {
-	decorator: image(../skins/widgets/combo-hover.svg);
+	decorator: ninepatch(field-hover, field-hover-inner);
 }
 
 .setting-row[data-control="combo"] select:focus,
 .setting-row[data-control="imagevalues"] select:focus
 {
-	decorator: image(../skins/widgets/combo-focus.svg);
+	decorator: ninepatch(field-focus, field-focus-inner);
 }
 
 .setting-row[data-control="combo"] select:disabled,
@@ -251,7 +252,7 @@
 .setting-row[data-control="imagevalues"] select:disabled,
 .setting-row[data-control="imagevalues"] select[disabled]
 {
-	decorator: image(../skins/widgets/combo-disabled.svg);
+	decorator: ninepatch(field-disabled, field-disabled-inner);
 }
 
 .setting-row[data-control="range"] input,
@@ -518,23 +519,24 @@
 
 .cols-3 .setting-row label
 {
-	width: 112px;
+	width: 104px;
 	margin-right: 4px;
 }
 
+/* border-box widgets: widths include the 24px border+padding overhead. */
 .cols-3 .setting-row input,
 .cols-3 .setting-row select,
 .cols-3 .setting-row[data-control="select"] select,
 .cols-3 .setting-row[data-control="combo"] select,
 .cols-3 .setting-row[data-control="imagevalues"] select
 {
-	width: 110px;
+	width: 124px;
 }
 
 .cols-3 .setting-row[data-control="range"] input,
 .cols-3 .setting-row .worr-slider
 {
-	width: 104px;
+	width: 116px;
 }
 
 .cols-3 .setting-row[data-control="range"] .setting-value
@@ -684,7 +686,7 @@
 	background-color: #244f53;
 	border-right-width: 1px;
 	border-right-color: #7ed4d8;
-	transition: width 0.15s cubic-out;
+	transition: width background-color border-right-color 0.15s cubic-out;
 }
 
 .setting-meter-text

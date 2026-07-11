@@ -130,8 +130,8 @@ contents_t CL_PointContents(const vec3_t point)
 
 	        // rotate start and end into the models frame of reference
 	        if (!VectorEmpty(ent->current.angles)) {
-	            vec3_t angles, axis[3];
-	            AnglesToAxis(angles, axis);
+	            vec3_t axis[3];
+	            AnglesToAxis(ent->current.angles, axis);
 	            RotatePoint(pos_l, axis);
 	        }
         

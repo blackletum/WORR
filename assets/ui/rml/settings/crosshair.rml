@@ -43,7 +43,7 @@
               </div>
               <div class="setting-row" data-control="toggle" data-cvar="cl_crosshair_health">
                 <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-                <label for="crosshair-health-color">Color By Health</label>
+                <label for="crosshair-health-color">Color by Health</label>
                 <input id="crosshair-health-color" type="checkbox" data-cvar="cl_crosshair_health" />
               </div>
             </section>

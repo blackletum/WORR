@@ -6,7 +6,25 @@
 namespace MenuUi {
 namespace {
 
-constexpr size_t kMaxStuffText = MAX_STRING_CHARS - 1;
+// Client stuffed commands share a 1 KiB frame buffer. Keep each UI snapshot
+// chunk at half that size so ordinary server commands still have headroom,
+// then pace one chunk per server frame.
+constexpr size_t kMaxStuffText = MAX_STRING_CHARS / 2;
+constexpr size_t kMaxQueuedUiCommands = 16;
+
+void QueueUiCommand(gentity_t *ent, std::string_view cmd)
+{
+    if (!ent || !ent->client || cmd.empty())
+        return;
+
+    auto &queue = ent->client->ui.commandQueue;
+    if (queue.size() >= kMaxQueuedUiCommands) {
+        gi.Com_PrintFmt("UI command queue overflow for client {}; dropping stale UI snapshot.\n",
+                        static_cast<int>(ent - g_entities - 1));
+        queue.clear();
+    }
+    queue.emplace_back(cmd);
+}
 
 } // namespace
 
@@ -82,7 +100,7 @@ void UiCommandBuilder::FlushIfNeeded(size_t extra)
     if (buffer_.size() + extra <= kMaxStuffText)
         return;
 
-    SendUiCommand(ent_, buffer_);
+    QueueUiCommand(ent_, buffer_);
     buffer_.clear();
 }
 
@@ -121,7 +139,7 @@ void UiCommandBuilder::Flush()
 {
     if (!ent_ || buffer_.empty())
         return;
-    SendUiCommand(ent_, buffer_);
+    QueueUiCommand(ent_, buffer_);
     buffer_.clear();
 }
 
@@ -134,6 +152,16 @@ void SendUiCommand(gentity_t *ent, std::string_view cmd)
     gi.WriteByte(svc_stufftext);
     gi.WriteString(text.c_str());
     gi.unicast(ent, true);
+}
+
+void FlushUiCommandQueue(gentity_t *ent)
+{
+    if (!ent || !ent->client || ent->client->ui.commandQueue.empty())
+        return;
+
+    std::string command = std::move(ent->client->ui.commandQueue.front());
+    ent->client->ui.commandQueue.pop_front();
+    SendUiCommand(ent, command);
 }
 
 } // namespace MenuUi

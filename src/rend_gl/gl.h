@@ -445,15 +445,9 @@ static inline void GL_ShiftLightmapBytes(const byte in[3], float out[3])
 {
     int shift = gl_static.lightmap_shift;
     int cap = gl_static.map_overbright_cap;
-
-    if (!shift) {
-        out[0] = in[0];
-        out[1] = in[1];
-        out[2] = in[2];
-        return;
-    }
-
-    int r, g, b;
+    int r = in[0];
+    int g = in[1];
+    int b = in[2];
 
     if (shift > 0) {
         r = in[0] << shift;
@@ -468,7 +462,7 @@ static inline void GL_ShiftLightmapBytes(const byte in[3], float out[3])
             g = g * 255 / max;
             b = b * 255 / max;
         }
-    } else {
+    } else if (shift < 0) {
         r = in[0] >> -shift;
         g = in[1] >> -shift;
         b = in[2] >> -shift;
@@ -901,7 +895,8 @@ enum { SSBO_WEIGHTS, SSBO_JOINTNUMS };
 // EVSM warp exponent shared by the moment writer (shadow.c) and the receiver
 // (shader.c). Moments are stored as (w, w*w) in RGBA16F, so exp(2*e) must stay
 // below the fp16 max of 65504, which caps e at ~5.54.
-#define GL_SHADOW_EVSM_EXPONENT_GLSL "5.4"
+#define GL_SHADOW_EVSM_EXPONENT 5.4
+#define GL_SHADOW_EVSM_EXPONENT_GLSL STRINGIFY(GL_SHADOW_EVSM_EXPONENT)
 
 typedef struct {
     vec3_t    position;

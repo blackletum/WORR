@@ -131,8 +131,7 @@
         <div class="session-admin-row" id="admin-command-set-team" data-admin-command="set_team">
           <span class="session-admin-label">set_team</span>
           <span>Force a client onto team</span>
-          <span class="ui-command-line">usage: set_team &lt;client&gt;</span>
-          <span class="ui-command-line">&lt;team&gt;</span>
+          <span class="ui-command-line">usage: set_team &lt;client&gt; &lt;team&gt;</span>
         </div>
         <div class="session-admin-row" id="admin-command-shuffle" data-admin-command="shuffle">
           <span class="session-admin-label">shuffle</span>
@@ -157,7 +156,7 @@
       </section>
 
       <footer class="actions" id="admin-commands-actions">
-        <button id="admin-commands-back" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="admin-commands-back" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

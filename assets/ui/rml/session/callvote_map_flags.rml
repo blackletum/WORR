@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Callvote Map Flags</title>
+    <title>WORR Vote: Map Flags</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
@@ -8,7 +8,10 @@
   <body id="session-callvote-map-flags" data-route-id="callvote_map_flags" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="callvote-map-flags-screen">
       <header class="page-header">
-        <h1>Callvote: Map Flags</h1>
+        <h1>Vote: Map Flags</h1>
+        <p id="callvote-map-flags-summary">
+          Propose changes to map rotation flags.
+        </p>
       </header>
 
       <nav class="menu-list" id="callvote-map-flags-content" data-model="session.callvote.map_flags" data-owner-boundary="sgame-published-cvars">
@@ -25,7 +28,7 @@
       </nav>
 
       <footer class="actions" id="callvote-map-flags-actions">
-        <button id="callvote-map-flags-back" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="callvote-map-flags-back" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

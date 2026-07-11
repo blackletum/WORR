@@ -152,6 +152,13 @@ void UI_MouseEvent(int x, int y)
 
 bool UI_IsTransparent(void)
 {
+    // The multiplayer match hub and its child routes are translucent gameplay
+    // overlays even though they do not occupy the cgame menu stack. Scope the
+    // override to the server-published session marker so unrelated RmlUi pages
+    // retain their existing opaque-menu rendering behavior.
+    if (UI_Rml_IsRouteActive() && Cvar_VariableInteger("ui_dm_menu_active"))
+        return true;
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->IsTransparent)
         return api->IsTransparent();

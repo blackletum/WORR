@@ -12,8 +12,9 @@ Primary tasks: `FR-09-T01`, `FR-09-T02`, `FR-09-T03`, `FR-09-T04`,
 
 Supporting linked tasks: `DV-06-T01`, `FR-07-T01`, and `FR-07-T02`.
 
-Execution status: `Active/round-75 menu-coverage-refinement accepted`.
-Round 75 is the latest coordinator-accepted validation baseline. Earlier
+Execution status: `Active/round-78 multiplayer-match-hub accepted`.
+Round 78 is the latest coordinator-accepted multiplayer/session baseline.
+Earlier
 parallel rounds produced source asset scaffolds, mock contracts, shared
 theme/component contracts, smoke and route-contract checkers, package-asset
 staging for loose `.install/basew/ui/rml/` assets, a guarded client
@@ -306,9 +307,21 @@ fields while keeping Main menu commands plain again. Round 71 adds a
 state-aware SVG skin library for real widget surfaces, wiring button,
 primary/destructive button, text box, combo/drop-down, checkbox, arrow box,
 range, progress, scrollbar, and popup-frame assets into the shared RmlUi
-themes while preserving color/border fallbacks.
+themes while preserving color/border fallbacks. Round 78 promotes the
+welcome/join and in-session Escape path into a live, server-authoritative
+multiplayer match hub. Sgame now publishes match, population, team/join,
+intermission, and tool state through a paced `ui_dm_*` snapshot; OpenGL opens
+the branded RmlUi route, while native Vulkan/RTX-vkpt remain on the matching
+cgame JSON presentation whenever their native RmlUi renderer is unavailable.
+Focused OpenGL transition smoke proves initial open, join close,
+inventory/Escape reopen, and Resume close, and native Vulkan evidence proves
+the JSON fallback without an OpenGL redirect. Implementation and user
+documentation are recorded in
+`docs-dev/rmlui-round78-multiplayer-match-hub-2026-07-10.md` and
+`docs-user/multiplayer-session-menu.md`.
 Native Vulkan/RTX-vkpt renderer
-implementations, live data controllers, localization/text shaping parity,
+implementations, remaining live data controllers, localization/text shaping
+parity,
 broad input/navigation parity, automated runtime navigation, full theme/layout
 parity, parity proof, and legacy-removal cutover remain incomplete.
 
@@ -338,10 +351,10 @@ Status legend:
 | `FR-09-T02` RmlUi dependency, Meson/build wiring, and staging | Agent 1 | `Active`: loose `ui/rml` package staging implemented, client scaffold source wired, full-route runtime document probe, registry drift, runtime asset/import, JSON runtime-asset reporting, detailed runtime asset manifest output, staged loose validation, proposed dependency decision/audit record, RmlUi `6.2` source wrap, default-disabled optional `rmlui` Meson feature gate, dependency-integration checker state `optional`, wrap provide aliases, explicit CMake fallback options, enabled scratch compile/link proof, RmlUi runtime DLL staging, and refreshed `.install` route-load proof accepted; supported build matrix pending | Gate G0 -> full-route runtime document probe accepted -> runtime registry/import validation -> runtime asset JSON/staging/manifest evidence -> dependency decision/audit -> dependency integration -> optional build gate -> runtime-switch/build wiring -> install refresh -> Gate G1 | RmlUi dependency resolves, links in the supported build matrix, and `.install/basew/ui/rml/` refreshes with current RmlUi assets. |
 | `FR-09-T03` Runtime bootstrap and native renderer integration | Agents 1 and 2 | `Active`: runtime smoke document, native renderer guardrails, guarded `ui_rml_enable` switch scaffold, filesystem-backed probe coverage for 57 route documents plus `core.runtime_smoke`, guarded menu-open probes for `main`, `game`, and `download_status`, runtime availability reporting, dependency-free file-interface boundary, runtime-hook boundary, compiled RmlUi Core adapter registration, WORR-backed RmlUi system/file interfaces, explicit `ui_rml_runtime_probe`, native renderer bridge contract/family lanes, OpenGL render-interface scaffold export/registration, OpenGL geometry/texture/scissor primitive bridge with `CanRender=true`, guarded `core.runtime_smoke` context open/update/render path, `ui_rml_runtime_open`/`ui_rml_runtime_close`, UI draw interception, guarded key/text/mouse delivery, runtime counters, `ui_rml_runtime_capture`, smoke bitmap glyph font path, styled smoke RCSS, local screenshot-dir override, automated guarded OpenGL TGA capture with glyph marker and layout assertions, guarded synthetic input/back-close capture evidence, two-viewport OpenGL matrix evidence, guarded `main`/`game`/`download_status` menu-route OpenGL matrix evidence, explicit renderer-family matrix guardrails, aggregate renderer-matrix capture manifests, native Vulkan/RTX bridge-readiness audit, bridge-readiness aggregate renderer manifests, native bridge activation checklist manifests, native bridge activation status reporting, native bridge source-set activation requirements, inactive Vulkan/RTX bridge source wiring, inactive Vulkan/RTX bridge class stubs, inactive Vulkan/RTX family exports, inactive Vulkan/RTX runtime dependencies, installed OpenGL full-route menu-load proof accepted, focused OpenGL navigation-layout proof accepted, deterministic client/cgame `pushmenu` to RmlUi route/popup proof accepted, focused `pushmenu multiplayer` OpenGL proof accepted, and focused SVG texture generation proof accepted; Vulkan/RTX-vkpt implementations, full font/text services, full input services, runtime navigation, responsive widescreen parity, theme/layout parity, and parity proof pending | Gate G0 -> runtime-switch scaffold -> full-route document probe -> guarded menu-entrypoint runtime stubs -> runtime/file interface boundary -> compiled core adapter -> system/file bridge -> native renderer contract -> OpenGL render-interface scaffold -> OpenGL render primitives -> guarded sample route/context draw proof -> guarded sample input/capture proof -> guarded sample screenshot/glyph/layout proof -> guarded synthetic input/back-close proof -> guarded viewport matrix proof -> guarded menu route proof -> renderer-family guardrail -> renderer-matrix capture manifest -> bridge-readiness audit -> bridge-readiness renderer manifest -> native bridge activation checklist -> native bridge activation status -> native bridge source-set activation -> inactive non-OpenGL bridge source wiring -> inactive non-OpenGL bridge class stubs -> inactive non-OpenGL family exports -> inactive non-OpenGL runtime dependencies -> installed route-load proof -> normal pushmenu bridge proof -> multiplayer hub route proof -> SVG texture proof -> native renderer matrix proof -> Gate G1 | Sample `.rml` opens from normal menu entry points in OpenGL, Vulkan, and RTX/vkpt without Vulkan-to-OpenGL fallback. |
 | `FR-09-T04` Fonts, localization, theme, cursor/audio, and accessibility | Agent 2, Agent 4 consumer | `Active`: base, utility, session, and accessibility themes seeded; linked shell/settings/single-player/session/accessibility themes now avoid RmlUi-rejected browser CSS in installed route-load validation; all low-risk settings routes have `controller_stub` metadata; a11y/localization inventory reports 8 static refs and 6 localization keys with 0 malformed hooks; guarded smoke bitmap glyph path validates first text geometry; OpenGL path draws a software cursor; SDL3_ttf-backed RmlUi text textures now validate on staged menu routes; shared settings/navigation surfaces now use the `604px` typed-widget/menu contract; menu music, open-sound, and focus/change feedback plumbing validates through staged RmlUi routes; first-party SVG widget marker styling validates across settings and utility forms after command-menu pictograms were removed; live localization/accessibility services and final shaping policy pending | Gate G1 -> theme/font/input services -> a11y/localization inventory -> content consumption -> widget asset styling -> live localization/a11y services -> Gate G2 | Stable theme/font/input/accessibility services plus at least one migrated page using them. |
-| `FR-09-T05` Reusable data-model and controller bridges | Agent 3 | `Active`: mock contracts, route-contract audit, shared components, controller fixtures, 54 accepted `controller_stub` routes, 3 guarded `runtime_stub` routes, 149 controller-contract references across all 57 advanced routes, command/cvar/data-model/condition/event inventory validation, metadata-sync validation, phase-consistency validation, controller fixture validation, controller-stub coverage, route metadata shape validation, runtime-stub eligibility validation, and controller-stub completion validation landed; live C++ controllers pending | mock contracts -> controller fixture reconciliation -> selected `controller_stub` routes accepted -> guarded `runtime_stub` eligibility -> utility/list/single-player/local-session/session-vote/lobby/final session controller-stub metadata -> cvar/command/condition/keybind/list/save-load/session bridges -> controller-stub completion gate -> live C++ controllers -> Gate G2 | One cvar control, one command button, one conditional element, one list/table, and one preview component validated through RmlUi. |
+| `FR-09-T05` Reusable data-model and controller bridges | Agent 3 | `Active`: mock contracts, route-contract audit, shared components, controller fixtures, 54 accepted `controller_stub` routes, 3 guarded `runtime_stub` routes, 149 controller-contract references across all 57 advanced routes, command/cvar/data-model/condition/event inventory validation, metadata-sync validation, phase-consistency validation, controller fixture validation, controller-stub coverage, route metadata shape validation, runtime-stub eligibility validation, and controller-stub completion validation landed; Round 78 adds the first live sgame-backed match-hub cvar/command bridge plus bounded, per-frame UI snapshot delivery; broader live C++ controllers remain pending | mock contracts -> controller fixture reconciliation -> selected `controller_stub` routes accepted -> guarded `runtime_stub` eligibility -> utility/list/single-player/local-session/session-vote/lobby/final session controller-stub metadata -> cvar/command/condition/keybind/list/save-load/session bridges -> controller-stub completion gate -> live C++ controllers -> Gate G2 | One cvar control, one command button, one conditional element, one list/table, and one preview component validated through RmlUi. |
 | `FR-09-T06` Shell/settings/single-player menu translation | Agent 4 | `Active`: all 23 Agent 4 source-route starter documents landed; all Agent 4-owned shell/settings/single-player routes now have either `controller_stub` metadata (`20`) or guarded `runtime_stub` metadata (`3`); runtime/parity pending | Agent 4 documents -> smoke manifest -> controller-stub batches -> runtime-stub entrypoint batch -> single-player controller-stub batch -> remaining local-session controller-stub batch -> parity checks -> Gate G3 | Agent 4-owned Wave A and single-player Wave B routes run through RmlUi with settings persistence and back/escape parity. |
 | `FR-09-T07` Browser, player-config, save/load, keybind, and utility surfaces | Agents 3, 4, and 5 | `Active`: all tracked rich utility and save/load starter documents landed; `addressbook`, `keys`, `legacykeys`, `weapons`, `servers`, `demos`, `players`, `ui_list`, `loadgame`, `savegame`, and `downloads` have `controller_stub` metadata; utility/keybind visible copy and long-list layout now have staged TTF screenshot proof; live controllers/parity pending | shared rich components -> utility documents -> utility controller-stub metadata -> utility/list controller-stub metadata -> save/load controller-stub metadata -> download-options controller-stub metadata -> long-list layout proof -> smoke/parity checks -> Gate G3 | Servers, demos, players, ui_list, keybind, addressbook, weapons, loadgame, and savegame routes pass parity checks. |
-| `FR-09-T08` Multiplayer/session/match menu translation | Agent 5 | `Active`: all tracked Wave C source-route starter documents landed; multiplayer/session route metadata covers the multiplayer hub plus all 25 session/match routes; all non-runtime multiplayer/session/vote/tournament/MyMap/map selector/match-stats routes now have static `controller_stub` metadata; visible fallback copy has been refined away from migration/debug wording; the Multiplayer hub now mirrors original q2servers/address-book/demos/start-server/player/options commands in a staged shell grid; live session behavior/parity pending | session data contract -> Wave C documents -> session route metadata -> vote/callvote controller-stub metadata -> multiplayer/lobby controller-stub metadata -> tournament/MyMap/map-selector/match-stats controller-stub metadata -> player-facing fallback copy -> multiplayer hub parity proof -> live match-state smoke -> Gate G3 | Vote, tournament, MyMap, forfeit, replay, map selector, match info, and match stats flows run through RmlUi. |
+| `FR-09-T08` Multiplayer/session/match menu translation | Agent 5 | `Active`: all tracked Wave C source-route starter documents landed; multiplayer/session route metadata covers the multiplayer hub plus all 25 session/match routes; all non-runtime multiplayer/session/vote/tournament/MyMap/map selector/match-stats routes have static `controller_stub` metadata; Round 78 implements the live server-authoritative first-connect and Escape match hub with team/intermission-aware state, branded RmlUi presentation, matching JSON fallback, and focused OpenGL/Vulkan evidence; broader vote/tournament/MyMap/list/controller parity remains pending | session data contract -> Wave C documents -> session route metadata -> vote/callvote controller-stub metadata -> multiplayer/lobby controller-stub metadata -> tournament/MyMap/map-selector/match-stats controller-stub metadata -> player-facing fallback copy -> multiplayer hub parity proof -> live match-state smoke -> remaining Wave C parity -> Gate G3 | Vote, tournament, MyMap, forfeit, replay, map selector, match info, and match stats flows run through RmlUi. |
 | `FR-09-T09` Migration-specific validation | Agent 5 plus all agents | `Active`: smoke, route-contract, command inventory, cvar inventory, data-model inventory, condition inventory, event inventory, a11y/localization inventory, document-id inventory, entrypoint inventory, route-metadata-shape validation, legacy-removal inventory/reporting, metadata sync, phase-consistency, dependency-decision, dependency-integration, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font validation, runtime capture harness glyph-marker, TGA layout, synthetic input/back-close, viewport-matrix validation, menu-route-matrix validation, renderer-family matrix guardrail validation, aggregate renderer-matrix capture validation, Vulkan/RTX bridge-readiness validation, bridge-readiness aggregate manifest validation, native bridge activation checklist validation, native bridge activation status validation, native bridge source-set activation validation, inactive non-OpenGL bridge source wiring validation, and inactive non-OpenGL bridge class-stub validation, inactive non-OpenGL family-export validation, inactive non-OpenGL runtime-dependency validation, installed 57-route load validation, focused navigation-layout capture evidence, deterministic `pushmenu` route/popup validation, focused SVG widget marker validation, controller fixture, controller-stub coverage, controller-stub completion, runtime-stub eligibility, menu-entrypoint, static RML semantics, navigation graph, runtime registry, import-aware runtime asset JSON/manifest, parity checklist/summary, and progress-report tools validate 57/57 source routes with `starter=0`, `controller_stub=54`, and `runtime_stub=3`; runtime navigation/broader input parity coverage pending | smoke manifest -> migration-phase metadata -> static semantics checks -> runtime registry/import checks -> menu-entrypoint/runtime-stub checks -> navigation graph/fixture/parity checks -> command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventories -> metadata/shape/phase/dependency/dependency-integration/legacy guardrails -> controller-stub completion gate -> runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font checks -> guarded screenshot/glyph/layout/input/viewport/menu-route harness -> renderer-family guardrail -> renderer-matrix capture manifest -> bridge-readiness audit -> bridge-readiness renderer manifest -> native bridge activation checklist -> native bridge activation status -> native bridge source-set activation -> inactive non-OpenGL bridge source wiring -> inactive non-OpenGL bridge class stubs -> inactive non-OpenGL family exports -> inactive non-OpenGL runtime dependencies -> progress reports -> document-load checks -> normal pushmenu probes -> SVG widget probes -> renderer/layout/input/session evidence -> Gate G4 | Automated smoke coverage and manual parity checklist cover all migrated routes and selected renderer/layout matrix. |
 | `FR-09-T10` Legacy JSON removal and final docs/staging cleanup | Agent 5 plus all agents | `Blocked`: waits on Gate G3/G4; legacy-removal inventory/checker tracks 6 items with 4 blocked, 2 pending, 0 ready, and 0 complete; progress reports surface the closed parity gate; controller-bindings parity is complete, but navigation, renderer, broad screenshot/input/back, and legacy-fallback evidence remain pending; no legacy removal attempted | legacy inventory -> progress gate summaries -> parity-ready evidence -> delete/archive -> docs/staging updates -> Gate G4 | Legacy JSON loader/widgets and dead assets are removed or intentionally archived with a documented reason. |
 | `FR-03-T08` Complete engine-side/cgame-side UI ownership split | S0, Agents 1 and 3 | `Active`: client-owned presentation/data-provider contract seeded; route ownership metadata, full-route probe registry, 54 selected `controller_stub` routes, 3 guarded menu-entrypoint `runtime_stub` routes, and all 57 central routes matched to feature metadata validated; ownership audit pending | ownership audit -> route ownership metadata -> selected route progression accepted -> guarded entrypoint route progression -> all static controller-stub progression -> data bridge contract -> Gate G0/G2 | Client runtime ownership and cgame/sgame data-provider boundaries are explicit and documented. |
@@ -3771,6 +3784,68 @@ remaining representative utility long-list containment issues at `960x720`.
   full keyboard/controller navigation parity, automated route-wide pixel
   clipping assertions, native Vulkan/RTX-vkpt RmlUi rendering, and full visual
   parity remain pending.
+
+### Round 78 Evidence (2026-07-10)
+
+Round 78 is accepted as the first live, server-authoritative multiplayer
+welcome/join and in-session Escape match-hub slice. The detailed implementation
+record is
+`docs-dev/rmlui-round78-multiplayer-match-hub-2026-07-10.md`; the approachable
+player/operator guide is `docs-user/multiplayer-session-menu.md`.
+
+Task status remains deliberately open:
+
+- `FR-09-T08`, `FR-09-T05`, `FR-03-T08`, and `FR-09-T04` are `Active` with
+  accepted live match-state publication, routing/ownership, branded theme, and
+  dual-presentation evidence for this slice.
+- `FR-09-T09` and `DV-03-T07` are `Active` with focused OpenGL transition,
+  injected layout, and native Vulkan fallback evidence; broader automated
+  navigation, input, viewport, and renderer coverage remains pending.
+- `DV-07-T04` is `Active`; `docs-user/multiplayer-session-menu.md` now covers
+  first-connect choices, Escape reopen, renderer presentation differences,
+  and the explicit `match_auto_join=1` compatibility override.
+- No FR-09, DV-03, or DV-07 umbrella checkbox or Gate G3/G4 state is closed by
+  this focused acceptance.
+
+Accepted implementation facts:
+
+- `match_auto_join` now defaults to `0`; a human first connection opens the
+  match hub in a frozen spectator state until a valid team/auto/free/spectator
+  choice succeeds. `match_auto_join=1` explicitly restores the historical
+  immediate assignment policy for non-host humans.
+- Escape on an active supported WORR deathmatch sends `inven` so sgame
+  republishes current match/team state before opening the hub. Coop, demos,
+  non-WORR game directories, and legacy servers keep the ordinary game menu.
+- The live `ui_dm_*` bridge covers identity, map/rules, match state,
+  population, player status, join legality, team labels, ready state, and
+  conditional match tools. A bounded queue chunks the snapshot and sends one
+  chunk per server frame.
+- OpenGL opens the branded `dm_join` RmlUi route. When the active renderer has
+  no native RmlUi interface, route/popup open failures select the matching
+  cgame JSON hub. Its yellow pointer is drawn code-natively with
+  `R_DrawFill32`; native Vulkan/RTX-vkpt are never redirected to OpenGL.
+- Team, Duel queue, locked/full match, tournament, ready-up, spectator, and
+  intermission conditions receive explicit action and explanatory states.
+
+Validation:
+
+- `meson compile -C builddir-win` succeeded.
+- `python -m pytest tools/ui_smoke -q` passed (`225 passed`).
+- The canonical install refresh completed and validated `275` packaged assets
+  plus `181` RmlUi paths.
+- `.install/basew/logs/match_hub_live_initial_v3.log` records OpenGL RmlUi
+  `active=yes`, route `dm_join`, and availability `ready`.
+- `.install/basew/logs/match_hub_transition_smoke.log` records the live
+  `active -> join -> inactive -> inven/Escape -> active -> Resume -> inactive`
+  sequence.
+- Injected initial and Escape captures under `.tmp/rmlui/match-hub/` were
+  visually inspected for the two authored layouts.
+- `.install/basew/logs/match_hub_live_vulkan_v4.log` and
+  `.install/basew/logs/match_hub_live_vulkan_final.log` record native Vulkan,
+  RmlUi `renderer_unavailable`, and `ui_dm_menu_active=1`;
+  `.tmp/rmlui/match-hub/match_hub_live_vulkan_repeat_a.png` is the final
+  visually inspected capture and confirms the matching JSON hub plus
+  code-native yellow cursor over the native Vulkan game view.
 
 ### Round 75 Evidence (2026-07-08)
 

@@ -105,12 +105,13 @@
 	overflow: auto;
 }
 
+/* 2 x (284px + 16px margin) = 600px: fits the 604px stack with slack. */
 #singleplayer-save-load-actions button
 {
 	position: static;
 	box-sizing: border-box;
-	width: 288px;
-	min-width: 288px;
+	width: 284px;
+	min-width: 284px;
 	height: 34px;
 	min-height: 34px;
 	padding: 6px 12px;
@@ -208,4 +209,13 @@
 	flex: 0 0 auto;
 	height: 8px;
 	width: 568px;
+}
+
+/* Pressed feedback for the save/load action tiles. */
+#singleplayer-save-load-actions button:active
+{
+	background-color: #3f3626;
+	border-color: #ffd967;
+	border-left-color: #ffd967;
+	color: #ffd967;
 }

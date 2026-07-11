@@ -51,8 +51,24 @@ body.ui-a11y-reduced-motion,
 	color: #f3eee4;
 }
 
+/*
+ * RmlUi has no !important. Specificity is additive (tag 10k / class,
+ * attribute, pseudo 100k / id 1M) and equal-specificity ties go to the
+ * later-imported sheet -- this one. The [class] ladder below outranks or
+ * ties every transition/animation rule in the theme (max ~300k today) so
+ * the reduced-motion contract actually holds. Keep new theme transitions
+ * under three class-units of specificity or extend the ladder.
+ */
 .ui-reduced-motion *,
-.ui-a11y-reduced-motion *
+.ui-a11y-reduced-motion *,
+.ui-reduced-motion [class],
+.ui-a11y-reduced-motion [class],
+.ui-reduced-motion [class] *,
+.ui-a11y-reduced-motion [class] *,
+.ui-reduced-motion [class] [class],
+.ui-a11y-reduced-motion [class] [class],
+.ui-reduced-motion [class] [class] *,
+.ui-a11y-reduced-motion [class] [class] *
 {
 	animation: none;
 	transition: none;
@@ -221,4 +237,268 @@ body.ui-a11y-reduced-motion,
 	border-color: #ffff00;
 	background-color: #202000;
 	color: #ffff00;
+}
+
+/*
+ * Short-canvas fallback: reclaim vertical space from fixed chrome. Lives here
+ * (imported last) so it outranks unconditional base and family rules.
+ */
+@media (max-height: 640px)
+{
+	.ui-route,
+	.screen
+	{
+		padding: 10px;
+	}
+
+	.page-header,
+	.menu-header
+	{
+		margin-bottom: 6px;
+		padding-bottom: 6px;
+	}
+
+	.menu-footer
+	{
+		margin-top: 6px;
+		padding-top: 6px;
+	}
+}
+
+/*
+ * High-visibility hardening. RmlUi has no !important, so the strip-down is
+ * enforced two ways: (a) generic widget rules below tie base-theme state
+ * rules and win by import order (this sheet loads last); (b) family-scoped
+ * chrome (hubs, lists, keybind/table components, settings combos) is
+ * enumerated with the mode class prefixed, which adds one class-unit --
+ * enough to tie the family rules' :hover/:focus variants and win by order.
+ * When adding new family chrome, add its selector here.
+ */
+.ui-high-visibility button,
+.ui-high-visibility .ui-button,
+.ui-high-visibility input,
+.ui-high-visibility select,
+.ui-high-visibility textarea,
+.ui-high-visibility .ui-field,
+.ui-high-visibility .ui-panel,
+.ui-high-visibility .popup-dialog,
+.ui-high-visibility .status-message,
+.ui-high-visibility progress,
+.ui-high-visibility .worr-command-button,
+.ui-high-visibility .worr-table-action,
+.ui-high-visibility .worr-keybind-toolbar-action,
+.ui-high-visibility .worr-keybind-conflict-action,
+.ui-high-visibility .hub-actions .hub-section button,
+.ui-high-visibility .menu-list button,
+.ui-high-visibility .session-command-list button,
+.ui-high-visibility #callvote-main-menu button,
+.ui-high-visibility #map-selector-options button,
+.ui-high-visibility #singleplayer-save-load-actions button,
+.ui-high-visibility .match-hub-tab,
+.ui-high-visibility button.match-hub-tab,
+.ui-high-visibility .match-hub-tools button,
+.ui-high-visibility .match-hub-join-actions .match-hub-join-button,
+.ui-high-visibility .match-hub-state,
+.ui-high-visibility .match-hub-shell,
+.ui-high-visibility .session-panel,
+.ui-high-visibility .status-panel,
+.ui-high-visibility .session-card,
+.ui-high-visibility .session-vote-prompt,
+.ui-high-visibility .session-match-summary,
+.ui-high-visibility .session-admin-summary,
+.ui-high-visibility .setting-row[data-control="field"] input,
+.ui-high-visibility .setting-row[data-control="combo"] select,
+.ui-high-visibility .setting-row[data-control="imagevalues"] select,
+.ui-high-visibility .setting-row[data-control="select"] select
+{
+	background-color: #000000;
+	border-color: #ffffff;
+	color: #ffffff;
+	decorator: none;
+}
+
+.ui-high-visibility button:hover,
+.ui-high-visibility .ui-button:hover,
+.ui-high-visibility button:focus,
+.ui-high-visibility .ui-button:focus,
+.ui-high-visibility input:hover,
+.ui-high-visibility input:focus,
+.ui-high-visibility select:hover,
+.ui-high-visibility select:focus,
+.ui-high-visibility textarea:hover,
+.ui-high-visibility textarea:focus,
+.ui-high-visibility .hub-actions .hub-section button:hover,
+.ui-high-visibility .hub-actions .hub-section button:focus,
+.ui-high-visibility .menu-list button:hover,
+.ui-high-visibility .menu-list button:focus,
+.ui-high-visibility .session-command-list button:hover,
+.ui-high-visibility .session-command-list button:focus,
+.ui-high-visibility #callvote-main-menu button:hover,
+.ui-high-visibility #callvote-main-menu button:focus,
+.ui-high-visibility #map-selector-options button:hover,
+.ui-high-visibility #map-selector-options button:focus,
+.ui-high-visibility #singleplayer-save-load-actions button:hover,
+.ui-high-visibility #singleplayer-save-load-actions button:focus,
+.ui-high-visibility button.match-hub-tab:hover,
+.ui-high-visibility button.match-hub-tab:focus,
+.ui-high-visibility .match-hub-tools button:hover,
+.ui-high-visibility .match-hub-tools button:focus,
+.ui-high-visibility .match-hub-join-actions .match-hub-join-button:hover,
+.ui-high-visibility .match-hub-join-actions .match-hub-join-button:focus,
+.ui-high-visibility .setting-row[data-control="field"] input:hover,
+.ui-high-visibility .setting-row[data-control="field"] input:focus,
+.ui-high-visibility .setting-row[data-control="combo"] select:hover,
+.ui-high-visibility .setting-row[data-control="combo"] select:focus,
+.ui-high-visibility .setting-row[data-control="imagevalues"] select:hover,
+.ui-high-visibility .setting-row[data-control="imagevalues"] select:focus
+{
+	background-color: #202000;
+	border-color: #ffff00;
+	color: #ffff00;
+	decorator: none;
+}
+
+.ui-high-visibility button:active,
+.ui-high-visibility .ui-button:active,
+.ui-high-visibility .menu-list button:active,
+.ui-high-visibility .session-command-list button:active,
+.ui-high-visibility #callvote-main-menu button:active,
+.ui-high-visibility #map-selector-options button:active,
+.ui-high-visibility #singleplayer-save-load-actions button:active,
+.ui-high-visibility button.match-hub-tab:active,
+.ui-high-visibility .match-hub-tools button:active,
+.ui-high-visibility .match-hub-join-actions .match-hub-join-button:active
+{
+	background-color: #ffff00;
+	border-color: #ffffff;
+	color: #000000;
+	decorator: none;
+}
+
+/*
+ * ID-scoped list menus (1,110,000 with :hover) need ID-level enumeration:
+ * class-level overrides cannot reach them.
+ */
+.ui-high-visibility #callvote-random-menu button,
+.ui-high-visibility #callvote-scorelimit-menu button,
+.ui-high-visibility #callvote-timelimit-menu button,
+.ui-high-visibility #callvote-unlagged-menu button,
+.ui-high-visibility #callvote-ruleset-menu button,
+.ui-high-visibility #callvote-map-flags-content button,
+.ui-high-visibility #mymap-flags-content button,
+.ui-high-visibility #ui-list-content button
+{
+	background-color: #000000;
+	border-color: #ffffff;
+	border-left-color: #ffffff;
+	color: #ffffff;
+	decorator: none;
+}
+
+.ui-high-visibility #callvote-random-menu button:hover,
+.ui-high-visibility #callvote-random-menu button:focus,
+.ui-high-visibility #callvote-scorelimit-menu button:hover,
+.ui-high-visibility #callvote-scorelimit-menu button:focus,
+.ui-high-visibility #callvote-timelimit-menu button:hover,
+.ui-high-visibility #callvote-timelimit-menu button:focus,
+.ui-high-visibility #callvote-unlagged-menu button:hover,
+.ui-high-visibility #callvote-unlagged-menu button:focus,
+.ui-high-visibility #callvote-ruleset-menu button:hover,
+.ui-high-visibility #callvote-ruleset-menu button:focus,
+.ui-high-visibility #callvote-map-flags-content button:hover,
+.ui-high-visibility #callvote-map-flags-content button:focus,
+.ui-high-visibility #mymap-flags-content button:hover,
+.ui-high-visibility #mymap-flags-content button:focus,
+.ui-high-visibility #ui-list-content button:hover,
+.ui-high-visibility #ui-list-content button:focus
+{
+	background-color: #202000;
+	border-color: #ffff00;
+	border-left-color: #ffff00;
+	color: #ffff00;
+	decorator: none;
+}
+
+/* Settings toggle rows: family :checked rules tie base HV rules and win. */
+.ui-high-visibility .setting-row[data-control="toggle"] input,
+.ui-high-visibility .setting-row[data-control="toggle"] input:hover,
+.ui-high-visibility .setting-row[data-control="toggle"] input:focus
+{
+	background-color: #000000;
+	border-color: #ffffff;
+	decorator: none;
+}
+
+.ui-high-visibility .setting-row[data-control="toggle"] input:checked,
+.ui-high-visibility .setting-row[data-control="toggle"] input:checked:hover,
+.ui-high-visibility .setting-row[data-control="toggle"] input:checked:focus
+{
+	background-color: #ffff00;
+	border-color: #ffffff;
+	decorator: none;
+}
+
+/* Hub secondary states and table sort headers. */
+.ui-high-visibility .hub-actions .hub-section button:active,
+.ui-high-visibility .hub-actions .hub-section button.ui-button-primary,
+.ui-high-visibility .hub-actions .hub-section button.ui-button-danger
+{
+	background-color: #000000;
+	border-color: #ffffff;
+	border-left-color: #ffffff;
+	color: #ffffff;
+	decorator: none;
+}
+
+.ui-high-visibility .data-table th[data-sort-key],
+.ui-high-visibility .utility-table th[data-sort-key],
+.ui-high-visibility .data-table th[data-sort-state="ascending"],
+.ui-high-visibility .data-table th[data-sort-state="descending"],
+.ui-high-visibility .data-table th[data-sort-key]:hover,
+.ui-high-visibility .utility-table th[data-sort-key]:hover
+{
+	background-color: #000000;
+	color: #ffffff;
+	decorator: none;
+}
+
+.ui-high-visibility .ui-route,
+.ui-high-visibility .screen,
+.ui-high-visibility .popup-screen,
+body.ui-high-visibility .ui-route,
+body.ui-high-visibility .screen
+{
+	background-color: #000000;
+	decorator: none;
+}
+
+/*
+ * Focus must be visibly distinct from hover for keyboard/gamepad users:
+ * these family rules style :focus identically to :hover, so re-declare the
+ * focus border here (ties their specificity, wins by import order).
+ */
+#callvote-main-menu button:focus,
+.menu-list button:focus,
+.session-command-list button:focus,
+#map-selector-options button:focus,
+#singleplayer-save-load-actions button:focus,
+.match-hub-tools button:focus,
+.match-hub-join-actions .match-hub-join-button:focus
+{
+	border-color: #ffd967;
+}
+
+/*
+ * Disabled controls are not hover/click targets and leave the tab/nav order
+ * so keyboard and gamepad focus skips them.
+ */
+button:disabled,
+button[disabled],
+.ui-button:disabled,
+.ui-button[disabled]
+{
+	pointer-events: none;
+	tab-index: none;
+	focus: none;
+	nav: none;
 }

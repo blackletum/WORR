@@ -252,6 +252,7 @@ enum {
     VK_ENTITY_VERTEX_LIGHTMAP = BIT(2),
     VK_ENTITY_VERTEX_NO_SHADOW = BIT(3),
     VK_ENTITY_VERTEX_NO_DLIGHT = BIT(4),
+    VK_ENTITY_VERTEX_INTENSITY = BIT(5),
 };
 
 static bool VK_Entity_Check(VkResult result, const char *what)
@@ -1155,10 +1156,10 @@ static bool VK_Entity_AddMD5(const entity_t *ent, const refdef_t *fd, const vk_m
     color_t color = shell ? VK_Entity_ShellColor(ent)
                           : VK_Entity_LitColor(ent, false, false,
                                                fd ? fd->time : 0.0f);
-    uint32_t flags = shell
+    uint32_t flags = (shell
         ? (VK_ENTITY_VERTEX_FULLBRIGHT | VK_ENTITY_VERTEX_NO_SHADOW |
            VK_ENTITY_VERTEX_NO_DLIGHT)
-        : VK_Entity_LightingFlags(ent, false);
+        : VK_Entity_LightingFlags(ent, false)) | VK_ENTITY_VERTEX_INTENSITY;
     qhandle_t preferred_skin = VK_Entity_SelectMD5Skin(ent, md5);
 
     for (uint32_t i = 0; i < md5->num_meshes; i++) {
@@ -2152,6 +2153,9 @@ static bool VK_Entity_AddBspModel(const entity_t *ent, const refdef_t *fd, const
         if (surf_flags & SURF_ALPHATEST) {
             flags |= VK_ENTITY_VERTEX_ALPHATEST;
         }
+        if (VK_World_SurfaceUsesIntensity(bsp, face)) {
+            flags |= VK_ENTITY_VERTEX_INTENSITY;
+        }
 
         for (int j = 1; j < face->numsurfedges - 1; j++) {
             if (surfedges[j].edge >= (uint32_t)bsp->numedges ||
@@ -2377,10 +2381,10 @@ static bool VK_Entity_AddMD2(const entity_t *ent, const refdef_t *fd, const vk_m
     color_t color = shell ? VK_Entity_ShellColor(ent)
                           : VK_Entity_LitColor(ent, false, false,
                                                fd ? fd->time : 0.0f);
-    uint32_t flags = shell
+    uint32_t flags = (shell
         ? (VK_ENTITY_VERTEX_FULLBRIGHT | VK_ENTITY_VERTEX_NO_SHADOW |
            VK_ENTITY_VERTEX_NO_DLIGHT)
-        : VK_Entity_LightingFlags(ent, false);
+        : VK_Entity_LightingFlags(ent, false)) | VK_ENTITY_VERTEX_INTENSITY;
     vk_entity_transform_t transform;
     VK_Entity_BuildTransform(ent, &transform);
 

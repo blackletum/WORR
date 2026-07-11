@@ -1138,6 +1138,10 @@ typedef struct {
     vec3_t  angles;
     float   forwardmove, sidemove;
     uint32_t server_frame;
+    // Server-owned interval, in engine frames, between the acknowledged
+    // snapshot and the prior snapshot actually built for this client.  This
+    // field is internal to the engine/game ABI and is never decoded from wire.
+    uint32_t server_frame_delta;
 } usercmd_t;
 
 typedef uint8_t water_level_t;

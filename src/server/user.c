@@ -978,6 +978,15 @@ static inline void SV_ClientThink(usercmd_t *cmd)
 {
     usercmd_t *old = &sv_client->lastcmd;
 
+    // Bind the command to a server-owned simulation clock.  The client only
+    // acknowledges a wire snapshot number; SV_SetLastFrame validates that
+    // acknowledgement and maps it back to the simulation frame captured when
+    // the snapshot was built.  Bots execute in the current simulation frame.
+    cmd->server_frame = sv_client->bot ? (uint32_t)sv.framenum
+                                       : sv_client->last_acked_server_frame;
+    cmd->server_frame_delta =
+        sv_client->bot ? 1u : sv_client->last_acked_server_frame_delta;
+
     sv_client->command_msec -= cmd->msec;
     sv_client->cmd_msec_used += cmd->msec;
     sv_client->num_moves++;
@@ -1026,10 +1035,18 @@ void SV_BotClientThink(client_t *client, usercmd_t *cmd)
 static void SV_SetLastFrame(int lastframe)
 {
     client_frame_t *frame;
+    uint32_t acknowledged_server_frame = 0;
+    uint32_t acknowledged_server_frame_delta = 0;
 
     if (lastframe > 0) {
-        if (lastframe >= sv_client->framenum)
+        if (lastframe >= sv_client->framenum) {
+            // An impossible future acknowledgement must not retain an older
+            // valid rewind authority.  Ignore it for delta state and fail the
+            // lag-compensation watermark closed.
+            sv_client->last_acked_server_frame = 0;
+            sv_client->last_acked_server_frame_delta = 0;
             return; // ignore invalid acks
+        }
 
         if (lastframe <= sv_client->lastframe)
             return; // ignore duplicate acks
@@ -1041,6 +1058,12 @@ static void SV_SetLastFrame(int lastframe)
                 // save time for ping calc
                 if (frame->sentTime <= com_eventTime)
                     frame->latency = com_eventTime - frame->sentTime;
+
+                // Preserve the authoritative simulation frame associated with
+                // this acknowledged client-rate snapshot.  Never derive this
+                // from the client-supplied snapshot number itself.
+                acknowledged_server_frame = frame->server_frame;
+                acknowledged_server_frame_delta = frame->server_frame_delta;
             }
         }
 
@@ -1049,6 +1072,12 @@ static void SV_SetLastFrame(int lastframe)
     }
 
     sv_client->lastframe = lastframe;
+    // If the acknowledged snapshot has already fallen out of the validated
+    // ring (or its slot does not match), fail closed instead of retaining an
+    // older rewind watermark indefinitely.
+    sv_client->last_acked_server_frame = acknowledged_server_frame;
+    sv_client->last_acked_server_frame_delta =
+        acknowledged_server_frame_delta;
 }
 
 static void apply_usercmd_delta(const q2proto_clc_move_delta_t *move_delta, const usercmd_t *from, usercmd_t *to)

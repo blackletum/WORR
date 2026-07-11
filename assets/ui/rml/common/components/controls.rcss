@@ -57,7 +57,7 @@
   background-color: #27231d;
   border-width: 2px;
   border-color: #756a5d;
-  decorator: image(../skins/widgets/button-normal.svg);
+  decorator: ninepatch(btn, btn-inner);
   transition: background-color border-color color 0.12s cubic-out;
 }
 
@@ -66,7 +66,7 @@
   background-color: #332d23;
   border-color: #b99b5b;
   color: #ffd967;
-  decorator: image(../skins/widgets/button-hover.svg);
+  decorator: ninepatch(btn-hover, btn-hover-inner);
 }
 
 .worr-command-button:focus
@@ -74,7 +74,7 @@
   background-color: #332d23;
   border-color: #ffd967;
   color: #ffd967;
-  decorator: image(../skins/widgets/button-focus.svg);
+  decorator: ninepatch(btn-focus, btn-focus-inner);
 }
 
 .worr-command-button:active
@@ -82,7 +82,7 @@
   background-color: #3f3626;
   border-color: #ffd967;
   color: #ffd967;
-  decorator: image(../skins/widgets/button-active.svg);
+  decorator: ninepatch(btn-active, btn-active-inner);
 }
 
 .worr-command-button:disabled
@@ -90,7 +90,7 @@
   color: #8d8375;
   background-color: #1b1916;
   border-color: #756a5d;
-  decorator: image(../skins/widgets/button-disabled.svg);
+  decorator: ninepatch(btn-disabled, btn-disabled-inner);
 }
 
 .worr-conditional-region

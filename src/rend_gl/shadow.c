@@ -424,8 +424,11 @@ static bool GL_Shadow_EnsureResources(int resolution,
   qglTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_DEPTH_COMPONENT24, resolution,
                 resolution, GL_SHADOW_MAX_PAGES, 0, GL_DEPTH_COMPONENT,
                 GL_UNSIGNED_INT, NULL);
-  qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  // Receiver shaders fetch raw depth and perform their own hard, PCF, and
+  // PCSS comparisons. Interpolating depth before those comparisons produces
+  // false visibility at discontinuities, so raw-depth taps must be nearest.
+  qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   qglTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_COMPARE_MODE, GL_NONE);
@@ -1246,7 +1249,14 @@ bool GL_Shadow_RenderView(void *userdata, const shadow_view_desc_t *view,
   }
   qglDepthMask(GL_TRUE);
   if (view->storage_family == SHADOW_STORAGE_MOMENT) {
-    const GLfloat clear_color[4] = {1.0f, 1.0f, 0.0f, 1.0f};
+    GLfloat clear_color[4] = {1.0f, 1.0f, 0.0f, 1.0f};
+    if (view->filter_family == SHADOW_FILTER_EVSM) {
+      // Empty texels represent far-plane depth. EVSM compares warped depth,
+      // so clearing them to unwarped (1, 1) falsely shadows untouched areas.
+      const float far_moment = expf((float)GL_SHADOW_EVSM_EXPONENT);
+      clear_color[0] = far_moment;
+      clear_color[1] = far_moment * far_moment;
+    }
     qglClearBufferfv(GL_COLOR, 0, clear_color);
   }
   qglClear(GL_DEPTH_BUFFER_BIT);

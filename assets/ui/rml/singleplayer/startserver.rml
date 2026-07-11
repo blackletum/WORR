@@ -41,7 +41,7 @@
 
             <nav class="menu-actions" id="startserver-actions" data-component="common.components.command_button">
               <button id="startserver-gameflags" type="button" data-command="pushmenu gameflags" data-route-target="gameflags" data-show-if="coop=0" data-menu-sound="open">Deathmatch Flags</button>
-              <button id="startserver-begin" class="ui-button-primary" type="button" data-command="forcemenuoff; if $coop == 1 then &quot;match_setup_active 0; deathmatch 0; coop 1&quot; else &quot;match_setup_active 1; deathmatch 1; coop 0; maxplayers $match_setup_maxplayers; maxclients $match_setup_maxplayers&quot;; map $_ui_nextserver force" data-menu-sound="confirm">Begin Game!</button>
+              <button id="startserver-begin" class="ui-button-primary" type="button" data-command="forcemenuoff; if $coop == 1 then &quot;match_setup_active 0; deathmatch 0; coop 1&quot; else &quot;match_setup_active 1; deathmatch 1; coop 0; maxplayers $match_setup_maxplayers; maxclients $match_setup_maxplayers&quot;; map $_ui_nextserver force" data-menu-sound="confirm">Begin Game</button>
             </nav>
           </div>
 

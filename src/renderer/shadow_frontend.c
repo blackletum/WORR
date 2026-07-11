@@ -173,21 +173,108 @@ static uint32_t ShadowFrontend_HashI32(uint32_t hash, int32_t value)
     return ShadowFrontend_HashU32(hash, (uint32_t)value);
 }
 
-static uint32_t ShadowFrontend_HashFloatQ(uint32_t hash, float value, float scale)
-{
-    return ShadowFrontend_HashI32(hash, (int32_t)lrintf(value * scale));
-}
-
 static int32_t ShadowFrontend_Quantize(float value, float scale)
 {
-    return (int32_t)lrintf(value * scale);
+    double quantized = (double)value * (double)scale;
+
+    if (!isfinite(quantized)) {
+        return 0;
+    }
+    if (quantized <= (double)INT32_MIN) {
+        return INT32_MIN;
+    }
+    if (quantized >= (double)INT32_MAX) {
+        return INT32_MAX;
+    }
+    return (int32_t)llround(quantized);
+}
+
+static uint32_t ShadowFrontend_HashFloatQ(uint32_t hash, float value, float scale)
+{
+    return ShadowFrontend_HashI32(hash, ShadowFrontend_Quantize(value, scale));
+}
+
+typedef struct {
+    cvar_t *primary;
+    cvar_t *alias;
+} shadow_cvar_alias_pair_t;
+
+#define SHADOW_FRONTEND_MAX_CVAR_ALIASES 24
+
+static shadow_cvar_alias_pair_t
+    shadow_cvar_aliases[SHADOW_FRONTEND_MAX_CVAR_ALIASES];
+static int shadow_cvar_alias_count;
+static bool shadow_cvar_alias_syncing;
+
+static void ShadowFrontend_CvarAliasChanged(cvar_t *self)
+{
+    if (!self || shadow_cvar_alias_syncing) {
+        return;
+    }
+
+    for (int i = 0; i < shadow_cvar_alias_count; i++) {
+        shadow_cvar_alias_pair_t *pair = &shadow_cvar_aliases[i];
+        cvar_t *target = NULL;
+
+        if (self == pair->primary) {
+            target = pair->alias;
+        } else if (self == pair->alias) {
+            target = pair->primary;
+        }
+        if (!target) {
+            continue;
+        }
+
+        shadow_cvar_alias_syncing = true;
+        Cvar_SetByVar(target, self->string, FROM_CODE);
+        shadow_cvar_alias_syncing = false;
+        return;
+    }
+}
+
+static void ShadowFrontend_UnregisterCvarAliases(void)
+{
+    for (int i = 0; i < shadow_cvar_alias_count; i++) {
+        shadow_cvar_alias_pair_t *pair = &shadow_cvar_aliases[i];
+        if (pair->primary && pair->primary->changed == ShadowFrontend_CvarAliasChanged) {
+            pair->primary->changed = NULL;
+        }
+        if (pair->alias && pair->alias->changed == ShadowFrontend_CvarAliasChanged) {
+            pair->alias->changed = NULL;
+        }
+    }
+    memset(shadow_cvar_aliases, 0, sizeof(shadow_cvar_aliases));
+    shadow_cvar_alias_count = 0;
+    shadow_cvar_alias_syncing = false;
+}
+
+static void ShadowFrontend_RegisterCvarAliasPair(cvar_t *primary,
+                                                 cvar_t *alias)
+{
+    if (!primary || !alias ||
+        shadow_cvar_alias_count >= SHADOW_FRONTEND_MAX_CVAR_ALIASES) {
+        return;
+    }
+
+    // An explicitly configured legacy/backend name wins only when the
+    // canonical r_ name retained its default. If both were configured, the
+    // canonical archived value is authoritative. Changed callbacks then
+    // mirror every live write, so selection does not depend on unrelated
+    // per-cvar edit counts.
+    if ((alias->flags & CVAR_MODIFIED) && !(primary->flags & CVAR_MODIFIED)) {
+        Cvar_SetByVar(primary, alias->string, FROM_CODE);
+    } else {
+        Cvar_SetByVar(alias, primary->string, FROM_CODE);
+    }
+
+    shadow_cvar_aliases[shadow_cvar_alias_count++] =
+        (shadow_cvar_alias_pair_t){ primary, alias };
+    primary->changed = ShadowFrontend_CvarAliasChanged;
+    alias->changed = ShadowFrontend_CvarAliasChanged;
 }
 
 static cvar_t *ShadowFrontend_CvarAlias(cvar_t *primary, cvar_t *alias)
 {
-    if (alias && primary && alias->modified_count > primary->modified_count) {
-        return alias;
-    }
     return primary ? primary : alias;
 }
 
@@ -203,6 +290,13 @@ static float ShadowFrontend_CvarValue(cvar_t *primary, cvar_t *alias)
     return var ? var->value : 0.0f;
 }
 
+static float ShadowFrontend_CvarFiniteValue(cvar_t *primary, cvar_t *alias,
+                                            float fallback)
+{
+    float value = ShadowFrontend_CvarValue(primary, alias);
+    return isfinite(value) ? value : fallback;
+}
+
 static const char *ShadowFrontend_CvarString(cvar_t *primary, cvar_t *alias)
 {
     cvar_t *var = ShadowFrontend_CvarAlias(primary, alias);
@@ -211,7 +305,8 @@ static const char *ShadowFrontend_CvarString(cvar_t *primary, cvar_t *alias)
 
 static void ShadowFrontend_ParseVec3(const char *text, const vec3_t fallback, vec3_t out)
 {
-    if (!text || sscanf(text, "%f %f %f", &out[0], &out[1], &out[2]) != 3) {
+    if (!text || sscanf(text, "%f %f %f", &out[0], &out[1], &out[2]) != 3 ||
+        !isfinite(out[0]) || !isfinite(out[1]) || !isfinite(out[2])) {
         VectorCopy(fallback, out);
     }
 }
@@ -226,7 +321,10 @@ static cvar_t *ShadowFrontend_RegisterAlias(const char *prefix,
 
     char name[64];
     Q_snprintf(name, sizeof(name), "%s_%s", prefix, suffix);
-    return Cvar_Get(name, primary->string, primary->flags | CVAR_NOARCHIVE);
+    cvar_t *alias = Cvar_Get(name, primary->string,
+                             primary->flags | CVAR_NOARCHIVE);
+    ShadowFrontend_RegisterCvarAliasPair(primary, alias);
+    return alias;
 }
 
 void ShadowFrontend_Init(shadow_frontend_state_t *state)
@@ -245,6 +343,7 @@ void ShadowFrontend_Shutdown(shadow_frontend_state_t *state)
     if (!state) {
         return;
     }
+    ShadowFrontend_UnregisterCvarAliases();
     ShadowFrontend_Init(state);
 }
 
@@ -255,6 +354,7 @@ void ShadowFrontend_RegisterCvars(shadow_frontend_cvars_t *vars,
         return;
     }
 
+    ShadowFrontend_UnregisterCvarAliases();
     memset(vars, 0, sizeof(*vars));
 
     vars->enabled = Cvar_Get("r_shadowmaps", "1", CVAR_ARCHIVE);
@@ -374,24 +474,32 @@ void ShadowFrontend_PolicyFromCvars(const shadow_frontend_cvars_t *vars,
                 64.0f, 4096.0f);
     policy->debug_light = ShadowFrontend_CvarInteger(vars->debug_light, vars->alias_debug_light);
     policy->debug_draw = ShadowFrontend_CvarInteger(vars->debug_draw, vars->alias_debug_draw);
-    policy->alpha_mode = ShadowFrontend_CvarInteger(vars->alpha_mode, vars->alias_alpha_mode);
+    policy->alpha_mode = Q_clip(
+        ShadowFrontend_CvarInteger(vars->alpha_mode, vars->alias_alpha_mode),
+        0, 1);
     Q_strlcpy(policy->model_exclusion_list,
               ShadowFrontend_CvarString(vars->model_exclusion_list,
                                          vars->alias_model_exclusion_list),
               sizeof(policy->model_exclusion_list));
-    policy->slope_bias = Q_clipf(ShadowFrontend_CvarValue(vars->bias_slope, vars->alias_bias_slope),
+    policy->slope_bias = Q_clipf(ShadowFrontend_CvarFiniteValue(
+                                     vars->bias_slope, vars->alias_bias_slope, 1.0f),
                                  0.0f, 16.0f);
-    policy->normal_offset = Q_clipf(ShadowFrontend_CvarValue(vars->normal_offset, vars->alias_normal_offset),
+    policy->normal_offset = Q_clipf(ShadowFrontend_CvarFiniteValue(
+                                        vars->normal_offset, vars->alias_normal_offset, 0.5f),
                                     0.0f, 16.0f);
-    policy->bias_scale = Q_clipf(ShadowFrontend_CvarValue(vars->bias_scale, vars->alias_bias_scale),
+    policy->bias_scale = Q_clipf(ShadowFrontend_CvarFiniteValue(
+                                     vars->bias_scale, vars->alias_bias_scale, 1.0f),
                                  0.0f, 16.0f);
-    policy->softness = Q_clipf(ShadowFrontend_CvarValue(vars->softness, vars->alias_softness),
+    policy->softness = Q_clipf(ShadowFrontend_CvarFiniteValue(
+                                   vars->softness, vars->alias_softness, 1.0f),
                                0.25f, 4.0f);
     policy->sun_distance =
-        Q_clipf(ShadowFrontend_CvarValue(vars->sun_distance, vars->alias_sun_distance),
+        Q_clipf(ShadowFrontend_CvarFiniteValue(
+                    vars->sun_distance, vars->alias_sun_distance, 4096.0f),
                 128.0f, 65536.0f);
     policy->sun_size =
-        Q_clipf(ShadowFrontend_CvarValue(vars->sun_size, vars->alias_sun_size),
+        Q_clipf(ShadowFrontend_CvarFiniteValue(
+                    vars->sun_size, vars->alias_sun_size, 4096.0f),
                 128.0f, 65536.0f);
 
     const vec3_t fallback_sun = {0.3f, 0.5f, -1.0f};
@@ -1498,7 +1606,9 @@ static shadow_storage_family_t ShadowFrontend_StorageForFilter(shadow_filter_fam
 
 static uint32_t ShadowFrontend_ProjectionHash(const shadow_light_desc_t *light,
                                               int resolution,
-                                              shadow_filter_family_t filter)
+                                              shadow_filter_family_t filter,
+                                              shadow_view_type_t view_type,
+                                              const shadow_frontend_policy_t *policy)
 {
     uint32_t hash = 2166136261u;
     if (light->source_shadow != DL_SHADOW_DYNAMIC) {
@@ -1508,6 +1618,17 @@ static uint32_t ShadowFrontend_ProjectionHash(const shadow_light_desc_t *light,
     hash = ShadowFrontend_HashU32(hash, (uint32_t)resolution);
     hash = ShadowFrontend_HashU32(hash, (uint32_t)filter);
     hash = ShadowFrontend_HashU32(hash, (uint32_t)light->light_class);
+
+    // Depth bias is applied while rasterizing the cached page, so a live
+    // policy change must not reuse depth produced with the previous values.
+    hash = ShadowFrontend_HashFloatQ(hash, policy->slope_bias, 65536.0f);
+    hash = ShadowFrontend_HashFloatQ(hash, policy->bias_scale, 65536.0f);
+
+    // Point faces widen their projection according to the filter footprint
+    // to hide cube seams. Other view types use softness only while sampling.
+    if (view_type == SHADOW_VIEW_POINT_FACE) {
+        hash = ShadowFrontend_HashFloatQ(hash, policy->softness, 65536.0f);
+    }
     return hash;
 }
 
@@ -1520,12 +1641,14 @@ static void ShadowFrontend_FillCacheKey(shadow_cache_key_t *key,
                                         int resolution,
                                         shadow_filter_family_t filter,
                                         shadow_storage_family_t storage,
+                                        const shadow_frontend_policy_t *policy,
                                         const vec3_t direction)
 {
     memset(key, 0, sizeof(*key));
     key->owner_id = light->owner_id;
     key->world_revision = state->world_revision;
-    key->projection_hash = ShadowFrontend_ProjectionHash(light, resolution, filter);
+    key->projection_hash = ShadowFrontend_ProjectionHash(
+        light, resolution, filter, view_type, policy);
     if (light->source_shadow == DL_SHADOW_DYNAMIC) {
         // Dynamic effect lights are re-rendered every frame; including their
         // moving origin/direction in the residency key only churns pages and
@@ -1840,7 +1963,7 @@ static void ShadowFrontend_AddView(shadow_frontend_state_t *state,
     ShadowFrontend_FillCacheKey(&view->cache_key, state, &key_light, view_type, face,
                                 cascade,
                                 view->resolution, view->filter_family,
-                                view->storage_family, axis[0]);
+                                view->storage_family, policy, axis[0]);
 
     uint32_t caster_dirty = 0;
     if (policy->cache_mode == SHADOW_CACHE_WORLD_ONLY) {
@@ -2318,6 +2441,10 @@ void ShadowFrontend_Dump(const shadow_frontend_state_t *state,
                    policy->default_resolution,
                    policy->sun_enabled ? 1 : 0, policy->sun_cascades,
                    policy->alpha_mode, policy->model_exclusion_list);
+        Com_Printf("policy bias_slope=%.4g normal_offset=%.4g bias_scale=%.4g softness=%.4g sun_distance=%.4g sun_size=%.4g\n",
+                   policy->slope_bias, policy->normal_offset,
+                   policy->bias_scale, policy->softness,
+                   policy->sun_distance, policy->sun_size);
     }
     Com_Printf("stats candidates=%d selected=%d views=%d casters=%d dynamic=%d pvs2_rejects=%d area_rejects=%d\n",
                s->candidate_lights, s->selected_lights, s->views,

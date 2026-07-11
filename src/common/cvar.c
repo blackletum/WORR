@@ -565,6 +565,18 @@ Cvar_ClampValue
 */
 float Cvar_ClampValue(cvar_t *var, float min, float max)
 {
+    if (!isfinite(var->value)) {
+        float value = var->default_string ? Q_atof(var->default_string) : min;
+
+        if (!isfinite(value)) {
+            value = min;
+        } else {
+            value = Q_clipf(value, min, max);
+        }
+
+        Cvar_SetValue(var, value, FROM_CODE);
+        return value;
+    }
     if (var->value < min) {
         Cvar_SetValue(var, min, FROM_CODE);
         return min;

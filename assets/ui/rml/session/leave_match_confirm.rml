@@ -12,7 +12,7 @@
           <h1 data-loc-key="m_confirm_leave_match">Confirm Leave Match</h1>
         </header>
         <p class="popup-message" id="leave-match-prompt" data-loc-key="m_confirm_leave_match_prompt">
-          Are you sure you want to leave the match?
+          Are you sure you want to leave the match? You will return to the lobby.
         </p>
         <footer class="popup-actions" id="leave-match-confirm-actions">
           <button class="popup-danger" id="leave-match-yes" type="button" data-loc-key="m_yes" data-command="forcemenuoff; disconnect" data-menu-sound="confirm">Yes</button>

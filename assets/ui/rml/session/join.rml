@@ -1,41 +1,125 @@
 <rml>
   <head>
-    <title>WORR Join</title>
+    <title>WORR Multiplayer Match Hub</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="session-join" data-route-id="join" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
-    <div class="screen compact-screen session-screen" id="join-screen" data-close-command="forcemenuoff; worr_dm_join_close">
-      <header class="page-header" id="join-header" data-model="session.join" data-owner-boundary="sgame-published-cvars">
-        <h1 id="join-title" data-bind="cvars.ui_dm_title">Join</h1>
-        <p id="join-subtitle" data-bind="cvars.ui_dm_subtitle" data-visible-if="ui_dm_subtitle">Session subtitle</p>
-      </header>
+  <body id="session-join" data-route-id="join" data-route-group="session" data-route-version="2" data-document-status="match-hub" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
+    <div class="screen compact-screen session-screen match-hub-screen" id="join-screen" data-close-command="worr_dm_join_close">
+      <main class="match-hub-shell" id="join-hub" data-model="session.join" data-owner-boundary="sgame-published-cvars">
+        <header class="match-hub-header" id="join-header">
+          <div class="match-hub-brand">
+            <img class="match-hub-logo" src="../common/icons/brand/worr-mark.svg" alt="WORR emblem" />
+            <div class="match-hub-wordmark">
+              <span>WORR</span>
+              <small>Multiplayer</small>
+            </div>
+          </div>
+          <div class="match-hub-heading">
+            <p class="match-hub-context" id="join-context" data-bind="cvars.ui_dm_context" data-visible-if="ui_dm_context">Multiplayer Match</p>
+            <h1 id="join-title" data-bind="cvars.ui_dm_title">WORR Server</h1>
+            <p class="match-hub-subtitle" id="join-subtitle" data-bind="cvars.ui_dm_subtitle" data-visible-if="ui_dm_subtitle">Gametype on map</p>
+          </div>
+          <p class="match-hub-state" id="join-header-state" data-bind="cvars.ui_dm_match_state">Waiting</p>
+        </header>
 
-      <section class="session-panel" id="join-team-actions" data-model="session.join.teams" data-owner-boundary="sgame-published-cvars">
-        <button id="join-red" type="button" data-label-cvar="ui_dm_join_red" data-command="forcemenuoff; team red" data-visible-if="ui_dm_show_join!=0;ui_dm_teamplay!=0" data-menu-sound="confirm">Join Red</button>
-        <button id="join-blue" type="button" data-label-cvar="ui_dm_join_blue" data-command="forcemenuoff; team blue" data-visible-if="ui_dm_show_join!=0;ui_dm_teamplay!=0" data-menu-sound="confirm">Join Blue</button>
-        <button id="join-free" type="button" data-label-cvar="ui_dm_join_free" data-command="forcemenuoff; team free" data-visible-if="ui_dm_show_join!=0;ui_dm_teamplay=0" data-menu-sound="confirm">Join Match</button>
-        <button id="join-spectate" type="button" data-command="forcemenuoff; team spectator" data-visible-if="ui_dm_show_spectate!=0" data-menu-sound="confirm">Spectate</button>
-      </section>
+        <nav class="match-hub-tabs" id="join-tabs" aria-label="Match menu">
+          <span class="match-hub-tab is-active" id="join-overview-tab">Overview</span>
+          <button class="match-hub-tab" id="join-vote-tab" type="button" data-command="worr_callvote_menu" data-visible-if="ui_dm_show_callvote!=0" data-menu-sound="open">Vote</button>
+          <button class="match-hub-tab" id="join-server-tab" type="button" data-command="worr_dm_hostinfo" data-menu-sound="open">Server</button>
+          <button class="match-hub-tab" id="join-details-tab" type="button" data-command="worr_dm_matchinfo" data-menu-sound="open">Match Details</button>
+          <button class="match-hub-tab" id="join-stats-tab" type="button" data-command="worr_matchstats_menu" data-visible-if="ui_dm_show_matchstats!=0" data-menu-sound="open">Stats</button>
+          <button class="match-hub-tab" id="join-settings-tab" type="button" data-command="pushmenu options" data-route-target="options" data-visible-if="ui_dm_show_resume!=0" data-menu-sound="open" data-loc-key="m_settings">Settings</button>
+        </nav>
 
-      <nav class="menu-list" id="join-session-menu" data-model="session.join.menu" data-owner-boundary="sgame-published-cvars">
-        <button id="join-info" type="button" data-command="worr_tourney_info" data-visible-if="ui_dm_show_tourney_info!=0" data-menu-sound="open">Information</button>
-        <button id="join-maps" type="button" data-command="worr_tourney_maps" data-visible-if="ui_dm_show_tourney_maps!=0" data-menu-sound="open">Map Choices</button>
-        <button id="join-callvote" type="button" data-command="worr_callvote_menu" data-visible-if="ui_dm_show_callvote!=0" data-menu-sound="open">Call a Vote</button>
-        <button id="join-mymap" type="button" data-command="worr_mymap_menu" data-visible-if="ui_dm_show_mymap!=0" data-menu-sound="open">MyMap</button>
-        <button id="join-hostinfo" type="button" data-command="worr_dm_hostinfo" data-menu-sound="open">Host Info</button>
-        <button id="join-forfeit" type="button" data-command="worr_forfeit_menu" data-visible-if="ui_dm_show_forfeit!=0" data-menu-sound="alert">Forfeit</button>
-        <button id="join-matchinfo" type="button" data-command="worr_dm_matchinfo" data-menu-sound="open">Match Info</button>
-        <button id="join-matchstats" type="button" data-command="worr_matchstats_menu" data-visible-if="ui_dm_show_matchstats!=0" data-menu-sound="open">Player Stats</button>
-        <button id="join-admin" type="button" data-command="worr_admin_menu" data-visible-if="ui_dm_show_admin!=0" data-menu-sound="open">Admin</button>
-        <button id="join-settings" type="button" data-loc-key="m_settings" data-command="pushmenu options" data-route-target="options" data-menu-sound="open">Settings</button>
-        <button id="join-leave" type="button" data-loc-key="m_leave_match" data-command="ui.popup" data-route-target="leave_match_confirm" data-menu-sound="alert">Leave Match</button>
-      </nav>
+        <div class="match-hub-content">
+          <section class="match-hub-overview" id="join-overview">
+            <div class="match-hub-section-heading">
+              <p class="match-hub-eyebrow">Match Overview</p>
+              <h2>Current Session</h2>
+            </div>
 
-      <footer class="actions" id="join-actions">
-        <button id="join-close" type="button" data-command="forcemenuoff; worr_dm_join_close" data-menu-sound="cancel">Close</button>
-      </footer>
+            <div class="match-hub-map-card">
+              <p class="match-hub-gametype" id="join-gametype" data-bind="cvars.ui_dm_gametype">Deathmatch</p>
+              <h2 class="match-hub-map" id="join-map" data-bind="cvars.ui_dm_map">Map unavailable</h2>
+              <p class="match-hub-map-code" id="join-mapname" data-bind="cvars.ui_dm_mapname">unknown</p>
+            </div>
+
+            <div class="match-hub-stat-grid">
+              <div class="match-hub-stat">
+                <span class="match-hub-stat-label">Match state</span>
+                <span class="match-hub-stat-value" id="join-match-state" data-bind="cvars.ui_dm_match_state">Waiting</span>
+              </div>
+              <div class="match-hub-stat">
+                <span class="match-hub-stat-label">Players</span>
+                <span class="match-hub-stat-value" id="join-player-count" data-bind="cvars.ui_dm_player_count">0</span>
+              </div>
+              <div class="match-hub-stat">
+                <span class="match-hub-stat-label">Spectators</span>
+                <span class="match-hub-stat-value" id="join-spectator-count" data-bind="cvars.ui_dm_spectator_count">0</span>
+              </div>
+              <div class="match-hub-stat">
+                <span class="match-hub-stat-label">Ruleset</span>
+                <span class="match-hub-stat-value" id="join-ruleset" data-bind="cvars.ui_dm_ruleset">Standard</span>
+              </div>
+              <div class="match-hub-stat">
+                <span class="match-hub-stat-label">Score limit</span>
+                <span class="match-hub-stat-value" id="join-score-limit" data-bind="cvars.ui_dm_score_limit">None</span>
+              </div>
+              <div class="match-hub-stat">
+                <span class="match-hub-stat-label">Time limit</span>
+                <span class="match-hub-stat-value" id="join-time-limit" data-bind="cvars.ui_dm_time_limit">None</span>
+              </div>
+              <div class="match-hub-stat match-hub-stat-wide">
+                <span class="match-hub-stat-label">Your status</span>
+                <span class="match-hub-stat-value" id="join-current-status" data-bind="cvars.ui_dm_current_status">Spectating</span>
+              </div>
+            </div>
+
+            <div class="match-hub-motd" id="join-motd-panel" data-visible-if="ui_dm_motd">
+              <p class="match-hub-stat-label">Message from the server</p>
+              <p id="join-motd" data-bind="cvars.ui_dm_motd">Welcome to the server.</p>
+            </div>
+          </section>
+
+          <aside class="match-hub-participation" id="join-participation">
+            <div class="match-hub-section-heading">
+              <p class="match-hub-eyebrow">Participation</p>
+              <h2>Enter the Match</h2>
+              <p class="match-hub-section-copy">Choose a side, join automatically, or remain an observer.</p>
+            </div>
+
+            <p class="match-hub-notice" id="join-notice" data-bind="cvars.ui_dm_join_notice" data-visible-if="ui_dm_join_notice">Joining is temporarily unavailable.</p>
+
+            <div class="match-hub-join-actions" id="join-team-actions">
+              <button class="match-hub-join-button team-red" id="join-red" type="button" data-label-cvar="ui_dm_join_red" data-command="team red" data-visible-if="ui_dm_show_join!=0;ui_dm_teamplay!=0" data-enable-if="ui_dm_can_join!=0" data-menu-sound="confirm">Join Red</button>
+              <button class="match-hub-join-button team-blue" id="join-blue" type="button" data-label-cvar="ui_dm_join_blue" data-command="team blue" data-visible-if="ui_dm_show_join!=0;ui_dm_teamplay!=0" data-enable-if="ui_dm_can_join!=0" data-menu-sound="confirm">Join Blue</button>
+              <button class="match-hub-join-button join-auto" id="join-auto" type="button" data-label-cvar="ui_dm_join_auto" data-command="team auto" data-visible-if="ui_dm_show_join!=0;ui_dm_teamplay!=0" data-enable-if="ui_dm_can_join!=0" data-menu-sound="confirm">Auto Assign</button>
+              <button class="match-hub-join-button join-free" id="join-free" type="button" data-label-cvar="ui_dm_join_free" data-command="team free" data-visible-if="ui_dm_show_join!=0;ui_dm_teamplay=0" data-enable-if="ui_dm_can_join!=0" data-menu-sound="confirm">Join Match</button>
+              <button class="match-hub-join-button spectate" id="join-spectate" type="button" data-command-cvar="ui_dm_spectate_command" data-visible-if="ui_dm_show_spectate!=0" data-menu-sound="confirm">Spectate</button>
+              <button class="match-hub-join-button ready" id="join-ready" type="button" data-label-cvar="ui_dm_ready_label" data-command-cvar="ui_dm_ready_command" data-visible-if="ui_dm_show_ready!=0" data-menu-sound="confirm">Ready</button>
+            </div>
+          </aside>
+        </div>
+
+        <section class="match-hub-tools" id="join-tools">
+          <span class="match-hub-tools-label">Match Tools</span>
+          <button id="join-info" type="button" data-command="worr_tourney_info" data-visible-if="ui_dm_show_tourney_info!=0" data-menu-sound="open">Tournament Info</button>
+          <button id="join-maps" type="button" data-command="worr_tourney_maps" data-visible-if="ui_dm_show_tourney_maps!=0" data-menu-sound="open">Map Choices</button>
+          <button id="join-mymap" type="button" data-command="worr_mymap_menu" data-visible-if="ui_dm_show_mymap!=0" data-menu-sound="open">MyMap</button>
+          <button class="is-danger" id="join-forfeit" type="button" data-command="worr_forfeit_menu" data-visible-if="ui_dm_show_forfeit!=0" data-menu-sound="alert">Forfeit</button>
+          <button id="join-admin" type="button" data-command="worr_admin_menu" data-visible-if="ui_dm_show_admin!=0" data-menu-sound="open">Admin</button>
+        </section>
+
+        <footer class="match-hub-footer" id="join-actions">
+          <p class="match-hub-instruction" id="join-initial-instruction" data-visible-if="ui_dm_initial!=0">Select a team or Spectate to continue. Your view remains locked while this screen is open.</p>
+          <div class="match-hub-footer-actions">
+            <button class="match-hub-resume" id="join-close" type="button" data-command="worr_dm_join_close" data-visible-if="ui_dm_show_resume!=0" data-menu-sound="cancel">Resume Match</button>
+            <button class="match-hub-leave" id="join-leave" type="button" data-command="ui.popup" data-route-target="leave_match_confirm" data-loc-key="m_leave_match" data-visible-if="ui_dm_show_leave!=0" data-menu-sound="alert">Leave Match</button>
+          </div>
+        </footer>
+      </main>
     </div>
   </body>
 </rml>

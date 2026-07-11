@@ -33,6 +33,101 @@ void OpenJoinMenu(gentity_t *ent);
 
 namespace {
 
+static std::string MatchStateLabel() {
+  if (level.intermission.time)
+    return "Intermission";
+  if (level.timeoutActive > 0_ms)
+    return "Timeout";
+
+  switch (level.matchState) {
+  case MatchState::None:
+  case MatchState::Initial_Delay:
+    return "Starting";
+  case MatchState::Warmup_Default:
+    switch (level.warmupState) {
+    case WarmupState::Too_Few_Players:
+      return "Waiting for players";
+    case WarmupState::Teams_Imbalanced:
+      return "Teams imbalanced";
+    case WarmupState::Not_Ready:
+      return "Waiting for ready players";
+    case WarmupState::Default:
+    default:
+      return "Warmup";
+    }
+  case MatchState::Warmup_ReadyUp:
+    return "Warmup - ready up";
+  case MatchState::Countdown:
+    return "Match starting";
+  case MatchState::In_Progress:
+    return "Match in progress";
+  case MatchState::Ended:
+    return "Match complete";
+  default:
+    return "Match status unavailable";
+  }
+}
+
+static std::string CurrentPlayerStatus(gclient_t *cl,
+                                       bool initialMenu) {
+  if (!cl)
+    return {};
+
+  if (!ClientIsPlaying(cl)) {
+    if (cl->sess.matchQueued)
+      return "Queued for the next duel slot";
+    return initialMenu ? "Choose how you want to enter the match"
+                       : "Currently spectating";
+  }
+
+  if (Teams())
+    return fmt::format("Playing on the {} team", Teams_TeamName(cl->sess.team));
+  return "Playing in the match";
+}
+
+static std::string ScoreLimitLabel() {
+  const int limit = GT_ScoreLimit();
+  if (limit <= 0)
+    return "No score limit";
+  return fmt::format("{} limit: {}", GT_ScoreLimitString(), limit);
+}
+
+static std::string TimeLimitLabel() {
+  if (!timeLimit || timeLimit->value <= 0.f)
+    return "No time limit";
+  return fmt::format("Time limit: {}",
+                     TimeString(static_cast<int>(timeLimit->value * 60000.f),
+                                false, false));
+}
+
+static std::string PlainUiText(std::string_view text) {
+  char buffer[MAX_STRING_CHARS] = {};
+  G_StripColorEscapes(text, buffer, sizeof(buffer));
+  return buffer;
+}
+
+static std::string DmJoinTitle() {
+  if (hostname && hostname->string && hostname->string[0]) {
+    std::string title = PlainUiText(hostname->string);
+    if (!title.empty())
+      return title;
+  }
+  return "WORR Match";
+}
+
+static std::string DmJoinSubtitle() {
+  const char *gametype = level.gametype_name.data();
+  const char *mapTitle = level.longName.data();
+  const char *mapName = level.mapName.data();
+  const char *displayMap = (mapTitle && *mapTitle) ? mapTitle : mapName;
+
+  if (gametype && *gametype && displayMap && *displayMap)
+    return fmt::format("{} | {}", gametype, displayMap);
+  if (gametype && *gametype)
+    return gametype;
+  return displayMap ? displayMap : "";
+}
+
 static void OpenJoinMenuInternal(gentity_t *ent, const std::string &title,
                                  const std::string &subtitle,
                                  const char *menuName) {
@@ -40,12 +135,15 @@ static void OpenJoinMenuInternal(gentity_t *ent, const std::string &title,
     return;
 
   gclient_t *cl = ent->client;
+  if (menuName && *menuName)
+    cl->ui.commandQueue.clear();
 
   int maxPlayers = maxplayers->integer;
   if (maxPlayers < 1)
     maxPlayers = 1;
 
   uint8_t redCount = 0, blueCount = 0, freeCount = 0, queueCount = 0;
+  uint8_t spectatorCount = 0;
   const bool duelQueueAllowed =
       Game::Has(GameFlags::OneVOne) && g_allow_duel_queue &&
       g_allow_duel_queue->integer && !Tournament_IsActive();
@@ -66,8 +164,10 @@ static void OpenJoinMenuInternal(gentity_t *ent, const std::string &title,
         blueCount++;
         break;
       case Team::None:
-      case Team::Spectator:
       case Team::Total:
+        break;
+      case Team::Spectator:
+        spectatorCount++;
         break;
       }
     }
@@ -78,6 +178,7 @@ static void OpenJoinMenuInternal(gentity_t *ent, const std::string &title,
       fmt::format("Join Red ({}/{})", redCount, maxPlayers / 2);
   std::string joinBlue =
       fmt::format("Join Blue ({}/{})", blueCount, maxPlayers / 2);
+  const std::string joinAuto = "Auto Assign";
 
   std::string joinFree;
   if (duelQueueAllowed && level.pop.num_playing_clients == 2) {
@@ -89,36 +190,111 @@ static void OpenJoinMenuInternal(gentity_t *ent, const std::string &title,
 
   const bool isPlaying = ClientIsPlaying(cl);
   const bool isTournament = Tournament_IsActive();
-  const bool showJoin = (cl->initialMenu.frozen || !isPlaying) && !isTournament;
+  const bool isIntermission = level.intermission.time != 0_ms;
+  const bool initialMenu = cl->initialMenu.frozen;
+  const bool matchLocked = match_lock && match_lock->integer &&
+                           level.matchState >= MatchState::Countdown;
+  const bool publicSlotsFull =
+      !isPlaying && level.pop.num_playing_human_clients >= maxPlayers;
+  const bool canJoin = !isIntermission &&
+                       (isPlaying || duelQueueAllowed ||
+                        (!matchLocked && !publicSlotsFull));
+  const bool showJoin =
+      !isIntermission &&
+      (initialMenu || !isPlaying || teamplay) && !isTournament;
   const bool showSpectate =
-      (cl->initialMenu.frozen || isPlaying) && !isTournament;
+      (initialMenu || (isPlaying && !isIntermission)) && !isTournament;
+  const bool showResume = !initialMenu;
+  const bool showLeave = true;
 
-  const bool showTourneyInfo = isTournament;
+  std::string joinNotice;
+  if (isIntermission) {
+    joinNotice = initialMenu
+        ? "The match has ended. Spectate or leave while the next map loads."
+        : "The match has ended. Review the results or leave while the next map loads.";
+  } else if (isTournament) {
+    joinNotice = "Tournament controls determine participation.";
+  } else if (!canJoin && matchLocked) {
+    joinNotice = "The match is locked. Spectate until the next warmup.";
+  } else if (!canJoin && publicSlotsFull) {
+    joinNotice = "The player limit is full. Spectate until a slot opens.";
+  } else if (initialMenu && teamplay) {
+    joinNotice = "Choose a side, use Auto Assign, or spectate.";
+  } else if (initialMenu) {
+    joinNotice = "Join the match or begin as a spectator.";
+  }
+
+  const bool showTourneyInfo = isTournament && !isIntermission;
   const bool showTourneyMaps =
-      isTournament && Tournament_VetoComplete() &&
+      isTournament && !isIntermission && Tournament_VetoComplete() &&
       !game.tournament.mapOrder.empty();
   const bool showCallvote =
-      !isTournament && g_allowVoting->integer &&
+      !isIntermission && !isTournament && g_allowVoting->integer &&
       (isPlaying || (!isPlaying && g_allowSpecVote->integer));
   const bool showMymap =
-      !isTournament && g_maps_mymap && g_maps_mymap->integer &&
+      !isIntermission && !isTournament &&
+      g_maps_mymap && g_maps_mymap->integer &&
       (!g_allowMymap || g_allowMymap->integer);
   const bool showForfeit =
       !isTournament && g_allowVoting->integer && isPlaying &&
       (level.matchState == MatchState::In_Progress ||
        level.matchState == MatchState::Countdown);
   const bool showMatchStats = g_matchstats->integer != 0;
-  const bool showAdmin = cl->sess.admin;
+  const bool showAdmin = cl->sess.admin && !isIntermission;
+  const bool showReady = isPlaying &&
+                         level.matchState == MatchState::Warmup_ReadyUp;
+  const std::string readyLabel =
+      cl->pers.readyStatus ? "Mark Not Ready" : "Ready Up";
+  const char *readyCommand = cl->pers.readyStatus ? "notready" : "ready";
+
+  std::string spectatorLabel = fmt::format(
+      "{} spectator{}", spectatorCount, spectatorCount == 1 ? "" : "s");
+  if (queueCount) {
+    spectatorLabel += fmt::format(" | {} queued", queueCount);
+  }
+
+  const char *mapTitle = level.longName.data();
+  const char *mapName = level.mapName.data();
+  const char *displayMap = (mapTitle && *mapTitle) ? mapTitle : mapName;
 
   MenuUi::UiCommandBuilder cmd(ent);
   cmd.AppendCvar("ui_dm_title", title);
   cmd.AppendCvar("ui_dm_subtitle", subtitle);
+  cmd.AppendCvar("ui_dm_context",
+                 initialMenu ? "WELCOME TO THE MATCH" : "MATCH MENU");
+  cmd.AppendCvar("ui_dm_initial", initialMenu ? "1" : "0");
+  cmd.AppendCvar("ui_dm_show_resume", showResume ? "1" : "0");
+  cmd.AppendCvar("ui_dm_show_leave", showLeave ? "1" : "0");
+  cmd.AppendCvar("ui_dm_menu_active", "1");
+  cmd.AppendCvar("ui_dm_motd", game.motd);
+  cmd.AppendCvar("ui_dm_gametype", level.gametype_name.data());
+  cmd.AppendCvar("ui_dm_map", displayMap ? displayMap : "");
+  cmd.AppendCvar("ui_dm_mapname", mapName ? mapName : "");
+  cmd.AppendCvar("ui_dm_match_state", MatchStateLabel());
+  cmd.AppendCvar("ui_dm_player_count",
+                 fmt::format("{} / {} playing",
+                             level.pop.num_playing_clients, maxPlayers));
+  cmd.AppendCvar("ui_dm_spectator_count", spectatorLabel);
+  cmd.AppendCvar("ui_dm_ruleset", rs_long_name[(int)game.ruleset]);
+  cmd.AppendCvar("ui_dm_score_limit", ScoreLimitLabel());
+  cmd.AppendCvar("ui_dm_time_limit", TimeLimitLabel());
+  cmd.AppendCvar("ui_dm_current_status",
+                 CurrentPlayerStatus(cl, initialMenu));
+  cmd.AppendCvar("ui_dm_join_notice", joinNotice);
+  cmd.AppendCvar("ui_dm_can_join", canJoin ? "1" : "0");
   cmd.AppendCvar("ui_dm_teamplay", teamplay ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_join", showJoin ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_spectate", showSpectate ? "1" : "0");
+  cmd.AppendCvar("ui_dm_spectate_command",
+                 initialMenu ? "worr_dm_initial_spectate"
+                             : "team spectator");
   cmd.AppendCvar("ui_dm_join_red", joinRed);
   cmd.AppendCvar("ui_dm_join_blue", joinBlue);
+  cmd.AppendCvar("ui_dm_join_auto", joinAuto);
   cmd.AppendCvar("ui_dm_join_free", joinFree);
+  cmd.AppendCvar("ui_dm_show_ready", showReady ? "1" : "0");
+  cmd.AppendCvar("ui_dm_ready_label", readyLabel);
+  cmd.AppendCvar("ui_dm_ready_command", readyCommand);
   cmd.AppendCvar("ui_dm_show_tourney_info", showTourneyInfo ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_tourney_maps", showTourneyMaps ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_callvote", showCallvote ? "1" : "0");
@@ -126,11 +302,14 @@ static void OpenJoinMenuInternal(gentity_t *ent, const std::string &title,
   cmd.AppendCvar("ui_dm_show_forfeit", showForfeit ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_matchstats", showMatchStats ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_admin", showAdmin ? "1" : "0");
-  cmd.AppendCommand(std::string("pushmenu ") + menuName);
+  if (menuName && *menuName)
+    cmd.AppendCommand(std::string("pushmenu ") + menuName);
   cmd.Flush();
 
-  cl->initialMenu.dmJoinActive = true;
-  cl->initialMenu.dmWelcomeActive = false;
+  if (menuName && *menuName) {
+    cl->initialMenu.dmJoinActive = true;
+    cl->initialMenu.dmWelcomeActive = false;
+  }
 }
 
 } // namespace
@@ -173,42 +352,28 @@ static void ReleaseWelcomeFreeze(gentity_t *ent) {
 }
 
 void OpenDmWelcomeMenu(gentity_t *ent) {
-  if (!ent || !ent->client)
-    return;
-
-  const std::string title =
-      fmt::format("{} v{}", worr::version::kGameTitle, worr::version::kGameVersion);
-  const char *host_value =
-      (hostname && hostname->string) ? hostname->string : "";
-
-  MenuUi::UiCommandBuilder cmd(ent);
-  cmd.AppendCvar("ui_welcome_title", title);
-  cmd.AppendCvar("ui_welcome_hostname", host_value);
-  cmd.AppendCvar("ui_welcome_motd", game.motd);
-  cmd.AppendCommand("pushmenu dm_welcome");
-  cmd.Flush();
-
-  ent->client->initialMenu.dmWelcomeActive = true;
-  ent->client->initialMenu.dmJoinActive = false;
+  // Keep the historical entry point for callers and older integrations, but
+  // first-connect onboarding now lands directly in the authoritative match
+  // hub. The initial freeze is released only by a successful team/spectator
+  // choice, not by an intermediate Continue page.
+  OpenDmJoinMenu(ent);
 }
 
 void OpenDmJoinMenu(gentity_t *ent) {
   if (!ent || !ent->client)
     return;
 
-  std::string title = "Match Lobby";
-  if (hostname && hostname->string && hostname->string[0])
-    title = hostname->string;
+  OpenJoinMenuInternal(ent, DmJoinTitle(), DmJoinSubtitle(), "dm_join");
+}
 
-  std::string subtitle;
-  const char *gametype = level.gametype_name.data();
-  const char *mapName = level.mapName.data();
-  if (gametype && *gametype && mapName && *mapName) {
-    subtitle = fmt::format("{} | {}", gametype, mapName);
-  } else if (gametype && *gametype) {
-    subtitle = gametype;
-  }
-  OpenJoinMenuInternal(ent, title, subtitle, "dm_join");
+void RefreshDmJoinMenu(gentity_t *ent) {
+  if (!ent || !ent->client || !ent->client->initialMenu.dmJoinActive)
+    return;
+
+  if (!ent->client->ui.commandQueue.empty())
+    return;
+
+  OpenJoinMenuInternal(ent, DmJoinTitle(), DmJoinSubtitle(), nullptr);
 }
 
 void CloseDmJoinMenu(gentity_t *ent) {
@@ -216,13 +381,9 @@ void CloseDmJoinMenu(gentity_t *ent) {
     return;
 
   ent->client->initialMenu.dmJoinActive = false;
-  if (ent->client->initialMenu.frozen) {
-    ent->client->initialMenu.frozen = false;
-    ent->client->initialMenu.shown = true;
-    ent->client->initialMenu.delay = 0_sec;
-    ent->client->initialMenu.hostSetupDone = true;
-    ent->client->initialMenu.dmWelcomeActive = false;
-  }
+  ent->client->initialMenu.nextUpdate = 0_ms;
+  ent->client->ui.commandQueue.clear();
+  MenuUi::SendUiCommand(ent, "set ui_dm_menu_active 0\n");
 }
 
 void ForceCloseDmJoinMenu(gentity_t *ent) {
@@ -243,8 +404,8 @@ void OpenDmHostInfoMenu(gentity_t *ent) {
       hostName = value;
   }
 
-  const char *serverName =
-      (hostname && hostname->string) ? hostname->string : "";
+  const std::string serverName =
+      (hostname && hostname->string) ? PlainUiText(hostname->string) : "";
 
   MenuUi::UiCommandBuilder cmd(ent);
   cmd.AppendCvar("ui_hostinfo_server", serverName);

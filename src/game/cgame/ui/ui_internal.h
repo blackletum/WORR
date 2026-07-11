@@ -425,17 +425,27 @@ private:
 class ActionWidget : public Widget {
 public:
     explicit ActionWidget(std::string command);
+    int Height(int lineHeight) const override;
     void Layout(int x, int y, int width, int lineHeight) override;
     void Draw(bool focused) const override;
     Sound Activate() override;
     void SetAlignLeft(bool alignLeft) { alignLeft_ = alignLeft; }
     void SetCommandCvar(cvar_t *cvar) { commandCvar_ = cvar; }
+    void SetTextSize(int size) { textSize_ = size; textSizeSet_ = true; }
+    void SetTextColor(color_t color) { textColor_ = color; textColorSet_ = true; }
+    void SetSelectedTextColor(color_t color) { selectedTextColor_ = color; selectedTextColorSet_ = true; }
     bool AlignLeft() const { return alignLeft_; }
 
 private:
     std::string command_;
     cvar_t *commandCvar_ = nullptr;
     bool alignLeft_ = false;
+    int textSize_ = 0;
+    bool textSizeSet_ = false;
+    color_t textColor_{};
+    bool textColorSet_ = false;
+    color_t selectedTextColor_{};
+    bool selectedTextColorSet_ = false;
 };
 
 class BitmapWidget : public Widget {

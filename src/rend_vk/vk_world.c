@@ -46,6 +46,7 @@ enum {
     VK_WORLD_VERTEX_ALPHATEST = BIT(2),
     VK_WORLD_VERTEX_FLOWING = BIT(3),
     VK_WORLD_VERTEX_LIGHTMAPPED = BIT(4),
+    VK_WORLD_VERTEX_INTENSITY = BIT(5),
 };
 
 enum {
@@ -138,6 +139,57 @@ static cvar_t *vk_gl_modulate_entities;
 static cvar_t *vk_gl_brightness;
 static cvar_t *vk_map_overbright_bits;
 static cvar_t *vk_map_overbright_cap;
+static cvar_t *vk_r_intensity;
+static cvar_t *vk_intensity_legacy;
+static bool vk_intensity_syncing;
+
+static void VK_World_IntensityChanged(cvar_t *self)
+{
+    if (vk_intensity_syncing || !self) {
+        return;
+    }
+
+    vk_intensity_syncing = true;
+    if (self == vk_r_intensity && vk_intensity_legacy) {
+        Cvar_SetByVar(vk_intensity_legacy, self->string, FROM_CODE);
+    } else if (self == vk_intensity_legacy && vk_r_intensity) {
+        Cvar_SetByVar(vk_r_intensity, self->string, FROM_CODE);
+    }
+    vk_intensity_syncing = false;
+}
+
+static void VK_World_RegisterIntensityCvars(void)
+{
+    vk_intensity_legacy = Cvar_Get("intensity", "1", 0);
+    vk_r_intensity = Cvar_Get("r_intensity", vk_intensity_legacy->string, 0);
+
+    // Native Vulkan applies intensity in the receiver shaders, so neither
+    // spelling requires a texture reload.
+    vk_intensity_legacy->flags &= ~CVAR_FILES;
+    vk_r_intensity->flags &= ~CVAR_FILES;
+
+    if ((vk_intensity_legacy->flags & CVAR_MODIFIED) &&
+        !(vk_r_intensity->flags & CVAR_MODIFIED)) {
+        Cvar_SetByVar(vk_r_intensity, vk_intensity_legacy->string, FROM_CODE);
+    } else {
+        Cvar_SetByVar(vk_intensity_legacy, vk_r_intensity->string, FROM_CODE);
+    }
+
+    vk_intensity_legacy->changed = VK_World_IntensityChanged;
+    vk_r_intensity->changed = VK_World_IntensityChanged;
+}
+
+static void VK_World_UnregisterIntensityCvars(void)
+{
+    if (vk_intensity_legacy &&
+        vk_intensity_legacy->changed == VK_World_IntensityChanged) {
+        vk_intensity_legacy->changed = NULL;
+    }
+    if (vk_r_intensity && vk_r_intensity->changed == VK_World_IntensityChanged) {
+        vk_r_intensity->changed = NULL;
+    }
+    vk_intensity_syncing = false;
+}
 
 static inline bool VK_World_Check(VkResult result, const char *what)
 {
@@ -714,6 +766,35 @@ float VK_World_EntityModulate(void)
     }
     return Cvar_ClampValue(vk_gl_modulate, 0, 1e6f) *
            Cvar_ClampValue(vk_gl_modulate_entities, 0, 1e6f);
+}
+
+float VK_World_Intensity(void)
+{
+    if (!vk_r_intensity) {
+        return 1.0f;
+    }
+    float value = Cvar_ClampValue(vk_r_intensity, 1.0f, 5.0f);
+    if (vk_intensity_legacy && vk_intensity_legacy->value != value) {
+        Cvar_SetValue(vk_intensity_legacy, value, FROM_CODE);
+    }
+    return value;
+}
+
+bool VK_World_SurfaceUsesIntensity(const bsp_t *bsp, const mface_t *face)
+{
+    if (!face || !face->texinfo) {
+        return false;
+    }
+
+    const surfflags_t flags = face->texinfo->c.flags;
+    if (face->lightmap && bsp && bsp->has_bspx) {
+        return true;
+    }
+    if (!(flags & SURF_COLOR_MASK)) {
+        return true;
+    }
+    return !(flags & SURF_TRANS_MASK) &&
+           strstr(face->texinfo->name, "lava") != NULL;
 }
 
 // Mirrors GL_ShiftLightmapBytes: applies the map overbright shift with a
@@ -1575,6 +1656,9 @@ static bool VK_World_BuildMesh(vk_world_vertex_t **out_vertices,
         if (face_lm->has_lightmap) {
             vertex_flags |= VK_WORLD_VERTEX_LIGHTMAPPED;
         }
+        if (VK_World_SurfaceUsesIntensity(bsp, face)) {
+            vertex_flags |= VK_WORLD_VERTEX_INTENSITY;
+        }
         float fallback_lm_u = 0.5f / (float)atlas_size;
         float fallback_lm_v = 0.5f / (float)atlas_size;
 
@@ -2073,6 +2157,7 @@ bool VK_World_Init(vk_context_t *ctx)
         vk_map_overbright_cap = Cvar_Get("r_map_overbright_cap", "255",
                                          CVAR_ARCHIVE | CVAR_FILES);
     }
+    VK_World_RegisterIntensityCvars();
 
     if (!ctx) {
         Com_SetLastError("Vulkan world: context is missing");
@@ -2180,6 +2265,7 @@ bool VK_World_CreateSwapchainResources(vk_context_t *ctx)
 
 void VK_World_Shutdown(vk_context_t *ctx)
 {
+    VK_World_UnregisterIntensityCvars();
     if (!vk_world.initialized) {
         return;
     }
@@ -2646,73 +2732,91 @@ void VK_World_LightPointEx(const vec3_t origin, vec3_t light, bool include_dynam
             (origin[2] - bsp->lightgrid.mins[2]) * bsp->lightgrid.scale[2],
         };
 
-        uint32_t point_i[3] = {
-            (uint32_t)point[0],
-            (uint32_t)point[1],
-            (uint32_t)point[2],
-        };
-
-        vec3_t samples[8];
-        vec3_t avg;
-        int mask = 0;
-        int numsamples = 0;
-        VectorClear(avg);
-
-        for (int i = 0; i < 8; i++) {
-            uint32_t p[3] = {
-                point_i[0] + ((i >> 0) & 1),
-                point_i[1] + ((i >> 1) & 1),
-                point_i[2] + ((i >> 2) & 1),
-            };
-
-            const lightgrid_sample_t *s = BSP_LookupLightgrid(&bsp->lightgrid, p);
-            if (!s)
-                continue;
-
-            VectorClear(samples[i]);
-            for (int j = 0; j < (int)bsp->lightgrid.numstyles && s->style != 255; j++, s++) {
-                vec3_t shifted;
-                VK_World_ShiftLightmapBytes(s->rgb, shifted);
-                VectorMA(samples[i], VK_World_LightStyleWhite(s->style), shifted, samples[i]);
+        uint32_t point_i[3];
+        uint32_t point_next[3];
+        bool valid_grid_point = true;
+        for (int axis = 0; axis < 3; axis++) {
+            if (!isfinite(point[axis]) || !bsp->lightgrid.size[axis] ||
+                point[axis] < 0.0f ||
+                point[axis] > (float)(bsp->lightgrid.size[axis] - 1)) {
+                valid_grid_point = false;
+                break;
             }
-
-            mask |= BIT(i);
-            VectorAdd(avg, samples[i], avg);
-            numsamples++;
+            point_i[axis] = (uint32_t)floorf(point[axis]);
+            point_next[axis] =
+                min(point_i[axis] + 1, bsp->lightgrid.size[axis] - 1);
         }
 
-        if (mask) {
-            has_light = true;
-            if (mask != 255) {
-                VectorScale(avg, 1.0f / max(numsamples, 1), avg);
-                for (int i = 0; i < 8; i++) {
-                    if (!(mask & BIT(i))) {
-                        VectorCopy(avg, samples[i]);
-                    }
+        if (valid_grid_point) {
+            vec3_t samples[8];
+            vec3_t avg;
+            int mask = 0;
+            int numsamples = 0;
+            VectorClear(avg);
+
+            for (int i = 0; i < 8; i++) {
+                uint32_t p[3] = {
+                    (i & BIT(0)) ? point_next[0] : point_i[0],
+                    (i & BIT(1)) ? point_next[1] : point_i[1],
+                    (i & BIT(2)) ? point_next[2] : point_i[2],
+                };
+
+                const lightgrid_sample_t *s =
+                    BSP_LookupLightgrid(&bsp->lightgrid, p);
+                if (!s)
+                    continue;
+
+                VectorClear(samples[i]);
+                int style_count = 0;
+                for (; style_count < (int)bsp->lightgrid.numstyles &&
+                       s->style != 255;
+                     style_count++, s++) {
+                    vec3_t shifted;
+                    VK_World_ShiftLightmapBytes(s->rgb, shifted);
+                    VectorMA(samples[i], VK_World_LightStyleWhite(s->style),
+                             shifted, samples[i]);
+                }
+
+                if (style_count > 0) {
+                    mask |= BIT(i);
+                    VectorAdd(avg, samples[i], avg);
+                    numsamples++;
                 }
             }
 
-            float fx = point[0] - point_i[0];
-            float fy = point[1] - point_i[1];
-            float fz = point[2] - point_i[2];
-            float bx = 1.0f - fx;
-            float by = 1.0f - fy;
-            float bz = 1.0f - fz;
-            vec3_t lerp_x[4];
-            vec3_t lerp_y[2];
+            if (mask) {
+                has_light = true;
+                if (mask != 255) {
+                    VectorScale(avg, 1.0f / max(numsamples, 1), avg);
+                    for (int i = 0; i < 8; i++) {
+                        if (!(mask & BIT(i))) {
+                            VectorCopy(avg, samples[i]);
+                        }
+                    }
+                }
 
-            LerpVector2(samples[0], samples[1], bx, fx, lerp_x[0]);
-            LerpVector2(samples[2], samples[3], bx, fx, lerp_x[1]);
-            LerpVector2(samples[4], samples[5], bx, fx, lerp_x[2]);
-            LerpVector2(samples[6], samples[7], bx, fx, lerp_x[3]);
+                float fx = point[0] - point_i[0];
+                float fy = point[1] - point_i[1];
+                float fz = point[2] - point_i[2];
+                float bx = 1.0f - fx;
+                float by = 1.0f - fy;
+                float bz = 1.0f - fz;
+                vec3_t lerp_x[4];
+                vec3_t lerp_y[2];
 
-            LerpVector2(lerp_x[0], lerp_x[1], by, fy, lerp_y[0]);
-            LerpVector2(lerp_x[2], lerp_x[3], by, fy, lerp_y[1]);
+                LerpVector2(samples[0], samples[1], bx, fx, lerp_x[0]);
+                LerpVector2(samples[2], samples[3], bx, fx, lerp_x[1]);
+                LerpVector2(samples[4], samples[5], bx, fx, lerp_x[2]);
+                LerpVector2(samples[6], samples[7], bx, fx, lerp_x[3]);
 
-            LerpVector2(lerp_y[0], lerp_y[1], bz, fz, light);
-            VK_World_AdjustLightColor(light);
-            if (include_dynamic_lights) {
-                VK_World_AdjustEntityLightColor(light);
+                LerpVector2(lerp_x[0], lerp_x[1], by, fy, lerp_y[0]);
+                LerpVector2(lerp_x[2], lerp_x[3], by, fy, lerp_y[1]);
+
+                LerpVector2(lerp_y[0], lerp_y[1], bz, fz, light);
+                VK_World_AdjustLightColor(light);
+                if (include_dynamic_lights) {
+                    VK_World_AdjustEntityLightColor(light);
+                }
             }
         }
     }

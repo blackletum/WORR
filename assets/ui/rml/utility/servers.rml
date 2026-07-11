@@ -10,7 +10,7 @@
       <header class="page-header">
         <h1>Servers</h1>
         <p id="servers-summary">
-          Multiplayer server directory.
+          Browse public multiplayer servers.
         </p>
       </header>
 
@@ -40,7 +40,7 @@
       </section>
 
       <footer class="status-bar" id="servers-status" data-bind="server_browser.status">
-        The server browser is not wired up in the new UI yet.
+        The server browser will be enabled in an upcoming update.
       </footer>
     </div>
   </body>

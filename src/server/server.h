@@ -104,6 +104,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 typedef struct {
     int         number;
+    // Authoritative simulation frame captured by this per-client wire
+    // snapshot.  The wire frame number can advance at a client-specific rate,
+    // so it must never be used directly as an sgame rewind timestamp.
+    uint32_t    server_frame;
+    // Engine-frame interval from the previous snapshot in a contiguous
+    // per-client wire-frame sequence.  Zero means there is no interpolation
+    // predecessor (first frame or a server-suppressed wire-frame gap).
+    uint32_t    server_frame_delta;
     int         num_entities;
     unsigned    first_entity;
     q2proto_packed_player_state_t ps;
@@ -289,6 +297,11 @@ typedef struct client_s {
     unsigned        lastactivity;   // svs.realtime when user activity was last seen
     int             lastframe;      // for delta compression
     usercmd_t       lastcmd;        // for filling in big drops
+    // Server-validated simulation watermark associated with lastframe.  This
+    // is copied into usercmd_t.server_frame immediately before ClientThink;
+    // clients never author the value used by lag compensation.
+    uint32_t        last_acked_server_frame;
+    uint32_t        last_acked_server_frame_delta;
     int             command_msec;   // every seconds this is reset, if user
                                     // commands exhaust it, assume time cheating
     int             num_moves;      // reset every 10 seconds
@@ -303,6 +316,8 @@ typedef struct client_s {
     client_frame_t  frames[UPDATE_BACKUP];    // updates can be delta'd from here
     unsigned        frames_sent, frames_acked, frames_nodelta;
     int             framenum;
+    int             last_built_client_frame;
+    uint32_t        last_built_server_frame;
 #if USE_FPS
     int             framediv;
 #endif

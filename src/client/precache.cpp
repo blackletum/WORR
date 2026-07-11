@@ -22,6 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client.h"
 
+#include <cerrno>
+
 #if 0
 // Testing for CL_ParsePlayerSkin()
 static void test_parse_player_skin(const char* string, bool parse_dogtag, const char* expect_name, const char* expect_model, const char* expect_skin, const char* expect_dogtag)
@@ -460,53 +462,152 @@ static void CS_LoadShadowLight(int index, const char *s)
 			shadowlightinfo[i].shadowlight.conedirection[1],
 			shadowlightinfo[i].shadowlight.conedirection[2]).data());
 */
-    char buf[CS_MAX_STRING_LENGTH];
-    int n = 0;
-
-    for (size_t i = 0; i < CS_MAX_STRING_LENGTH; i++, s++) {
-        if (!*s) {
-            buf[i] = '\0';
-            break;
-        } else if (*s == ';') {
-            buf[i] = ' ';
-            n++;
-        } else {
-            buf[i] = *s;
-        }
-    }
-
-    // bad shadow light
-    if (n != 11 && n != 12) {
+    int shadow_index = index - cl.csr.shadowlights;
+    if (shadow_index < 0 || shadow_index >= (int)cl.csr.max_shadowlights ||
+        shadow_index >= MAX_SHADOW_LIGHTS) {
         return;
     }
 
-    cl_shadow_light_t *light = &cl.shadowdefs[index - cl.csr.shadowlights].light;
+    auto *slot = &cl.shadowdefs[shadow_index];
+    int parsed_number = 0;
+    cl_shadow_light_t parsed_light = {};
+    bool valid = false;
 
-    const char *p = buf;
-    int shadow_index = index - cl.csr.shadowlights;
-    cl.shadowdefs[shadow_index].number = Q_atoi(COM_Parse(&p));
-    bool is_cone = !!Q_atoi(COM_Parse(&p));
-    light->radius = Q_atof(COM_Parse(&p));
-    light->resolution = Q_atoi(COM_Parse(&p));
-    light->intensity = Q_atof(COM_Parse(&p));
-    light->fade_start = Q_atof(COM_Parse(&p));
-    light->fade_end = Q_atof(COM_Parse(&p));
-    if (n == 12)
-        light->max_fade_dist = Q_atof(COM_Parse(&p));
-    else
-        light->max_fade_dist = 0.0f;
-    light->lightstyle = Q_atoi(COM_Parse(&p));
-    light->coneangle = Q_atof(COM_Parse(&p));
-    light->conedirection[0] = Q_atof(COM_Parse(&p));
-    light->conedirection[1] = Q_atof(COM_Parse(&p));
-    light->conedirection[2] = Q_atof(COM_Parse(&p));
-    light->owner_entity = cl.shadowdefs[shadow_index].number;
-    light->source_index = shadow_index;
-    light->strict_pvs = true;
-    light->ignore_owner_casters = false;
+    // Parse every numeric field strictly before touching the live slot. This
+    // prevents a malformed update from leaving a mixture of old and new
+    // values, or retaining a previously valid light as stale state.
+    do {
+        enum { LEGACY_FIELD_COUNT = 12, FIELD_COUNT = 13 };
+        char fields[FIELD_COUNT][CS_MAX_STRING_LENGTH];
+        int field_count = 0;
+        const char *field_start = s;
 
-    if (!is_cone) {
-        light->coneangle = 0.0f;
+        if (!s || Q_strnlen(s, CS_MAX_STRING_LENGTH) >= CS_MAX_STRING_LENGTH)
+            break;
+
+        while (field_count < FIELD_COUNT) {
+            const char *separator = strchr(field_start, ';');
+            size_t length = separator ? (size_t)(separator - field_start)
+                                      : strlen(field_start);
+            if (!length || length >= sizeof(fields[0]))
+                break;
+            memcpy(fields[field_count], field_start, length);
+            fields[field_count][length] = '\0';
+            field_count++;
+            if (!separator) {
+                field_start = NULL;
+                break;
+            }
+            field_start = separator + 1;
+        }
+
+        // A non-null cursor means there were too many fields (including a
+        // trailing semicolon); exact field counts reject trailing garbage.
+        if (field_start ||
+            (field_count != LEGACY_FIELD_COUNT && field_count != FIELD_COUNT)) {
+            break;
+        }
+
+        auto parse_int = [](const char *text, int *value) {
+            char *end = NULL;
+            errno = 0;
+            long parsed = strtol(text, &end, 10);
+            if (end == text)
+                return false;
+            while (end && isspace((unsigned char)*end))
+                end++;
+            if (errno == ERANGE || !end || *end ||
+                parsed < INT_MIN || parsed > INT_MAX) {
+                return false;
+            }
+            *value = (int)parsed;
+            return true;
+        };
+        auto parse_float = [](const char *text, float *value) {
+            char *end = NULL;
+            errno = 0;
+            float parsed = strtof(text, &end);
+            if (end == text)
+                return false;
+            while (end && isspace((unsigned char)*end))
+                end++;
+            if (errno == ERANGE || !end || *end || !isfinite(parsed)) {
+                return false;
+            }
+            *value = parsed;
+            return true;
+        };
+
+        int light_type = 0;
+        int field = 0;
+        if (!parse_int(fields[field++], &parsed_number) ||
+            !parse_int(fields[field++], &light_type) ||
+            !parse_float(fields[field++], &parsed_light.radius) ||
+            !parse_int(fields[field++], &parsed_light.resolution) ||
+            !parse_float(fields[field++], &parsed_light.intensity) ||
+            !parse_float(fields[field++], &parsed_light.fade_start) ||
+            !parse_float(fields[field++], &parsed_light.fade_end)) {
+            break;
+        }
+        if (field_count == FIELD_COUNT) {
+            if (!parse_float(fields[field++], &parsed_light.max_fade_dist))
+                break;
+        }
+        if (!parse_int(fields[field++], &parsed_light.lightstyle) ||
+            !parse_float(fields[field++], &parsed_light.coneangle) ||
+            !parse_float(fields[field++], &parsed_light.conedirection[0]) ||
+            !parse_float(fields[field++], &parsed_light.conedirection[1]) ||
+            !parse_float(fields[field++], &parsed_light.conedirection[2]) ||
+            field != field_count) {
+            break;
+        }
+
+        constexpr float MAX_SHADOWLIGHT_DISTANCE = 1048576.0f;
+        constexpr float MAX_SHADOWLIGHT_INTENSITY = 65536.0f;
+        constexpr int MAX_SHADOWLIGHT_RESOLUTION = 4096;
+        if (parsed_number <= 0 || parsed_number >= (int)cl.csr.max_edicts ||
+            (light_type != 0 && light_type != 1) ||
+            parsed_light.radius <= 0.0f ||
+            parsed_light.radius > MAX_SHADOWLIGHT_DISTANCE ||
+            parsed_light.resolution < 0 ||
+            parsed_light.resolution > MAX_SHADOWLIGHT_RESOLUTION ||
+            parsed_light.intensity < 0.0f ||
+            parsed_light.intensity > MAX_SHADOWLIGHT_INTENSITY ||
+            parsed_light.fade_start < 0.0f ||
+            parsed_light.fade_start > MAX_SHADOWLIGHT_DISTANCE ||
+            parsed_light.fade_end < parsed_light.fade_start ||
+            parsed_light.fade_end > MAX_SHADOWLIGHT_DISTANCE ||
+            parsed_light.max_fade_dist < 0.0f ||
+            parsed_light.max_fade_dist > MAX_SHADOWLIGHT_DISTANCE ||
+            parsed_light.lightstyle < -1 ||
+            parsed_light.lightstyle >= MAX_LIGHTSTYLES ||
+            parsed_light.coneangle < 0.0f || parsed_light.coneangle >= 90.0f ||
+            fabsf(parsed_light.conedirection[0]) > 1.0f ||
+            fabsf(parsed_light.conedirection[1]) > 1.0f ||
+            fabsf(parsed_light.conedirection[2]) > 1.0f ||
+            (light_type &&
+             (parsed_light.coneangle < 1.0f ||
+              VectorLengthSquared(parsed_light.conedirection) < 1e-6f))) {
+            break;
+        }
+
+        if (!light_type)
+            parsed_light.coneangle = 0.0f;
+        parsed_light.owner_entity = parsed_number;
+        parsed_light.source_index = shadow_index;
+        parsed_light.strict_pvs = true;
+        parsed_light.ignore_owner_casters = false;
+        valid = true;
+    } while (false);
+
+    memset(slot, 0, sizeof(*slot));
+    if (valid) {
+        slot->number = parsed_number;
+        slot->light = parsed_light;
+    } else if (s && *s) {
+        Com_LPrintf(PRINT_WARNING,
+                    "Ignoring malformed shadow light configstring %d\n",
+                    index);
     }
 }
 

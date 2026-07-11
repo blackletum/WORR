@@ -23,6 +23,7 @@ which holds all of a player's game-related state.*/
 #include "../gameplay/client_config.hpp"
 #include "../gameplay/g_headhunters.hpp"
 #include "../gameplay/g_proball.hpp"
+#include "../menu/menu_ui_helpers.hpp"
 #include "../monsters/m_player.hpp"
 #include "p_client_shared.hpp"
 #include "team_join_capacity.hpp"
@@ -3318,6 +3319,12 @@ static bool ClientIsBot(const gentity_t *ent);
 static bool BotAssignInitialTeam(gentity_t *ent);
 
 bool InitPlayerTeam(gentity_t *ent) {
+  if (!ClientIsBot(ent)) {
+    MenuUi::SendUiCommand(
+        ent, deathmatch->integer ? "set ui_worr_match_hub 1\n"
+                                 : "set ui_worr_match_hub 0\n");
+  }
+
   // Non-deathmatch (e.g. single-player or coop) - everyone plays
   if (!deathmatch->integer) {
     ent->client->sess.team = Team::Free;
@@ -3376,6 +3383,7 @@ bool InitPlayerTeam(gentity_t *ent) {
   ent->client->initialMenu.shown = false;
   ent->client->initialMenu.dmWelcomeActive = false;
   ent->client->initialMenu.dmJoinActive = false;
+  ent->client->initialMenu.nextUpdate = 0_ms;
   if (!ent->client->initialMenu.shown)
     ent->client->initialMenu.delay = level.time + 10_hz;
 
@@ -4020,6 +4028,7 @@ bool SetTeam(gentity_t *ent, Team desired_team, bool inactive, bool force,
     cl->initialMenu.hostSetupDone = true;
     cl->initialMenu.dmWelcomeActive = false;
     cl->initialMenu.dmJoinActive = false;
+    cl->initialMenu.nextUpdate = 0_ms;
   }
 
   if (!force && wasInitialised && changedTeam)

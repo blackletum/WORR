@@ -24,16 +24,32 @@ void GL_SampleLightPoint(vec3_t color)
     const byte          *lightmap;
     const byte          *b1, *b2, *b3, *b4;
     const lightstyle_t  *style;
+    float               sample_s, sample_t;
     float               fracu, fracv;
     float               w1, w2, w3, w4;
     vec3_t              temp;
-    int                 s, t, smax, tmax, size;
+    int                 s0, t0, s1, t1, smax, tmax, size;
 
-    s = glr.lightpoint.s;
-    t = glr.lightpoint.t;
+    VectorClear(color);
+    if (!surf || !surf->lightmap || surf->lm_width < 1 || surf->lm_height < 1)
+        return;
 
-    fracu = glr.lightpoint.s - s;
-    fracv = glr.lightpoint.t - t;
+    smax = surf->lm_width;
+    tmax = surf->lm_height;
+    size = smax * tmax * 3;
+
+    sample_s = isfinite(glr.lightpoint.s) ? glr.lightpoint.s : 0.0f;
+    sample_t = isfinite(glr.lightpoint.t) ? glr.lightpoint.t : 0.0f;
+    sample_s = Q_clipf(sample_s, 0.0f, (float)(smax - 1));
+    sample_t = Q_clipf(sample_t, 0.0f, (float)(tmax - 1));
+
+    s0 = (int)floorf(sample_s);
+    t0 = (int)floorf(sample_t);
+    s1 = min(s0 + 1, smax - 1);
+    t1 = min(t0 + 1, tmax - 1);
+
+    fracu = sample_s - (float)s0;
+    fracv = sample_t - (float)t0;
 
     // compute weights of lightmap blocks
     w1 = (1.0f - fracu) * (1.0f - fracv);
@@ -41,19 +57,13 @@ void GL_SampleLightPoint(vec3_t color)
     w3 = fracu * fracv;
     w4 = (1.0f - fracu) * fracv;
 
-    smax = surf->lm_width;
-    tmax = surf->lm_height;
-    size = smax * tmax * 3;
-
-    VectorClear(color);
-
     // add all the lightmaps with bilinear filtering
     lightmap = surf->lightmap;
     for (int i = 0; i < surf->numstyles; i++) {
-        b1 = &lightmap[3 * ((t + 0) * smax + (s + 0))];
-        b2 = &lightmap[3 * ((t + 0) * smax + (s + 1))];
-        b3 = &lightmap[3 * ((t + 1) * smax + (s + 1))];
-        b4 = &lightmap[3 * ((t + 1) * smax + (s + 0))];
+        b1 = &lightmap[3 * (t0 * smax + s0)];
+        b2 = &lightmap[3 * (t0 * smax + s1)];
+        b3 = &lightmap[3 * (t1 * smax + s1)];
+        b4 = &lightmap[3 * (t1 * smax + s0)];
 
         vec3_t c1, c2, c3, c4;
         GL_ShiftLightmapBytes(b1, c1);
@@ -76,6 +86,7 @@ static bool GL_LightGridPoint(const lightgrid_t *grid, const vec3_t start, vec3_
 {
     vec3_t point, avg;
     uint32_t point_i[3];
+    uint32_t point_next[3];
     vec3_t samples[8];
     int i, j, mask, numsamples;
 
@@ -86,15 +97,22 @@ static bool GL_LightGridPoint(const lightgrid_t *grid, const vec3_t start, vec3_
     point[1] = (start[1] - grid->mins[1]) * grid->scale[1];
     point[2] = (start[2] - grid->mins[2]) * grid->scale[2];
 
-    VectorCopy(point, point_i);
+    for (i = 0; i < 3; i++) {
+        if (!isfinite(point[i]) || !grid->size[i] || point[i] < 0.0f ||
+            point[i] > (float)(grid->size[i] - 1)) {
+            return false;
+        }
+        point_i[i] = (uint32_t)floorf(point[i]);
+        point_next[i] = min(point_i[i] + 1, grid->size[i] - 1);
+    }
     VectorClear(avg);
 
     for (i = mask = numsamples = 0; i < 8; i++) {
         uint32_t tmp[3];
 
-        tmp[0] = point_i[0] + ((i >> 0) & 1);
-        tmp[1] = point_i[1] + ((i >> 1) & 1);
-        tmp[2] = point_i[2] + ((i >> 2) & 1);
+        tmp[0] = (i & BIT(0)) ? point_next[0] : point_i[0];
+        tmp[1] = (i & BIT(1)) ? point_next[1] : point_i[1];
+        tmp[2] = (i & BIT(2)) ? point_next[2] : point_i[2];
 
         const lightgrid_sample_t *s = BSP_LookupLightgrid(grid, tmp);
         if (!s)

@@ -122,8 +122,8 @@ constexpr bit_t<n> bit_v = 1ull << n;
 
 // game.h -- game dll information visible to server
 // PARIL_NEW_API - value likely not used by any other Q2-esque engine in the wild
-constexpr int32_t GAME_API_VERSION = 2023;
-constexpr int32_t CGAME_API_VERSION = 2026;
+constexpr int32_t GAME_API_VERSION = 2024;
+constexpr int32_t CGAME_API_VERSION = 2027;
 
 // forward declarations
 struct gentity_t;
@@ -438,6 +438,7 @@ struct usercmd_t {
 	gvec3_t                angles;
 	float				   forwardMove, sideMove;
 	uint32_t               serverFrame;	   // for integrity, etc
+	uint32_t               serverFrameDelta; // validated sent-snapshot interval
 };
 
 enum water_level_t : uint8_t {

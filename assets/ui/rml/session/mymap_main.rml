@@ -27,7 +27,7 @@
         <button id="mymap-select" type="button" data-command="worr_mymap_select" data-enable-if="ui_mymap_can_select=1" data-menu-sound="confirm">Select Map</button>
         <button id="mymap-flags" type="button" data-command="worr_mymap_flags" data-enable-if="ui_mymap_can_flags=1" data-menu-sound="open">Flags</button>
         <button id="mymap-clear" type="button" data-command="worr_mymap_clear" data-enable-if="ui_mymap_has_flags=1" data-menu-sound="change">Clear Flags</button>
-        <button id="mymap-back" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="mymap-back" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

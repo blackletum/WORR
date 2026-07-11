@@ -494,6 +494,13 @@ ActionWidget::ActionWidget(std::string command)
 {
 }
 
+int ActionWidget::Height(int lineHeight) const
+{
+    if (!textSizeSet_)
+        return lineHeight;
+    return max(1, UI_FontLineHeightSized(textSize_) + 2);
+}
+
 void ActionWidget::Layout(int x, int y, int width, int lineHeight)
 {
     rect_.y = y;
@@ -505,18 +512,35 @@ void ActionWidget::Layout(int x, int y, int width, int lineHeight)
 void ActionWidget::Draw(bool focused) const
 {
     bool disabled = IsDisabled();
-    color_t color = disabled ? uis.color.disabled : uis.color.normal;
+    color_t color = disabled ? uis.color.disabled
+                             : (textColorSet_ ? textColor_ : uis.color.normal);
     if (focused && !disabled)
-        color = uis.color.active;
+        color = selectedTextColorSet_ ? selectedTextColor_ : uis.color.active;
 
     DrawRowHighlight(rect_.x, rect_.y, rect_.width, rect_.height, focused, disabled);
 
     int draw_x = alignLeft_ ? rect_.x : rect_.x + rect_.width / 2;
-    int draw_y = WidgetTextY(rect_.y, rect_.height);
+    int draw_y = textSizeSet_
+        ? rect_.y + (rect_.height - UI_FontLineHeightSized(textSize_)) / 2
+        : WidgetTextY(rect_.y, rect_.height);
     int flags = alignLeft_ ? UI_LEFT : UI_CENTER;
-    if (!focused && !disabled)
+    if (!focused && !disabled && !textColorSet_)
         flags |= UI_ALTCOLOR;
-    UI_DrawString(draw_x, draw_y, flags, color, LabelText());
+
+    if (textSizeSet_) {
+        const char *label = LabelText();
+        int sized_x = draw_x;
+        int sized_flags = flags & ~(UI_LEFT | UI_RIGHT);
+        if (!alignLeft_) {
+            sized_x -= UI_FontMeasureStringSized(
+                sized_flags, strlen(label), label, nullptr, textSize_) / 2;
+        }
+        UI_FontDrawStringSized(sized_x, draw_y, sized_flags,
+                               MAX_STRING_CHARS, label,
+                               COLOR_SETA_U8(color, 255), textSize_);
+    } else {
+        UI_DrawString(draw_x, draw_y, flags, color, LabelText());
+    }
 }
 
 Sound ActionWidget::Activate()

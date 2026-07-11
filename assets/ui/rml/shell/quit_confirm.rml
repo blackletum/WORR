@@ -11,7 +11,7 @@
         <header class="popup-header" id="quit-confirm-header">
           <h1>Confirm Quit</h1>
         </header>
-        <p class="popup-message" id="quit-confirm-prompt">Exit WORR?</p>
+        <p class="popup-message" id="quit-confirm-prompt">Are you sure you want to quit?</p>
         <footer class="popup-actions" id="quit-confirm-actions">
           <button class="popup-danger" id="quit-confirm-yes" type="button" data-command="quit" data-loc-key="m_yes" data-menu-sound="confirm">Yes</button>
           <button class="popup-secondary" id="quit-confirm-no" type="button" data-command="popmenu" data-loc-key="m_no" data-menu-sound="cancel">No</button>

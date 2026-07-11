@@ -268,8 +268,11 @@ static bool UI_IsRmlPopupRouteName(const char *menu_name)
 static bool UI_Command_TryPushRmlRoute(const char *menu_name)
 {
     cvar_t *ui_rml_enable = Cvar_Get("ui_rml_enable", "0", 0);
+    cvar_t *ui_rml_runtime_available =
+        Cvar_Get("ui_rml_runtime_available", "0", CVAR_ROM);
 
     if (!ui_rml_enable || !ui_rml_enable->integer ||
+        !ui_rml_runtime_available || !ui_rml_runtime_available->integer ||
         !UI_IsRmlRouteName(menu_name)) {
         return false;
     }
@@ -277,15 +280,15 @@ static bool UI_Command_TryPushRmlRoute(const char *menu_name)
     Cbuf_InsertText(&cmd_buffer,
                     va("%s %s\n",
                        UI_IsRmlPopupRouteName(menu_name)
-                           ? "ui_rml_runtime_popup"
-                           : "ui_rml_runtime_open",
+                           ? "ui_rml_runtime_popup_fallback"
+                           : "ui_rml_runtime_open_fallback",
                        menu_name));
     if (Cvar_VariableInteger("ui_rml_debug")) {
         Com_Printf("RmlUi pushmenu bridge routed '%s' through %s.\n",
                    menu_name,
                    UI_IsRmlPopupRouteName(menu_name)
-                       ? "ui_rml_runtime_popup"
-                       : "ui_rml_runtime_open");
+                       ? "ui_rml_runtime_popup_fallback"
+                       : "ui_rml_runtime_open_fallback");
     }
     return true;
 }
@@ -382,11 +385,14 @@ void MenuSystem::Init()
     Resize();
 
     uis.fontHandle = UI_FontLegacyHandle();
-    uis.cursorHandle = R_RegisterPic("/gfx/cursor.png");
+    // Use the shipped Quake menu cursor as the native-UI pointer. The former
+    // loose /gfx cursor paths are not part of the distributable asset tree and
+    // resolve to the magenta missing-texture tile on Vulkan/RTX.
+    uis.cursorHandle = R_RegisterPic("m_cursor0");
     R_GetPicSize(&uis.cursorWidth, &uis.cursorHeight, uis.cursorHandle);
     uis.cursorWidth = UI_CURSOR_SIZE;
     uis.cursorHeight = UI_CURSOR_SIZE;
-    uis.cursorTextHandle = R_RegisterPic("/gfx/cursor-text.png");
+    uis.cursorTextHandle = uis.cursorHandle;
     R_GetPicSize(&uis.cursorTextWidth, &uis.cursorTextHeight, uis.cursorTextHandle);
     uis.cursorTextWidth = UI_CURSOR_SIZE;
     uis.cursorTextHeight = UI_CURSOR_SIZE;
@@ -512,6 +518,9 @@ void MenuSystem::Pop()
 
 void MenuSystem::ForceOff()
 {
+    const bool closesMatchHub =
+        !stack_.empty() && Cvar_VariableInteger("ui_dm_menu_active") != 0;
+
     for (MenuPage *menu : stack_) {
         menu->OnClose();
     }
@@ -521,6 +530,12 @@ void MenuSystem::ForceOff()
     uis.transparent = false;
     UI_Sys_SetMenuBlurRect(nullptr);
     Key_SetDest(static_cast<keydest_t>(Key_GetDest() & ~KEY_MENU));
+
+    if (closesMatchHub) {
+        Cvar_SetInteger(Cvar_Get("ui_dm_menu_active", "0", 0),
+                        0, FROM_CODE);
+        Cbuf_AddText(&cmd_buffer, "worr_dm_join_close\n");
+    }
 }
 
 void MenuSystem::OpenMenu(uiMenu_t menu)
@@ -574,24 +589,25 @@ void MenuSystem::Draw(unsigned realtime)
 
     bool use_text_cursor = active_ && active_->WantsTextCursor(uis.mouseCoords[0], uis.mouseCoords[1]);
 
-    qhandle_t cursor_handle = uis.cursorHandle;
-    int cursor_w = uis.cursorWidth;
-    int cursor_h = uis.cursorHeight;
-    int hotspot_x = 0;
-    int hotspot_y = 0;
-
-    if (use_text_cursor && uis.cursorTextHandle) {
-        cursor_handle = uis.cursorTextHandle;
-        cursor_w = uis.cursorTextWidth;
-        cursor_h = uis.cursorTextHeight;
-        hotspot_x = cursor_w / 2;
-        hotspot_y = cursor_h / 2;
+    // Draw a small code-native pointer so every renderer has a crisp cursor
+    // without depending on loose legacy PCX assets in the distributable.
+    const int cursor_x = uis.mouseCoords[0];
+    const int cursor_y = uis.mouseCoords[1];
+    const color_t cursor_shadow = COLOR_RGBA(0, 0, 0, 210);
+    const color_t cursor_color = COLOR_RGBA(255, 217, 103, 255);
+    if (use_text_cursor) {
+        R_DrawFill32(cursor_x + 1, cursor_y - 7, 2, 18, cursor_shadow);
+        R_DrawFill32(cursor_x, cursor_y - 8, 2, 18, cursor_color);
+    } else {
+        R_DrawFill32(cursor_x + 1, cursor_y + 1, 3, 17, cursor_shadow);
+        R_DrawFill32(cursor_x, cursor_y, 3, 17, cursor_color);
+        for (int i = 0; i < 9; ++i) {
+            R_DrawFill32(cursor_x + i + 1, cursor_y + i + 1,
+                         3, 3, cursor_shadow);
+            R_DrawFill32(cursor_x + i, cursor_y + i,
+                         3, 3, cursor_color);
+        }
     }
-
-    R_DrawStretchPic(uis.mouseCoords[0] - hotspot_x,
-                     uis.mouseCoords[1] - hotspot_y,
-                     cursor_w, cursor_h,
-                     COLOR_WHITE, cursor_handle);
 
     if (ui_debug->integer) {
         UI_DrawString(uis.width - 4, 4, UI_RIGHT, COLOR_WHITE,

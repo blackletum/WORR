@@ -1115,7 +1115,7 @@ static void GL_BuildIntensityTable(void)
 static void GL_BuildGammaTables(void)
 {
     int i;
-    float inf, g = gl_gamma->value;
+    float inf, g = Cvar_ClampValue(gl_gamma, 0.3f, 3.0f);
     int shift = gl_static.overbright_bits;
 
     if (g == 1.0f) {
@@ -1363,6 +1363,35 @@ static void GL_InitPostProcTextureEx(int w, int h, GLenum min_filter, GLenum mag
     qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
+static void GL_InitExposureTexture(int w, int h)
+{
+    GL_InitPostProcTextureEx(w, h, GL_NEAREST, GL_NEAREST);
+
+    Q_assert((w == 0 && h == 0) || (w == 1 && h == 1));
+    if (w == 1 && h == 1) {
+        static const uint16_t half_identity[4] = {
+            0x3c00, 0x3c00, 0x3c00, 0x3c00
+        };
+        static const GLfloat float_identity[4] = {
+            1.0f, 1.0f, 1.0f, 1.0f
+        };
+        static const byte unorm_identity[4] = {255, 255, 255, 255};
+        const void *identity;
+
+        if (gl_post_type == GL_HALF_FLOAT)
+            identity = half_identity;
+        else if (gl_post_type == GL_FLOAT)
+            identity = float_identity;
+        else if (gl_post_type == GL_UNSIGNED_BYTE)
+            identity = unorm_identity;
+        else
+            return;
+
+        qglTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1, 1, gl_post_format,
+                         gl_post_type, identity);
+    }
+}
+
 static void GL_InitPostProcTexture(int w, int h)
 {
     GL_InitPostProcTextureEx(w, h, GL_LINEAR, GL_LINEAR);
@@ -1572,10 +1601,10 @@ static bool GL_InitFramebuffersWithFormat(bool dof_active, bool crt_active, bool
     GL_InitPostProcTextureEx(bloom_mip_w, bloom_mip_h, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_EXPOSURE_0);
-    GL_InitPostProcTextureEx(exposure_w, exposure_h, GL_NEAREST, GL_NEAREST);
+    GL_InitExposureTexture(exposure_w, exposure_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_EXPOSURE_1);
-    GL_InitPostProcTextureEx(exposure_w, exposure_h, GL_NEAREST, GL_NEAREST);
+    GL_InitExposureTexture(exposure_w, exposure_h);
 
     GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_POST);
     GL_InitPostProcTexture(post_w, post_h);

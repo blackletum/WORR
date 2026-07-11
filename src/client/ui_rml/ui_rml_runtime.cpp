@@ -56,6 +56,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <RmlUi/Core/RenderManager.h>
 #include <RmlUi/Core/ScrollTypes.h>
 #include <RmlUi/Core/StringUtilities.h>
+#include <RmlUi/Core/StyleTypes.h>
 #include <RmlUi/Core/SystemInterface.h>
 #include <RmlUi/Core/URL.h>
 
@@ -1876,10 +1877,21 @@ static void UI_Rml_ApplyElementConditions(Rml::Element *element)
         visible = visible && UI_Rml_ConditionExpressionMatches(show_if);
     }
 
+    // This pass runs every frame: only touch properties/attributes on state
+    // changes, or the redundant sets dirty style definitions and force
+    // relayout each frame.
     if (has_visible_condition) {
-        if (visible) {
+        // The local display property stores the parsed keyword as an int, so
+        // compare against the enum -- string comparison never matches "none".
+        const Rml::Property *display = element->GetLocalProperty("display");
+        const bool currently_hidden =
+            display && display->unit == Rml::Unit::KEYWORD &&
+            display->Get<int>() ==
+                static_cast<int>(Rml::Style::Display::None);
+
+        if (visible && currently_hidden) {
             element->RemoveProperty("display");
-        } else {
+        } else if (!visible && !currently_hidden) {
             element->SetProperty("display", "none");
         }
     }
@@ -1888,9 +1900,11 @@ static void UI_Rml_ApplyElementConditions(Rml::Element *element)
         UI_Rml_ElementCondition(element, "data-enable-if", "data-enabled-if");
     if (!enable_if.empty()) {
         const bool enabled = UI_Rml_ConditionExpressionMatches(enable_if);
-        if (enabled) {
+        const bool currently_disabled = element->HasAttribute("disabled");
+
+        if (enabled && currently_disabled) {
             element->RemoveAttribute("disabled");
-        } else {
+        } else if (!enabled && !currently_disabled) {
             element->SetAttribute("disabled", "");
         }
     }
@@ -2682,6 +2696,21 @@ static bool UI_Rml_HandleKeybindCaptureKey(int key, bool down)
     return true;
 }
 
+// Disabled controls (attribute or pseudo class, on the element or any
+// ancestor) must not dispatch commands: pointer-events only guards mouse
+// clicks, while Enter/Space activation still reaches this listener.
+static bool UI_Rml_ElementIsDisabled(Rml::Element *element)
+{
+    for (Rml::Element *walk = element; walk; walk = walk->GetParentNode()) {
+        if (walk->HasAttribute("disabled") ||
+            walk->IsPseudoClassSet("disabled")) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 class UI_Rml_CommandEventListener final : public Rml::EventListener {
 public:
     void ProcessEvent(Rml::Event &event) override
@@ -2689,6 +2718,11 @@ public:
         Rml::Element *keybind_element =
             UI_Rml_FindKeybindElement(event.GetTargetElement());
         if (keybind_element) {
+            if (UI_Rml_ElementIsDisabled(keybind_element)) {
+                event.StopPropagation();
+                return;
+            }
+
             UI_Rml_BeginKeybindCapture(keybind_element);
             UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_MOVE);
             event.StopPropagation();
@@ -2697,6 +2731,11 @@ public:
 
         Rml::Element *element = UI_Rml_FindCommandElement(event.GetTargetElement());
         if (!element) {
+            return;
+        }
+
+        if (UI_Rml_ElementIsDisabled(element)) {
+            event.StopPropagation();
             return;
         }
 
@@ -3201,6 +3240,26 @@ static void UI_Rml_ExpandSourceLists(Rml::ElementDocument *document)
         }
 
         FS_FreeList(files);
+
+        // Seed the bound cvar from the first option when it is still empty:
+        // commands like 'map $_ui_nextserver force' must not macro-collapse
+        // when the user never touches the select.
+        const Rml::String bound_cvar =
+            element->GetAttribute<Rml::String>("data-cvar", "");
+        if (!bound_cvar.empty() && select->GetNumOptions() > 0) {
+            cvar_t *var = Cvar_WeakGet(bound_cvar.c_str());
+
+            if (var && !var->string[0]) {
+                if (Rml::Element *option = select->GetOption(0)) {
+                    const Rml::String value =
+                        option->GetAttribute<Rml::String>("value", "");
+
+                    if (!value.empty()) {
+                        Cvar_SetByVar(var, value.c_str(), FROM_MENU);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -4032,7 +4091,13 @@ static bool UI_Rml_CompiledRuntimeRender(void)
 
     R_SetClipRect(NULL);
     R_SetScale(UI_Rml_CompiledRuntimeRendererDrawScale());
-    if (!ui_rml_context->Render()) {
+    const bool rendered = ui_rml_context->Render();
+
+    // RmlUi may finish on a clipped scroll region. Flush that geometry and
+    // restore the renderer-wide clip state so the next gameplay frame is not
+    // accidentally drawn through the menu's final scissor rectangle.
+    R_SetClipRect(NULL);
+    if (!rendered) {
         return false;
     }
 

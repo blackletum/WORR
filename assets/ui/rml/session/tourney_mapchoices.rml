@@ -16,11 +16,10 @@
 
       <main class="session-panel" id="tourney-mapchoices-list" data-model="session.tournament.mapchoices.lines" data-controller="session.fixed_list" data-list-provider="session.tournament.mapchoices.lines">
         <section class="session-static-report" id="tourney-mapchoices-fallback" data-show-if="!ui_tourney_mapchoice_line_0">
-          <p id="tourney-mapchoices-fallback-0" class="ui-map-name">Map order appears once</p>
-          <p id="tourney-mapchoices-fallback-1" class="ui-map-name">picks and bans finish.</p>
+          <p id="tourney-mapchoices-fallback-0" class="ui-map-name">Map order appears once picks and bans finish.</p>
         </section>
-        <p id="tourney-mapchoice-line-0" class="ui-map-name" data-bind="cvars.ui_tourney_mapchoice_line_0" data-label-cvar="ui_tourney_mapchoice_line_0" data-visible-if="ui_tourney_mapchoice_line_0">Map order appears once</p>
-        <p id="tourney-mapchoice-line-1" class="ui-map-name" data-bind="cvars.ui_tourney_mapchoice_line_1" data-label-cvar="ui_tourney_mapchoice_line_1" data-visible-if="ui_tourney_mapchoice_line_1">picks and bans finish.</p>
+        <p id="tourney-mapchoice-line-0" class="ui-map-name" data-bind="cvars.ui_tourney_mapchoice_line_0" data-label-cvar="ui_tourney_mapchoice_line_0" data-visible-if="ui_tourney_mapchoice_line_0">Map order appears once picks and bans finish.</p>
+        <p id="tourney-mapchoice-line-1" class="ui-map-name" data-bind="cvars.ui_tourney_mapchoice_line_1" data-label-cvar="ui_tourney_mapchoice_line_1" data-visible-if="ui_tourney_mapchoice_line_1"></p>
         <p id="tourney-mapchoice-line-2" class="ui-map-name" data-bind="cvars.ui_tourney_mapchoice_line_2" data-label-cvar="ui_tourney_mapchoice_line_2" data-visible-if="ui_tourney_mapchoice_line_2">Map choice line 3</p>
         <p id="tourney-mapchoice-line-3" class="ui-map-name" data-bind="cvars.ui_tourney_mapchoice_line_3" data-label-cvar="ui_tourney_mapchoice_line_3" data-visible-if="ui_tourney_mapchoice_line_3">Map choice line 4</p>
         <p id="tourney-mapchoice-line-4" class="ui-map-name" data-bind="cvars.ui_tourney_mapchoice_line_4" data-label-cvar="ui_tourney_mapchoice_line_4" data-visible-if="ui_tourney_mapchoice_line_4">Map choice line 5</p>
@@ -32,7 +31,7 @@
       </main>
 
       <footer class="actions" id="tourney-mapchoices-actions">
-        <button id="tourney-mapchoices-back" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="tourney-mapchoices-back" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

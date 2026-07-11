@@ -347,11 +347,16 @@ void V_AddLightExVis(cl_shadow_light_t *light, bool strict_pvs)
     const uint32_t now_ms = Sys_Milliseconds();
     float intensity = light->intensity * V_LightstyleScale(light->lightstyle) *
                       fade;
-    uint32_t key = (shadowlight && light->dynamic_shadow &&
-                    (light->owner_entity || light->source_index >= 0))
+    const bool has_stable_shadow_source =
+        shadowlight && light->dynamic_shadow &&
+        (light->owner_entity || light->source_index >= 0);
+    const uint32_t stable_shadow_id = has_stable_shadow_source
         ? V_DlightBuildStableKey(0x45584c54u, (uint32_t)light->owner_entity,
                                  (uint32_t)light->source_index,
                                  (uint32_t)light->resolution)
+        : 0u;
+    uint32_t key = has_stable_shadow_source
+        ? stable_shadow_id
         : V_DlightBuildKey(
             light->origin, light->radius, intensity, (int32_t)light->color.r,
             (int32_t)light->color.g, (int32_t)light->color.b, shadowlight,
@@ -412,6 +417,7 @@ void V_AddLightExVis(cl_shadow_light_t *light, bool strict_pvs)
     dl->shadow_lightstyle = light->lightstyle;
     dl->shadow_owner_entity = light->owner_entity;
     dl->shadow_source_index = light->source_index;
+    dl->shadow_stable_id = stable_shadow_id;
     dl->shadow_strict_pvs = strict_pvs;
     dl->shadow_ignore_owner_casters = light->ignore_owner_casters;
     dl->shadow = DL_SHADOW_NONE;
@@ -707,19 +713,23 @@ static void V_SetLightLevel(void)
 
     // pick the greatest component, which should be the same
     // as the mono value returned by software
-    if (shadelight[0] > shadelight[1]) {
-        if (shadelight[0] > shadelight[2]) {
-            cl.lightlevel = 150.0f * shadelight[0];
-        } else {
-            cl.lightlevel = 150.0f * shadelight[2];
-        }
-    } else {
-        if (shadelight[1] > shadelight[2]) {
-            cl.lightlevel = 150.0f * shadelight[1];
-        } else {
-            cl.lightlevel = 150.0f * shadelight[2];
-        }
-    }
+    float brightest;
+    if (shadelight[0] > shadelight[1])
+        brightest = shadelight[0] > shadelight[2] ? shadelight[0] : shadelight[2];
+    else
+        brightest = shadelight[1] > shadelight[2] ? shadelight[1] : shadelight[2];
+
+    const float level = 150.0f * brightest;
+    // The move protocol serializes this int as uint8_t. Clamp before the
+    // conversion so overbright samples saturate instead of wrapping, and do
+    // not allow a poisoned renderer sample to trigger undefined float-to-int
+    // conversion.
+    if (isnan(level) || level <= 0.0f)
+        cl.lightlevel = 0;
+    else if (level >= 255.0f)
+        cl.lightlevel = 255;
+    else
+        cl.lightlevel = (int)level;
 }
 
 static inline void V_SetDebugCvarInt(cvar_t *var, int value)

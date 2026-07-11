@@ -25,5 +25,6 @@ private:
 };
 
 void SendUiCommand(gentity_t *ent, std::string_view cmd);
+void FlushUiCommandQueue(gentity_t *ent);
 
 } // namespace MenuUi

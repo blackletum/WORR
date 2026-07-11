@@ -419,6 +419,12 @@ static std::unique_ptr<Widget> BuildWidget(const MenuItemData &item)
         action->SetAlignLeft(item.alignLeft);
         if (!item.commandCvar.empty())
             action->SetCommandCvar(Cvar_WeakGet(item.commandCvar.c_str()));
+        if (item.textSizeSet)
+            action->SetTextSize(item.textSize);
+        if (item.textColorSet)
+            action->SetTextColor(item.textColor);
+        if (item.selectedTextColorSet)
+            action->SetSelectedTextColor(item.selectedTextColor);
         widget = std::move(action);
     } else if (item.type == "button") {
         qhandle_t image = R_RegisterPic(item.image.c_str());

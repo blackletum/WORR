@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Skill Select</title>
+    <title>WORR Select Skill</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/singleplayer.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />

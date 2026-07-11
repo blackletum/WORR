@@ -601,6 +601,24 @@ void SV_BuildClientFrame(client_t *client)
     // this is the frame we are creating
     frame = &client->frames[client->framenum & UPDATE_MASK];
     frame->number = client->framenum;
+    frame->server_frame = sv.framenum;
+    frame->server_frame_delta = 0;
+    // Only contiguous per-client wire frames are interpolation neighbours.
+    // A reduced snapshot rate retains consecutive client frame numbers while
+    // spanning multiple engine frames, so record that actual simulation span.
+    // Rate drops and fragment stalls advance the client frame number without
+    // building a snapshot; the resulting gap deliberately keeps the zero
+    // no-interpolation sentinel instead of over-rewinding by the suppressed
+    // interval.
+    if (client->last_built_client_frame > 0 &&
+        client->framenum == client->last_built_client_frame + 1 &&
+        client->last_built_server_frame &&
+        client->last_built_server_frame < sv.framenum) {
+        frame->server_frame_delta =
+            sv.framenum - client->last_built_server_frame;
+    }
+    client->last_built_client_frame = client->framenum;
+    client->last_built_server_frame = sv.framenum;
     frame->sentTime = com_eventTime; // save it for ping calc later
     frame->latency = -1; // not yet acked
 

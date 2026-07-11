@@ -597,6 +597,8 @@ gentity_t* ent, char* userInfo, const char* socialID, bool isBot) {
 
 	// they can connect
 	ent->client = game.clients + (ent - g_entities - 1);
+	ent->client->initialMenu = {};
+	ent->client->ui.commandQueue.clear();
 
 	ent->client->sess.is_a_bot = isBot;
 	ent->client->sess.consolePlayer = false;
@@ -1044,6 +1046,8 @@ DisconnectResult ClientSessionServiceImpl::ClientDisconnect(local_game_import_t&
 	cl->pers.limitedLivesPersist = false;
 	cl->pers.limitedLivesStash = 0;
 	cl->pers.spawned = false;
+	cl->initialMenu = {};
+	cl->ui.commandQueue.clear();
 	ent->timeStamp = level.time + 1_sec;
 
 	if (wasSpawned) {
@@ -1206,12 +1210,15 @@ gentity_t* ent, usercmd_t* ucmd) {
 
 	const bool initialMenuReady = (cl->initialMenu.delay && level.time > cl->initialMenu.delay);
 	if (cl->initialMenu.frozen && ent == host && g_autoScreenshotTool->integer) {
+		if (IsUiMenuOpen(cl))
+			CloseActiveMenu(ent);
 		cl->initialMenu.frozen = false;
 		cl->initialMenu.shown = true;
 		cl->initialMenu.delay = 0_sec;
 		cl->initialMenu.hostSetupDone = true;
 		cl->initialMenu.dmWelcomeActive = false;
 		cl->initialMenu.dmJoinActive = false;
+		cl->initialMenu.nextUpdate = 0_ms;
 	}
 
 	auto showInitialMenu = [&](gentity_t* player) {
@@ -1223,6 +1230,7 @@ gentity_t* ent, usercmd_t* ucmd) {
 			player->client->initialMenu.hostSetupDone = true;
 			player->client->initialMenu.dmWelcomeActive = false;
 			player->client->initialMenu.dmJoinActive = false;
+			player->client->initialMenu.nextUpdate = 0_ms;
 			return;
 		}
 
@@ -1238,11 +1246,6 @@ gentity_t* ent, usercmd_t* ucmd) {
 				Commands::Score(player, CommandArgs{});
 				return;
 			}
-		}
-
-		if (deathmatch->integer && player != host && !player->client->initialMenu.dmWelcomeActive) {
-			OpenDmWelcomeMenu(player);
-			return;
 		}
 
 		OpenJoinMenu(player);

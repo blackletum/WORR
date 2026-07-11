@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Multi-Monitor Settings</title>
+    <title>WORR Multi-Monitor Setup</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/settings.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
@@ -8,7 +8,7 @@
   <body id="settings-multimonitor" data-route-id="multimonitor" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="multimonitor-screen">
       <header class="menu-header">
-        <h1>Multi-Monitor Settings</h1>
+        <h1>Multi-Monitor Setup</h1>
       </header>
 
       <main class="settings-form" id="multimonitor-settings-form" data-component="common.components.cvar_controls">

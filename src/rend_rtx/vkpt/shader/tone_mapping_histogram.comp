@@ -184,7 +184,7 @@ void main()
 
     // Compute and write histogram value
     // Initialize local memory
-    if(validThread && linear_idx < HISTOGRAM_BINS)
+    if(linear_idx < HISTOGRAM_BINS)
     {
         s_Histogram[linear_idx] = 0;
     }
@@ -229,7 +229,7 @@ void main()
     barrier();
 
     // Add warp histogram to global histogram.
-    if(validThread && linear_idx < HISTOGRAM_BINS)
+    if(linear_idx < HISTOGRAM_BINS)
     {
         int localBinValue = int(s_Histogram[linear_idx]);
         if (localBinValue != 0)

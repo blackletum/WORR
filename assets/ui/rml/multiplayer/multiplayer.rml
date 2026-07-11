@@ -26,7 +26,7 @@
 
           <section class="hub-section" id="multiplayer-host-section">
             <h2>Host</h2>
-            <button id="multiplayer-startserver" class="ui-button-primary" type="button" data-command="if $match_setup_format == &quot;&quot; then match_setup_format regular; if $match_setup_gametype == &quot;&quot; then match_setup_gametype ffa; if $match_setup_modifier == &quot;&quot; then match_setup_modifier standard; if $match_setup_length == &quot;&quot; then match_setup_length standard; if $match_setup_type == &quot;&quot; then match_setup_type standard; if $match_setup_bestof == &quot;&quot; then match_setup_bestof bo1; if $match_setup_maxplayers == &quot;&quot; then match_setup_maxplayers 8; pushmenu startserver" data-route-target="startserver" data-menu-sound="open">Start Server</button>
+            <button id="multiplayer-startserver" class="ui-button-primary" type="button" data-command="if x$match_setup_format == x then match_setup_format regular; if x$match_setup_gametype == x then match_setup_gametype ffa; if x$match_setup_modifier == x then match_setup_modifier standard; if x$match_setup_length == x then match_setup_length standard; if x$match_setup_type == x then match_setup_type standard; if x$match_setup_bestof == x then match_setup_bestof bo1; if x$match_setup_maxplayers == x then match_setup_maxplayers 8; pushmenu startserver" data-route-target="startserver" data-menu-sound="open">Start Server</button>
           </section>
 
           <section class="hub-section" id="multiplayer-player-section">

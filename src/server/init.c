@@ -31,7 +31,11 @@ void SV_ClientReset(client_t *client)
     // any partially connected client will be restarted
     client->state = cs_connected;
     client->framenum = 1; // frame 0 can't be used
+    client->last_built_client_frame = 0;
+    client->last_built_server_frame = 0;
     client->lastframe = -1;
+    client->last_acked_server_frame = 0;
+    client->last_acked_server_frame_delta = 0;
     client->frames_nodelta = 0;
     client->send_delta = 0;
     client->suppress_count = 0;

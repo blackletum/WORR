@@ -863,15 +863,18 @@ Enables administrative permissions when the correct password is supplied.
 
 			if (deathmatch->integer) {
 				if (Vote_Menu_Active(ent)) return;
-				if (IsUiMenuOpen(cl)) {
-					CloseActiveMenu(ent);
+				// The first-connect hub is modal. Inventory/Escape requests may
+				// restore it if needed, but cannot dismiss it before the player
+				// chooses a team or spectator mode.
+				if (cl->initialMenu.frozen) {
+					// Always republish and push: the client-side route may have
+					// disappeared after a renderer reset even while the server still
+					// owns the modal state.
+					OpenJoinMenu(ent);
 					return;
 				}
-				if (cl->initialMenu.frozen) {
-					if (cl->initialMenu.dmWelcomeActive)
-						return;
-					if (!cl->initialMenu.dmJoinActive)
-						OpenJoinMenu(ent);
+				if (IsUiMenuOpen(cl)) {
+					CloseActiveMenu(ent);
 					return;
 				}
 				if (cl->initialMenu.dmJoinActive)
@@ -1551,6 +1554,7 @@ Toggles the eyecam view when following other players.
 		}
 
 		const bool wasSpectator = !ClientIsPlaying(ent->client);
+		const bool matchHubWasActive = ent->client->initialMenu.dmJoinActive;
 		Team team = StringToTeamNum(args.getString(1).data());
 		if (team != Team::None) {
 			const bool isBot = (ent->svFlags & SVF_BOT) || ent->client->sess.is_a_bot;
@@ -1568,7 +1572,15 @@ Toggles the eyecam view when following other players.
 				ent->client->initialMenu.hostSetupDone = true;
 				ent->client->initialMenu.dmWelcomeActive = false;
 				ent->client->initialMenu.dmJoinActive = false;
+				ent->client->initialMenu.nextUpdate = 0_ms;
 			}
+
+			// SetTeam closes a visible hub on a real transition. Explicitly
+			// choosing Spectate while already a first-connect spectator is the
+			// successful no-transition case and must close it here as well.
+			if (matchHubWasActive && !changed &&
+				team == Team::Spectator && wasSpectator)
+				ForceCloseDmJoinMenu(ent);
 		}
 	}
 
@@ -1577,7 +1589,47 @@ Toggles the eyecam view when following other players.
 		if (!ent || !ent->client)
 			return;
 
-		CloseDmJoinMenu(ent);
+		if (ent->client->initialMenu.frozen) {
+			OpenDmJoinMenu(ent);
+			return;
+		}
+
+		if (!ent->client->initialMenu.dmJoinActive)
+			return;
+
+		// Closing the shell also closes any vote/list/stats child route that
+		// may have been opened from it, keeping every server-side UI marker in
+		// sync with the client's global menu close.
+		CloseActiveMenu(ent);
+	}
+
+	void DmInitialSpectate(gentity_t* ent, const CommandArgs& args) {
+		(void)args;
+		if (!ent || !ent->client || !ent->client->initialMenu.frozen ||
+			ClientIsPlaying(ent->client))
+			return;
+
+		auto* cl = ent->client;
+		cl->sess.team = Team::Spectator;
+		cl->ps.teamID = static_cast<int>(Team::Spectator);
+		cl->sess.initialised = true;
+		cl->sess.matchQueued = false;
+		cl->sess.duelQueueTicket = 0;
+		cl->sess.queuedTeam = Team::None;
+		cl->sess.inactiveStatus = false;
+		cl->sess.inactivityWarning = false;
+		cl->sess.inactivityTime = 0_sec;
+		cl->sess.inGame = false;
+		cl->sess.teamJoinTime = level.time;
+		cl->pers.readyStatus = false;
+		if (!level.intermission.time)
+			MoveClientToFreeCam(ent);
+
+		cl->initialMenu.frozen = false;
+		cl->initialMenu.shown = true;
+		cl->initialMenu.delay = 0_sec;
+		cl->initialMenu.hostSetupDone = true;
+		CloseActiveMenu(ent);
 	}
 
 	void DmHostInfo(gentity_t* ent, const CommandArgs& args) {
@@ -1605,20 +1657,8 @@ Toggles the eyecam view when following other players.
 		if (!cl->initialMenu.frozen && !cl->initialMenu.dmWelcomeActive)
 			return;
 
-		cl->initialMenu.frozen = false;
-		cl->initialMenu.shown = true;
-		cl->initialMenu.delay = 0_sec;
-		cl->initialMenu.hostSetupDone = true;
 		cl->initialMenu.dmWelcomeActive = false;
-		cl->initialMenu.dmJoinActive = false;
-
-		if (match_autoJoin && match_autoJoin->integer) {
-			Team targetTeam = Teams() ? PickTeam(-1) : Team::Free;
-			::SetTeam(ent, targetTeam, false, false, false);
-		}
-		else {
-			OpenJoinMenu(ent);
-		}
+		OpenJoinMenu(ent);
 	}
 
 	static bool TryLaunchVoteWithFeedback(gentity_t* ent, std::string_view voteName, std::string_view voteArg) {
@@ -2445,10 +2485,11 @@ Toggles the eyecam view when following other players.
 		RegisterCommand("tourney_status", &TourneyStatus, AllowDead | AllowSpectator);
 		RegisterCommand("timer", &Timer, AllowSpectator | AllowDead);
 		RegisterCommand("unhook", &UnHook, {}, true);
-		RegisterCommand("worr_dm_join_close", &DmJoinClose, AllowDead | AllowSpectator);
-		RegisterCommand("worr_dm_hostinfo", &DmHostInfo, AllowDead | AllowSpectator);
-		RegisterCommand("worr_dm_matchinfo", &DmMatchInfo, AllowDead | AllowSpectator);
-		RegisterCommand("worr_welcome_continue", &WelcomeContinue, AllowDead | AllowSpectator);
+		RegisterCommand("worr_dm_join_close", &DmJoinClose, AllowDead | AllowIntermission | AllowSpectator);
+		RegisterCommand("worr_dm_initial_spectate", &DmInitialSpectate, AllowDead | AllowIntermission | AllowSpectator);
+		RegisterCommand("worr_dm_hostinfo", &DmHostInfo, AllowDead | AllowIntermission | AllowSpectator);
+		RegisterCommand("worr_dm_matchinfo", &DmMatchInfo, AllowDead | AllowIntermission | AllowSpectator);
+		RegisterCommand("worr_welcome_continue", &WelcomeContinue, AllowDead | AllowIntermission | AllowSpectator);
 		RegisterCommand("worr_ui_list_prev", &WorrUiListPrev, AllowDead | AllowSpectator);
 		RegisterCommand("worr_ui_list_next", &WorrUiListNext, AllowDead | AllowSpectator);
 		RegisterCommand("worr_ui_list_close", &WorrUiListClose, AllowDead | AllowSpectator);
@@ -2488,8 +2529,8 @@ Toggles the eyecam view when following other players.
 		RegisterCommand("worr_vote_close", &WorrVoteClose, AllowDead | AllowSpectator);
 		RegisterCommand("worr_mapselector_vote", &WorrMapSelectorVote, AllowDead | AllowSpectator | AllowIntermission);
 		RegisterCommand("worr_mapselector_close", &WorrMapSelectorClose, AllowDead | AllowSpectator | AllowIntermission);
-		RegisterCommand("worr_matchstats_menu", &WorrMatchStatsMenu, AllowDead | AllowSpectator);
-		RegisterCommand("worr_matchstats_close", &WorrMatchStatsClose, AllowDead | AllowSpectator);
+		RegisterCommand("worr_matchstats_menu", &WorrMatchStatsMenu, AllowDead | AllowIntermission | AllowSpectator);
+		RegisterCommand("worr_matchstats_close", &WorrMatchStatsClose, AllowDead | AllowIntermission | AllowSpectator);
 		RegisterCommand("worr_forfeit_menu", &WorrForfeitMenu, AllowDead | AllowSpectator);
 		RegisterCommand("worr_forfeit_yes", &WorrForfeitYes, AllowDead | AllowSpectator);
 		RegisterCommand("worr_admin_menu", &WorrAdminMenu, AllowDead | AllowSpectator | AdminOnly);
@@ -2521,7 +2562,7 @@ Toggles the eyecam view when following other players.
 		RegisterCommand("drop", &inventory::Drop);
 		RegisterCommand("dropindex", &inventory::Drop);
 		RegisterCommand("invdrop", &inventory::InvDrop);
-		RegisterCommand("inven", &inventory::Inven, AllowDead | AllowSpectator, true);
+		RegisterCommand("inven", &inventory::Inven, AllowDead | AllowIntermission | AllowSpectator, true);
 		RegisterCommand("invnext", &inventory::InvNext, AllowSpectator | AllowIntermission, true);
 		RegisterCommand("invnextp", &inventory::InvNextP, {}, true);
 		RegisterCommand("invnextw", &inventory::InvNextW, {}, true);

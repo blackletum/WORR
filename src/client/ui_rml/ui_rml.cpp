@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ui_rml.h"
 
+#include "common/cmd.h"
 #include "common/common.h"
 #include "common/cvar.h"
 #include "common/files.h"
@@ -34,6 +35,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 static cvar_t *ui_rml_enable;
 static cvar_t *ui_rml_debug;
 static cvar_t *ui_rml_asset_root;
+static cvar_t *ui_rml_runtime_available;
 static bool ui_rml_initialized;
 static bool ui_rml_commands_registered;
 
@@ -44,6 +46,7 @@ static bool ui_rml_runtime_started;
 static bool ui_rml_runtime_failed;
 static bool ui_rml_route_active;
 static char ui_rml_active_route[MAX_QPATH];
+static char ui_rml_restore_route_after_init[MAX_QPATH];
 #define UI_RML_ROUTE_HISTORY_MAX 16
 static char ui_rml_route_history[UI_RML_ROUTE_HISTORY_MAX][MAX_QPATH];
 static size_t ui_rml_route_history_count;
@@ -493,6 +496,21 @@ static bool UI_Rml_RuntimeCanOpenRoutes(void)
 #endif
 }
 
+static void UI_Rml_PublishRuntimeAvailability(void)
+{
+    if (!ui_rml_runtime_available) {
+        return;
+    }
+
+#if UI_RML_HAS_RUNTIME
+    const bool available = UI_Rml_RuntimeInterfaceAvailable() &&
+                           UI_Rml_RuntimeCanOpenRoutes();
+#else
+    const bool available = false;
+#endif
+    Cvar_SetInteger(ui_rml_runtime_available, available ? 1 : 0, FROM_CODE);
+}
+
 static void UI_Rml_StopRuntime(void);
 static void UI_Rml_ClearActiveRoute(bool notify_runtime);
 static void UI_Rml_PrintRuntimeStatus(void);
@@ -554,6 +572,7 @@ static bool UI_Rml_StartRuntime(void)
 
     if (ui_rml_runtime.Init && !ui_rml_runtime.Init()) {
         ui_rml_runtime_failed = true;
+        UI_Rml_PublishRuntimeAvailability();
         return false;
     }
 
@@ -622,6 +641,56 @@ static void UI_Rml_ClearActiveRoute(bool notify_runtime)
     (void)notify_runtime;
 #endif
 }
+
+#if UI_RML_HAS_RUNTIME
+static bool UI_Rml_QueueMenuRoute(const char *route_id)
+{
+    if (!route_id || !route_id[0] ||
+        !UI_Rml_FindRoute(route_id) ||
+        !strcmp(route_id, "core.runtime_smoke")) {
+        return false;
+    }
+
+    Cbuf_AddText(&cmd_buffer, va("pushmenu %s\n", route_id));
+    return true;
+}
+
+static void UI_Rml_FallbackRoute(const char *route_id, bool mark_runtime_failed)
+{
+    char fallback_route[MAX_QPATH];
+
+    Q_strlcpy(fallback_route, route_id ? route_id : "",
+              sizeof(fallback_route));
+    if (mark_runtime_failed) {
+        ui_rml_runtime_failed = true;
+    }
+    UI_Rml_PublishRuntimeAvailability();
+    UI_Rml_ClearRouteHistory();
+    UI_Rml_ClearActiveRoute(true);
+    UI_Rml_QueueMenuRoute(fallback_route);
+}
+
+static void UI_Rml_FallbackActiveRoute(bool mark_runtime_failed)
+{
+    char active_route[MAX_QPATH];
+
+    Q_strlcpy(active_route,
+              ui_rml_route_active ? ui_rml_active_route : "",
+              sizeof(active_route));
+    UI_Rml_FallbackRoute(active_route, mark_runtime_failed);
+}
+
+static bool UI_Rml_SaveActiveRoute(char *route_id, size_t size)
+{
+    if (!route_id || !size || !ui_rml_route_active ||
+        !ui_rml_active_route[0]) {
+        return false;
+    }
+
+    Q_strlcpy(route_id, ui_rml_active_route, size);
+    return true;
+}
+#endif
 
 static bool UI_Rml_KeyIsMouseButton(int key)
 {
@@ -746,6 +815,18 @@ static bool UI_Rml_OpenRouteInternalEx(const char *route_id, bool record_history
     }
 
     if (ui_rml_runtime.OpenRoute(route->id, document)) {
+        const bool establishes_root_history =
+            !strcmp(route->id, "main") ||
+            !strcmp(route->id, "game") ||
+            !strcmp(route->id, "download_status");
+        if (establishes_root_history) {
+            if (Cvar_VariableInteger("ui_dm_menu_active")) {
+                Cvar_SetInteger(Cvar_Get("ui_dm_menu_active", "0", 0),
+                                0, FROM_CODE);
+            }
+            UI_Rml_ClearRouteHistory();
+            record_history = false;
+        }
         if (record_history && had_previous_route) {
             UI_Rml_PushRouteHistory(previous_route);
         }
@@ -862,6 +943,23 @@ static void UI_Rml_RuntimeOpenRoute_f(void)
     UI_Rml_OpenRouteInternal(route_id);
 }
 
+static void UI_Rml_RuntimeOpenRouteFallback_f(void)
+{
+#if UI_RML_HAS_RUNTIME
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: %s <route_id>\n", Cmd_Argv(0));
+        return;
+    }
+
+    const char *route_id = Cmd_Argv(1);
+    if (!UI_Rml_OpenRouteInternal(route_id)) {
+        Com_Printf("RmlUi bridged route '%s' failed; opening the cgame fallback.\n",
+                   route_id);
+        UI_Rml_FallbackRoute(route_id, true);
+    }
+#endif
+}
+
 static bool UI_Rml_OpenPopupRouteInternal(const char *route_id)
 {
 #if UI_RML_HAS_RUNTIME
@@ -887,6 +985,23 @@ static void UI_Rml_RuntimePopupRoute_f(void)
     }
 
     UI_Rml_OpenPopupRouteInternal(Cmd_Argv(1));
+}
+
+static void UI_Rml_RuntimePopupRouteFallback_f(void)
+{
+#if UI_RML_HAS_RUNTIME
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: %s <route_id>\n", Cmd_Argv(0));
+        return;
+    }
+
+    const char *route_id = Cmd_Argv(1);
+    if (!UI_Rml_OpenPopupRouteInternal(route_id)) {
+        Com_Printf("RmlUi bridged popup '%s' failed; opening the cgame fallback.\n",
+                   route_id);
+        UI_Rml_FallbackRoute(route_id, true);
+    }
+#endif
 }
 
 static void UI_Rml_RuntimeCaptureMenu_f(void)
@@ -1038,7 +1153,9 @@ static const cmdreg_t ui_rml_commands[] = {
     { "ui_rml_probe", UI_Rml_ProbeRoute_f, UI_Rml_ProbeRoute_c },
     { "ui_rml_runtime_probe", UI_Rml_RuntimeProbeRoute_f, UI_Rml_RuntimeProbeRoute_c },
     { "ui_rml_runtime_open", UI_Rml_RuntimeOpenRoute_f, UI_Rml_RuntimeOpenRoute_c },
+    { "ui_rml_runtime_open_fallback", UI_Rml_RuntimeOpenRouteFallback_f, UI_Rml_RuntimeOpenRoute_c },
     { "ui_rml_runtime_popup", UI_Rml_RuntimePopupRoute_f, UI_Rml_RuntimeOpenRoute_c },
+    { "ui_rml_runtime_popup_fallback", UI_Rml_RuntimePopupRouteFallback_f, UI_Rml_RuntimeOpenRoute_c },
     { "ui_rml_runtime_back", UI_Rml_RuntimeBackRoute_f },
     { "ui_rml_runtime_close", UI_Rml_RuntimeCloseRoute_f },
     { "ui_rml_runtime_status", UI_Rml_RuntimeStatus_f },
@@ -1057,6 +1174,8 @@ void UI_Rml_Init(void)
     ui_rml_enable = Cvar_Get("ui_rml_enable", UI_RML_ENABLE_DEFAULT, 0);
     ui_rml_debug = Cvar_Get("ui_rml_debug", "0", 0);
     ui_rml_asset_root = Cvar_Get("ui_rml_asset_root", "ui/rml", 0);
+    ui_rml_runtime_available =
+        Cvar_Get("ui_rml_runtime_available", "0", CVAR_ROM);
 
 #if UI_RML_HAS_RUNTIME
     UI_Rml_RegisterCompiledRuntime();
@@ -1069,6 +1188,14 @@ void UI_Rml_Init(void)
     }
 
     ui_rml_initialized = true;
+    UI_Rml_PublishRuntimeAvailability();
+
+#if UI_RML_HAS_RUNTIME
+    if (ui_rml_restore_route_after_init[0]) {
+        UI_Rml_QueueMenuRoute(ui_rml_restore_route_after_init);
+        ui_rml_restore_route_after_init[0] = 0;
+    }
+#endif
 
     if (ui_rml_debug->integer) {
         Com_Printf("RmlUi menu scaffold initialized; availability='%s', runtime='%s', renderer='%s', renderer_family='%s', asset_root='%s'.\n",
@@ -1095,7 +1222,24 @@ void UI_Rml_Shutdown(void)
         ui_rml_commands_registered = false;
     }
 
+#if UI_RML_HAS_RUNTIME
+    // UI/renderer/filesystem restarts tear down RmlUi while the networked
+    // session remains alive. Preserve an owned match-hub route across the
+    // re-init; CL_ClearState removes the marker first on real disconnects, so
+    // stale session routes are not restored there.
+    if (ui_rml_route_active &&
+        Cvar_VariableInteger("ui_dm_menu_active")) {
+        Q_strlcpy(ui_rml_restore_route_after_init, ui_rml_active_route,
+                  sizeof(ui_rml_restore_route_after_init));
+    } else {
+        ui_rml_restore_route_after_init[0] = 0;
+    }
+#endif
+
     UI_Rml_StopRuntime();
+    if (ui_rml_runtime_available) {
+        Cvar_SetInteger(ui_rml_runtime_available, 0, FROM_CODE);
+    }
 
 #if UI_RML_HAS_RUNTIME
     ui_rml_cursor_handle = 0;
@@ -1109,6 +1253,7 @@ void UI_Rml_Shutdown(void)
     ui_rml_enable = NULL;
     ui_rml_debug = NULL;
     ui_rml_asset_root = NULL;
+    ui_rml_runtime_available = NULL;
 }
 
 bool UI_Rml_IsEnabled(void)
@@ -1384,7 +1529,7 @@ void UI_Rml_ModeChanged(void)
 
     UI_Rml_GetCanvas(&width, &height, NULL);
     if (!ui_rml_runtime.Update(width, height, ui_rml_route_metrics.last_realtime)) {
-        UI_Rml_ClearActiveRoute(true);
+        UI_Rml_FallbackActiveRoute(true);
         return;
     }
 
@@ -1405,7 +1550,7 @@ bool UI_Rml_Draw(unsigned realtime)
     }
 
     if (!UI_Rml_RuntimeIsAvailable()) {
-        UI_Rml_ClearActiveRoute(true);
+        UI_Rml_FallbackActiveRoute(false);
         return false;
     }
 
@@ -1415,7 +1560,7 @@ bool UI_Rml_Draw(unsigned realtime)
         !ui_rml_runtime.Render()) {
         Com_Printf("RmlUi route '%s' failed to render; falling back to legacy UI.\n",
                    ui_rml_active_route[0] ? ui_rml_active_route : "<unknown>");
-        UI_Rml_ClearActiveRoute(true);
+        UI_Rml_FallbackActiveRoute(true);
         return false;
     }
 
@@ -1532,6 +1677,17 @@ bool UI_Rml_MouseEvent(int x, int y)
 void UI_Rml_CloseActiveRoute(void)
 {
 #if UI_RML_HAS_RUNTIME
+    // A session hub can own child routes (Settings, Video, etc.). Closing one
+    // of those routes must also release the sgame-side dmJoinActive state;
+    // otherwise the server continues treating the player as menu-blocked
+    // after no UI is visible. Initial-connect close requests are rejected and
+    // restored by sgame, preserving the mandatory choice contract.
+    if (Cvar_VariableInteger("ui_dm_menu_active")) {
+        Cvar_SetInteger(Cvar_Get("ui_dm_menu_active", "0", 0),
+                        0, FROM_CODE);
+        Cbuf_AddText(&cmd_buffer, "worr_dm_join_close\n");
+    }
+
     if (ui_rml_route_active) {
         ui_rml_route_metrics.close_requests++;
     }
@@ -1543,6 +1699,10 @@ void UI_Rml_CloseActiveRoute(void)
 #if UI_RML_HAS_RUNTIME
 void UI_Rml_SetRuntimeInterface(const ui_rml_runtime_interface_t *runtime)
 {
+    char restore_route[MAX_QPATH];
+    const bool restore_active_route =
+        UI_Rml_SaveActiveRoute(restore_route, sizeof(restore_route));
+
     UI_Rml_StopRuntime();
     ui_rml_runtime_failed = false;
 
@@ -1559,10 +1719,18 @@ void UI_Rml_SetRuntimeInterface(const ui_rml_runtime_interface_t *runtime)
         ui_rml_runtime = {};
         ui_rml_runtime_registered = false;
     }
+    UI_Rml_PublishRuntimeAvailability();
+    if (restore_active_route) {
+        UI_Rml_QueueMenuRoute(restore_route);
+    }
 }
 
 void UI_Rml_SetRendererInterface(const ui_rml_renderer_interface_t *renderer)
 {
+    char restore_route[MAX_QPATH];
+    const bool restore_active_route =
+        UI_Rml_SaveActiveRoute(restore_route, sizeof(restore_route));
+
     if (ui_rml_runtime_started) {
         UI_Rml_StopRuntime();
     }
@@ -1571,17 +1739,30 @@ void UI_Rml_SetRendererInterface(const ui_rml_renderer_interface_t *renderer)
         ui_rml_renderer = *renderer;
         ui_rml_renderer_registered = true;
     } else {
-        UI_Rml_ClearRendererInterface();
+        ui_rml_renderer = {};
+        ui_rml_renderer_registered = false;
+    }
+    UI_Rml_PublishRuntimeAvailability();
+    if (restore_active_route) {
+        UI_Rml_QueueMenuRoute(restore_route);
     }
 }
 
 void UI_Rml_ClearRendererInterface(void)
 {
+    char restore_route[MAX_QPATH];
+    const bool restore_active_route =
+        UI_Rml_SaveActiveRoute(restore_route, sizeof(restore_route));
+
     if (ui_rml_runtime_started) {
         UI_Rml_StopRuntime();
     }
 
     ui_rml_renderer = {};
     ui_rml_renderer_registered = false;
+    UI_Rml_PublishRuntimeAvailability();
+    if (restore_active_route) {
+        UI_Rml_QueueMenuRoute(restore_route);
+    }
 }
 #endif

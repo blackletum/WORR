@@ -3,6 +3,8 @@
 #define VK_WORLD_VERTEX_FULLBRIGHT 2u
 #define VK_WORLD_VERTEX_ALPHATEST 4u
 #define VK_WORLD_VERTEX_LIGHTMAPPED 16u
+#define VK_WORLD_VERTEX_INTENSITY 32u
+#define SHADOW_VISIBILITY_EXPONENT 2.0
 #define VK_SHADOW_MAX_PAGES 64
 #define VK_SHADOW_MAX_DLIGHTS 64
 #define DLIGHT_CUTOFF 64.0
@@ -145,6 +147,7 @@ float shadow_sample_page_covered(int page, vec3 world_pos, vec3 normal,
     } else {
         result = shadow_pcss_depth(page, tc, bias);
     }
+    result = pow(clamp(result, 0.0, 1.0), SHADOW_VISIBILITY_EXPONENT);
     return mix(1.0, result, clamp(shadow_global.y, 0.0, 1.0));
 }
 
@@ -245,8 +248,9 @@ vec3 calc_dynamic_lights(vec3 world_pos, vec3 normal) {
 
         if (light.cone.w != 0.0) {
             float mag = -dot(dir, light.cone.xyz);
-            float spot = max(1.0 - (1.0 - mag) * (1.0 / (1.0 - light.cone.w)),
-                             0.0);
+            float cone_cos = clamp(light.cone.w, -1.0, 0.9999);
+            float spot = clamp((mag - cone_cos) /
+                               max(1.0 - cone_cos, 0.0001), 0.0, 1.0);
             if (spot <= 0.0) {
                 continue;
             }
@@ -281,5 +285,8 @@ void main() {
                        max(shadow_dlight_count.y, 0.0), vec3(0.0));
     }
     vec4 color = base * vec4(lighting, lm.a) * in_color;
+    if ((in_flags & VK_WORLD_VERTEX_INTENSITY) != 0u) {
+        color.rgb *= max(shadow_moment_tuning.z, 1.0);
+    }
     out_color = color;
 }

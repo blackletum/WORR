@@ -15,6 +15,7 @@ class Menu;
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -2704,9 +2705,6 @@ struct GameLocals {
   // [Paril-KEX]
   uint32_t gravity_modCount = 0;
   std::array<LevelEntry, MAX_LEVELS_PER_UNIT> levelEntries{};
-  int32_t maxLagOrigins = 0;
-  Vector3 *lagOrigins{}; // maxClients * maxLagOrigins
-
   GameType gametype = GameType::None; // current gametype
   std::string motd = "";              // message of the day
   int motdModificationCount = 0;      // used to detect changes
@@ -5214,9 +5212,6 @@ void G_SaveIPFilters();
 // p_view.cpp
 //
 void ClientEndServerFrame(gentity_t *ent);
-void LagCompensate(gentity_t *from_player, const Vector3 &start,
-                   const Vector3 &dir);
-void UnLagCompensate();
 
 //
 // p_hud_main.cpp
@@ -5242,9 +5237,16 @@ void MultiplayerScoreboard(gentity_t *ent);
 //
 // p_weapon.cpp
 //
+enum class ProjectSourceTraceMode : uint8_t {
+  Live,
+  LagCompensated,
+};
+
 void G_PlayerNoise(gentity_t *who, const Vector3 &where, PlayerNoise type);
 void P_ProjectSource(gentity_t *ent, const Vector3 &angles, Vector3 distance,
-                     Vector3 &result_start, Vector3 &result_dir);
+                     Vector3 &result_start, Vector3 &result_dir,
+                     ProjectSourceTraceMode traceMode =
+                         ProjectSourceTraceMode::Live);
 void NoAmmoWeaponChange(gentity_t *ent, bool sound);
 void Weapon_Generic(gentity_t *ent, int FRAME_ACTIVATE_LAST,
                     int FRAME_FIRE_LAST, int FRAME_IDLE_LAST,
@@ -5847,6 +5849,7 @@ struct UiMenuState {
   GameTime mapSelectorNextUpdate = 0_ms;
   bool matchStatsActive = false;
   GameTime matchStatsNextUpdate = 0_ms;
+  std::deque<std::string> commandQueue{};
 };
 
 // this structure is cleared on each ClientSpawn(),
@@ -6070,14 +6073,6 @@ struct gclient_t {
 
   GameTime thunderbolt_sound_time = 0_ms;
 
-  // saved positions for lag compensation
-  struct {
-    uint8_t numOrigins = 0; // 0 to MAX_LAG_ORIGINS, how many we can go back
-    uint8_t nextOrigin = 0; // the next one to write to
-    bool isCompensated = false;
-    Vector3 restoreOrigin = vec3_origin;
-  } lag;
-
   // for high tickrate weapon angles
   Vector3 slow_view_angles = vec3_origin;
   GameTime slow_view_angle_time = 0_ms;
@@ -6142,6 +6137,7 @@ struct gclient_t {
       bool hostSetupDone = false;
       bool dmWelcomeActive = false;
       bool dmJoinActive = false;
+      GameTime nextUpdate = 0_ms;
     } initialMenu;
 
   GameTime lastPowerupMessageTime = 0_ms;
@@ -6895,11 +6891,13 @@ inline void CloseActiveMenu(gentity_t *ent) {
   ent->client->ui.matchStatsActive = false;
   ent->client->ui.list.kind = UiListKind::None;
   ent->client->ui.list.page = 0;
+  ent->client->ui.commandQueue.clear();
   ent->client->initialMenu.dmWelcomeActive = false;
   ent->client->initialMenu.dmJoinActive = false;
+  ent->client->initialMenu.nextUpdate = 0_ms;
 
   gi.WriteByte(svc_stufftext);
-  gi.WriteString("forcemenuoff\n");
+  gi.WriteString("set ui_dm_menu_active 0; forcemenuoff\n");
   gi.unicast(ent, true);
 }
 
@@ -6939,6 +6937,7 @@ void OpenForfeitMenu(gentity_t *ent);
 void OpenPlayerWelcomeMenu(gentity_t *ent);
 void OpenDmWelcomeMenu(gentity_t *ent);
 void OpenDmJoinMenu(gentity_t *ent);
+void RefreshDmJoinMenu(gentity_t *ent);
 void CloseDmJoinMenu(gentity_t *ent);
 void ForceCloseDmJoinMenu(gentity_t *ent);
 void OpenDmHostInfoMenu(gentity_t *ent);

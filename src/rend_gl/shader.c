@@ -319,7 +319,9 @@ static void write_dynamic_lights(sizebuf_t *buf) {
 
       if (dlights[i].cone.w != 0.0) {
         float mag = -dot(dir, dlights[i].cone.xyz);
-        float spot = max(1.0 - (1.0 - mag) * (1.0 / (1.0 - dlights[i].cone.w)), 0.0);
+        float cone_cos = clamp(dlights[i].cone.w, -1.0, 0.9999);
+        float spot = clamp((mag - cone_cos) / max(1.0 - cone_cos, 0.0001),
+                           0.0, 1.0);
         if (spot <= 0.0)
           continue;
         result *= spot;
@@ -343,6 +345,8 @@ static void write_shadedot(sizebuf_t *buf) {
 }
 
 #if USE_MD5
+static void write_normal_transform(sizebuf_t *buf);
+
 static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits) {
   const bool shadow = false;
 
@@ -377,6 +381,9 @@ static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits) {
 
   if (bits & GLS_MESH_SHADE)
     write_shadedot(buf);
+
+  if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
+    write_normal_transform(buf);
 
   GLSF("void main() {\n");
   GLSL(vec3 out_pos = vec3(0.0); vec3 out_norm = vec3(0.0);
@@ -417,7 +424,7 @@ static void write_skel_shader(sizebuf_t *buf, glStateBits_t bits) {
   if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
     GLSL(v_world_pos = (m_model * vec4(out_pos, 1.0)).xyz;)
   if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
-    GLSL(v_norm = normalize((mat3(m_model) * out_norm).xyz);)
+    GLSL(v_norm = transform_normal(out_norm);)
   GLSL(gl_Position = m_proj * m_view * m_model * vec4(out_pos, 1.0);)
   GLSF("}\n");
 }
@@ -430,6 +437,26 @@ static void write_getnormal(sizebuf_t *buf) {
     float lat = float(uint(norm) & 255U) * scale;
     float lng = float((uint(norm) >> 8) & 255U) * scale;
     return vec3(sin(lat) * cos(lng), sin(lat) * sin(lng), cos(lat));
+  })
+}
+
+// Entity transforms can contain non-uniform or reflected scale. Multiplying a
+// normal by mat3(m_model) is only correct for a rigid or uniform-scale matrix;
+// use the inverse-transpose of the renderer's orthogonal scaled axes instead.
+// This expanded form avoids a per-vertex general matrix inverse and remains
+// defined when malformed content collapses one of the axes.
+static void write_normal_transform(sizebuf_t *buf) {
+  GLSL(vec3 transform_normal(vec3 normal) {
+    vec3 axis_x = m_model[0].xyz;
+    vec3 axis_y = m_model[1].xyz;
+    vec3 axis_z = m_model[2].xyz;
+    vec3 transformed =
+        axis_x * (normal.x / max(dot(axis_x, axis_x), 1e-12)) +
+        axis_y * (normal.y / max(dot(axis_y, axis_y), 1e-12)) +
+        axis_z * (normal.z / max(dot(axis_z, axis_z), 1e-12));
+    float len2 = dot(transformed, transformed);
+    return len2 > 1e-12 ? transformed * inversesqrt(len2)
+                        : vec3(0.0, 0.0, 1.0);
   })
 }
 
@@ -456,6 +483,9 @@ static void write_mesh_shader(sizebuf_t *buf, glStateBits_t bits) {
 
   if (bits & GLS_MESH_SHADE)
     write_shadedot(buf);
+
+  if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
+    write_normal_transform(buf);
 
   GLSF("void main() {\n");
   if (!shadow)
@@ -485,7 +515,7 @@ static void write_mesh_shader(sizebuf_t *buf, glStateBits_t bits) {
     }
 
     if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
-      GLSL(v_norm = normalize((mat3(m_model) * norm).xyz);)
+      GLSL(v_norm = transform_normal(norm);)
   } else {
     if (bits &
         (GLS_MESH_SHELL | GLS_MESH_SHADE | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
@@ -504,7 +534,7 @@ static void write_mesh_shader(sizebuf_t *buf, glStateBits_t bits) {
     }
 
     if (bits & (GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
-      GLSL(v_norm = normalize((mat3(m_model) * norm).xyz);)
+      GLSL(v_norm = transform_normal(norm);)
   }
 
   if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS | GLS_RIMLIGHT))
@@ -553,6 +583,7 @@ static void write_vertex_shader(sizebuf_t *buf, glStateBits_t bits) {
   if (bits & GLS_DYNAMIC_LIGHTS) {
     GLSL(in vec3 a_norm;)
     GLSL(out vec3 v_norm;)
+    write_normal_transform(buf);
   }
 
   GLSF("void main() {\n");
@@ -575,7 +606,7 @@ static void write_vertex_shader(sizebuf_t *buf, glStateBits_t bits) {
   if (bits & (GLS_FOG_HEIGHT | GLS_DYNAMIC_LIGHTS))
     GLSL(v_world_pos = (m_model * a_pos).xyz;)
   if (bits & GLS_DYNAMIC_LIGHTS)
-    GLSL(v_norm = normalize((mat3(m_model) * a_norm).xyz);)
+    GLSL(v_norm = transform_normal(a_norm);)
   GLSL(gl_Position = m_proj * m_view * m_model * a_pos;)
   GLSF("}\n");
 }
@@ -1655,12 +1686,18 @@ static void shader_setup_fog(void) {
 }
 
 static void shader_setup_3d(void) {
+  float modulate = Cvar_ClampValue(gl_modulate, 0.0f, 1e6f);
+  float world_modulate = Cvar_ClampValue(gl_modulate_world, 0.0f, 1e6f);
+  float intensity = Cvar_ClampValue(gl_intensity, 1.0f, 5.0f);
+  float glow_intensity =
+      Cvar_ClampValue(gl_glowmap_intensity, 0.0f, 10.0f);
+
   gls.u_block.time = glr.fd.time;
   gls.u_block.modulate =
-      gl_modulate->value * gl_modulate_world->value * gl_static.identity_light;
-  gls.u_block.add = gl_brightness->value;
-  gls.u_block.intensity = gl_intensity->value;
-  gls.u_block.intensity2 = gl_intensity->value * gl_glowmap_intensity->value;
+      modulate * world_modulate * gl_static.identity_light;
+  gls.u_block.add = Cvar_ClampValue(gl_brightness, -1.0f, 1.0f);
+  gls.u_block.intensity = intensity;
+  gls.u_block.intensity2 = intensity * glow_intensity;
   gls.u_block.refract_scale = Cvar_ClampValue(gl_warp_refraction, 0.0f, 2.0f);
   gls.u_block.refract_pad = 0.0f;
 

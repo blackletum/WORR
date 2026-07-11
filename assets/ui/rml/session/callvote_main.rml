@@ -21,8 +21,8 @@
         <button id="callvote-main-restart" type="button" data-command="worr_callvote_restart" data-visible-if="ui_callvote_show_restart!=0" data-menu-sound="confirm">Restart Match</button>
         <button id="callvote-main-gametype" type="button" data-command="worr_callvote_gametype" data-visible-if="ui_callvote_show_gametype!=0" data-menu-sound="open">Gametype</button>
         <button id="callvote-main-ruleset" type="button" data-command="worr_callvote_ruleset" data-visible-if="ui_callvote_show_ruleset!=0" data-menu-sound="open">Ruleset</button>
-        <button id="callvote-main-timelimit" type="button" data-command="worr_callvote_timelimit" data-visible-if="ui_callvote_show_timelimit!=0" data-menu-sound="open">Timelimit</button>
-        <button id="callvote-main-scorelimit" type="button" data-command="worr_callvote_scorelimit" data-visible-if="ui_callvote_show_scorelimit!=0" data-menu-sound="open">Scorelimit</button>
+        <button id="callvote-main-timelimit" type="button" data-command="worr_callvote_timelimit" data-visible-if="ui_callvote_show_timelimit!=0" data-menu-sound="open">Time Limit</button>
+        <button id="callvote-main-scorelimit" type="button" data-command="worr_callvote_scorelimit" data-visible-if="ui_callvote_show_scorelimit!=0" data-menu-sound="open">Score Limit</button>
         <button id="callvote-main-shuffle" type="button" data-command="worr_callvote_shuffle" data-visible-if="ui_callvote_show_shuffle!=0" data-menu-sound="confirm">Shuffle Teams</button>
         <button id="callvote-main-balance" type="button" data-command="worr_callvote_balance" data-visible-if="ui_callvote_show_balance!=0" data-menu-sound="confirm">Balance Teams</button>
         <button id="callvote-main-unlagged" type="button" data-command="worr_callvote_unlagged" data-visible-if="ui_callvote_show_unlagged!=0" data-menu-sound="open">Unlagged</button>
@@ -32,7 +32,7 @@
       </nav>
 
       <footer class="actions" id="callvote-main-actions">
-        <button id="callvote-main-return" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="callvote-main-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

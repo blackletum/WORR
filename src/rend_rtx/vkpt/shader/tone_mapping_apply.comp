@@ -163,9 +163,10 @@ void main()
     // We're currently going to do linear interpolation manually.
     // Must match tone_mapping_histogram.comp.
     const float biased_log_luminance = log2(lum) * log_luminance_scale + log_luminance_bias;
-    const float histogram_bin = clamp(biased_log_luminance * HISTOGRAM_BINS, 0.0, HISTOGRAM_BINS);
+    const float histogram_bin = clamp(biased_log_luminance * HISTOGRAM_BINS,
+                                      0.0, HISTOGRAM_BINS - 1.0);
     const uint left_bin = uint(histogram_bin);
-    const uint right_bin = left_bin + 1;
+    const uint right_bin = min(left_bin + 1, uint(HISTOGRAM_BINS - 1));
     const float right_weight_F = fract(histogram_bin);
     const float left_weight_F = 1.0 - right_weight_F;
 

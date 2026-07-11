@@ -1,5 +1,8 @@
 # Q2 to Q3 Event System Migration Plan
 
+> [!IMPORTANT]
+> **Superseded on 2026-07-11.** This document is retained as historical research. The active plan is `docs-dev/plans/progressive-networking-events-snapshots-roadmap.md`. WORR already uses client-acknowledged snapshot delta bases, `q2proto/` remains read-only for the active work, and legacy Quake II server/demo compatibility is mandatory.
+
 ## Overview
 
 This document outlines a detailed plan for replacing WORR's Quake 2-based event and packet system with ideas from Quake 3 Arena's superior, more efficient, and robust architecture.

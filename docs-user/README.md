@@ -18,6 +18,8 @@ If you want deep engine internals, design notes, or migration writeups, see `doc
   customize profiles, and reload changes.
 - [Bot Multiplayer Playtest](bot-playtest.md): generate repeatable FFA, Duel,
   TDM, and CTF bot playtest configs and checklists.
+- [Multiplayer Session Menu](multiplayer-session-menu.md): join or spectate,
+  review the live match, and reopen the server-managed menu during play.
 
 ## Full Reference Manuals
 

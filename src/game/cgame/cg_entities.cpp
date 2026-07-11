@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_ents.c -- entity parsing and management
 
 #include "cg_entity_local.h"
+#include "cg_snapshot_timeline.hpp"
 
 extern qhandle_t cl_mod_powerscreen;
 extern qhandle_t cl_mod_laser;
@@ -545,6 +546,13 @@ static void parse_entity_event(int number)
         return;
 #endif
 
+    if (cent->current.event &&
+        !CG_SnapshotTimeline_ShouldDispatchEvent(
+            static_cast<std::uint32_t>(number),
+            static_cast<std::uint32_t>(cent->current.event))) {
+        return;
+    }
+
     switch (cent->current.event) {
     case EV_ITEM_RESPAWN:
         S_StartSound(NULL, number, CHAN_WEAPON, S_RegisterSound("items/respawn1.wav"), 1, ATTN_IDLE, 0);
@@ -581,6 +589,7 @@ static void parse_entity_event(int number)
 static void set_active_state(void)
 {
     cls.state = ca_active;
+    CG_SnapshotTimeline_Reset(cls.realtime);
     Cbuf_ExecuteDeferred(&cmd_buffer);
 
     cl.serverdelta = cl.frame.number ? Q_align_down(cl.frame.number, CL_FRAMEDIV) : 0;
@@ -716,6 +725,7 @@ void CL_DeltaFrame(void)
     int                 i, j;
     int                 framenum;
     int                 prevstate = cls.state;
+    const unsigned      accepted_frame_flags = cl.frameflags;
 
     // getting a valid frame message ends the connection process
     if (cls.state == ca_precached)
@@ -734,6 +744,20 @@ void CL_DeltaFrame(void)
 #if USE_FPS
     cl.keyservertime = (framenum / cl.frametime.div) * BASE_FRAMETIME;
 #endif
+
+    const unsigned inferred_acked_input_cmd = cls.demo.playback
+        ? 0u
+        : cl.history[cls.netchan.incoming_acknowledged & CMD_MASK].cmdNumber;
+    const cg_accepted_snapshot_t accepted_snapshot = {
+        .snapshot_id = cl.frame.number,
+        .delta_baseline_id = cl.frame.delta,
+        .server_time_ms = static_cast<std::uint32_t>(cl.servertime),
+        .receive_time_ms = cls.realtime,
+        .frame_flags = accepted_frame_flags,
+        .entity_count = static_cast<std::uint32_t>(cl.frame.numEntities),
+        .inferred_acked_input_cmd = inferred_acked_input_cmd,
+    };
+    CG_SnapshotTimeline_RecordAccepted(accepted_snapshot);
 
     // rebuild the list of solid entities for this frame
     cl.numSolidEntities = 0;
@@ -783,6 +807,8 @@ void CL_DeltaFrame(void)
 #endif
 
     CL_CheckPredictionError();
+
+    CG_SnapshotTimeline_DebugTick(cls.realtime);
 
     SCR_SetCrosshairColor();
 }

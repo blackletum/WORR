@@ -961,9 +961,22 @@ public:
             return {};
         }
 
-        const image_t *image = IMG_Find(source.c_str(), IT_PIC, IF_NONE);
+        // IF_REPEAT: RmlUi tiles textures by scaling texcoords past [0,1]
+        // (decorator fit modes repeat/repeat-x/repeat-y), which requires
+        // wrap-mode repeat instead of the IT_PIC clamp default.
+        const image_t *image = IMG_Find(source.c_str(), IT_PIC, IF_REPEAT);
         if (!image || image == R_NOTEXTURE || !image->texnum ||
             !image->width || !image->height) {
+            return {};
+        }
+
+        // Scrap-atlas placements (< 64x64 pics) occupy a sub-rect of a shared
+        // texture; RmlUi samples the full [0,1] range, so such images would
+        // render neighbouring scrap content. Reject them loudly instead.
+        if (image->flags & IF_SCRAP) {
+            Com_WPrintf("RmlUi texture '%s' landed in the scrap atlas; "
+                        "author UI textures at 64x64 or larger.\n",
+                        source.c_str());
             return {};
         }
 

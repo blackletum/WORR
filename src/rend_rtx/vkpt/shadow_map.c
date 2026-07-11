@@ -516,7 +516,7 @@ static void sample_disk(float* u, float* v)
 void vkpt_shadow_map_setup(const sun_light_t* light, const float* bbox_min, const float* bbox_max, float* VP, float* depth_scale, bool random_sampling)
 {
 	vec3_t up_dir = { 0.0f, 0.0f, 1.0f };
-	if (light->direction[2] >= 0.99f)
+	if (fabsf(light->direction[2]) >= 0.99f)
 		VectorSet(up_dir, 1.f, 0.f, 0.f);
 
 	vec3_t look_dir;

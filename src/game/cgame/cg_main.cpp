@@ -6,6 +6,28 @@
 #include "client/cgame_entity_ext.h"
 #include "client/cgame_ui_ext.h"
 #include "m_flash.hpp"
+#include "shared/pmove_abi_layout.hpp"
+
+static_assert(std::is_standard_layout_v<PMove>);
+static_assert(std::is_trivially_copyable_v<PMove>);
+static_assert(sizeof(pmove_state_t) == worr::pmove_abi_v1::state_size);
+static_assert(sizeof(usercmd_t) == worr::pmove_abi_v1::command_size);
+static_assert(sizeof(PMove) == worr::pmove_abi_v1::pmove_size);
+static_assert(alignof(PMove) == worr::pmove_abi_v1::pmove_alignment);
+static_assert(offsetof(PMove, cmd) == worr::pmove_abi_v1::command_offset);
+static_assert(offsetof(PMove, snapInitial) ==
+              worr::pmove_abi_v1::snap_initial_offset);
+static_assert(offsetof(PMove, touch) == worr::pmove_abi_v1::touch_offset);
+static_assert(offsetof(PMove, viewAngles) ==
+              worr::pmove_abi_v1::view_angles_offset);
+static_assert(offsetof(PMove, trace) ==
+              worr::pmove_abi_v1::trace_callback_offset);
+static_assert(offsetof(PMove, clip) ==
+              worr::pmove_abi_v1::clip_callback_offset);
+static_assert(offsetof(PMove, pointContents) ==
+              worr::pmove_abi_v1::point_contents_callback_offset);
+static_assert(offsetof(PMove, impactDelta) ==
+              worr::pmove_abi_v1::impact_delta_offset);
 
 cgame_import_t cgi;
 cgame_export_t cglobals;
@@ -45,6 +67,7 @@ static void InitCGame()
 	cgame_init_time = cgi.CL_ClientRealTime();
 
 	pm_config.n64Physics = !!atoi(cgi.get_configString(CONFIG_N64_PHYSICS));
+	pm_config.q3Overbounce = !!atoi(cgi.get_configString(CONFIG_Q3_OVERBOUNCE));
 	pm_config.airAccel = atoi(cgi.get_configString(CS_AIRACCEL));
 }
 
@@ -103,6 +126,8 @@ static void CG_ParseConfigString(int32_t i, const char *s)
 {
 	if (i == CONFIG_N64_PHYSICS)
 		pm_config.n64Physics = !!atoi(s);
+	else if (i == CONFIG_Q3_OVERBOUNCE)
+		pm_config.q3Overbounce = !!atoi(s);
 	else if (i == CS_AIRACCEL)
 		pm_config.airAccel = atoi(s);
 

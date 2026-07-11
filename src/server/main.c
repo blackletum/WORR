@@ -1930,7 +1930,11 @@ static bool SV_BotAddImmediate(const char *name, const char *team,
 
     newcl->state = cs_spawned;
     newcl->framenum = 1;
+    newcl->last_built_client_frame = 0;
+    newcl->last_built_server_frame = 0;
     newcl->lastframe = -1;
+    newcl->last_acked_server_frame = 0;
+    newcl->last_acked_server_frame_delta = 0;
     newcl->lastmessage = svs.realtime;
     newcl->lastactivity = svs.realtime;
     newcl->command_msec = 1800;
@@ -7070,7 +7074,11 @@ static void SVC_DirectConnect(void)
     Com_DPrintf("Going from cs_free to cs_assigned for %s\n", newcl->name);
     newcl->state = cs_assigned;
     newcl->framenum = 1; // frame 0 can't be used
+    newcl->last_built_client_frame = 0;
+    newcl->last_built_server_frame = 0;
     newcl->lastframe = -1;
+    newcl->last_acked_server_frame = 0;
+    newcl->last_acked_server_frame_delta = 0;
     newcl->lastmessage = svs.realtime;    // don't timeout
     newcl->lastactivity = svs.realtime;
     newcl->min_ping = 9999;

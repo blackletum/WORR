@@ -712,6 +712,8 @@ void GL_MultMatrix(GLfloat *restrict p, const GLfloat *restrict a,
 
 void GL_SetEntityAxis(void) {
   const entity_t *e = glr.ent;
+  vec3_t scale;
+  bool scaled = false;
 
   glr.entrotated = false;
   glr.entscale = 1;
@@ -725,13 +727,20 @@ void GL_SetEntityAxis(void) {
     glr.entrotated = true;
   }
 
-  if ((e->scale[0] && e->scale[0] != 1) || (e->scale[1] && e->scale[1] != 1) ||
-      (e->scale[2] && e->scale[2] != 1)) {
-    VectorScale(glr.entaxis[0], e->scale[0], glr.entaxis[0]);
-    VectorScale(glr.entaxis[1], e->scale[1], glr.entaxis[1]);
-    VectorScale(glr.entaxis[2], e->scale[2], glr.entaxis[2]);
+  for (int i = 0; i < 3; i++) {
+    scale[i] = isfinite(e->scale[i]) && e->scale[i] != 0.0f
+                   ? e->scale[i]
+                   : 1.0f;
+    scaled |= scale[i] != 1.0f;
+  }
+
+  if (scaled) {
+    VectorScale(glr.entaxis[0], scale[0], glr.entaxis[0]);
+    VectorScale(glr.entaxis[1], scale[1], glr.entaxis[1]);
+    VectorScale(glr.entaxis[2], scale[2], glr.entaxis[2]);
     glr.entrotated = true;
-    glr.entscale = max(e->scale[0], max(e->scale[1], e->scale[2]));
+    glr.entscale = max(fabsf(scale[0]),
+                       max(fabsf(scale[1]), fabsf(scale[2])));
   }
 }
 
@@ -1404,6 +1413,16 @@ static void GL_UpdateAutoExposure(void) {
   int dst = 1 - src;
   GLuint src_tex = src ? TEXNUM_PP_EXPOSURE_1 : TEXNUM_PP_EXPOSURE_0;
   GLuint dst_tex = dst ? TEXNUM_PP_EXPOSURE_1 : TEXNUM_PP_EXPOSURE_0;
+  const bool first_update = !gl_auto_exposure_valid;
+  const float adaptation_alpha = gls.u_block.postfx_auto[3];
+
+  // Start from the current scene target instead of slowly adapting from an
+  // arbitrary previous value. The textures are initialized to identity as a
+  // defensive fallback, but the first update should not depend on them.
+  if (first_update) {
+    gls.u_block.postfx_auto[3] = 1.0f;
+    gls.u_block_dirty = true;
+  }
 
   qglBindFramebuffer(GL_FRAMEBUFFER, FBO_EXPOSURE);
   qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
@@ -1415,6 +1434,11 @@ static void GL_UpdateAutoExposure(void) {
   GL_ForceTexture(TMU_TEXTURE, TEXNUM_PP_SCENE);
   GL_ForceTexture(TMU_EXPOSURE, src_tex);
   GL_PostProcess(GLS_EXPOSURE_UPDATE, 0, 0, 1, 1);
+
+  if (first_update) {
+    gls.u_block.postfx_auto[3] = adaptation_alpha;
+    gls.u_block_dirty = true;
+  }
 
   GL_Setup2D();
 

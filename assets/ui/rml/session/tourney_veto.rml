@@ -29,8 +29,8 @@
 
         <section class="session-flow-step" id="tourney-veto-wait-panel" data-visible-if="ui_tourney_veto_show_wait=1">
           <h2>Waiting</h2>
-          <p id="tourney-veto-wait-0" data-bind="cvars.ui_tourney_veto_wait_0" data-label-cvar="ui_tourney_veto_wait_0">Waiting for the active</p>
-          <p id="tourney-veto-wait-1" data-bind="cvars.ui_tourney_veto_wait_1" data-label-cvar="ui_tourney_veto_wait_1">side to make a choice.</p>
+          <p id="tourney-veto-wait-0" data-bind="cvars.ui_tourney_veto_wait_0" data-label-cvar="ui_tourney_veto_wait_0">Waiting for the active side to make a choice.</p>
+          <p id="tourney-veto-wait-1" data-bind="cvars.ui_tourney_veto_wait_1" data-label-cvar="ui_tourney_veto_wait_1"></p>
         </section>
 
         <section class="session-panel" id="tourney-veto-action-panel" data-visible-if="ui_tourney_veto_can_pick=1" data-controller="session.tournament_veto">
@@ -50,7 +50,7 @@
       </main>
 
       <footer class="actions" id="tourney-veto-actions">
-        <button id="tourney-veto-back" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="tourney-veto-back" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

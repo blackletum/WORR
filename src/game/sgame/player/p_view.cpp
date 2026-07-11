@@ -9,13 +9,14 @@ entry point called each frame to update the player's view state (`player_state_t
 Bobbing: `P_CalcBob` calculates the up-and-down and side-to-side motion of the view as the
 player moves. - Damage Feedback: Calculates view kicks (`P_DamageFeedback`) and screen blends
 when the player takes damage. - Weapon Kick: `P_AddWeaponKick` applies the recoil effect to the
-player's view when they fire a weapon. - Lag Compensation: Implements the `LagCompensate`
-system, which temporarily moves other players back in time to their positions as seen by the
-attacker, ensuring accurate hit detection in a networked environment.*/
+player's view when they fire a weapon. - Lag History: Captures finalized authoritative player
+poses for the sgame-owned historical collision-query service.*/
 
 #include "../g_local.hpp"
+#include "../menu/menu_ui_helpers.hpp"
 #include "../monsters/m_player.hpp"
 #include "../bots/bot_includes.hpp"
+#include "../network/lag_compensation.hpp"
 
 #include <array>
 
@@ -34,12 +35,20 @@ namespace {
 constexpr GameTime kVoteMenuUpdateInterval = 250_ms;
 constexpr GameTime kMapSelectorUpdateInterval = 200_ms;
 constexpr GameTime kMatchStatsUpdateInterval = 1_sec;
+constexpr GameTime kDmJoinUpdateInterval = 1_sec;
 
 void UpdateCgameUiMenus(gentity_t* ent) {
 	if (!ent || !ent->client)
 		return;
 
 	auto* cl = ent->client;
+	MenuUi::FlushUiCommandQueue(ent);
+
+	if (cl->initialMenu.dmJoinActive &&
+		cl->initialMenu.nextUpdate <= level.time) {
+		RefreshDmJoinMenu(ent);
+		cl->initialMenu.nextUpdate = level.time + kDmJoinUpdateInterval;
+	}
 
 	const bool voteActive = Vote_Menu_Active(ent);
 	if (!voteActive) {
@@ -1357,102 +1366,6 @@ static void P_RunMegaHealth(gentity_t* ent) {
 
 /*
 =================
-LagCompensate
-
-[Paril-KEX] push all players' origins back to match their lag compensation
-=================
-*/
-void LagCompensate(gentity_t* from_player, const Vector3& start, const Vector3& dir) {
-	uint32_t currentFrame = gi.ServerFrame();
-
-	// if you need this to fight monsters, you need help
-	if (!deathmatch->integer)
-		return;
-	else if (!g_lagCompensation->integer)
-		return;
-	// don't need this
-	else if (from_player->client->cmd.serverFrame >= currentFrame ||
-		(from_player->svFlags & SVF_BOT))
-		return;
-
-	int32_t frameDelta = (currentFrame - from_player->client->cmd.serverFrame) + 1;
-
-	for (auto player : active_clients()) {
-		// we aren't gonna hit ourselves
-		if (player == from_player)
-			continue;
-
-		// not enough data, spare them
-		if (player->client->lag.numOrigins < frameDelta)
-			continue;
-
-		// if they're way outside of cone of vision, they won't be captured in this
-		if ((player->s.origin - start).normalized().dot(dir) < 0.75f)
-			continue;
-
-		int32_t lagID = (player->client->lag.nextOrigin - 1) - (frameDelta - 1);
-
-		if (lagID < 0)
-			lagID = game.maxLagOrigins + lagID;
-
-		if (lagID < 0 || lagID >= player->client->lag.numOrigins) {
-			gi.Com_PrintFmt("{}: lag compensation error.\n", __FUNCTION__);
-			UnLagCompensate();
-			return;
-		}
-
-		const Vector3& lagOrigin = (game.lagOrigins + ((player->s.number - 1) * game.maxLagOrigins))[lagID];
-
-		// no way they'd be hit if they aren't in the PVS
-		if (!gi.inPVS(lagOrigin, start, false))
-			continue;
-
-		// only back up once
-		if (!player->client->lag.isCompensated) {
-			player->client->lag.isCompensated = true;
-			player->client->lag.restoreOrigin = player->s.origin;
-		}
-
-		player->s.origin = lagOrigin;
-
-		gi.linkEntity(player);
-	}
-}
-
-/*
-=================
-UnLagCompensate
-
-[Paril-KEX] pop everybody's lag compensation values
-=================
-*/
-void UnLagCompensate() {
-	for (auto player : active_clients()) {
-		if (player->client->lag.isCompensated) {
-			player->client->lag.isCompensated = false;
-			player->s.origin = player->client->lag.restoreOrigin;
-			gi.linkEntity(player);
-		}
-	}
-}
-
-/*
-=================
-G_SaveLagCompensation
-
-[Paril-KEX] save the current lag compensation value
-=================
-*/
-static inline void G_SaveLagCompensation(gentity_t* ent) {
-	(game.lagOrigins + ((ent->s.number - 1) * game.maxLagOrigins))[ent->client->lag.nextOrigin] = ent->s.origin;
-	ent->client->lag.nextOrigin = (ent->client->lag.nextOrigin + 1) % game.maxLagOrigins;
-
-	if (ent->client->lag.numOrigins < game.maxLagOrigins)
-		ent->client->lag.numOrigins++;
-}
-
-/*
-=================
 Frenzy_ApplyAmmoRegen
 =================
 */
@@ -1785,7 +1698,7 @@ void ClientEndServerFrame(gentity_t* ent) {
 	P_AssignClientSkinNum(ent);
 
 	if (deathmatch->integer)
-		G_SaveLagCompensation(ent);
+		LagCompensation_RecordFrame(ent);
 
 	Compass_Update(ent, false);
 

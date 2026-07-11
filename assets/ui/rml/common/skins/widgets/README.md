@@ -1,7 +1,10 @@
-# WORR RmlUi Widget Skin Assets
+# WORR RmlUi Widget Skin Assets (legacy fallback set)
 
-This folder contains renderer-safe SVG widget surfaces used by the shared
-RmlUi themes. The files intentionally stay within the current OpenGL bridge SVG
+This folder contains renderer-safe SVG widget surfaces. As of the grimy-metal
+pass (see `../metal/README.md` and `docs-dev/rmlui-grimy-metal-theme-2026-07-11.md`)
+the shared themes use the generated `worr-metal` sprite sheet for widget
+chrome; these SVGs remain as the renderer-neutral fallback and palette
+reference. The files intentionally stay within the current OpenGL bridge SVG
 subset: rect, line, polyline, polygon, path, circle, flat fill/stroke colors,
 and opacity.
 

@@ -195,24 +195,38 @@ vkpt_tone_mapping_create_pipelines(void)
 VkResult
 vkpt_tone_mapping_reset(VkCommandBuffer cmd_buf)
 {
-	BUFFER_BARRIER(cmd_buf,
+	VkBufferMemoryBarrier buffer_barrier = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.buffer = qvk.buf_tonemap.buffer,
 		.offset = 0,
 		.size = VK_WHOLE_SIZE,
-		.srcAccessMask = 0,
-		.dstAccessMask = 0
-	);
+		.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+		.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+	};
+	VkPipelineStageFlags shader_stages = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+	if (!qvk.use_ray_query)
+		shader_stages |= VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR;
+
+	// The persistent buffer can still be in use by the preceding frame's
+	// compute or ray-tracing work. Finish those accesses before overwriting it.
+	vkCmdPipelineBarrier(cmd_buf,
+		shader_stages,
+		VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+		0, NULL, 1, &buffer_barrier, 0, NULL);
 
 	vkCmdFillBuffer(cmd_buf, qvk.buf_tonemap.buffer,
 		0, VK_WHOLE_SIZE, 0);
 
-	BUFFER_BARRIER(cmd_buf,
-		.buffer = qvk.buf_tonemap.buffer,
-		.offset = 0,
-		.size = VK_WHOLE_SIZE,
-		.srcAccessMask = 0,
-		.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT
-	);
+	// vkCmdFillBuffer is a transfer write. Make the cleared data visible to
+	// both the reads and atomic/writable accesses in the compute passes below.
+	buffer_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	buffer_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+	vkCmdPipelineBarrier(cmd_buf,
+		VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+		0, NULL, 1, &buffer_barrier, 0, NULL);
 
 	return VK_SUCCESS;
 }

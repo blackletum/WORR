@@ -809,6 +809,26 @@ static VkSurfaceFormatKHR VK_ChooseSurfaceFormat(const VkSurfaceFormatKHR *forma
         }
     }
 
+    for (uint32_t i = 0; i < count; ++i) {
+        if (formats[i].format == VK_FORMAT_R8G8B8A8_UNORM &&
+            formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return formats[i];
+        }
+    }
+
+    // The native raster shaders currently produce legacy display-referred
+    // code values. Prefer an UNORM target even on unusual surfaces; selecting
+    // an SRGB image format here would apply a second transfer function.
+    for (uint32_t i = 0; i < count; ++i) {
+        if (formats[i].format == VK_FORMAT_B8G8R8A8_UNORM ||
+            formats[i].format == VK_FORMAT_R8G8B8A8_UNORM) {
+            return formats[i];
+        }
+    }
+
+    Com_WPrintf("Vulkan: no compatible UNORM swapchain format; using format %d\n",
+                (int)formats[0].format);
+
     return formats[0];
 }
 

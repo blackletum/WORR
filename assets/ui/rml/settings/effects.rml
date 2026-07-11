@@ -86,7 +86,7 @@
               </div>
               <div class="setting-row" data-control="action">
                 <span class="setting-widget-icon" data-widget="action"><img src="../common/icons/widgets/action.svg" /></span>
-                <label for="effects-railtrail">Railgun Trail</label>
+                <label for="effects-railtrail">Rail Trail</label>
                 <button id="effects-railtrail" type="button" data-component="common.components.command_button" data-command="pushmenu railtrail" data-route-target="railtrail" data-menu-sound="open">Open</button>
               </div>
             </section>

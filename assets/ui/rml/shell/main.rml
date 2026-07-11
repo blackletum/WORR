@@ -12,7 +12,7 @@
       </div>
 
       <div class="menu-stack" id="main-menu-stack" data-component="common.components.menu_frame">
-        <img id="main-logo" src="/art/logo.png" />
+        <img id="main-logo" src="../common/brand/logo-menu.png" />
         <div class="menu-actions" id="main-menu-actions">
           <button id="main-singleplayer" type="button" data-command="pushmenu singleplayer" data-route-target="singleplayer" data-menu-sound="open">Single Player</button>
           <button id="main-multiplayer" type="button" data-command="pushmenu multiplayer" data-route-target="multiplayer" data-menu-sound="open">Multiplayer</button>
@@ -25,7 +25,7 @@
       <div class="menu-footer" id="main-menu-footer">
         <button id="main-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
         <div id="main-version">
-          <p id="main-version-title">DEVELOPMENT VERSION</p>
+          <p id="main-version-title">Version</p>
           <p id="main-version-value" data-bind-cvar="version">WORR</p>
         </div>
       </div>

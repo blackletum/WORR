@@ -6,6 +6,91 @@
  * colors and spacing until a runtime token preprocessor exists.
  */
 
+/* BEGIN GENERATED worr-metal spritesheet (tools/ui_gen_metal_skins.py) */
+@spritesheet worr-metal
+{
+	src: ../skins/metal/ui-metal.png;
+	resolution: 2x;
+	btn: 4px 4px 96px 72px;
+	btn-hover: 104px 4px 96px 72px;
+	btn-focus: 204px 4px 96px 72px;
+	btn-active: 304px 4px 96px 72px;
+	btn-disabled: 404px 4px 96px 72px;
+	btn-quiet: 504px 4px 96px 72px;
+	btn-primary: 604px 4px 96px 72px;
+	btn-primary-hover: 704px 4px 96px 72px;
+	btn-danger: 804px 4px 96px 72px;
+	btn-danger-hover: 904px 4px 96px 72px;
+	field: 4px 80px 96px 72px;
+	field-hover: 104px 80px 96px 72px;
+	field-focus: 204px 80px 96px 72px;
+	field-disabled: 304px 80px 96px 72px;
+	selectarrow: 404px 80px 30px 28px;
+	selectarrow-hover: 438px 80px 30px 28px;
+	check-off: 472px 80px 64px 56px;
+	check-off-hover: 540px 80px 64px 56px;
+	check-off-focus: 608px 80px 64px 56px;
+	check-on: 676px 80px 64px 56px;
+	check-on-hover: 744px 80px 64px 56px;
+	check-on-focus: 812px 80px 64px 56px;
+	check-disabled: 880px 80px 64px 56px;
+	check-on-disabled: 948px 80px 64px 56px;
+	track: 4px 156px 96px 24px;
+	track-hover: 104px 156px 96px 24px;
+	track-focus: 204px 156px 96px 24px;
+	track-disabled: 304px 156px 96px 24px;
+	thumb: 404px 156px 48px 56px;
+	thumb-hover: 456px 156px 48px 56px;
+	thumb-disabled: 508px 156px 48px 56px;
+	ptrack: 560px 156px 96px 56px;
+	ptrack-hover: 660px 156px 96px 56px;
+	ptrack-disabled: 760px 156px 96px 56px;
+	pfill: 860px 156px 80px 40px;
+	pfill-disabled: 4px 216px 80px 40px;
+	sthumb: 88px 216px 24px 64px;
+	sthumb-hover: 116px 216px 24px 64px;
+	sthumb-disabled: 144px 216px 24px 64px;
+	strack: 172px 216px 24px 96px;
+	rail: 200px 216px 192px 12px;
+	panel: 396px 216px 144px 144px;
+	popup: 544px 216px 192px 192px;
+	drop: 740px 216px 96px 96px;
+	grime: 4px 412px 256px 256px;
+	btn-inner: 28px 28px 48px 24px;
+	btn-hover-inner: 128px 28px 48px 24px;
+	btn-focus-inner: 228px 28px 48px 24px;
+	btn-active-inner: 328px 28px 48px 24px;
+	btn-disabled-inner: 428px 28px 48px 24px;
+	btn-quiet-inner: 528px 28px 48px 24px;
+	btn-primary-inner: 628px 28px 48px 24px;
+	btn-primary-hover-inner: 728px 28px 48px 24px;
+	btn-danger-inner: 828px 28px 48px 24px;
+	btn-danger-hover-inner: 928px 28px 48px 24px;
+	field-inner: 24px 100px 56px 32px;
+	field-hover-inner: 124px 100px 56px 32px;
+	field-focus-inner: 224px 100px 56px 32px;
+	field-disabled-inner: 324px 100px 56px 32px;
+	track-inner: 14px 166px 76px 4px;
+	track-hover-inner: 114px 166px 76px 4px;
+	track-focus-inner: 214px 166px 76px 4px;
+	track-disabled-inner: 314px 166px 76px 4px;
+	ptrack-inner: 576px 172px 64px 24px;
+	ptrack-hover-inner: 676px 172px 64px 24px;
+	ptrack-disabled-inner: 776px 172px 64px 24px;
+	pfill-inner: 872px 168px 56px 16px;
+	pfill-disabled-inner: 16px 228px 56px 16px;
+	sthumb-inner: 98px 226px 4px 44px;
+	sthumb-hover-inner: 126px 226px 4px 44px;
+	sthumb-disabled-inner: 154px 226px 4px 44px;
+	strack-inner: 182px 226px 4px 76px;
+	rail-inner: 204px 220px 184px 4px;
+	panel-inner: 420px 240px 96px 96px;
+	popup-inner: 584px 256px 112px 112px;
+	drop-inner: 756px 232px 64px 64px;
+	grime-inner: 84px 492px 96px 96px;
+}
+/* END GENERATED worr-metal spritesheet */
+
 body
 {
 	position: absolute;
@@ -43,6 +128,8 @@ h1,
 	font-size: 30px;
 	line-height: 1.1;
 	font-weight: bold;
+	text-transform: uppercase;
+	letter-spacing: 2px;
 }
 
 h2,
@@ -55,6 +142,7 @@ h2,
 	font-size: 21px;
 	line-height: 1.15;
 	font-weight: bold;
+	letter-spacing: 1px;
 }
 
 p,
@@ -109,17 +197,32 @@ li
 	color: #7ed4d8;
 }
 
+/*
+ * The renderer bridge does not implement SetTransform, so entrance motion
+ * must animate opacity (vertex colors) only; transform keyframes would be
+ * silently dropped.
+ */
 @keyframes route-enter
 {
 	from
 	{
 		opacity: 0;
-		transform: translateY(8px);
 	}
 	to
 	{
 		opacity: 1;
-		transform: translateY(0px);
+	}
+}
+
+@keyframes popup-enter
+{
+	from
+	{
+		opacity: 0;
+	}
+	to
+	{
+		opacity: 1;
 	}
 }
 
@@ -140,6 +243,7 @@ li
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+	decorator: ninepatch(grime, grime-inner) border-box, image(../skins/metal/backdrop.png repeat) border-box;
 	animation: 0.18s cubic-out route-enter;
 }
 
@@ -151,28 +255,11 @@ li
 	animation: none;
 }
 
-/* Short-canvas fallback: reclaim vertical space from fixed chrome. */
-@media (max-height: 640px)
-{
-	.ui-route,
-	.screen
-	{
-		padding: 10px;
-	}
-
-	.page-header,
-	.menu-header
-	{
-		margin-bottom: 6px;
-		padding-bottom: 6px;
-	}
-
-	.menu-footer
-	{
-		margin-top: 6px;
-		padding-top: 6px;
-	}
-}
+/*
+ * The short-canvas (max-height: 640px) fallback lives in accessibility.rcss:
+ * that sheet is imported last, so the media rules actually beat the
+ * unconditional family styles.
+ */
 
 .compact-screen
 {
@@ -185,14 +272,16 @@ li
 	flex: 0 0 auto;
 	margin-bottom: 8px;
 	padding-bottom: 8px;
-	border-bottom-width: 1px;
-	border-bottom-color: #332d23;
+	border-bottom-width: 2px;
+	border-bottom-color: #4b4235;
 }
 
 .page-header p,
 .menu-header p
 {
 	margin-bottom: 0px;
+	/* Readable measure on ultrawide canvases. */
+	max-width: 760px;
 }
 
 .status-message
@@ -208,6 +297,7 @@ li
 	margin-bottom: 8px;
 	white-space: normal;
 	word-break: break-word;
+	decorator: ninepatch(drop, drop-inner);
 }
 
 .page-header p.status-message,
@@ -245,11 +335,13 @@ li
 .ui-panel,
 .contract
 {
+	box-sizing: border-box;
 	padding: 16px;
 	background-color: #1b1916;
 	border-width: 2px;
 	border-color: #756a5d;
 	border-radius: 6px;
+	decorator: ninepatch(panel, panel-inner) border-box, image(../skins/metal/plate.png repeat) border-box;
 }
 
 .ui-row
@@ -283,6 +375,11 @@ li
 	border-top-color: #332d23;
 }
 
+body[data-menu-presentation="popup"]
+{
+	background-color: transparent;
+}
+
 .popup-screen
 {
 	display: flex;
@@ -290,11 +387,14 @@ li
 	align-items: center;
 	justify-content: center;
 	padding: 18px;
-	background-color: #080706;
+	/* Translucent scrim: dim whatever is beneath instead of hiding it. */
+	background-color: #080706d8;
+	decorator: none;
 }
 
 .popup-dialog
 {
+	box-sizing: border-box;
 	width: 420px;
 	max-width: 420px;
 	padding: 18px;
@@ -304,8 +404,15 @@ li
 	border-left-width: 4px;
 	border-left-color: #ee6758;
 	border-radius: 6px;
-	decorator: image(../skins/widgets/popup-frame.svg);
+	decorator: ninepatch(popup, popup-inner), image(../skins/metal/plate.png repeat);
 	transition: background-color border-color color 0.12s cubic-out;
+	animation: 0.14s cubic-out popup-enter;
+}
+
+.ui-reduced-motion .popup-dialog,
+.ui-a11y-reduced-motion .popup-dialog
+{
+	animation: none;
 }
 
 .confirmation-dialog
@@ -375,7 +482,7 @@ li
 	border-color: #5f8765;
 	border-left-width: 4px;
 	border-left-color: #83d18f;
-	decorator: image(../skins/widgets/button-primary.svg);
+	decorator: ninepatch(btn-primary, btn-primary-inner);
 }
 
 .popup-primary:hover
@@ -384,7 +491,7 @@ li
 	border-color: #83d18f;
 	border-left-color: #a6e3ad;
 	color: #83d18f;
-	decorator: image(../skins/widgets/button-primary-hover.svg);
+	decorator: ninepatch(btn-primary-hover, btn-primary-hover-inner);
 }
 
 .popup-primary:focus
@@ -393,7 +500,7 @@ li
 	border-color: #ffd967;
 	border-left-color: #a6e3ad;
 	color: #83d18f;
-	decorator: image(../skins/widgets/button-primary-hover.svg);
+	decorator: ninepatch(btn-primary-hover, btn-primary-hover-inner);
 }
 
 .popup-primary:active
@@ -402,7 +509,7 @@ li
 	border-color: #a6e3ad;
 	border-left-color: #a6e3ad;
 	color: #a6e3ad;
-	decorator: image(../skins/widgets/button-primary-hover.svg);
+	decorator: ninepatch(btn-primary-hover, btn-primary-hover-inner);
 }
 
 .popup-danger
@@ -411,7 +518,7 @@ li
 	border-color: #895047;
 	border-left-width: 4px;
 	border-left-color: #ee6758;
-	decorator: image(../skins/widgets/button-danger.svg);
+	decorator: ninepatch(btn-danger, btn-danger-inner);
 }
 
 .popup-danger:hover
@@ -420,7 +527,7 @@ li
 	border-color: #ee6758;
 	border-left-color: #ff9285;
 	color: #ee6758;
-	decorator: image(../skins/widgets/button-danger-hover.svg);
+	decorator: ninepatch(btn-danger-hover, btn-danger-hover-inner);
 }
 
 .popup-danger:focus
@@ -429,7 +536,7 @@ li
 	border-color: #ffd967;
 	border-left-color: #ff9285;
 	color: #ee6758;
-	decorator: image(../skins/widgets/button-danger-hover.svg);
+	decorator: ninepatch(btn-danger-hover, btn-danger-hover-inner);
 }
 
 .popup-danger:active
@@ -438,7 +545,7 @@ li
 	border-color: #ff9285;
 	border-left-color: #ff9285;
 	color: #ff9285;
-	decorator: image(../skins/widgets/button-danger-hover.svg);
+	decorator: ninepatch(btn-danger-hover, btn-danger-hover-inner);
 }
 
 .popup-secondary
@@ -446,7 +553,7 @@ li
 	background-color: #1b1916;
 	border-color: #5f5548;
 	color: #c9beb0;
-	decorator: image(../skins/widgets/button-normal.svg);
+	decorator: ninepatch(btn-quiet, btn-quiet-inner);
 }
 
 .popup-secondary:hover
@@ -454,7 +561,7 @@ li
 	background-color: #27231d;
 	border-color: #b99b5b;
 	color: #ffd967;
-	decorator: image(../skins/widgets/button-hover.svg);
+	decorator: ninepatch(btn-hover, btn-hover-inner);
 }
 
 .popup-secondary:focus
@@ -462,7 +569,7 @@ li
 	background-color: #27231d;
 	border-color: #ffd967;
 	color: #ffd967;
-	decorator: image(../skins/widgets/button-focus.svg);
+	decorator: ninepatch(btn-focus, btn-focus-inner);
 }
 
 .popup-secondary:active
@@ -470,7 +577,7 @@ li
 	background-color: #3f3626;
 	border-color: #ffd967;
 	color: #ffd967;
-	decorator: image(../skins/widgets/button-active.svg);
+	decorator: ninepatch(btn-active, btn-active-inner);
 }
 
 button,
@@ -489,6 +596,7 @@ button,
 .ui-button
 {
 	display: block;
+	box-sizing: border-box;
 	min-height: 36px;
 	min-width: 96px;
 	max-width: 100%;
@@ -498,7 +606,7 @@ button,
 	border-width: 2px;
 	border-color: #756a5d;
 	border-radius: 3px;
-	decorator: image(../skins/widgets/button-normal.svg);
+	decorator: ninepatch(btn, btn-inner);
 	text-align: center;
 	font-family: "WORR Display";
 	font-size: 16px;
@@ -514,7 +622,7 @@ button:hover,
 	background-color: #332d23;
 	border-color: #b99b5b;
 	color: #ffd967;
-	decorator: image(../skins/widgets/button-hover.svg);
+	decorator: ninepatch(btn-hover, btn-hover-inner);
 }
 
 button:active,
@@ -523,7 +631,7 @@ button:active,
 	background-color: #3f3626;
 	border-color: #ffd967;
 	color: #ffd967;
-	decorator: image(../skins/widgets/button-active.svg);
+	decorator: ninepatch(btn-active, btn-active-inner);
 }
 
 button:focus,
@@ -536,13 +644,13 @@ textarea:focus,
 	background-color: #332d23;
 	border-color: #ffd967;
 	color: #ffd967;
-	decorator: image(../skins/widgets/input-focus.svg);
+	decorator: ninepatch(field-focus, field-focus-inner);
 }
 
 button:focus,
 .ui-button:focus
 {
-	decorator: image(../skins/widgets/button-focus.svg);
+	decorator: ninepatch(btn-focus, btn-focus-inner);
 }
 
 button[data-command="ui.back"],
@@ -558,7 +666,7 @@ button.ui-button-back,
 	background-color: #1b1916;
 	border-color: #5f5548;
 	color: #c9beb0;
-	decorator: image(../skins/widgets/button-normal.svg);
+	decorator: ninepatch(btn-quiet, btn-quiet-inner);
 }
 
 button[data-command="ui.back"]:hover,
@@ -574,7 +682,7 @@ button.ui-button-back:hover,
 	background-color: #27231d;
 	border-color: #b99b5b;
 	color: #ffd967;
-	decorator: image(../skins/widgets/button-hover.svg);
+	decorator: ninepatch(btn-hover, btn-hover-inner);
 }
 
 button[data-command="ui.back"]:focus,
@@ -590,7 +698,7 @@ button.ui-button-back:focus,
 	background-color: #27231d;
 	border-color: #ffd967;
 	color: #ffd967;
-	decorator: image(../skins/widgets/button-focus.svg);
+	decorator: ninepatch(btn-focus, btn-focus-inner);
 }
 
 button[data-command="ui.back"]:active,
@@ -606,7 +714,7 @@ button.ui-button-back:active,
 	background-color: #3f3626;
 	border-color: #ffd967;
 	color: #ffd967;
-	decorator: image(../skins/widgets/button-active.svg);
+	decorator: ninepatch(btn-active, btn-active-inner);
 }
 
 button.ui-button-primary,
@@ -616,7 +724,7 @@ button.ui-button-primary,
 	border-color: #5f8765;
 	border-left-width: 4px;
 	border-left-color: #83d18f;
-	decorator: image(../skins/widgets/button-primary.svg);
+	decorator: ninepatch(btn-primary, btn-primary-inner);
 }
 
 button.ui-button-primary:hover,
@@ -626,7 +734,7 @@ button.ui-button-primary:hover,
 	border-color: #83d18f;
 	border-left-color: #a6e3ad;
 	color: #83d18f;
-	decorator: image(../skins/widgets/button-primary-hover.svg);
+	decorator: ninepatch(btn-primary-hover, btn-primary-hover-inner);
 }
 
 button.ui-button-primary:focus,
@@ -636,7 +744,7 @@ button.ui-button-primary:focus,
 	border-color: #ffd967;
 	border-left-color: #a6e3ad;
 	color: #83d18f;
-	decorator: image(../skins/widgets/button-primary-hover.svg);
+	decorator: ninepatch(btn-primary-hover, btn-primary-hover-inner);
 }
 
 button.ui-button-primary:active,
@@ -646,7 +754,7 @@ button.ui-button-primary:active,
 	border-color: #a6e3ad;
 	border-left-color: #a6e3ad;
 	color: #a6e3ad;
-	decorator: image(../skins/widgets/button-primary-hover.svg);
+	decorator: ninepatch(btn-primary-hover, btn-primary-hover-inner);
 }
 
 button.ui-button-danger,
@@ -656,7 +764,7 @@ button.ui-button-danger,
 	border-color: #895047;
 	border-left-width: 4px;
 	border-left-color: #ee6758;
-	decorator: image(../skins/widgets/button-danger.svg);
+	decorator: ninepatch(btn-danger, btn-danger-inner);
 }
 
 button.ui-button-danger:hover,
@@ -666,7 +774,7 @@ button.ui-button-danger:hover,
 	border-color: #ee6758;
 	border-left-color: #ff9285;
 	color: #ee6758;
-	decorator: image(../skins/widgets/button-danger-hover.svg);
+	decorator: ninepatch(btn-danger-hover, btn-danger-hover-inner);
 }
 
 button.ui-button-danger:focus,
@@ -676,7 +784,7 @@ button.ui-button-danger:focus,
 	border-color: #ffd967;
 	border-left-color: #ff9285;
 	color: #ee6758;
-	decorator: image(../skins/widgets/button-danger-hover.svg);
+	decorator: ninepatch(btn-danger-hover, btn-danger-hover-inner);
 }
 
 button.ui-button-danger:active,
@@ -686,7 +794,7 @@ button.ui-button-danger:active,
 	border-color: #ff9285;
 	border-left-color: #ff9285;
 	color: #ff9285;
-	decorator: image(../skins/widgets/button-danger-hover.svg);
+	decorator: ninepatch(btn-danger-hover, btn-danger-hover-inner);
 }
 
 input,
@@ -694,6 +802,7 @@ select,
 textarea,
 .ui-field
 {
+	box-sizing: border-box;
 	min-height: 36px;
 	max-width: 100%;
 	padding: 6px 10px;
@@ -702,7 +811,7 @@ textarea,
 	border-width: 2px;
 	border-color: #756a5d;
 	border-radius: 3px;
-	decorator: image(../skins/widgets/input-normal.svg);
+	decorator: ninepatch(field, field-inner);
 	font-family: "WORR UI";
 	font-size: 16px;
 	line-height: 1.2;
@@ -721,17 +830,21 @@ input[type="checkbox"],
 	padding: 0px;
 	background-color: #171511;
 	border-color: #756a5d;
-	decorator: image(../skins/widgets/checkbox-off.svg);
+	decorator: image(check-off);
 }
 
+/*
+ * The range element is an invisible container; slidertrack carries all the
+ * chrome so the track is never drawn twice.
+ */
 input[type="range"],
 .worr-slider
 {
 	min-height: 28px;
 	padding: 0px;
-	background-color: #171511;
-	border-color: #5f5548;
-	decorator: image(../skins/widgets/range-track.svg);
+	background-color: transparent;
+	border-width: 0px;
+	decorator: none;
 }
 
 progress,
@@ -743,7 +856,7 @@ progress,
 	border-width: 2px;
 	border-color: #756a5d;
 	border-radius: 3px;
-	decorator: image(../skins/widgets/progress-track.svg);
+	decorator: ninepatch(ptrack, ptrack-inner);
 	transition: background-color border-color 0.12s cubic-out;
 }
 
@@ -754,46 +867,46 @@ textarea:hover,
 {
 	background-color: #211e19;
 	border-color: #b99b5b;
-	decorator: image(../skins/widgets/input-hover.svg);
+	decorator: ninepatch(field-hover, field-hover-inner);
 }
 
 select
 {
-	decorator: image(../skins/widgets/select-normal.svg);
+	decorator: ninepatch(field, field-inner);
 }
 
 select:hover
 {
-	decorator: image(../skins/widgets/select-hover.svg);
+	decorator: ninepatch(field-hover, field-hover-inner);
 }
 
 select:focus
 {
-	decorator: image(../skins/widgets/select-focus.svg);
+	decorator: ninepatch(field-focus, field-focus-inner);
 }
 
 select selectvalue
 {
-	margin-right: 36px;
+	margin-right: 32px;
 }
 
 select selectarrow
 {
 	width: 30px;
 	min-width: 30px;
-	decorator: image(../skins/widgets/arrowbox-normal.svg);
+	decorator: image(selectarrow);
 }
 
 select:hover selectarrow,
 select:focus selectarrow
 {
-	decorator: image(../skins/widgets/arrowbox-hover.svg);
+	decorator: image(selectarrow-hover);
 }
 
 select:active selectarrow,
 select selectarrow:checked
 {
-	decorator: image(../skins/widgets/arrowbox-hover.svg);
+	decorator: image(selectarrow-hover);
 }
 
 select selectbox
@@ -802,7 +915,7 @@ select selectbox
 	background-color: #16130f;
 	border-width: 1px;
 	border-color: #5f5548;
-	decorator: image(../skins/widgets/dropdown-panel.svg);
+	decorator: ninepatch(drop, drop-inner);
 }
 
 select selectbox option
@@ -818,59 +931,53 @@ select selectbox option:checked
 {
 	background-color: #332d23;
 	color: #ffd967;
-	decorator: image(../skins/widgets/dropdown-option-hover.svg);
 }
 
 select selectbox option:active
 {
 	background-color: #3f3626;
 	color: #ffd967;
-	decorator: image(../skins/widgets/dropdown-option-hover.svg);
 }
 
 input[type="checkbox"]:hover,
 .worr-toggle:hover
 {
-	decorator: image(../skins/widgets/checkbox-off-hover.svg);
+	decorator: image(check-off-hover);
 }
 
 input[type="checkbox"]:focus,
 .worr-toggle:focus
 {
 	border-color: #ffd967;
-	decorator: image(../skins/widgets/checkbox-off-focus.svg);
+	decorator: image(check-off-focus);
 }
 
 input[type="checkbox"]:checked,
 .worr-toggle:checked
 {
-	decorator: image(../skins/widgets/checkbox-on.svg);
+	decorator: image(check-on);
 }
 
 input[type="checkbox"]:checked:hover,
 .worr-toggle:checked:hover
 {
-	decorator: image(../skins/widgets/checkbox-on-hover.svg);
+	decorator: image(check-on-hover);
 }
 
 input[type="checkbox"]:checked:focus,
 .worr-toggle:checked:focus
 {
 	border-color: #ffd967;
-	decorator: image(../skins/widgets/checkbox-on-focus.svg);
+	decorator: image(check-on-focus);
 }
 
 input[type="range"]:hover,
-.worr-slider:hover
-{
-	decorator: image(../skins/widgets/range-track-hover.svg);
-}
-
+.worr-slider:hover,
 input[type="range"]:focus,
 .worr-slider:focus
 {
-	border-color: #ffd967;
-	decorator: image(../skins/widgets/range-track-focus.svg);
+	background-color: transparent;
+	decorator: none;
 }
 
 input[type="range"] slidertrack,
@@ -878,19 +985,19 @@ input[type="range"] slidertrack,
 {
 	height: 22px;
 	margin-top: 3px;
-	decorator: image(../skins/widgets/range-track.svg);
+	decorator: ninepatch(track, track-inner);
 }
 
 input[type="range"]:hover slidertrack,
 .worr-slider:hover slidertrack
 {
-	decorator: image(../skins/widgets/range-track-hover.svg);
+	decorator: ninepatch(track-hover, track-hover-inner);
 }
 
 input[type="range"]:focus slidertrack,
 .worr-slider:focus slidertrack
 {
-	decorator: image(../skins/widgets/range-track-focus.svg);
+	decorator: ninepatch(track-focus, track-focus-inner);
 }
 
 input[type="range"] sliderprogress,
@@ -909,7 +1016,7 @@ input[type="range"] sliderbar,
 	margin-left: -7px;
 	margin-right: -7px;
 	margin-top: -3px;
-	decorator: image(../skins/widgets/range-thumb.svg);
+	decorator: image(thumb);
 }
 
 input[type="range"] sliderbar:hover,
@@ -917,7 +1024,7 @@ input[type="range"] sliderbar:active,
 .worr-slider sliderbar:hover,
 .worr-slider sliderbar:active
 {
-	decorator: image(../skins/widgets/range-thumb-hover.svg);
+	decorator: image(thumb-hover);
 }
 
 input[type="range"]:disabled,
@@ -925,7 +1032,7 @@ input[type="range"][disabled],
 .worr-slider:disabled,
 .worr-slider[disabled]
 {
-	decorator: image(../skins/widgets/range-track-disabled.svg);
+	decorator: none;
 }
 
 input[type="range"]:disabled slidertrack,
@@ -933,7 +1040,7 @@ input[type="range"][disabled] slidertrack,
 .worr-slider:disabled slidertrack,
 .worr-slider[disabled] slidertrack
 {
-	decorator: image(../skins/widgets/range-track-disabled.svg);
+	decorator: ninepatch(track-disabled, track-disabled-inner);
 }
 
 input[type="range"]:disabled sliderbar,
@@ -941,7 +1048,7 @@ input[type="range"][disabled] sliderbar,
 .worr-slider:disabled sliderbar,
 .worr-slider[disabled] sliderbar
 {
-	decorator: image(../skins/widgets/range-thumb-disabled.svg);
+	decorator: image(thumb-disabled);
 }
 
 input[type="range"] sliderarrowdec,
@@ -961,14 +1068,14 @@ input[type="range"] sliderarrowinc:hover,
 .worr-slider sliderarrowdec:hover,
 .worr-slider sliderarrowinc:hover
 {
-	decorator: image(../skins/widgets/arrowbox-hover.svg);
+	decorator: image(selectarrow-hover);
 }
 
 progress fill,
 .worr-progress fill
 {
 	background-color: #426f72;
-	decorator: image(../skins/widgets/progress-fill.svg);
+	decorator: ninepatch(pfill, pfill-inner);
 }
 
 progress:hover,
@@ -976,7 +1083,7 @@ progress:hover,
 {
 	background-color: #211e19;
 	border-color: #b99b5b;
-	decorator: image(../skins/widgets/progress-track-hover.svg);
+	decorator: ninepatch(ptrack-hover, ptrack-hover-inner);
 }
 
 progress:disabled,
@@ -984,7 +1091,7 @@ progress[disabled],
 .worr-progress:disabled,
 .worr-progress[disabled]
 {
-	decorator: image(../skins/widgets/progress-track-disabled.svg);
+	decorator: ninepatch(ptrack-disabled, ptrack-disabled-inner);
 }
 
 progress:disabled fill,
@@ -992,14 +1099,14 @@ progress[disabled] fill,
 .worr-progress:disabled fill,
 .worr-progress[disabled] fill
 {
-	decorator: image(../skins/widgets/progress-fill-disabled.svg);
+	decorator: ninepatch(pfill-disabled, pfill-disabled-inner);
 }
 
 scrollbarvertical slidertrack,
 scrollbarhorizontal slidertrack
 {
 	background-color: #12110f;
-	decorator: image(../skins/widgets/scroll-track.svg);
+	decorator: ninepatch(strack, strack-inner);
 }
 
 scrollbarvertical
@@ -1031,7 +1138,7 @@ scrollbarvertical sliderbar,
 scrollbarhorizontal sliderbar
 {
 	background-color: #756a5d;
-	decorator: image(../skins/widgets/scroll-thumb.svg);
+	decorator: ninepatch(sthumb, sthumb-inner);
 	transition: background-color 0.12s cubic-out;
 }
 
@@ -1053,13 +1160,20 @@ scrollbarvertical sliderbar:hover,
 scrollbarhorizontal sliderbar:hover
 {
 	background-color: #8d8375;
-	decorator: image(../skins/widgets/scroll-thumb-hover.svg);
+	decorator: ninepatch(sthumb-hover, sthumb-hover-inner);
+}
+
+scrollbarvertical sliderbar:active,
+scrollbarhorizontal sliderbar:active
+{
+	background-color: #b99b5b;
+	decorator: ninepatch(sthumb-hover, sthumb-hover-inner);
 }
 
 scrollbarvertical:disabled sliderbar,
 scrollbarhorizontal:disabled sliderbar
 {
-	decorator: image(../skins/widgets/scroll-thumb-disabled.svg);
+	decorator: ninepatch(sthumb-disabled, sthumb-disabled-inner);
 }
 
 scrollbarvertical sliderarrowdec,
@@ -1091,7 +1205,44 @@ button:disabled,
 button[disabled],
 .ui-button[disabled]
 {
-	decorator: image(../skins/widgets/button-disabled.svg);
+	decorator: ninepatch(btn-disabled, btn-disabled-inner);
+}
+
+/*
+ * Disabled controls must not light up: these guards outrank the generic
+ * hover/active/focus rules (including primary/danger variants) and pin the
+ * disabled presentation.
+ */
+button:disabled:hover,
+button:disabled:active,
+button:disabled:focus,
+button[disabled]:hover,
+button[disabled]:active,
+button[disabled]:focus,
+.ui-button:disabled:hover,
+.ui-button:disabled:active,
+.ui-button:disabled:focus,
+.ui-button[disabled]:hover,
+.ui-button[disabled]:active,
+.ui-button[disabled]:focus
+{
+	background-color: #1b1916;
+	border-color: #756a5d;
+	border-left-color: #756a5d;
+	color: #8d8375;
+	decorator: ninepatch(btn-disabled, btn-disabled-inner);
+}
+
+input:disabled:hover,
+input[disabled]:hover,
+textarea:disabled:hover,
+textarea[disabled]:hover,
+select:disabled:hover,
+select[disabled]:hover
+{
+	background-color: #1b1916;
+	border-color: #756a5d;
+	decorator: ninepatch(field-disabled, field-disabled-inner);
 }
 
 input:disabled,
@@ -1100,13 +1251,13 @@ input[disabled],
 textarea[disabled],
 .ui-field.is-disabled
 {
-	decorator: image(../skins/widgets/input-disabled.svg);
+	decorator: ninepatch(field-disabled, field-disabled-inner);
 }
 
 select:disabled,
 select[disabled]
 {
-	decorator: image(../skins/widgets/select-disabled.svg);
+	decorator: ninepatch(field-disabled, field-disabled-inner);
 }
 
 input[type="checkbox"]:disabled,
@@ -1114,7 +1265,7 @@ input[type="checkbox"][disabled],
 .worr-toggle:disabled,
 .worr-toggle[disabled]
 {
-	decorator: image(../skins/widgets/checkbox-disabled.svg);
+	decorator: image(check-disabled);
 }
 
 input[type="checkbox"]:checked:disabled,
@@ -1122,7 +1273,7 @@ input[type="checkbox"]:checked[disabled],
 .worr-toggle:checked:disabled,
 .worr-toggle:checked[disabled]
 {
-	decorator: image(../skins/widgets/checkbox-on-disabled.svg);
+	decorator: image(check-on-disabled);
 }
 
 .ui-scroll
@@ -1177,6 +1328,16 @@ body.ui-high-visibility,
 {
 	background-color: #000000;
 	color: #ffffff;
+}
+
+.ui-high-visibility .ui-route,
+.ui-high-visibility .screen,
+.ui-high-visibility .popup-screen,
+body.ui-high-visibility .ui-route,
+body.ui-high-visibility .screen
+{
+	background-color: #000000;
+	decorator: none;
 }
 
 .ui-high-visibility .ui-panel,

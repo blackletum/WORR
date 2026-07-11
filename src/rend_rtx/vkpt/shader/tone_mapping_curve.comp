@@ -153,10 +153,10 @@ float computePrefixSum(float val, const uint linear_idx)
 
 void main()
 {
-    const ivec2 ipos = ivec2(gl_GlobalInvocationID);
-    if(any(greaterThanEqual(ipos, ivec2(global_ubo.width, global_ubo.height))))
-        return;
-    
+    // This pass is one 128-lane workgroup, with one invocation per histogram
+    // bin. It is not an image-space dispatch. In particular, do not reject
+    // lanes using the render extent: every lane must reach every workgroup
+    // barrier below.
     const int linear_idx = int(gl_LocalInvocationIndex);
 
     // Read histogram and normalize. Add bias to avoid all-zero histogram.
@@ -201,11 +201,30 @@ void main()
     weight_sum = computeSharedSum(weight_sum, linear_idx);
     bin_sum = computeSharedSum(bin_sum, linear_idx);
 
-    float log_target_lum = weight_sum / max(0.0001f, bin_sum);
-    // Clamp the luminance estimate of the scene to be between the minimum and
-    // maximum luminance estimate levels:
-    log_target_lum = clamp(log_target_lum, log2(global_ubo.tm_min_luminance),
-                                           log2(global_ubo.tm_max_luminance));
+    // Keep the auto-exposure range positive, finite, ordered, and within the
+    // histogram's representable luminance range. The cvars are intentionally
+    // user-editable, so the shader must not let malformed values poison the
+    // persistent tone curve.
+    const float histogram_min_luminance = exp2(min_log_luminance);
+    const float histogram_max_luminance = exp2(max_log_luminance);
+
+    float target_min_luminance = global_ubo.tm_min_luminance;
+    if(isnan(target_min_luminance) || isinf(target_min_luminance) || target_min_luminance <= 0.0)
+        target_min_luminance = histogram_min_luminance;
+
+    float target_max_luminance = global_ubo.tm_max_luminance;
+    if(isnan(target_max_luminance) || isinf(target_max_luminance) || target_max_luminance <= 0.0)
+        target_max_luminance = histogram_max_luminance;
+
+    const float target_log_a = clamp(log2(target_min_luminance), min_log_luminance, max_log_luminance);
+    const float target_log_b = clamp(log2(target_max_luminance), min_log_luminance, max_log_luminance);
+    const float target_log_min = min(target_log_a, target_log_b);
+    const float target_log_max = max(target_log_a, target_log_b);
+
+    float log_target_lum = (bin_sum > 0.0001) ? weight_sum / bin_sum : target_log_min;
+    if(isnan(log_target_lum) || isinf(log_target_lum))
+        log_target_lum = target_log_min;
+    log_target_lum = clamp(log_target_lum, target_log_min, target_log_max);
 
     // If we are not resetting the curve, blend the luminance over time to
     // provide for eye adaptation:
@@ -291,11 +310,13 @@ void main()
 
     // Interpolate values below global_ubo.tm_noise_stops somewhat to their
     // value from the autoexposure code:
-    const float noise_stop_bin = clamp((global_ubo.tm_noise_stops * log_luminance_scale + log_luminance_bias)*HISTOGRAM_BINS,
-                                        0.0, HISTOGRAM_BINS-1.0);
+    float noise_stop_bin = (global_ubo.tm_noise_stops * log_luminance_scale + log_luminance_bias) * HISTOGRAM_BINS;
+    if(isnan(noise_stop_bin) || isinf(noise_stop_bin))
+        noise_stop_bin = 0.0;
+    noise_stop_bin = clamp(noise_stop_bin, 0.0, HISTOGRAM_BINS - 1.0);
     // Since blurring may have made the tone curve value at noise_stop_bin greater than -r,
     // we apply the expected incremental adjustment:
-    if(linear_idx < noise_stop_bin){
+    if(float(linear_idx) < noise_stop_bin){
         /* The "somewhat autoexposure" value (tone_curve_ae) can become larger than the actual curve,
          * and when mixed into the tone curve, would would introduce a "bump" followed by a "valley"
          * to the resulting TM curve. This looks odd.
@@ -306,13 +327,14 @@ void main()
 
         /* Tone curve value before noise_stop_bin. Takes advantage of prior call to computePrefixSum()
          * (Since that contains a prefix sum it's also the maximum value of the curve to that point.) */
-        const float my_tonecurve_at_ns = s_Shared[int(noise_stop_bin) - 1]*delta - r;
+        const int noise_reference_bin = clamp(int(noise_stop_bin) - 1, 0, HISTOGRAM_BINS - 1);
+        const float my_tonecurve_at_ns = s_Shared[noise_reference_bin] * delta - r;
         // The "somewhat autoexposure" value at tm_noise_stops
-        const float bin_log_luminance_at_ns = (float(noise_stop_bin - 1)/float(HISTOGRAM_BINS)) * (max_log_luminance - min_log_luminance) + min_log_luminance;
-        // Compute "fudge factor" so tone_curve_ae values will not be larger than my_tonecurve_at_ns
-        const float fudge = -(my_tonecurve_at_ns - bin_log_luminance_at_ns) / log_target_lum;
-
-        const float tone_curve_ae = bin_log_luminance - log_target_lum * fudge;
+        const float bin_log_luminance_at_ns = (max(noise_stop_bin - 1.0, 0.0) / float(HISTOGRAM_BINS)) * (max_log_luminance - min_log_luminance) + min_log_luminance;
+        // Substituting the fudge-factor expression into the auto-exposure
+        // curve cancels log_target_lum. Use the reduced form directly: the
+        // original quotient produced 0/0 when the target log luminance was 0.
+        const float tone_curve_ae = bin_log_luminance + my_tonecurve_at_ns - bin_log_luminance_at_ns;
         my_tonecurve = mix(tone_curve_ae,
             my_tonecurve,
             mix(smoothstep(0.5*noise_stop_bin, noise_stop_bin, linear_idx), 1.0, global_ubo.tm_noise_blend));

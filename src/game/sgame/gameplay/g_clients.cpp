@@ -7,21 +7,11 @@ g_clients.cpp implementation.*/
 
 #include <algorithm>
 #include <cstddef>
-#include <new>
 
 namespace {
 	int ClampMaxClients(int maxClients) {
 		const int upperLimit = static_cast<int>(MAX_CLIENTS_KEX);
 		return std::clamp(maxClients, 0, upperLimit);
-	}
-
-	int ComputeLagHistorySamples() {
-		if (gi.frameTimeSec <= 0.0f)
-			return 1;
-
-		const float samples = 20.0f * (0.1f / gi.frameTimeSec);
-		const int rounded = static_cast<int>(samples);
-		return std::max(1, rounded);
 	}
 
 	void* TagMallocChecked(std::size_t size) {
@@ -52,8 +42,6 @@ void AllocateClientArray(int maxClients) {
 	if (game.maxClients == 0) {
 		game.clients = nullptr;
 		globals.numEntities = 1;
-		game.maxLagOrigins = 0;
-		game.lagOrigins = nullptr;
 		return;
 	}
 
@@ -61,13 +49,6 @@ void AllocateClientArray(int maxClients) {
 	ConstructClients(game.clients, game.maxClients);
 
 	globals.numEntities = game.maxClients + 1;
-
-	game.maxLagOrigins = ComputeLagHistorySamples();
-	const std::size_t lagCount = static_cast<std::size_t>(game.maxClients) * static_cast<std::size_t>(game.maxLagOrigins);
-	game.lagOrigins = static_cast<Vector3*>(TagMallocChecked(sizeof(Vector3) * lagCount));
-
-	for (std::size_t i = 0; i < lagCount; ++i)
-		new (&game.lagOrigins[i]) Vector3();
 
 	// [KEX]: Ensure client pointers are linked immediately to prevent engine crashes
 	// if SV_CalcPings runs before a client is fully connected.
@@ -94,19 +75,8 @@ void FreeClientArray() {
 
 	TagFreeChecked(game.clients);
 
-	if (game.lagOrigins) {
-		const std::size_t lagCount = static_cast<std::size_t>(game.maxClients) * static_cast<std::size_t>(game.maxLagOrigins);
-
-		for (std::size_t i = 0; i < lagCount; ++i)
-			game.lagOrigins[i].~Vector3();
-	}
-
-	TagFreeChecked(game.lagOrigins);
-
 	game.clients = nullptr;
-	game.lagOrigins = nullptr;
 	game.maxClients = 0;
-	game.maxLagOrigins = 0;
 	globals.numEntities = 1;
 }
 

@@ -15,7 +15,7 @@
 
 .menu-header
 {
-	margin-bottom: 12px;
+	margin-bottom: 8px;
 }
 
 .menu-stack
@@ -120,7 +120,7 @@
 	flex-direction: row;
 	flex-wrap: wrap;
 	flex: 0 0 auto;
-	margin-top: 16px;
+	margin-top: 8px;
 }
 
 .menu-footer .ui-button
@@ -168,7 +168,7 @@
 .hub-actions .hub-section h2
 {
 	margin-bottom: 8px;
-	font-size: 17px;
+	font-size: 18px;
 	color: #ffd967;
 }
 

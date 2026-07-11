@@ -14,7 +14,7 @@
 
       <main class="settings-form" id="gameflags-settings-form" data-component="common.components.cvar_controls">
         <section class="settings-section" id="gameflags-items-section">
-          <h2>Items And Damage</h2>
+          <h2>Items &amp; Damage</h2>
           <div class="setting-row" data-control="toggle" data-cvar="dmflags" data-bit="3" data-negate="true">
             <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
             <label for="gameflags-falling-damage">Falling Damage</label>

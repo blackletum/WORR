@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Demo Browser</title>
+    <title>WORR Demos</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/utility.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
@@ -10,7 +10,7 @@
       <header class="page-header">
         <h1>Demos</h1>
         <p id="demos-summary">
-          Recorded demos.
+          Browse and play recorded demos.
         </p>
       </header>
 
@@ -40,7 +40,7 @@
       </section>
 
       <footer class="status-bar" id="demos-status" data-bind="demo_browser.status">
-        The demo browser is not wired up in the new UI yet.
+        The demo browser will be enabled in an upcoming update.
       </footer>
     </div>
   </body>

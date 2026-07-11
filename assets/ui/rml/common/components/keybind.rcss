@@ -28,7 +28,7 @@
   background-color: #27231d;
   border-width: 2px;
   border-color: #756a5d;
-  decorator: image(../skins/widgets/button-normal.svg);
+  decorator: ninepatch(btn, btn-inner);
 }
 
 .worr-keybind-status {
@@ -92,7 +92,7 @@
   background-color: #1b1916;
   border-width: 2px;
   border-color: #756a5d;
-  decorator: image(../skins/widgets/textbox-normal.svg);
+  decorator: ninepatch(field, field-inner);
 }
 
 .worr-keybind-slot:hover,
@@ -102,7 +102,7 @@
   background-color: #332d23;
   border-color: #b99b5b;
   color: #ffd967;
-  decorator: image(../skins/widgets/button-hover.svg);
+  decorator: ninepatch(btn-hover, btn-hover-inner);
 }
 
 .worr-keybind-slot:focus,
@@ -112,7 +112,7 @@
   background-color: #332d23;
   border-color: #ffd967;
   color: #ffd967;
-  decorator: image(../skins/widgets/button-focus.svg);
+  decorator: ninepatch(btn-focus, btn-focus-inner);
 }
 
 .worr-keybind-clear {
@@ -124,7 +124,7 @@
   background-color: #1b1916;
   border-width: 2px;
   border-color: #5f5548;
-  decorator: image(../skins/widgets/button-normal.svg);
+  decorator: ninepatch(btn, btn-inner);
 }
 
 .worr-keybind-conflict {

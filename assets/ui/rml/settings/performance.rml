@@ -60,7 +60,7 @@
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="cl_warn_on_fps_rounding">
             <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="performance-fps-warning">Warn On FPS Rounding</label>
+            <label for="performance-fps-warning">Warn on FPS Rounding</label>
             <input id="performance-fps-warning" type="checkbox" data-cvar="cl_warn_on_fps_rounding" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="cl_async">

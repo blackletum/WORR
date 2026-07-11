@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Callvote Timelimit</title>
+    <title>WORR Vote: Time Limit</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
@@ -8,8 +8,11 @@
   <body id="session-callvote-timelimit" data-route-id="callvote_timelimit" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="callvote-timelimit-screen">
       <header class="page-header">
-        <h1>Callvote: Timelimit</h1>
-        <p id="callvote-timelimit-current" class="status-message" data-bind="cvars.ui_callvote_timelimit_current" data-visible-if="ui_callvote_timelimit_current">Current timelimit</p>
+        <h1>Vote: Time Limit</h1>
+        <p id="callvote-timelimit-summary">
+          Propose a new time limit for the match.
+        </p>
+        <p id="callvote-timelimit-current" class="status-message" data-bind="cvars.ui_callvote_timelimit_current" data-visible-if="ui_callvote_timelimit_current">Current time limit</p>
       </header>
 
       <nav class="menu-list" id="callvote-timelimit-menu" data-model="session.callvote.timelimit" data-owner-boundary="sgame-published-cvars">
@@ -26,7 +29,7 @@
       </nav>
 
       <footer class="actions" id="callvote-timelimit-actions">
-        <button id="callvote-timelimit-return" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="callvote-timelimit-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

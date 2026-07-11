@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Railgun Trail Settings</title>
+    <title>WORR Rail Trail Setup</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/settings.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
@@ -8,7 +8,7 @@
   <body id="settings-railtrail" data-route-id="railtrail" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round3" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="railtrail-screen">
       <header class="menu-header">
-        <h1>Railgun Trail Setup</h1>
+        <h1>Rail Trail Setup</h1>
       </header>
 
       <main class="settings-form" id="railtrail-settings-form" data-component="common.components.cvar_controls">
@@ -20,7 +20,7 @@
             <select id="railtrail-type" data-cvar="cl_railtrail_type" data-source-menu-type="values">
               <option value="0">Default</option>
               <option value="1">Core Only</option>
-              <option value="2">Core And Spiral</option>
+              <option value="2">Core &amp; Spiral</option>
             </select>
           </div>
           <div class="setting-row" data-control="range" data-cvar="cl_railtrail_time">

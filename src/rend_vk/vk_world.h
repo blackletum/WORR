@@ -29,6 +29,8 @@ void VK_World_LightPointEx(const vec3_t origin, vec3_t light, bool include_dynam
 float VK_World_LightmapModulate(void);
 float VK_World_LightmapAdd(void);
 float VK_World_EntityModulate(void);
+float VK_World_Intensity(void);
+bool VK_World_SurfaceUsesIntensity(const bsp_t *bsp, const mface_t *face);
 VkDescriptorSet VK_World_GetLightmapDescriptorSet(void);
 bool VK_World_GetFaceLightmapUV(const mface_t *face, const vec3_t point,
                                 vec2_t out_uv);

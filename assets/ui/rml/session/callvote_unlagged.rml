@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Callvote Unlagged</title>
+    <title>WORR Vote: Unlagged</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
@@ -8,7 +8,10 @@
   <body id="session-callvote-unlagged" data-route-id="callvote_unlagged" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="callvote-unlagged-screen">
       <header class="page-header">
-        <h1>Callvote: Unlagged</h1>
+        <h1>Vote: Unlagged</h1>
+        <p id="callvote-unlagged-summary">
+          Propose toggling lag compensation.
+        </p>
         <p id="callvote-unlagged-current" class="status-message" data-bind="cvars.ui_callvote_unlagged_current" data-visible-if="ui_callvote_unlagged_current">Current unlagged state</p>
       </header>
 
@@ -18,7 +21,7 @@
       </nav>
 
       <footer class="actions" id="callvote-unlagged-actions">
-        <button id="callvote-unlagged-return" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="callvote-unlagged-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

@@ -28,7 +28,7 @@
           <button id="keys-inven" type="button" data-bind-command="inven" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Inventory</span><span class="bind-key"></span></button>
           <button id="keys-invuse" type="button" data-bind-command="invuse" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Use Item</span><span class="bind-key"></span></button>
           <button id="keys-invdrop" type="button" data-bind-command="invdrop" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Drop Item</span><span class="bind-key"></span></button>
-          <button id="keys-invprev" type="button" data-bind-command="invprev" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Prev Item</span><span class="bind-key"></span></button>
+          <button id="keys-invprev" type="button" data-bind-command="invprev" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Previous Item</span><span class="bind-key"></span></button>
           <button id="keys-invnext" type="button" data-bind-command="invnext" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Next Item</span><span class="bind-key"></span></button>
         </section>
         </div>

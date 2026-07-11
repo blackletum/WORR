@@ -9,6 +9,9 @@
     <div class="screen compact-screen session-screen" id="dm-matchinfo-screen">
       <header class="page-header">
         <h1>Match Info</h1>
+        <p id="dm-matchinfo-summary">
+          Details about the current match.
+        </p>
       </header>
 
       <section class="session-match-summary" id="dm-matchinfo-content" data-model="session.dm_matchinfo" data-owner-boundary="sgame-published-cvars">
@@ -24,7 +27,7 @@
       </section>
 
       <footer class="actions" id="dm-matchinfo-actions">
-        <button id="dm-matchinfo-return" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="dm-matchinfo-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

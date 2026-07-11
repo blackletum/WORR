@@ -1,6 +1,6 @@
 <rml>
   <head>
-    <title>WORR Callvote Scorelimit</title>
+    <title>WORR Vote: Score Limit</title>
     <link type="text/rcss" href="../common/theme/base.rcss" />
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
@@ -8,8 +8,11 @@
   <body id="session-callvote-scorelimit" data-route-id="callvote_scorelimit" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="callvote-scorelimit-screen">
       <header class="page-header">
-        <h1>Callvote: Scorelimit</h1>
-        <p id="callvote-scorelimit-current" class="status-message" data-bind="cvars.ui_callvote_scorelimit_current" data-visible-if="ui_callvote_scorelimit_current">Current scorelimit</p>
+        <h1>Vote: Score Limit</h1>
+        <p id="callvote-scorelimit-summary">
+          Propose a new score limit for the match.
+        </p>
+        <p id="callvote-scorelimit-current" class="status-message" data-bind="cvars.ui_callvote_scorelimit_current" data-visible-if="ui_callvote_scorelimit_current">Current score limit</p>
       </header>
 
       <nav class="menu-list" id="callvote-scorelimit-menu" data-model="session.callvote.scorelimit" data-owner-boundary="sgame-published-cvars">
@@ -25,7 +28,7 @@
       </nav>
 
       <footer class="actions" id="callvote-scorelimit-actions">
-        <button id="callvote-scorelimit-return" type="button" data-command="popmenu" data-menu-sound="cancel">Return</button>
+        <button id="callvote-scorelimit-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
       </footer>
     </div>
   </body>

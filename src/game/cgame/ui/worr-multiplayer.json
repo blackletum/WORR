@@ -35,255 +35,394 @@
     },
     {
       "name": "dm_join",
-      "background": "#000000c8",
-      "style": { "compact": true, "transparent": true },
-      "closeCommand": "forcemenuoff; worr_dm_join_close",
+      "background": "#070402b8",
+      "style": {
+        "compact": true,
+        "transparent": true,
+        "frame": {
+          "fill": "#120d09ec",
+          "border": "#d8782c",
+          "padding": 12,
+          "borderWidth": 2
+        }
+      },
+      "closeCommand": "worr_dm_join_close",
       "items": [
-        { "type": "action", "labelCvar": "ui_dm_title", "align": "center", "selectable": false },
+        { "type": "heading", "label": "W O R R", "textSize": 16, "textColor": "#fff1df" },
+        { "type": "heading", "label": "MULTIPLAYER MATCH HUB", "textSize": 13, "textColor": "#ed842e" },
+        { "type": "action", "label": "WORR Server", "labelCvar": "ui_dm_title", "align": "center", "selectable": false, "textSize": 14, "textColor": "#fff1df" },
         {
           "type": "action",
           "labelCvar": "ui_dm_subtitle",
           "align": "center",
           "selectable": false,
+          "textSize": 10,
+          "textColor": "#cdb9a6",
           "showIf": ["ui_dm_subtitle"]
         },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
+        { "type": "heading", "label": "NAVIGATION - OVERVIEW", "textSize": 11, "textColor": "#d69a68" },
         {
           "type": "action",
+          "label": "Vote",
+          "align": "left",
+          "command": "worr_callvote_menu",
+          "textSize": 11,
+          "textColor": "#d9c1a7",
+          "showIf": ["ui_dm_show_callvote!=0"]
+        },
+        { "type": "action", "label": "Server", "align": "left", "command": "worr_dm_hostinfo", "textSize": 11, "textColor": "#d9c1a7" },
+        { "type": "action", "label": "Match Details", "align": "left", "command": "worr_dm_matchinfo", "textSize": 11, "textColor": "#d9c1a7" },
+        {
+          "type": "action",
+          "label": "Stats",
+          "align": "left",
+          "command": "worr_matchstats_menu",
+          "textSize": 11,
+          "textColor": "#d9c1a7",
+          "showIf": ["ui_dm_show_matchstats!=0"]
+        },
+        {
+          "type": "action",
+          "label": "Settings",
+          "align": "left",
+          "command": "pushmenu options",
+          "textSize": 11,
+          "textColor": "#d9c1a7",
+          "showIf": ["ui_dm_show_resume!=0"]
+        },
+        { "type": "heading", "label": "MATCH OVERVIEW", "textSize": 11, "textColor": "#ed842e" },
+        { "type": "action", "label": "Waiting", "labelCvar": "ui_dm_match_state", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "0 players", "labelCvar": "ui_dm_player_count", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "0 spectators", "labelCvar": "ui_dm_spectator_count", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "Standard ruleset", "labelCvar": "ui_dm_ruleset", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "No score limit", "labelCvar": "ui_dm_score_limit", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "No time limit", "labelCvar": "ui_dm_time_limit", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "Spectating", "labelCvar": "ui_dm_current_status", "align": "left", "selectable": false, "textSize": 10, "textColor": "#f2c691" },
+        { "type": "heading", "label": "PARTICIPATION", "textSize": 11, "textColor": "#ed842e" },
+        {
+          "type": "wrappedtext",
+          "labelCvar": "ui_dm_join_notice",
+          "align": "left",
+          "maxLines": 3,
+          "showIf": ["ui_dm_join_notice"]
+        },
+        {
+          "type": "action",
+          "label": "Join Red",
           "labelCvar": "ui_dm_join_red",
           "align": "left",
-          "command": "forcemenuoff; team red",
-          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=1"]
+          "command": "team red",
+          "textSize": 12,
+          "textColor": "#ff9185",
+          "showIf": ["ui_dm_show_join!=0", "ui_dm_teamplay!=0"],
+          "enableIf": ["ui_dm_can_join!=0"]
         },
         {
           "type": "action",
+          "label": "Join Blue",
           "labelCvar": "ui_dm_join_blue",
           "align": "left",
-          "command": "forcemenuoff; team blue",
-          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=1"]
+          "command": "team blue",
+          "textSize": 12,
+          "textColor": "#82bfff",
+          "showIf": ["ui_dm_show_join!=0", "ui_dm_teamplay!=0"],
+          "enableIf": ["ui_dm_can_join!=0"]
         },
         {
           "type": "action",
+          "label": "Auto Assign",
+          "labelCvar": "ui_dm_join_auto",
+          "align": "left",
+          "command": "team auto",
+          "textSize": 12,
+          "textColor": "#f0c89c",
+          "showIf": ["ui_dm_show_join!=0", "ui_dm_teamplay!=0"],
+          "enableIf": ["ui_dm_can_join!=0"],
+          "defaultIf": ["ui_dm_can_join!=0"]
+        },
+        {
+          "type": "action",
+          "label": "Join Match",
           "labelCvar": "ui_dm_join_free",
           "align": "left",
-          "command": "forcemenuoff; team free",
-          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=0"]
+          "command": "team free",
+          "textSize": 12,
+          "textColor": "#f0c89c",
+          "showIf": ["ui_dm_show_join!=0", "ui_dm_teamplay=0"],
+          "enableIf": ["ui_dm_can_join!=0"],
+          "defaultIf": ["ui_dm_can_join!=0"]
         },
         {
           "type": "action",
           "label": "Spectate",
           "align": "left",
-          "command": "forcemenuoff; team spectator",
-          "showIf": ["ui_dm_show_spectate=1"]
+          "commandCvar": "ui_dm_spectate_command",
+          "textSize": 12,
+          "textColor": "#c9beb0",
+          "showIf": ["ui_dm_show_spectate!=0"],
+          "defaultIf": ["ui_dm_can_join=0"]
         },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
         {
           "type": "action",
-          "label": "Information",
+          "label": "Ready",
+          "labelCvar": "ui_dm_ready_label",
+          "align": "left",
+          "commandCvar": "ui_dm_ready_command",
+          "textSize": 12,
+          "textColor": "#9be3a5",
+          "showIf": ["ui_dm_show_ready!=0"]
+        },
+        { "type": "heading", "label": "MATCH TOOLS", "textSize": 11, "textColor": "#d69a68" },
+        {
+          "type": "action",
+          "label": "Tournament Info",
           "align": "left",
           "command": "worr_tourney_info",
-          "showIf": ["ui_dm_show_tourney_info=1"]
+          "textSize": 10,
+          "textColor": "#d9c1a7",
+          "showIf": ["ui_dm_show_tourney_info!=0"]
         },
         {
           "type": "action",
           "label": "Map Choices",
           "align": "left",
           "command": "worr_tourney_maps",
-          "showIf": ["ui_dm_show_tourney_maps=1"]
-        },
-        {
-          "type": "action",
-          "label": "Call a Vote",
-          "align": "left",
-          "command": "worr_callvote_menu",
-          "showIf": ["ui_dm_show_callvote=1"]
+          "textSize": 10,
+          "textColor": "#d9c1a7",
+          "showIf": ["ui_dm_show_tourney_maps!=0"]
         },
         {
           "type": "action",
           "label": "MyMap",
           "align": "left",
           "command": "worr_mymap_menu",
-          "showIf": ["ui_dm_show_mymap=1"]
-        },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
-        {
-          "type": "action",
-          "label": "Host Info",
-          "align": "left",
-          "command": "worr_dm_hostinfo"
+          "textSize": 10,
+          "textColor": "#d9c1a7",
+          "showIf": ["ui_dm_show_mymap!=0"]
         },
         {
           "type": "action",
           "label": "Forfeit",
           "align": "left",
           "command": "worr_forfeit_menu",
-          "showIf": ["ui_dm_show_forfeit=1"]
+          "textSize": 10,
+          "textColor": "#ef8b7f",
+          "showIf": ["ui_dm_show_forfeit!=0"]
         },
-        {
-          "type": "action",
-          "label": "Match Info",
-          "align": "left",
-          "command": "worr_dm_matchinfo"
-        },
-        {
-          "type": "action",
-          "label": "Player Stats",
-          "align": "left",
-          "command": "worr_matchstats_menu",
-          "showIf": ["ui_dm_show_matchstats=1"]
-        },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
         {
           "type": "action",
           "label": "Admin",
           "align": "left",
           "command": "worr_admin_menu",
-          "showIf": ["ui_dm_show_admin=1"]
-        },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
-        {
-          "type": "action",
-          "label": "$m_settings",
-          "align": "left",
-          "command": "pushmenu options"
+          "textSize": 10,
+          "textColor": "#d9c1a7",
+          "showIf": ["ui_dm_show_admin!=0"]
         },
         {
-          "type": "action",
-          "label": "$m_leave_match",
+          "type": "wrappedtext",
+          "label": "Select a team or Spectate to continue. Your view remains locked while this screen is open.",
           "align": "left",
-          "command": "pushmenu leave_match_confirm"
+          "maxLines": 3,
+          "showIf": ["ui_dm_initial!=0"]
         },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
-        { "type": "action", "label": "visit darkmatter-quake.com", "align": "center", "selectable": false },
-        { "type": "action", "label": ":: community :: matches ::", "align": "center", "selectable": false },
-        { "type": "action", "label": ":: content :: news ::", "align": "center", "selectable": false }
+        {
+          "type": "action",
+          "label": "Resume Match",
+          "align": "left",
+          "command": "worr_dm_join_close",
+          "textSize": 11,
+          "textColor": "#f0c89c",
+          "showIf": ["ui_dm_show_resume!=0"]
+        },
+        {
+          "type": "action",
+          "label": "Leave Match",
+          "align": "left",
+          "command": "pushmenu leave_match_confirm",
+          "textSize": 11,
+          "textColor": "#ef8b7f",
+          "showIf": ["ui_dm_show_leave!=0"]
+        }
       ]
     },
     {
       "name": "join",
-      "background": "#000000c8",
-      "style": { "compact": true, "transparent": true },
-      "closeCommand": "forcemenuoff; worr_dm_join_close",
+      "background": "#070402b8",
+      "style": {
+        "compact": true,
+        "transparent": true,
+        "frame": {
+          "fill": "#120d09ec",
+          "border": "#d8782c",
+          "padding": 12,
+          "borderWidth": 2
+        }
+      },
+      "closeCommand": "worr_dm_join_close",
       "items": [
-        { "type": "action", "labelCvar": "ui_dm_title", "align": "center", "selectable": false },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
+        { "type": "heading", "label": "W O R R", "textSize": 16, "textColor": "#fff1df" },
+        { "type": "heading", "label": "MULTIPLAYER MATCH HUB", "textSize": 13, "textColor": "#ed842e" },
+        { "type": "action", "label": "WORR Server", "labelCvar": "ui_dm_title", "align": "center", "selectable": false, "textSize": 14, "textColor": "#fff1df" },
         {
           "type": "action",
           "labelCvar": "ui_dm_subtitle",
           "align": "center",
           "selectable": false,
+          "textSize": 10,
+          "textColor": "#cdb9a6",
           "showIf": ["ui_dm_subtitle"]
         },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
+        { "type": "heading", "label": "NAVIGATION - OVERVIEW", "textSize": 11, "textColor": "#d69a68" },
         {
           "type": "action",
+          "label": "Vote",
+          "align": "left",
+          "command": "worr_callvote_menu",
+          "showIf": ["ui_dm_show_callvote!=0"]
+        },
+        { "type": "action", "label": "Server", "align": "left", "command": "worr_dm_hostinfo" },
+        { "type": "action", "label": "Match Details", "align": "left", "command": "worr_dm_matchinfo" },
+        {
+          "type": "action",
+          "label": "Stats",
+          "align": "left",
+          "command": "worr_matchstats_menu",
+          "showIf": ["ui_dm_show_matchstats!=0"]
+        },
+        {
+          "type": "action",
+          "label": "Settings",
+          "align": "left",
+          "command": "pushmenu options",
+          "showIf": ["ui_dm_show_resume!=0"]
+        },
+        { "type": "heading", "label": "MATCH OVERVIEW", "textSize": 11, "textColor": "#ed842e" },
+        { "type": "action", "label": "Waiting", "labelCvar": "ui_dm_match_state", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "0 players", "labelCvar": "ui_dm_player_count", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "0 spectators", "labelCvar": "ui_dm_spectator_count", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "Standard ruleset", "labelCvar": "ui_dm_ruleset", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "No score limit", "labelCvar": "ui_dm_score_limit", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "No time limit", "labelCvar": "ui_dm_time_limit", "align": "left", "selectable": false, "textSize": 10, "textColor": "#e7ddd1" },
+        { "type": "action", "label": "Spectating", "labelCvar": "ui_dm_current_status", "align": "left", "selectable": false, "textSize": 10, "textColor": "#f2c691" },
+        { "type": "heading", "label": "PARTICIPATION", "textSize": 11, "textColor": "#ed842e" },
+        {
+          "type": "wrappedtext",
+          "labelCvar": "ui_dm_join_notice",
+          "align": "left",
+          "maxLines": 3,
+          "showIf": ["ui_dm_join_notice"]
+        },
+        {
+          "type": "action",
+          "label": "Join Red",
           "labelCvar": "ui_dm_join_red",
           "align": "left",
-          "command": "forcemenuoff; team red",
-          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=1"]
+          "command": "team red",
+          "showIf": ["ui_dm_show_join!=0", "ui_dm_teamplay!=0"],
+          "enableIf": ["ui_dm_can_join!=0"]
         },
         {
           "type": "action",
+          "label": "Join Blue",
           "labelCvar": "ui_dm_join_blue",
           "align": "left",
-          "command": "forcemenuoff; team blue",
-          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=1"]
+          "command": "team blue",
+          "showIf": ["ui_dm_show_join!=0", "ui_dm_teamplay!=0"],
+          "enableIf": ["ui_dm_can_join!=0"]
         },
         {
           "type": "action",
+          "label": "Auto Assign",
+          "labelCvar": "ui_dm_join_auto",
+          "align": "left",
+          "command": "team auto",
+          "showIf": ["ui_dm_show_join!=0", "ui_dm_teamplay!=0"],
+          "enableIf": ["ui_dm_can_join!=0"],
+          "defaultIf": ["ui_dm_can_join!=0"]
+        },
+        {
+          "type": "action",
+          "label": "Join Match",
           "labelCvar": "ui_dm_join_free",
           "align": "left",
-          "command": "forcemenuoff; team free",
-          "showIf": ["ui_dm_show_join=1", "ui_dm_teamplay=0"]
+          "command": "team free",
+          "showIf": ["ui_dm_show_join!=0", "ui_dm_teamplay=0"],
+          "enableIf": ["ui_dm_can_join!=0"],
+          "defaultIf": ["ui_dm_can_join!=0"]
         },
         {
           "type": "action",
           "label": "Spectate",
           "align": "left",
-          "command": "forcemenuoff; team spectator",
-          "showIf": ["ui_dm_show_spectate=1"]
+          "commandCvar": "ui_dm_spectate_command",
+          "showIf": ["ui_dm_show_spectate!=0"],
+          "defaultIf": ["ui_dm_can_join=0"]
         },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
         {
           "type": "action",
-          "label": "Information",
+          "label": "Ready",
+          "labelCvar": "ui_dm_ready_label",
+          "align": "left",
+          "commandCvar": "ui_dm_ready_command",
+          "showIf": ["ui_dm_show_ready!=0"]
+        },
+        { "type": "heading", "label": "MATCH TOOLS", "textSize": 11, "textColor": "#d69a68" },
+        {
+          "type": "action",
+          "label": "Tournament Info",
           "align": "left",
           "command": "worr_tourney_info",
-          "showIf": ["ui_dm_show_tourney_info=1"]
+          "showIf": ["ui_dm_show_tourney_info!=0"]
         },
         {
           "type": "action",
           "label": "Map Choices",
           "align": "left",
           "command": "worr_tourney_maps",
-          "showIf": ["ui_dm_show_tourney_maps=1"]
-        },
-        {
-          "type": "action",
-          "label": "Call a Vote",
-          "align": "left",
-          "command": "worr_callvote_menu",
-          "showIf": ["ui_dm_show_callvote=1"]
+          "showIf": ["ui_dm_show_tourney_maps!=0"]
         },
         {
           "type": "action",
           "label": "MyMap",
           "align": "left",
           "command": "worr_mymap_menu",
-          "showIf": ["ui_dm_show_mymap=1"]
-        },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
-        {
-          "type": "action",
-          "label": "Host Info",
-          "align": "left",
-          "command": "worr_dm_hostinfo"
+          "showIf": ["ui_dm_show_mymap!=0"]
         },
         {
           "type": "action",
           "label": "Forfeit",
           "align": "left",
           "command": "worr_forfeit_menu",
-          "showIf": ["ui_dm_show_forfeit=1"]
+          "showIf": ["ui_dm_show_forfeit!=0"]
         },
-        {
-          "type": "action",
-          "label": "Match Info",
-          "align": "left",
-          "command": "worr_dm_matchinfo"
-        },
-        {
-          "type": "action",
-          "label": "Player Stats",
-          "align": "left",
-          "command": "worr_matchstats_menu",
-          "showIf": ["ui_dm_show_matchstats=1"]
-        },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
         {
           "type": "action",
           "label": "Admin",
           "align": "left",
           "command": "worr_admin_menu",
-          "showIf": ["ui_dm_show_admin=1"]
-        },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
-        {
-          "type": "action",
-          "label": "$m_settings",
-          "align": "left",
-          "command": "pushmenu options"
+          "showIf": ["ui_dm_show_admin!=0"]
         },
         {
-          "type": "action",
-          "label": "$m_leave_match",
+          "type": "wrappedtext",
+          "label": "Select a team or Spectate to continue. Your view remains locked while this screen is open.",
           "align": "left",
-          "command": "pushmenu leave_match_confirm"
+          "maxLines": 3,
+          "showIf": ["ui_dm_initial!=0"]
         },
-        { "type": "action", "label": "---", "align": "center", "selectable": false },
-        { "type": "action", "label": "visit darkmatter-quake.com", "align": "center", "selectable": false },
-        { "type": "action", "label": ":: community :: matches ::", "align": "center", "selectable": false },
-        { "type": "action", "label": ":: content :: news ::", "align": "center", "selectable": false }
+        {
+          "type": "action",
+          "label": "Resume Match",
+          "align": "left",
+          "command": "worr_dm_join_close",
+          "showIf": ["ui_dm_show_resume!=0"]
+        },
+        {
+          "type": "action",
+          "label": "Leave Match",
+          "align": "left",
+          "command": "pushmenu leave_match_confirm",
+          "showIf": ["ui_dm_show_leave!=0"]
+        }
       ]
     },
     {

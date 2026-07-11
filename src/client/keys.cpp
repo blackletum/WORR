@@ -735,13 +735,32 @@ void Key_Event(unsigned key, bool down, unsigned time)
             (cls.state == ca_active && cl.serverstate == ss_game &&
              cls.netchan.protocol > 0 &&
              !cls.demo.playback && cl.servercount > 0 && cl.maxclients > 1);
+        // BASEGAME is canonicalized to an empty game directory by the
+        // filesystem. The sgame-published capability distinguishes WORR
+        // deathmatch from coop and from remote legacy servers without relying
+        // on a local/stale `deathmatch` cvar.
+        const bool is_worr_base_game =
+            !cl.gamedir[0] || !Q_stricmp(cl.gamedir, BASEGAME);
+        const bool has_worr_match_hub =
+            is_multiplayer_game_menu && is_worr_base_game &&
+            Cvar_VariableInteger("ui_worr_match_hub") != 0;
+        const auto open_game_menu = [&]() {
+            // WORR's match menu is sgame-authored: asking the server to run
+            // `inven` republishes current match/team state before it opens the
+            // hub. Coop and other game directories use the renderer-neutral
+            // in-game menu for legacy Q2 server compatibility.
+            if (has_worr_match_hub)
+                CL_ClientCommand("inven");
+            else
+                UI_OpenMenu(UIMENU_GAME);
+        };
 
         if (cls.key_dest == KEY_GAME &&
             cl.frame.ps.stats[STAT_LAYOUTS] & (LAYOUTS_LAYOUT | LAYOUTS_INVENTORY | LAYOUTS_HELP) &&
             !cls.demo.playback) {
             if (keydown[key] == 2) {
                 // force match lobby in multiplayer when escape is held
-                UI_OpenMenu(is_multiplayer_game_menu ? UIMENU_MAIN : UIMENU_GAME);
+                open_game_menu();
             } else if (keydown[key] == 1) {
                 // put away help computer / inventory
                 CL_ClientCommand("putaway");
@@ -765,7 +784,7 @@ void Key_Event(unsigned key, bool down, unsigned time)
         } else if (cls.key_dest & KEY_MESSAGE) {
             Key_Message(key);
         } else if (cls.state >= ca_active) {
-            UI_OpenMenu(is_multiplayer_game_menu ? UIMENU_MAIN : UIMENU_GAME);
+            open_game_menu();
         } else {
             UI_OpenMenu(UIMENU_MAIN);
         }

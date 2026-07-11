@@ -21,6 +21,7 @@ change game behavior on the fly.*/
 #include "../bots/bot_includes.hpp"
 #include "../commands/commands.hpp"
 #include "../g_local.hpp"
+#include "../network/lag_compensation.hpp"
 #include "../../../../inc/shared/bot_admin_audit_status.h"
 #include "../../../../inc/shared/bot_chat_policy_status.h"
 #include "../../../../inc/shared/bot_frame_command.h"
@@ -1138,7 +1139,10 @@ static void InitGame() {
   g_disable_player_collision =
       gi.cvar("g_disable_player_collision", "0", CVAR_NOFLAGS);
   match_startNoHumans = gi.cvar("match_start_no_humans", "1", CVAR_NOFLAGS);
-  match_autoJoin = gi.cvar("match_auto_join", "1", CVAR_NOFLAGS);
+  // Human players normally enter through the initial match hub so they can
+  // review the session and make an explicit team/spectator choice. Servers
+  // that deliberately prefer the historical immediate join can opt back in.
+  match_autoJoin = gi.cvar("match_auto_join", "0", CVAR_NOFLAGS);
   match_crosshairIDs = gi.cvar("match_crosshair_ids", "1", CVAR_NOFLAGS);
   warmup_doReadyUp = gi.cvar("warmup_do_ready_up", "0", CVAR_NOFLAGS);
   warmup_enabled = gi.cvar("warmup_enabled", "1", CVAR_NOFLAGS);
@@ -1187,6 +1191,7 @@ static void InitGame() {
   g_knockbackScale = gi.cvar("g_knockback_scale", "0.8", CVAR_NOFLAGS);
   g_ladderSteps = gi.cvar("g_ladder_steps", "1", CVAR_NOFLAGS);
   g_lagCompensation = gi.cvar("g_lag_compensation", "1", CVAR_NOFLAGS);
+  LagCompensation_Init();
   g_level_rulesets = gi.cvar("g_level_rulesets", "0", CVAR_NOFLAGS);
   match_maps_list = gi.cvar("match_maps_list", "", CVAR_NOFLAGS);
   match_maps_listShuffle =
@@ -1385,6 +1390,8 @@ void FindIntermissionPoint(void) {
 
 static void ShutdownGame() {
   gi.Com_Print("==== ShutdownGame ====\n");
+
+  LagCompensation_Shutdown();
 
   Bot_RuntimeEndLevel();
   if (bot_lifecycle_smoke != nullptr && bot_lifecycle_smoke->integer != 0)

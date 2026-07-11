@@ -25,6 +25,28 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/mdfour.h"
 #include "common/loc.h"
 #include "common/gamedll.h"
+#include "shared/pmove_abi_layout.hpp"
+
+static_assert(std::is_standard_layout_v<pmove_t>);
+static_assert(std::is_trivially_copyable_v<pmove_t>);
+static_assert(sizeof(pmove_state_t) == worr::pmove_abi_v1::state_size);
+static_assert(sizeof(usercmd_t) == worr::pmove_abi_v1::command_size);
+static_assert(sizeof(pmove_t) == worr::pmove_abi_v1::pmove_size);
+static_assert(alignof(pmove_t) == worr::pmove_abi_v1::pmove_alignment);
+static_assert(offsetof(pmove_t, cmd) == worr::pmove_abi_v1::command_offset);
+static_assert(offsetof(pmove_t, snapinitial) ==
+              worr::pmove_abi_v1::snap_initial_offset);
+static_assert(offsetof(pmove_t, touch) == worr::pmove_abi_v1::touch_offset);
+static_assert(offsetof(pmove_t, viewangles) ==
+              worr::pmove_abi_v1::view_angles_offset);
+static_assert(offsetof(pmove_t, trace) ==
+              worr::pmove_abi_v1::trace_callback_offset);
+static_assert(offsetof(pmove_t, clip) ==
+              worr::pmove_abi_v1::clip_callback_offset);
+static_assert(offsetof(pmove_t, pointcontents) ==
+              worr::pmove_abi_v1::point_contents_callback_offset);
+static_assert(offsetof(pmove_t, impact_delta) ==
+              worr::pmove_abi_v1::impact_delta_offset);
 
 static cvar_t   *cl_alpha;
 
@@ -467,7 +489,14 @@ static void CG_Q2Proto_UnpackSolid(uint32_t solid, vec3_t mins, vec3_t maxs)
 
 static void CG_Entity_Pmove(pmove_t *pmove)
 {
-    Pmove(pmove, &cl.pmp);
+    // External WORR cgame exports the same C++ movement implementation used by
+    // sgame.  Routing prediction through the engine's legacy C pmove made the
+    // authoritative and predicted simulations diverge despite p_move.cpp
+    // being linked into both modules.  The public PMove/pmove_t ABI is layout
+    // compatible by contract; classic built-in cgame retains its own export.
+    if (!cgame || !cgame->Pmove)
+        Com_Error(ERR_DROP, "cgame Pmove export is unavailable");
+    cgame->Pmove(pmove);
 }
 
 static void CG_CL_GTV_Resume(void)

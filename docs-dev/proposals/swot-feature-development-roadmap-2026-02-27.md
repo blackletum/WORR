@@ -678,6 +678,13 @@ umclusters = 4`, with travel counts including walk, jump, ladder, walk-off-ledge
   - Stabilized dynamic effect dlight shadow residency for both OpenGL and Vulkan by preserving stable cdlight/entity/explosion keys through client submission and by removing moving dynamic-light projection/origin drift from shadow cache residency keys.
   - Restored first-person viewweapon shadow receiving in both OpenGL and native Vulkan so the hidden local-player body caster can shadow the held weapon without making `RF_WEAPONMODEL` entities cast shadows.
   - Implementation logs: `docs-dev/renderer/shadowmapping-replacement-baseline.md`, `docs-dev/renderer/shadowmapping-native-backends-2026-04-30.md`, `docs-dev/renderer/shadowmapping-full-plan-2026-04-30.md`, `docs-dev/renderer/vulkan-entity-lightmap-shadow-receiver-repair-2026-06-11.md`, `docs-dev/renderer/vulkan-viewweapon-dlight-glow-fixes-2026-06-12.md`, `docs-dev/renderer/viewweapon-shadow-receiver-2026-06-13.md`.
+- `FR-02-T12` Done; `FR-01-T09` / `FR-02-T13..T15` / `FR-03-T11` / `DV-02-T07` / `DV-03-T08` Planned:
+  - Completed a cross-renderer gamma, lighting, tone-mapping, and shadowmapping audit and landed the bounded correctness/safety fixes that did not require changing the renderer output contract.
+  - Native Vulkan now honors shared `r_intensity`, matches OpenGL's filtered-shadow response, prefers compatible UNORM swapchains, and keeps regenerated embedded SPIR-V in sync.
+  - OpenGL now uses correct raw shadow-depth sampling, far-depth EVSM clears, finite lighting controls, inverse-transpose normal transforms, safe lightmap/lightgrid sampling, and deterministic first-frame auto exposure.
+  - Shared/client paths now mirror shadow aliases deterministically, invalidate cached pages for raster policy changes, preserve tracked-light identity, strictly validate shadowlight configstrings, and saturate protocol lightlevel values.
+  - Next work is the renderer-neutral linear scene/final presentation contract, renderer-independent gameplay light query, scalable/material-aware shadow resources, direct-sun separation, capability-aware UI, and semantic/pixel validation.
+  - Plan and implementation log: `docs-dev/plans/renderer-color-lighting-shadow-modernization.md`, `docs-dev/renderer/gamma-lighting-shadow-audit-hardening-2026-07-10.md`.
 - `FR-03-T09` Done:
   - Added shared archived `r_borderless` tri-state window behavior for renderer/video backends (`0` exclusive where supported, `1` borderless fullscreen, `2` always borderless in windowed mode too).
   - Updated the Video and Multi-Monitor menu selectors to expose `r_borderless` instead of the legacy `r_fullscreen_exclusive` toggle, while keeping the legacy cvar as a no-archive runtime mirror.
@@ -782,6 +789,31 @@ umclusters = 4`, with travel counts including walk, jump, ladder, walk-off-ledge
   - Implementation log: `docs-dev/match-menu-session-split-2026-03-23.md`.
   - Converted the multiplayer `MyMap` entry into a dedicated submenu flow with explicit availability/status messaging, preserved flag state across navigation, and successful queue cleanup/close behavior.
   - Implementation log: `docs-dev/match-menu-mymap-submenu-2026-03-23.md`.
+- `FR-09-T08` / `FR-09-T05` / `FR-03-T08` / `FR-09-T04` /
+  `FR-09-T09` / `DV-03-T07` / `DV-07-T04` In Progress:
+  - Accepted Round 78 as the first live server-authoritative multiplayer
+    welcome/join and in-session Escape match hub. Human deathmatch clients now
+    default to an explicit join/team/spectator choice, and Escape asks sgame
+    to republish current match state through the existing `inven` command.
+  - Added live `ui_dm_*` identity, map/rules, population, match-state,
+    team/join, ready/intermission, and conditional-tool publication through a
+    bounded per-client UI command queue paced at one chunk per server frame.
+  - OpenGL uses the branded RmlUi `dm_join` route. Renderer/runtime failures
+    select the matching cgame JSON hub; native Vulkan evidence records
+    `renderer_unavailable`, `ui_dm_menu_active=1`, and the JSON hub rendered
+    natively without a Vulkan-to-OpenGL redirect.
+  - Focused OpenGL validation covers initial active, successful join close,
+    inventory/Escape reopen, and Resume close. Injected initial/Escape layouts
+    and the live native Vulkan fallback were visually inspected.
+  - The canonical install refresh validated `275` packaged assets and `181`
+    RmlUi paths; the Windows build succeeded and the UI smoke suite passed
+    `225` tests.
+  - Implementation and user docs:
+    `docs-dev/rmlui-round78-multiplayer-match-hub-2026-07-10.md` and
+    `docs-user/multiplayer-session-menu.md`.
+  - These umbrella tasks remain open for broader live controllers, automated
+    navigation/input/layout coverage, native Vulkan/RTX-vkpt RmlUi bridges,
+    Wave C parity, and legacy removal.
 - `FR-02-T07` Done:
   - SDL video backend now creates Vulkan-capable windows for `r_renderer vulkan`/`rtx` instead of always forcing an OpenGL context.
   - Native Vulkan renderer now uses SDL Vulkan instance/surface helpers and enables portability enumeration/subset support required by MoltenVK-backed macOS devices.
@@ -1106,6 +1138,9 @@ Tasks:
   Dependency: `FR-01-T01..T06`. Priority: P1.
 - [ ] `FR-01-T08` Add Vulkan runtime debug overlays/counters for missing-feature detection.
   Dependency: none. Priority: P1.
+- [ ] `FR-01-T09` Make gameplay light queries renderer-neutral and independent of visual gamma, intensity, fullbright, and dynamic-light settings.
+  Dependency: `FR-02-T12`. Priority: P0.
+  Progress: Protocol serialization now rejects non-finite samples and saturates `lightlevel` to `0..255`; separating the query from backend-adjusted `R_LightPoint` output remains pending.
 
 ## Epic FR-02: Renderer Role Clarity (OpenGL vs Vulkan vs RTX)
 Objective: ensure each renderer has a clearly defined role and quality target.
@@ -1141,6 +1176,15 @@ Tasks:
 - [x] `FR-02-T11` Implement native Vulkan raster shadow page allocation/render/sample backend under the shared frontend.
   Dependency: `FR-02-T09`, `FR-01-T07`. Priority: P0.
   Progress: The same dynamic effect dlight identity/cache-key stabilization applies to native Vulkan, while dynamic pages remain rerendered when light parameters move or fade.
+- [x] `FR-02-T12` Audit and harden gamma, lighting, tone mapping, and shadowmapping correctness across OpenGL, native Vulkan, and Vulkan RTX.
+  Dependency: `FR-02-T09..T11`. Priority: P0.
+  Progress: Closed EVSM empty-page encoding, stale raster-policy cache reuse, raw-depth filtering, lightmap/lightgrid bounds, transformed-normal, cvar finite-value, tracked-light identity, shadowlight configstring, native Vulkan intensity/filter-response, and VKPT tone-map synchronization/indexing defects. The implementation log is `docs-dev/renderer/gamma-lighting-shadow-audit-hardening-2026-07-10.md`.
+- [ ] `FR-02-T13` Implement a renderer-neutral linear-light scene and final SDR/HDR presentation contract with explicit texture/data transfer functions and output gamma compatibility.
+  Dependency: `FR-02-T12`. Priority: P0.
+- [ ] `FR-02-T14` Replace fixed worst-case shadow arrays with budgeted active capacity/resolution buckets, transactional allocation, capability-correct samplers, dirty-layer mip generation, and alpha-tested caster materials.
+  Dependency: `FR-02-T12`. Priority: P1.
+- [ ] `FR-02-T15` Separate direct sun lighting from baked/ambient light before enabling sun shadows by default.
+  Dependency: `FR-02-T12`, `FR-02-T13`. Priority: P1.
 
 ## Epic FR-03: JSON UI Rework Completion
 Objective: complete modern menu coverage and remove remaining UX gaps for core settings and flows.
@@ -1169,10 +1213,18 @@ Tasks:
   Dependency: `FR-03-T06`. Priority: P1.
 - [ ] `FR-03-T08` Complete split between engine-side and cgame-side UI ownership where still mixed.
   Dependency: `FR-03-T06`. Priority: P1.
+  Round 78 progress: WORR deathmatch now publishes an explicit match-hub
+  capability and keeps join legality, live match state, initial freeze, and
+  Escape reopen under sgame authority. The client only selects the available
+  RmlUi or cgame JSON presentation and preserves the ordinary game-menu path
+  for coop, demos, other game directories, and legacy servers. Broader UI
+  ownership audit and bridge simplification remain open.
 - [x] `FR-03-T09` Complete multi-monitor settings hierarchy and monitor targeting behavior for fullscreen modes.
   Dependency: `FR-03-T06`. Priority: P1.
 - [x] `FR-03-T10` Align the fixed-layout main menu framing with Quake II rerelease reference captures.
   Dependency: none. Priority: P1.
+- [ ] `FR-03-T11` Make video, gamma, lighting, and shadow controls renderer/capability aware and expose the shared `r_shadow*` controls.
+  Dependency: `FR-02-T01`, `FR-02-T13`. Priority: P1.
 
 Strategic note:
 - `FR-09` is now the long-term UI platform migration track. Remaining `FR-03`
@@ -2405,6 +2457,12 @@ Tasks:
   instead of clipping, and reusable component templates now publish explicit
   audio intent. Localization flow, text shaping policy, live accessibility
   services, and a user-facing reduced-motion preference remain pending.
+  Round 78 note: the multiplayer match hub now has a first-party WORR emblem,
+  branded translucent shell, state chip, tabbed navigation, distinct
+  team/participation treatments, responsive narrow/short layout rules, and
+  explicit high-visibility styling. Matching JSON action sizing/color support
+  preserves a readable native-renderer fallback. Broader localization and
+  accessibility-service completion remains pending.
 - [ ] `FR-09-T05` Implement reusable data-model and controller bridges for
   cvars, commands, conditions, dynamic labels, and shared list/table flows.
   Dependency: `FR-09-T03`. Priority: P0.
@@ -2471,6 +2529,12 @@ Tasks:
   `57` advanced routes. The strict controller-stub completion checker passes
   with `0` central starter routes. Live C++ controllers and event dispatch
   remain open.
+  Round 78 note: sgame now publishes the first live match-hub controller
+  contract through display-ready `ui_dm_*` cvars and registered commands. A
+  bounded queue chunks the expanded snapshot below the shared stufftext limit,
+  sends one chunk per frame, and waits for the queue to drain before the
+  one-second live refresh. The remaining list, browser, save/load, keybind,
+  player-preview, vote, and tournament controllers remain open.
 - [ ] `FR-09-T06` Translate shell/settings/single-player menus from the current
   JSON definitions into RmlUi documents.
   Dependency: `FR-09-T04`, `FR-09-T05`. Priority: P0.
@@ -2709,6 +2773,15 @@ Tasks:
   `-Wabstract-final-class` diagnostics without activating or redirecting either
   native renderer path. Implementation log:
   `docs-dev/rmlui-inactive-vulkan-stub-build-warning-cleanup-2026-07-10.md`.
+  Round 78 note: `dm_join`/`join` now implement a live match hub for both the
+  mandatory first-connect choice and in-session Escape. The server publishes
+  match overview, population, rules, team/Duel participation, ready state,
+  intermission restrictions, and conditional tools; OpenGL consumes the
+  branded RmlUi route, while unavailable renderer-native RmlUi lanes use the
+  matching cgame JSON page. `match_auto_join` now defaults to `0`, with
+  explicit `match_auto_join=1` preserving the historical immediate-assignment
+  override. Other Wave C flow/controller parity remains open. Implementation
+  log: `docs-dev/rmlui-round78-multiplayer-match-hub-2026-07-10.md`.
 - [ ] `FR-09-T09` Add migration-specific validation for navigation, scaling,
   localization, and renderer parity.
   Dependency: `FR-09-T06`, `FR-09-T07`, `FR-09-T08`, `DV-03-T07`.
@@ -3225,6 +3298,14 @@ Tasks:
   condition-grammar validation fix, not live controller parity, broad input
   parity, true narrow-viewport capture parity, full screenshot layout parity,
   or native Vulkan/RTX renderer parity.
+  Round 78 note: focused live OpenGL evidence records `dm_join` active on
+  initial connect and the active -> join -> inactive -> inventory/Escape ->
+  active -> Resume -> inactive sequence. Injected RmlUi initial/Escape captures
+  were visually inspected, while native Vulkan records RmlUi
+  `renderer_unavailable`, `ui_dm_menu_active=1`, and a visually confirmed JSON
+  hub. The build, `225` UI smoke tests, and `.install` refresh passed. This is
+  focused session and fallback evidence, not closure of the broad navigation,
+  input, viewport, localization, or renderer-native RmlUi matrix.
 - [ ] `FR-09-T10` Remove legacy JSON menu loading/widgets, close migration
   bridge fallbacks, and update staging/docs for the final RmlUi path.
   Dependency: `FR-09-T09`. Priority: P1.
@@ -3257,6 +3338,179 @@ Tasks:
   renderer, screenshot/layout, input/back, and non-runtime legacy-fallback
   evidence are still pending. No legacy JSON removal, fallback cutover, or
   `parity_ready` promotion is claimed.
+
+## Epic FR-10: Progressive Networking, Events, Snapshots, Prediction, and Lag Compensation
+
+Objective: replace the remaining Q2-shaped runtime coupling with a progressive,
+measurable networking architecture that preserves legacy Q2 server and demo
+compatibility while giving WORR deterministic client prediction, ordered event
+delivery, resilient snapshots, and fair authoritative lag compensation.
+
+Primary Areas: `src/client/*`, `src/server/*`, `src/game/bgame/*`,
+`src/game/cgame/*`, `src/game/sgame/network/*`, and `tools/net/*`.
+
+Architecture decision: retain `q2proto/` as a read-only legacy wire adapter.
+Validated protocol data is translated above the wire into canonical snapshot,
+input, event, and clock records. The engine owns decode validation and bounded
+histories; cgame owns snapshot transition, interpolation, prediction,
+reconciliation, and event playback; shared bgame code owns deterministic
+simulation; sgame owns authoritative state and scoped rewind. A future WORR
+transport may be negotiated outside `q2proto/`, but it must remain dual-stack.
+
+Exit Criteria:
+- Legacy Q2/Rerelease servers and supported demos remain playable through the
+  adapter path, and modern demos/MVD/spectator views have explicit acceptance
+  coverage.
+- Local movement and predictable side effects replay from an explicit
+  authoritative input acknowledgement through the same deterministic shared
+  simulation used by sgame.
+- One-shot events have typed payloads, monotonic identities, delivery classes,
+  prediction correlation, acknowledgement, and duplicate suppression.
+- Snapshot recovery, interpolation, extrapolation, packet-loss behavior, and
+  bandwidth/CPU/memory budgets pass deterministic loss/jitter/reorder tests.
+- Authoritative rewind is clock-mapped, bounded, abuse-resistant, full-pose,
+  interpolated, transactional, and covered across the declared weapon/mover
+  policy matrix.
+
+Tasks:
+- [x] `FR-10-T01` Audit the current pipeline and ratify ownership, canonical
+  data models, compatibility boundaries, security/fairness rules, budgets, and
+  rollout gates.
+  Area: `client/server/cgame/sgame/docs-dev`. Priority: P0. Dependencies: none.
+  State: Done (2026-07-11).
+  Definition of Done: a linked living plan records current-source evidence,
+  the chosen architecture, measurable budgets, compatibility matrix, staged
+  migrations, and rollback criteria; stale event-system guidance is marked
+  superseded.
+  Evidence: `docs-dev/plans/progressive-networking-events-snapshots-roadmap.md`
+  and `docs-dev/progressive-networking-foundation-2026-07-11.md`.
+- [ ] `FR-10-T02` Establish deterministic shared bgame simulation, fixed tick
+  and clock rules, canonical predicted-state schema, and state hashing.
+  Area: `bgame/cgame/sgame`. Priority: P0. Dependencies: `FR-10-T01`.
+  State: In Progress.
+  Definition of Done: server/client replay parity is proven from identical
+  inputs, hashes detect divergence, and float/time nondeterminism is bounded or
+  removed on every predicted path.
+  Progress: cgame prediction now routes through the same C++ PMove export as
+  sgame, initial movement config is synchronized, and both module/engine sides
+  assert a shared PMove layout contract. Game/cgame module APIs advanced to
+  `2024`/`2027` so the expanded command/PMove layout rejects mixed stale
+  binaries. The exactly typed ABI, state schema, hashes, and replay parity
+  harness remain.
+- [ ] `FR-10-T03` Add a deterministic network baseline and fault-injection
+  harness for latency, jitter, loss, duplication, reordering, corruption, and
+  bandwidth pressure.
+  Area: `tools/net`, `client/server`. Priority: P0. Dependencies: `FR-10-T01`.
+  State: Backlog.
+  Definition of Done: repeatable scenarios emit machine-readable evidence
+  under `.tmp/` and gate snapshot, event, prediction, and rewind regressions.
+- [ ] `FR-10-T04` Add a negotiated WORR packet envelope and legacy
+  protocol/demo adapters outside `q2proto/`.
+  Area: `common/net`, `client/server`. Priority: P0.
+  Dependencies: `FR-10-T01`, `FR-10-T03`. State: Backlog.
+  Definition of Done: negotiation cannot downgrade silently, MTU and malformed
+  input are bounded, and both modern and legacy compatibility matrices pass.
+- [ ] `FR-10-T05` Implement the typed, sequenced event journal with predictable,
+  authoritative, reliable, and persistent delivery classes.
+  Area: `bgame/cgame/sgame/client/server`. Priority: P0.
+  Dependencies: `FR-10-T02`, `FR-10-T04`. State: In Progress.
+  Definition of Done: multiple events per tick retain order, event IDs and
+  prediction correlation suppress duplicates, acknowledgement controls
+  retention, and legacy one-byte events translate without changing q2proto.
+  Progress: the first cgame-owned bounded event journal and snapshot-derived
+  identity/deduplication foundation is active behind the legacy event adapter;
+  authoritative wire sequencing remains pending. Evidence:
+  `docs-dev/progressive-networking-foundation-2026-07-11.md`.
+- [ ] `FR-10-T06` Build canonical acknowledged-baseline snapshot history,
+  keyframe recovery, removals/PVS rules, component deltas, and packet budgets.
+  Area: `client/server`. Priority: P0. Dependencies: `FR-10-T02`, `FR-10-T04`.
+  State: Backlog.
+  Definition of Done: distinct packet/snapshot/tick/baseline IDs are validated,
+  acknowledged baselines recover under loss, and no entity or payload limit
+  truncates silently.
+  Baseline note: the current engine already deltas from a client-acknowledged
+  frame in `src/server/entities.c`; this task generalizes that correct behavior
+  into the canonical model rather than reimplementing a previous-frame-only
+  design.
+- [ ] `FR-10-T07` Move cgame to an immutable snapshot timeline with explicit
+  transitions, discontinuities, adaptive interpolation, bounded extrapolation,
+  and event playback.
+  Area: `cgame/client`. Priority: P0.
+  Dependencies: `FR-10-T05`, `FR-10-T06`, `DV-04-T02`. State: In Progress.
+  Definition of Done: cgame consumes value/range APIs instead of mutable engine
+  internals on migrated paths, remote entities remain smooth under the fault
+  matrix, and teleport/epoch/entity-generation changes never interpolate.
+  Progress: the first fixed-capacity cgame snapshot metadata timeline and
+  discontinuity/telemetry seam is active while legacy rendering behavior
+  remains active. Evidence:
+  `docs-dev/progressive-networking-foundation-2026-07-11.md`.
+- [ ] `FR-10-T08` Complete client prediction, input replay, reconciliation,
+  predicted-state caching, and predicted-side-effect suppression.
+  Area: `bgame/cgame/client`. Priority: P0.
+  Dependencies: `FR-10-T02`, `FR-10-T05`, `FR-10-T07`. State: Backlog.
+  Definition of Done: authoritative input sequence is the replay watermark,
+  all eligible local movement/gameplay is predicted, corrections meet visual
+  budgets, and replay never duplicates effects.
+- [ ] `FR-10-T09` Add adaptive input delivery with explicit command sequences,
+  acknowledgements, pacing, batching, selective redundancy, and simulation /
+  packet / render rate decoupling.
+  Area: `client/server/common/net`. Priority: P1.
+  Dependencies: `FR-10-T04`, `FR-10-T06`, `FR-10-T08`. State: Backlog.
+  Definition of Done: input age and loss remain bounded under the fault matrix,
+  duplicate inputs are idempotent, and rate control meets bandwidth budgets.
+- [ ] `FR-10-T10` Establish server clock mapping and bounded timestamped
+  full-collision-pose history with a non-mutating historical query scene.
+  Area: `server/sgame/network`. Priority: P0.
+  Dependencies: `FR-10-T02`, `FR-10-T06`, `FR-10-T09`. State: In Progress.
+  Definition of Done: commands use a server-validated snapshot-to-simulation
+  watermark, history stores time/frame/origin/bounds/angles/validity, samples
+  interpolate without crossing discontinuities, and historical collision
+  queries cannot mutate or relink the authoritative live world.
+  Progress: the initial authority fix maps acknowledged network snapshots back
+  to server simulation frames and validated contiguous-snapshot intervals
+  before sgame sees a command; first/suppressed gaps use an explicit
+  no-interpolation sentinel. Bounded full-pose player history now feeds a
+  non-mutating historical proxy collision scene for the legacy path. Explicit
+  per-command render time, movers, and load gates remain.
+- [ ] `FR-10-T11` Ship fair hitscan lag compensation with validation, rewind
+  caps, diagnostics, and weapon-specific acceptance coverage.
+  Area: `sgame/network`, `sgame/player`. Priority: P0.
+  Dependencies: `FR-10-T10`. State: In Progress.
+  Definition of Done: hitscan traces use scoped interpolated history, cannot
+  trust client-authored time, do not cross spawn/teleport discontinuities, and
+  pass zero/low/high-latency fairness scenarios.
+  Progress: supported hitscan convergence/traces use historical player proxies
+  and restore-before-mutation query boundaries; damage remains current and
+  authoritative. The deterministic latency/fairness matrix remains pending.
+- [ ] `FR-10-T12` Extend declared compensation policies to projectile spawn /
+  fast-forward, melee, continuous beams, splash, movers, and triggers.
+  Area: `sgame/network`, `sgame/gameplay`. Priority: P1.
+  Dependencies: `FR-10-T10`, `FR-10-T11`. State: Backlog.
+  Definition of Done: each interaction class has an explicit fairness/collision
+  policy and deterministic tests; world state is never globally left rewound.
+- [ ] `FR-10-T13` Preserve modern and legacy demo, MVD, spectator, GTV, seeking,
+  and replay semantics across snapshot/event transitions.
+  Area: `client/server/mvd`. Priority: P1.
+  Dependencies: `FR-10-T04` through `FR-10-T07`. State: Backlog.
+  Definition of Done: record/play/seek/relay matrices preserve ordered commands,
+  events, discontinuities, and canonical snapshot identities.
+- [ ] `FR-10-T14` Add network telemetry, diagnostics, security/load tests, and
+  enforceable CPU, memory, bandwidth, correction, and rewind budgets.
+  Area: `client/server/cgame/sgame/tools`. Priority: P1.
+  Dependencies: `FR-10-T03`, `FR-10-T06`, `FR-10-T08`, `FR-10-T10` through
+  `FR-10-T12`. State: Backlog.
+  Definition of Done: operator and developer telemetry is bounded and
+  actionable, adversarial inputs fail closed, and release gates consume
+  machine-readable budget evidence.
+- [ ] `FR-10-T15` Complete progressive rollout, dual-stack acceptance,
+  operator/end-user documentation, migration defaults, and removal gates.
+  Area: `docs-dev/docs-user/tools/release`. Priority: P1.
+  Dependencies: `FR-10-T05` through `FR-10-T14`. State: Backlog.
+  Definition of Done: every phase has a reversible switch and owner, modern
+  defaults meet acceptance budgets, and no legacy adapter is removed before its
+  published compatibility gate is satisfied.
+
+Living plan: `docs-dev/plans/progressive-networking-events-snapshots-roadmap.md`.
 
 ## Development Roadmap (Task-Based Project)
 
@@ -3306,6 +3560,8 @@ Tasks:
   Dependency: `DV-02-T01`. Priority: P2.
 - [x] `DV-02-T06` Add renderer guardrail scans for removed shadow fallback/cache paths.
   Dependency: `DV-02-T01`. Priority: P1.
+- [ ] `DV-02-T07` Make native Vulkan and VKPT shader generation, freshness checking, and `spirv-val` validation mandatory build/CI dependencies.
+  Dependency: `DV-02-T01`, `DV-02-T02`. Priority: P1.
 
 ## Epic DV-03: Automated Test Strategy
 Objective: expand meaningful automated tests across protocol, gameplay, renderer, and tooling.
@@ -3583,6 +3839,14 @@ Tasks:
   dependency wiring. Native runtime navigation, broad input/navigation parity,
   final route layout assertions, and live renderer-specific coverage remain
   pending.
+  Round 78 note: focused runtime evidence now covers the live multiplayer
+  initial/join/Escape/resume transition on OpenGL, injected initial/Escape
+  layout inspection, and native Vulkan renderer-unavailable fallback to the
+  matching JSON hub. Broader route automation, input/navigation coverage,
+  viewport assertions, and renderer-native RmlUi coverage remain pending.
+
+- [ ] `DV-03-T08` Add deterministic renderer semantic tests for gamma/color charts, light-query saturation, shadow alias/cache invalidation, malformed shadowlight records, and GL/Vulkan pixel tolerances.
+  Dependency: `DV-02-T03`, `FR-02-T12`. Priority: P1.
 
 ## Epic DV-04: Architecture and Code Quality
 Objective: reduce maintenance overhead and complete key modernization tracks.
@@ -4423,6 +4687,12 @@ Tasks:
   Vulkan/RTX renderer parity, final route ownership, full live
   data-model/controller behavior, true narrow-viewport capture parity, full
   screenshot layout parity, or end-user documentation.
+  RmlUi Round 78 note: the live multiplayer match hub now has an approachable
+  player/operator guide at `docs-user/multiplayer-session-menu.md`, including
+  initial participation choices, Escape reopen, live overview/tool behavior,
+  native-renderer presentation differences, and the explicit
+  `match_auto_join=1` immediate-assignment override. Other user-visible RmlUi
+  workflows still require final parity documentation before cutover.
 - [x] `DV-07-T05` Keep the canonical shadowmapping replacement baseline synchronized with implementation status.
   Dependency: `FR-02-T09`. Priority: P1.
 - [ ] `DV-07-T06` Maintain imported-source credits and provenance ledgers for the Q3A BotLib and `TTimo/bspc` AAS work.
@@ -4493,9 +4763,12 @@ Tasks:
 ## Immediate 90-Day Priority Queue (2026-07-01 to 2026-09-30)
 - [ ] `P0` `FR-01-T01` Vulkan particle style parity
 - [ ] `P0` `FR-01-T04` MD2/MD5 parity pass
+- [ ] `P0` `FR-01-T09` Renderer-neutral gameplay light queries
+- [ ] `P0` `FR-02-T13` Linear-light scene and final presentation contract
 - [ ] `P0` `FR-04-T02` Bot frame logic implementation
 - [ ] `P0` `FR-09-T01` RmlUi runtime ownership and inventory closeout
 - [ ] `P0` `FR-09-T02` RmlUi dependency/bootstrap and staging path
+- [ ] `P0` `FR-09-T08` Multiplayer/session/match menu live-state parity
 - [ ] `P0` `DV-01-T01` Project board template rollout
 - [ ] `P0` `DV-02-T01` PR CI workflow
 - [ ] `P0` `DV-03-T01` Integrate q2proto tests into CI

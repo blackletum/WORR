@@ -16,6 +16,7 @@ Weapon State Machine: The `Weapon_Generic` function provides a state machine to
 handle the animation sequence of firing a weapon (ready, fire, idle, etc.).*/
 
 #include "../g_local.hpp"
+#include "../network/lag_compensation.hpp"
 #include "g_proball.hpp"
 #include <array>
 
@@ -138,7 +139,11 @@ void pierce_trace(const Vector3 &start, const Vector3 &end, gentity_t *ignore,
   Vector3 own_end = end;
 
   for (int loop_count = MAX_ENTITIES; loop_count > 0; --loop_count) {
-    pierce.tr = gi.traceLine(start, own_end, ignore, mask);
+    // Only the collision query observes historical player poses.  The helper
+    // uses unlinked proxies and returns before hit callbacks apply authoritative
+    // damage, knockback, death, or piercing mutations.
+    pierce.tr =
+        LagCompensation_TraceLine(ignore, start, own_end, ignore, mask);
 
     // didn't hit anything, so we're done
     if (!pierce.tr.ent || pierce.tr.fraction == 1.0f)
@@ -1476,7 +1481,7 @@ static void fire_beams(gentity_t *self, const Vector3 &start,
     content_mask &= ~MASK_WATER;
   }
 
-  tr = gi.traceLine(start, end, self, content_mask);
+  tr = LagCompensation_TraceLine(self, start, end, self, content_mask);
 
   // see if we hit water
   if (tr.contents & MASK_WATER) {
@@ -1491,7 +1496,8 @@ static void fire_beams(gentity_t *self, const Vector3 &start,
       gi.multicast(tr.endPos, MULTICAST_PVS, false);
     }
     // re-trace ignoring water this time
-    tr = gi.traceLine(water_start, end, self, content_mask & ~MASK_WATER);
+    tr = LagCompensation_TraceLine(self, water_start, end, self,
+                                   content_mask & ~MASK_WATER);
   }
   endpoint = tr.endPos;
 
@@ -1665,7 +1671,7 @@ bool fire_thunderbolt(gentity_t *self, const Vector3 &start,
     return true;
   }
 
-  tr = gi.traceLine(start, end, self, content_mask);
+  tr = LagCompensation_TraceLine(self, start, end, self, content_mask);
 
   // see if we hit water
   if (tr.contents & MASK_WATER) {
@@ -1680,7 +1686,8 @@ bool fire_thunderbolt(gentity_t *self, const Vector3 &start,
       gi.multicast(tr.endPos, MULTICAST_PVS, false);
     }
     // re-trace ignoring water this time
-    tr = gi.traceLine(water_start, end, self, content_mask & ~MASK_WATER);
+    tr = LagCompensation_TraceLine(self, water_start, end, self,
+                                   content_mask & ~MASK_WATER);
   }
   endpoint = tr.endPos;
 
@@ -1688,33 +1695,43 @@ bool fire_thunderbolt(gentity_t *self, const Vector3 &start,
   if (water)
     damage = damage / 2;
 
-  gentity_t *hit1 = nullptr;
-  gentity_t *hit2 = nullptr;
-  auto apply_damage = [&](const trace_t &hit) {
-    if (!hit.ent || !hit.ent->takeDamage)
-      return;
-
-    if (hit.ent == hit1 || hit.ent == hit2)
-      return;
-
-    Damage(hit.ent, self, self, aimDir, hit.endPos, hit.plane.normal, damage,
-           kick, DamageFlags::Energy, mod);
-
-    if (!hit1)
-      hit1 = hit.ent;
-    else
-      hit2 = hit.ent;
-  };
-
-  apply_damage(tr);
+  std::array<trace_t, 3> damageTraces{};
+  std::size_t damageTraceCount = 0;
+  damageTraces[damageTraceCount++] = tr;
 
   Vector3 side = {-forward[_Y], forward[_X], 0.0f};
   if (side.length() > 0.1f) {
     side.normalize();
     side *= 16.0f;
     const contents_t damage_mask = content_mask & ~MASK_WATER;
-    apply_damage(gi.traceLine(start + side, end + side, self, damage_mask));
-    apply_damage(gi.traceLine(start - side, end - side, self, damage_mask));
+    damageTraces[damageTraceCount++] = LagCompensation_TraceLine(
+        self, start + side, end + side, self, damage_mask);
+    damageTraces[damageTraceCount++] = LagCompensation_TraceLine(
+        self, start - side, end - side, self, damage_mask);
+  }
+
+  // Resolve the complete historical beam footprint before mutating any target.
+  // A main-ray kill must not change the collision scene seen by side rays.
+  std::array<gentity_t *, 3> damagedTargets{};
+  std::size_t damagedTargetCount = 0;
+  for (std::size_t i = 0; i < damageTraceCount; ++i) {
+    const trace_t &hit = damageTraces[i];
+    if (!hit.ent || !hit.ent->takeDamage)
+      continue;
+
+    bool alreadyDamaged = false;
+    for (std::size_t target = 0; target < damagedTargetCount; ++target) {
+      if (damagedTargets[target] == hit.ent) {
+        alreadyDamaged = true;
+        break;
+      }
+    }
+    if (alreadyDamaged)
+      continue;
+
+    damagedTargets[damagedTargetCount++] = hit.ent;
+    Damage(hit.ent, self, self, aimDir, hit.endPos, hit.plane.normal, damage,
+           kick, DamageFlags::Energy, mod);
   }
 
   if (!((tr.surface) && (tr.surface->flags & SURF_SKY))) {

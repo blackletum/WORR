@@ -7,6 +7,7 @@ g_weapon.c*/
 #include "../g_local.hpp"
 #include "../gameplay/g_proball.hpp"
 #include "../monsters/m_player.hpp"
+#include "../network/lag_compensation.hpp"
 
 
 #include <array>
@@ -117,7 +118,8 @@ Projects the weapon muzzle position and direction from the player's view.
 ================
 */
 void P_ProjectSource(gentity_t *ent, const Vector3 &angles, Vector3 distance,
-                     Vector3 &result_start, Vector3 &result_dir) {
+                     Vector3 &result_start, Vector3 &result_dir,
+                     ProjectSourceTraceMode traceMode) {
   // Adjust distance based on projection settings or handedness
   if (g_weaponProjection->integer > 0) {
     // Horizontally centralize the weapon projection
@@ -151,7 +153,9 @@ void P_ProjectSource(gentity_t *ent, const Vector3 &angles, Vector3 distance,
   if (!G_ShouldPlayersCollide(true))
     mask &= ~CONTENTS_PLAYER;
 
-  trace_t tr = gi.traceLine(eye_pos, end, ent, mask);
+  trace_t tr = traceMode == ProjectSourceTraceMode::LagCompensated
+                   ? LagCompensation_TraceLine(ent, eye_pos, end, ent, mask)
+                   : gi.traceLine(eye_pos, end, ent, mask);
 
   bool closeToTarget = (tr.fraction * 8192.0f) < 128.0f;
   bool hitEntity =
@@ -2317,12 +2321,11 @@ static void Weapon_Machinegun_Fire(gentity_t *ent) {
   P_AddWeaponKick(ent, kickOrigin, kickAngles);
 
   Vector3 start, dir;
-  P_ProjectSource(ent, client.vAngle, {0, 0, -8}, start, dir);
+  P_ProjectSource(ent, client.vAngle, {0, 0, -8}, start, dir,
+                  ProjectSourceTraceMode::LagCompensated);
 
-  LagCompensate(ent, start, dir);
   fire_bullet(ent, start, dir, damage, kick, hSpread, vSpread,
               ModID::Machinegun);
-  UnLagCompensate();
 
   Weapon_PowerupSound(ent);
 
@@ -2439,19 +2442,15 @@ static void Weapon_Chaingun_Fire(gentity_t *ent) {
   P_AddWeaponKick(ent, kickOrigin, kickAngles);
 
   Vector3 start, dir;
-  P_ProjectSource(ent, client.vAngle, {0, 0, -8}, start, dir);
-
-  LagCompensate(ent, start, dir);
 
   for (int i = 0; i < shots; ++i) {
     // Recalculate for each shot
-    P_ProjectSource(ent, client.vAngle, {0, 0, -8}, start, dir);
+    P_ProjectSource(ent, client.vAngle, {0, 0, -8}, start, dir,
+                    ProjectSourceTraceMode::LagCompensated);
 
     fire_bullet(ent, start, dir, damage, kick, DEFAULT_BULLET_HSPREAD,
                 DEFAULT_BULLET_VSPREAD, ModID::Chaingun);
   }
-
-  UnLagCompensate();
 
   Weapon_PowerupSound(ent);
 
@@ -2506,16 +2505,15 @@ static void Weapon_Shotgun_Fire(gentity_t *ent) {
   // Setup source and direction
   const Vector3 viewOffset = {0.f, 0.f, -8.f};
   Vector3 start, dir;
-  P_ProjectSource(ent, ent->client->vAngle, viewOffset, start, dir);
+  P_ProjectSource(ent, ent->client->vAngle, viewOffset, start, dir,
+                  ProjectSourceTraceMode::LagCompensated);
 
   // Apply weapon kickback
   P_AddWeaponKick(ent, ent->client->vForward * -2.f, {-2.f, 0.f, 0.f});
 
   // Fire with lag compensation
-  LagCompensate(ent, start, dir);
   fire_shotgun(ent, start, dir, damage, kick, 500, 500, pelletCount,
                ModID::Shotgun);
-  UnLagCompensate();
 
   // Muzzle flash
   gi.WriteByte(svc_muzzleflash);
@@ -2559,15 +2557,12 @@ static void Weapon_SuperShotgun_Fire(gentity_t *ent) {
   const Vector3 viewOffset = {0.f, 0.f, -8.f};
   Vector3 start, dir;
 
-  // Central shot uses original angle
-  P_ProjectSource(ent, ent->client->vAngle, viewOffset, start, dir);
-  LagCompensate(ent, start, dir);
-
   // First barrel shot (slightly left)
   Vector3 leftAngle = {ent->client->vAngle[PITCH],
                        ent->client->vAngle[YAW] - 5.f,
                        ent->client->vAngle[ROLL]};
-  P_ProjectSource(ent, leftAngle, viewOffset, start, dir);
+  P_ProjectSource(ent, leftAngle, viewOffset, start, dir,
+                  ProjectSourceTraceMode::LagCompensated);
   fire_shotgun(ent, start, dir, damage, kick, DEFAULT_SHOTGUN_HSPREAD,
                DEFAULT_SHOTGUN_VSPREAD, DEFAULT_SSHOTGUN_COUNT / 2,
                ModID::SuperShotgun);
@@ -2576,12 +2571,11 @@ static void Weapon_SuperShotgun_Fire(gentity_t *ent) {
   Vector3 rightAngle = {ent->client->vAngle[PITCH],
                         ent->client->vAngle[YAW] + 5.f,
                         ent->client->vAngle[ROLL]};
-  P_ProjectSource(ent, rightAngle, viewOffset, start, dir);
+  P_ProjectSource(ent, rightAngle, viewOffset, start, dir,
+                  ProjectSourceTraceMode::LagCompensated);
   fire_shotgun(ent, start, dir, damage, kick, DEFAULT_SHOTGUN_HSPREAD,
                DEFAULT_SHOTGUN_VSPREAD, DEFAULT_SSHOTGUN_COUNT / 2,
                ModID::SuperShotgun);
-
-  UnLagCompensate();
 
   // Add recoil
   P_AddWeaponKick(ent, ent->client->vForward * -2.f, {-2.f, 0.f, 0.f});
@@ -2628,11 +2622,10 @@ static void Weapon_Railgun_Fire(gentity_t *ent) {
   }
 
   Vector3 start, dir;
-  P_ProjectSource(ent, ent->client->vAngle, {0.f, 7.f, -8.f}, start, dir);
+  P_ProjectSource(ent, ent->client->vAngle, {0.f, 7.f, -8.f}, start, dir,
+                  ProjectSourceTraceMode::LagCompensated);
 
-  LagCompensate(ent, start, dir);
   fire_rail(ent, start, dir, damage, kick);
-  UnLagCompensate();
 
   P_AddWeaponKick(ent, ent->client->vForward * -3.f, {-3.f, 0.f, 0.f});
 
@@ -3000,7 +2993,8 @@ static void Weapon_Disruptor_Fire(gentity_t *ent) {
   const Vector3 kDistance = {24.f, 8.f, -8.f};
 
   Vector3 start, dir;
-  P_ProjectSource(ent, ent->client->vAngle, kDistance, start, dir);
+  P_ProjectSource(ent, ent->client->vAngle, kDistance, start, dir,
+                  ProjectSourceTraceMode::LagCompensated);
 
   Vector3 end = start + (dir * 8192.f);
   gentity_t *target = nullptr;
@@ -3011,10 +3005,7 @@ static void Weapon_Disruptor_Fire(gentity_t *ent) {
     mask &= ~CONTENTS_PLAYER;
   }
 
-  // Lag compensation
-  LagCompensate(ent, start, dir);
-  trace_t tr = gi.traceLine(start, end, ent, mask);
-  UnLagCompensate();
+  trace_t tr = LagCompensation_TraceLine(ent, start, end, ent, mask);
 
   // Attempt hit from point trace
   if (tr.ent != world && tr.ent->health > 0 &&
@@ -3022,8 +3013,9 @@ static void Weapon_Disruptor_Fire(gentity_t *ent) {
        (tr.ent->flags & FL_DAMAGEABLE))) {
     target = tr.ent;
   } else {
-    // Try expanded bounding box trace
-    tr = gi.trace(start, kMins, kMaxs, end, ent, mask);
+    // The expanded fallback is another pure query against the same historical
+    // timestamp.  Both helpers restore before target selection or firing.
+    tr = LagCompensation_Trace(ent, start, kMins, kMaxs, end, ent, mask);
     if (tr.ent != world && tr.ent->health > 0 &&
         ((tr.ent->svFlags & SVF_MONSTER) || tr.ent->client ||
          (tr.ent->flags & FL_DAMAGEABLE))) {
@@ -3307,12 +3299,10 @@ static void Weapon_PlasmaBeam_Fire(gentity_t *ent) {
 
   // Fire origin and direction
   Vector3 start, dir;
-  P_ProjectSource(ent, ent->client->vAngle, {7.f, 2.f, -3.f}, start, dir);
+  P_ProjectSource(ent, ent->client->vAngle, {7.f, 2.f, -3.f}, start, dir,
+                  ProjectSourceTraceMode::LagCompensated);
 
-  // Lag compensation for accurate hits
-  LagCompensate(ent, start, dir);
   fire_plasmabeam(ent, start, dir, {2.f, 7.f, -3.f}, damage, kick, false);
-  UnLagCompensate();
 
   Weapon_PowerupSound(ent);
 
@@ -3422,15 +3412,13 @@ static void Weapon_Thunderbolt_Fire(gentity_t *ent) {
   const Vector3 projectionOffset = {7.f, 2.f, -3.f};
   const Vector3 muzzleOffset = {2.f, 7.f, -3.f};
   Vector3 start, dir;
-  P_ProjectSource(ent, ent->client->vAngle, projectionOffset, start, dir);
-
-  LagCompensate(ent, start, dir);
+  P_ProjectSource(ent, ent->client->vAngle, projectionOffset, start, dir,
+                  ProjectSourceTraceMode::LagCompensated);
 
   const bool discharged =
       fire_thunderbolt(ent, start, dir, muzzleOffset, damage, kick,
-                       ModID::Thunderbolt, static_cast<int>(damageMultiplier));
-
-  UnLagCompensate();
+                       ModID::Thunderbolt,
+                       static_cast<int>(damageMultiplier));
 
   if (!discharged) {
     if (startingFire) {

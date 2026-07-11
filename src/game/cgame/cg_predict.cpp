@@ -2,6 +2,7 @@
 // Licensed under the GNU General Public License 2.0.
 
 #include "cg_entity_local.h"
+#include "cg_snapshot_timeline.hpp"
 
 #if USE_DEBUG
 #define CG_SHOWMISS(...) \
@@ -81,9 +82,12 @@ void CL_CheckPredictionError(void)
     len = fabsf(delta[0]) + fabsf(delta[1]) + fabsf(delta[2]);
     if (len > 80) {
         // > 80 world units is a teleport or something
+        CG_SnapshotTimeline_NotePredictionCorrection(cmd, cl.cmdNumber, len, true);
         VectorClear(cl.prediction_error);
         return;
     }
+
+    CG_SnapshotTimeline_NotePredictionCorrection(cmd, cl.cmdNumber, len, false);
 
     CG_SHOWMISS("prediction miss on %i: %f (%f %f %f)\n",
                 cl.frame.number, len, delta[0], delta[1], delta[2]);
@@ -125,14 +129,20 @@ void CL_PredictMovement(void)
 
     // if we are too far out of date, just freeze
     if (current - ack > CMD_BACKUP - 1) {
+        CG_SnapshotTimeline_NotePredictionReplay(ack, current, 0);
+        CG_SnapshotTimeline_DebugTick(cls.realtime);
         CG_SHOWMISS("%i: exceeded CMD_BACKUP\n", cl.frame.number);
         return;
     }
 
     if (!cl.cmd.msec && current == ack) {
+        CG_SnapshotTimeline_NotePredictionReplay(ack, current, 0);
+        CG_SnapshotTimeline_DebugTick(cls.realtime);
         CG_SHOWMISS("%i: not moved\n", cl.frame.number);
         return;
     }
+
+    CG_SnapshotTimeline_NotePredictionReplay(ack, current, current - ack);
 
     // copy current state to pmove
     memset(&pm, 0, sizeof(pm));
@@ -207,4 +217,6 @@ void CL_PredictMovement(void)
 
     cl.last_groundplane = pm.groundplane;
     cl.last_groundentity = pm.groundentity;
+
+    CG_SnapshotTimeline_DebugTick(cls.realtime);
 }
