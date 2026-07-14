@@ -117,6 +117,7 @@ def write_valid_evidence(
     *,
     evidence_id: str = "rmlui_runtime_smoke_round29",
     route_id: str = "core.runtime_smoke",
+    renderer: str = "opengl",
     width: int = 640,
     height: int = 480,
 ) -> None:
@@ -133,19 +134,25 @@ def write_valid_evidence(
     capture_marker = (
         "RmlUi guarded capture route is active; capture after the next rendered frame."
         if route_id == "core.runtime_smoke"
-        else f"RmlUi guarded menu capture route '{route_id}' is active through UIMENU_MAIN; capture after the next rendered frame."
+        else (
+            f"RmlUi guarded menu capture route '{route_id}' is active through UIMENU_MAIN; capture after the next rendered frame."
+            if route_id in runtime_capture.MENU_ENTRYPOINT_ROUTES
+            else f"RmlUi guarded route capture '{route_id}' is active through UI_Rml_OpenRoute; capture after the next rendered frame."
+        )
     )
+    renderer_family = runtime_capture.RENDERER_FAMILIES[renderer]
+    renderer_label = runtime_capture.RENDERER_LABELS[renderer]
     evidence_text = f"""
 {capture_marker}
 RmlUi TTF font face 'WORR Display' loaded from Quake II Rerelease font fonts/RussoOne-Regular.ttf.
 RmlUi TTF font engine generated text texture: strings=1 size=18 source='Quake II Rerelease: fonts/RussoOne-Regular.ttf'.
-RmlUi runtime status: active=yes route='{route_id}' availability='ready' runtime='RmlUi' renderer='OpenGL RmlUi render-interface primitives' family='opengl'.
+RmlUi runtime status: active=yes route='{route_id}' availability='ready' runtime='RmlUi' renderer='{renderer_label} RmlUi render-interface primitives' family='{renderer_family}'.
 RmlUi runtime frames: updates=2 renders=2 last_realtime=123 dimensions={width}x{height}.
 RmlUi runtime route counters: opens=1 closes=0 close_requests=0 synthetic_inputs=0.
 RmlUi runtime input: keys=0 chars=0 mouse_moves=0 mouse_buttons=0 mouse_wheels=0 last_mouse=0,0.
 Wrote {screenshot_path}
 RmlUi synthetic input smoke: keys=2 chars=1 mouse_moves=1 mouse_buttons=1 mouse_wheels=1 close_requests=1 closes=1 active=no.
-RmlUi runtime status: active=no route='<none>' availability='ready' runtime='RmlUi' renderer='OpenGL RmlUi render-interface primitives' family='opengl'.
+RmlUi runtime status: active=no route='<none>' availability='ready' runtime='RmlUi' renderer='{renderer_label} RmlUi render-interface primitives' family='{renderer_family}'.
 RmlUi runtime frames: updates=2 renders=2 last_realtime=123 dimensions={width}x{height}.
 RmlUi runtime route counters: opens=1 closes=1 close_requests=1 synthetic_inputs=1.
 RmlUi runtime input: keys=2 chars=1 mouse_moves=1 mouse_buttons=1 mouse_wheels=1 last_mouse=128,192.
@@ -174,10 +181,64 @@ def test_dry_run_prints_guarded_capture_command(
     assert result == 0
     assert "+ui_rml_runtime_capture" in captured.out
     assert "+set r_screenshot_dir" in captured.out
+    assert "+set r_maxfps 60" in captured.out
+    assert "+set s_enable 0" in captured.out
+    assert "+set r_screenshot_message 1" in captured.out
+    assert "--bootstrap-quiet-status" in captured.out
+    assert "+ui_rml_reduced_motion 1" in captured.out
+    assert "+ui_rml_reduced_motion 0 +quit" in captured.out
+    assert f"+wait {runtime_capture.DEFAULT_CAPTURE_WAIT}" in captured.out
     assert "+screenshottga rmlui_runtime_smoke_round29" in captured.out
     assert "+ui_rml_runtime_synthetic_input" in captured.out
     assert "+ui_rml_runtime_status" in captured.out
     assert "+quit" in captured.out
+
+
+def test_engine_timeout_is_reported_without_escaping(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = tmp_path / "repo"
+    install_dir = repo_root / ".install"
+    engine_exe = install_dir / "worr_x86_64.exe"
+    write_text(engine_exe, "fake exe")
+    report = runtime_capture.build_report(
+        repo_root,
+        install_dir,
+        engine_exe,
+        "basew",
+        "rtx",
+        repo_root / ".tmp/rmlui/runtime-capture",
+        "timeout_evidence",
+        "tga",
+        runtime_capture.DEFAULT_ROUTE_ID,
+        True,
+        None,
+        "640x480",
+        1,
+        1,
+        1,
+        None,
+    )
+
+    def raise_timeout(*args: object, **kwargs: object) -> None:
+        raise runtime_capture.subprocess.TimeoutExpired(report.command, 2.5)
+
+    monkeypatch.setattr(runtime_capture.subprocess, "run", raise_timeout)
+
+    start_time = runtime_capture.run_engine_for_report(report, 2.5)
+
+    assert start_time is not None
+    assert report.ran_engine is True
+    assert report.exit_code is None
+    assert report.elapsed_seconds is not None
+    assert report.elapsed_seconds >= 0
+    assert report.errors == ["engine timed out after 2.5 seconds"]
+
+
+def test_fixed_size_body_text_threshold_does_not_scale_with_viewport() -> None:
+    assert runtime_capture.min_layout_count(640 * 480, "body_text") == 1024
+    assert runtime_capture.min_layout_count(1920 * 1080, "body_text") == 1024
 
 
 def test_dry_run_matrix_prints_guarded_viewport_commands(
@@ -212,7 +273,125 @@ def test_dry_run_route_matrix_prints_guarded_menu_commands(
     assert "+screenshottga rmlui_runtime_smoke_round29_download_status" in captured.out
 
 
-def test_dry_run_renderer_matrix_prints_opengl_commands_and_blocked_lanes(
+def test_full_route_matrix_dry_run_covers_manifest_routes(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+
+    result, captured = run_checker(
+        repo_root,
+        capsys,
+        "--dry-run",
+        "--full-route-matrix",
+    )
+
+    assert result == 0
+    commands = [line for line in captured.out.splitlines() if line.strip()]
+    assert len(commands) == len(runtime_capture.FULL_ROUTE_MATRIX) == 58
+    assert "+ui_rml_runtime_capture_menu main" in captured.out
+    assert "+ui_rml_runtime_capture_route accessibility" in captured.out
+    assert "+ui_rml_runtime_capture_route match_stats" in captured.out
+    assert captured.out.count("+set ui_dm_initial 0") == 2
+    assert captured.out.count("+set ui_dm_show_resume 1") == 2
+
+
+def test_dry_run_save_route_uses_general_route_capture(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+
+    result, captured = run_checker(
+        repo_root,
+        capsys,
+        "--dry-run",
+        "--route-id",
+        "loadgame",
+    )
+
+    assert result == 0
+    assert "+ui_rml_runtime_capture_route loadgame" in captured.out
+    assert "+screenshottga rmlui_runtime_smoke_round29" in captured.out
+
+
+def test_capture_registry_covers_every_manifest_route() -> None:
+    manifest = json.loads(
+        (SCRIPT_DIR / "rmlui_manifest.json").read_text(encoding="utf-8")
+    )
+    manifest_routes = {route["id"] for route in manifest["routes"]}
+    assert set(runtime_capture.ROUTE_DOCUMENTS) == manifest_routes | {
+        runtime_capture.DEFAULT_ROUTE_ID
+    }
+
+
+def test_dry_run_server_route_forces_local_source(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+
+    result, captured = run_checker(
+        repo_root,
+        capsys,
+        "--dry-run",
+        "--route-id",
+        "servers",
+        "--server-address",
+        "127.0.0.1:27919",
+    )
+
+    assert result == 0
+    assert runtime_capture.ROUTE_DOCUMENTS["servers"] == Path("utility/servers.rml")
+    assert "+ui_rml_reduced_motion 1 +set adr0 127.0.0.1:27919 +set ui_server_source local" in captured.out
+    assert "+ui_rml_runtime_capture_route servers" in captured.out
+
+
+def test_dry_run_ui_list_route_seeds_published_cvars(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+
+    result, captured = run_checker(
+        repo_root,
+        capsys,
+        "--dry-run",
+        "--route-id",
+        "ui_list",
+        "--seed-cvar",
+        "ui_list_title=Callvote: Map",
+        "--seed-cvar",
+        "ui_list_item_show_0=1",
+    )
+
+    assert result == 0
+    assert runtime_capture.ROUTE_DOCUMENTS["ui_list"] == Path("utility/ui_list.rml")
+    assert "+set ui_list_title Callvote: Map +set ui_list_item_show_0 1" in captured.out
+    assert "+ui_rml_runtime_capture_route ui_list" in captured.out
+
+
+@pytest.mark.parametrize(
+    "seed",
+    ("missing_separator", "bad-name=value", "9bad=value"),
+)
+def test_invalid_seed_cvar_is_rejected(
+    tmp_path: Path,
+    seed: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        runtime_capture.main(
+            [
+                "--repo-root",
+                str(tmp_path / "repo"),
+                "--dry-run",
+                "--seed-cvar",
+                seed,
+            ]
+        )
+
+
+def test_dry_run_renderer_matrix_prints_native_renderer_lanes(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -226,10 +405,10 @@ def test_dry_run_renderer_matrix_prints_opengl_commands_and_blocked_lanes(
     assert "+ui_rml_runtime_capture_menu game" in captured.out
     assert "+ui_rml_runtime_capture_menu download_status" in captured.out
     assert "OpenGL=native_guarded" in captured.out
-    assert "Vulkan=blocked_until_native" in captured.out
-    assert "RTX/vkpt=blocked_until_native" in captured.out
-    assert "Vulkan=foundation_present_blocked" in captured.out
-    assert "RTX/vkpt=foundation_present_blocked" in captured.out
+    assert "Vulkan=native_guarded" in captured.out
+    assert "RTX/vkpt=native_guarded" in captured.out
+    assert "Vulkan=native_guarded" in captured.out
+    assert "RTX/vkpt=native_guarded" in captured.out
 
 
 def test_valid_runtime_capture_evidence_passes(
@@ -276,6 +455,31 @@ def test_valid_runtime_capture_evidence_passes(
     assert payload["facts"]["layout_assertions"]["buttons_render_below_panel"] is True
     assert payload["copied_evidence"]["screenshot"].endswith("rmlui_runtime_smoke_round29.tga")
     assert (repo_root / ".tmp/rmlui/runtime-capture/manifest.json").is_file()
+
+
+def test_valid_vulkan_runtime_capture_evidence_passes(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+    write_valid_evidence(repo_root, renderer="vulkan")
+
+    result, captured = run_checker(
+        repo_root,
+        capsys,
+        "--renderer",
+        "vulkan",
+        "--format",
+        "json",
+    )
+
+    payload = json.loads(captured.out)
+    assert result == 0
+    assert payload["ok"] is True
+    assert payload["facts"]["renderer"] == "vulkan"
+    assert payload["facts"]["guarded_renderer_status_seen"] is True
+    assert payload["facts"]["guarded_opengl_status_seen"] is False
+    assert "+set r_renderer vulkan" in " ".join(payload["command"])
 
 
 def test_route_matrix_evidence_passes_for_guarded_menu_entrypoints(
@@ -356,30 +560,32 @@ def test_renderer_matrix_evidence_combines_opengl_routes_and_static_lanes(
     assert payload["counts"]["routes"] == 3
     assert payload["counts"]["route_passed"] == 3
     assert payload["counts"]["renderer_lanes"] == 3
-    assert payload["counts"]["native_guarded_lanes"] == 1
-    assert payload["counts"]["blocked_lanes"] == 2
+    assert payload["counts"]["native_guarded_lanes"] == 3
+    assert payload["counts"]["blocked_lanes"] == 0
     assert payload["counts"]["bridge_lanes"] == 2
     assert payload["counts"]["bridge_foundation_lanes"] == 2
-    assert payload["counts"]["native_bridge_lanes"] == 0
-    assert payload["counts"]["bridge_blocked_lanes"] == 2
-    assert payload["counts"]["bridge_activation_complete_lanes"] == 0
-    assert payload["counts"]["bridge_partial_activation_lanes"] == 2
+    assert payload["counts"]["native_bridge_lanes"] == 2
+    assert payload["counts"]["bridge_blocked_lanes"] == 0
+    assert payload["counts"]["bridge_activation_complete_lanes"] == 2
+    assert payload["counts"]["bridge_partial_activation_lanes"] == 0
     assert payload["counts"]["bridge_inactive_activation_lanes"] == 0
     assert payload["counts"]["bridge_activation_requirements"] == 10
-    assert payload["counts"]["bridge_satisfied_activation_requirements"] == 8
-    assert payload["counts"]["bridge_pending_activation_requirements"] == 2
-    assert payload["counts"]["missing_bridge_requirements"] == 2
+    assert payload["counts"]["bridge_satisfied_activation_requirements"] == 10
+    assert payload["counts"]["bridge_pending_activation_requirements"] == 0
+    assert payload["counts"]["missing_bridge_requirements"] == 0
     assert payload["renderer_guardrail"]["lanes"]["opengl"]["expected_status"] == "native_guarded"
-    assert payload["renderer_guardrail"]["lanes"]["vulkan"]["expected_status"] == "blocked_until_native"
-    assert payload["renderer_guardrail"]["lanes"]["rtx_vkpt"]["expected_status"] == "blocked_until_native"
+    assert payload["renderer_guardrail"]["lanes"]["vulkan"]["expected_status"] == "native_guarded"
+    assert payload["renderer_guardrail"]["lanes"]["rtx_vkpt"]["expected_status"] == "native_guarded"
     assert payload["bridge_readiness"]["lanes"]["vulkan"]["foundation_ok"] is True
-    assert payload["bridge_readiness"]["lanes"]["vulkan"]["native_bridge_claimed"] is False
-    assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_status"] == "partial_activation_blocked"
-    assert payload["bridge_readiness"]["lanes"]["vulkan"]["next_activation_requirement"] == "native_interface_export_present"
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["native_bridge_claimed"] is True
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_status"] == "activation_complete"
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["next_activation_requirement"] is None
     assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_requirements"]["runtime_dependency_enabled"] is True
     assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_requirements"]["native_bridge_class_present"] is True
-    assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_requirements"]["native_interface_export_present"] is False
+    assert payload["bridge_readiness"]["lanes"]["vulkan"]["activation_requirements"]["native_interface_export_present"] is True
     assert payload["bridge_readiness"]["lanes"]["rtx_vkpt"]["foundation_ok"] is True
+    assert payload["bridge_readiness"]["lanes"]["rtx_vkpt"]["native_bridge_claimed"] is True
+    assert payload["bridge_readiness"]["lanes"]["rtx_vkpt"]["activation_status"] == "activation_complete"
     assert payload["opengl_route_matrix"]["counts"]["passed"] == 3
     assert payload["opengl_route_matrix"]["routes"][0]["facts"]["layout_required"] is False
     assert (repo_root / ".tmp/rmlui/runtime-capture/renderer-matrix.json").is_file()
@@ -639,3 +845,25 @@ Wrote rmlui_runtime_smoke_round29.tga
     assert "runtime inactive status after synthetic back-close was not found" in captured.out
     assert "runtime synthetic input did not record key events" in captured.out
     assert "runtime route counters did not record a route close" in captured.out
+
+
+def test_custom_install_defaults_to_its_staged_engine(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = tmp_path / "repo"
+    custom_install = Path(".tmp/rmlui/custom-install")
+
+    result = runtime_capture.main(
+        [
+            "--repo-root",
+            str(repo_root),
+            "--install-dir",
+            custom_install.as_posix(),
+            "--dry-run",
+        ]
+    )
+
+    assert result == 0
+    command = capsys.readouterr().out
+    assert str((repo_root / custom_install / "worr_x86_64.exe").resolve()) in command

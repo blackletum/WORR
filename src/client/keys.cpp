@@ -859,13 +859,18 @@ void Key_Event(unsigned key, bool down, unsigned time)
     }
 
     if (!down) {
+        if ((cls.key_dest & KEY_CONSOLE) && key == K_MOUSE1)
+            Con_MouseButton(false);
         if (cls.key_dest & KEY_MENU)
             UI_KeyEvent(key, down);
         return;     // other subsystems only care about key down events
     }
 
     if (cls.key_dest & KEY_CONSOLE) {
-        Key_Console(key);
+        if (key == K_MOUSE1)
+            Con_MouseButton(true);
+        else
+            Key_Console(key);
     } else if (cls.key_dest & KEY_MENU) {
         UI_KeyEvent(key, down);
     } else if (cls.key_dest & KEY_MESSAGE) {

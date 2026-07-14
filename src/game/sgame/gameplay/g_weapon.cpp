@@ -20,6 +20,28 @@ handle the animation sequence of firing a weapon (ready, fire, idle, etc.).*/
 #include "g_proball.hpp"
 #include <array>
 
+[[nodiscard]] static uint32_t
+LagCompensationWeaponPolicy(MeansOfDeath mod) {
+  switch (mod.id) {
+  case ModID::Machinegun:
+    return WORR_REWIND_WEAPON_MACHINEGUN;
+  case ModID::Chaingun:
+    return WORR_REWIND_WEAPON_CHAINGUN;
+  case ModID::Shotgun:
+    return WORR_REWIND_WEAPON_SHOTGUN;
+  case ModID::SuperShotgun:
+    return WORR_REWIND_WEAPON_SUPER_SHOTGUN;
+  case ModID::Railgun:
+    return WORR_REWIND_WEAPON_RAILGUN;
+  case ModID::PlasmaBeam:
+    return WORR_REWIND_WEAPON_PLASMA_BEAM;
+  case ModID::Thunderbolt:
+    return WORR_REWIND_WEAPON_THUNDERBOLT;
+  default:
+    return WORR_REWIND_WEAPON_UNSPECIFIED;
+  }
+}
+
 /*
 =============
 PlayClientPowerupFireSound
@@ -142,8 +164,9 @@ void pierce_trace(const Vector3 &start, const Vector3 &end, gentity_t *ignore,
     // Only the collision query observes historical player poses.  The helper
     // uses unlinked proxies and returns before hit callbacks apply authoritative
     // damage, knockback, death, or piercing mutations.
-    pierce.tr =
-        LagCompensation_TraceLine(ignore, start, own_end, ignore, mask);
+    pierce.tr = LagCompensation_TraceLine(
+        ignore, start, own_end, ignore, mask, pierce.pierced.data(),
+        pierce.num_pierced, pierce.lag_compensation_weapon_policy);
 
     // didn't hit anything, so we're done
     if (!pierce.tr.ent || pierce.tr.fraction == 1.0f)
@@ -287,6 +310,7 @@ static void fire_lead(gentity_t *self, const Vector3 &start,
   fire_lead_pierce_t args = {
       self,    start,   aimDir, damage,    kick,
       hSpread, vSpread, mod,    te_impact, MASK_PROJECTILE | MASK_WATER};
+  args.lag_compensation_weapon_policy = LagCompensationWeaponPolicy(mod);
 
   // [Paril-KEX]
   if (self->client && !G_ShouldPlayersCollide(true))
@@ -1060,6 +1084,7 @@ fire_rail
 void fire_rail(gentity_t *self, const Vector3 &start, const Vector3 &aimDir,
                int damage, int kick) {
   fire_rail_pierce_t args = {self, aimDir, damage, kick};
+  args.lag_compensation_weapon_policy = WORR_REWIND_WEAPON_RAILGUN;
 
   contents_t mask = MASK_PROJECTILE | CONTENTS_SLIME | CONTENTS_LAVA;
 
@@ -1481,7 +1506,8 @@ static void fire_beams(gentity_t *self, const Vector3 &start,
     content_mask &= ~MASK_WATER;
   }
 
-  tr = LagCompensation_TraceLine(self, start, end, self, content_mask);
+  tr = LagCompensation_TraceLine(self, start, end, self, content_mask, nullptr,
+                                 0, WORR_REWIND_WEAPON_PLASMA_BEAM);
 
   // see if we hit water
   if (tr.contents & MASK_WATER) {
@@ -1496,8 +1522,9 @@ static void fire_beams(gentity_t *self, const Vector3 &start,
       gi.multicast(tr.endPos, MULTICAST_PVS, false);
     }
     // re-trace ignoring water this time
-    tr = LagCompensation_TraceLine(self, water_start, end, self,
-                                   content_mask & ~MASK_WATER);
+    tr = LagCompensation_TraceLine(
+        self, water_start, end, self, content_mask & ~MASK_WATER, nullptr, 0,
+        WORR_REWIND_WEAPON_PLASMA_BEAM);
   }
   endpoint = tr.endPos;
 
@@ -1671,7 +1698,8 @@ bool fire_thunderbolt(gentity_t *self, const Vector3 &start,
     return true;
   }
 
-  tr = LagCompensation_TraceLine(self, start, end, self, content_mask);
+  tr = LagCompensation_TraceLine(self, start, end, self, content_mask, nullptr,
+                                 0, WORR_REWIND_WEAPON_THUNDERBOLT);
 
   // see if we hit water
   if (tr.contents & MASK_WATER) {
@@ -1686,8 +1714,9 @@ bool fire_thunderbolt(gentity_t *self, const Vector3 &start,
       gi.multicast(tr.endPos, MULTICAST_PVS, false);
     }
     // re-trace ignoring water this time
-    tr = LagCompensation_TraceLine(self, water_start, end, self,
-                                   content_mask & ~MASK_WATER);
+    tr = LagCompensation_TraceLine(
+        self, water_start, end, self, content_mask & ~MASK_WATER, nullptr, 0,
+        WORR_REWIND_WEAPON_THUNDERBOLT);
   }
   endpoint = tr.endPos;
 
@@ -1705,9 +1734,11 @@ bool fire_thunderbolt(gentity_t *self, const Vector3 &start,
     side *= 16.0f;
     const contents_t damage_mask = content_mask & ~MASK_WATER;
     damageTraces[damageTraceCount++] = LagCompensation_TraceLine(
-        self, start + side, end + side, self, damage_mask);
+        self, start + side, end + side, self, damage_mask, nullptr, 0,
+        WORR_REWIND_WEAPON_THUNDERBOLT);
     damageTraces[damageTraceCount++] = LagCompensation_TraceLine(
-        self, start - side, end - side, self, damage_mask);
+        self, start - side, end - side, self, damage_mask, nullptr, 0,
+        WORR_REWIND_WEAPON_THUNDERBOLT);
   }
 
   // Resolve the complete historical beam footprint before mutating any target.

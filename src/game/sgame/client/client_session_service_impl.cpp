@@ -21,7 +21,6 @@ client_session_service_impl.cpp implementation.*/
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <format>
 #include <string>
@@ -43,6 +42,28 @@ current flags and gravity scaling.
 static bool G_SpawnHasGravity(const gentity_t* ent)
 {
 return !(ent->flags & FL_FLY) && ent->gravity != 0.0f;
+}
+
+/*
+=============
+PmoveStatesMatch
+
+Compares the prediction contract field by field.  The structure may contain
+padding, so comparing its object representation can report a state change
+when none of the transmitted movement values changed.
+=============
+*/
+[[nodiscard]] static bool PmoveStatesMatch(const pmove_state_t& lhs,
+	const pmove_state_t& rhs)
+{
+	return lhs.pmType == rhs.pmType &&
+		lhs.origin == rhs.origin &&
+		lhs.velocity == rhs.velocity &&
+		lhs.pmFlags == rhs.pmFlags &&
+		lhs.pmTime == rhs.pmTime &&
+		lhs.gravity == rhs.gravity &&
+		lhs.deltaAngles == rhs.deltaAngles &&
+		lhs.viewHeight == rhs.viewHeight;
 }
 
 /*
@@ -1390,8 +1411,8 @@ gentity_t* ent, usercmd_t* ucmd) {
 		else
 			pmState.pmFlags &= ~PMF_IGNORE_PLAYER_COLLISION;
 
-		pmState.haste = cl->PowerupTimer(PowerupTimer::Haste) > level.time;
-		if (pmState.haste)
+		const bool hasteActive = cl->PowerupTimer(PowerupTimer::Haste) > level.time;
+		if (hasteActive)
 			pmState.pmFlags |= PMF_HASTE;
 		else
 			pmState.pmFlags &= ~PMF_HASTE;
@@ -1428,7 +1449,8 @@ gentity_t* ent, usercmd_t* ucmd) {
 		pm.s = pmState;
 		pm.s.origin = ent->s.origin;
 		pm.s.velocity = ent->velocity;
-		if (std::memcmp(&cl->old_pmove, &pm.s, sizeof(pm.s)) != 0)
+		pm.config = pm_config;
+		if (!PmoveStatesMatch(cl->old_pmove, pm.s))
 			pm.snapInitial = true;
 		pm.cmd = *ucmd;
 		if (IsBlockingUiMenuOpen(cl) && !ClientIsPlaying(cl)) {
@@ -1448,12 +1470,6 @@ gentity_t* ent, usercmd_t* ucmd) {
 		const Vector3 savedVAngle = cl->vAngle;
 
 		Pmove(&pm);
-
-		if (pmState.haste)
-			pm.s.pmFlags |= PMF_HASTE;
-		else
-			pm.s.pmFlags &= ~PMF_HASTE;
-		pm.s.haste = pmState.haste;
 
 		cl->ps.rdFlags = pm.rdFlags;
 

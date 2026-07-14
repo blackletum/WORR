@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "server.h"
+#include "server/native_shadow.h"
 
 /*
 ===============================================================================
@@ -799,6 +800,78 @@ static void SV_Status_f(void)
     Com_Printf("\n");
 
     SV_MvdStatus_f();
+}
+
+/*
+============================
+SV_WorrNativeShadowStatus_f
+
+Stable, scalar-only rows consumed by the staged two-process impairment gate.
+============================
+*/
+static void SV_WorrNativeShadowStatus_f(void)
+{
+    client_t *client;
+
+    if (!svs.initialized) {
+        Com_Printf("No server running.\n");
+        return;
+    }
+
+    FOR_EACH_CLIENT(client) {
+        sv_native_shadow_status_v1 status;
+
+        if (client->state <= cs_zombie || !client->worr_native_shadow)
+            continue;
+        memset(&status, 0, sizeof(status));
+        (void)SV_NativeShadowGetStatusV1(
+            client->worr_native_shadow, svs.realtime, &status);
+        Com_Printf(
+            "WORR_NATIVE_SERVER_STATUS_V1 schema=%u "
+            "slot=%d protocol=%d enabled=%u lifecycle=%u hooks=%u "
+            "readiness_phase=%u official_epoch=%u transport_epoch=%u "
+            "public_mask=0x%02x private_mask=0x%02x wire_committed=%u "
+            "challenges_queued=%llu client_ready=%llu server_active=%llu "
+            "rx_carriers=%llu rx_commits=%llu rx_repeat_refreshes=%llu "
+            "legacy_joins=%llu command_matches=%llu "
+            "command_mismatches=%llu sample_mismatches=%llu "
+            "ack_eligible=%u ack_prepares=%llu ack_handoffs=%llu "
+            "async_rate_deferrals=%llu async_fragment_deferrals=%llu "
+            "async_wake_attempts=%llu async_ack_handoffs=%llu "
+            "async_wake_no_handoff=%llu rx_rejections=%llu "
+            "tx_ack_rejections=%llu rx_drained=%llu drains=%llu "
+            "failures=%llu "
+            "last_failure=%u\n",
+            status.schema_version, client->number, client->protocol,
+            status.enabled, status.lifecycle, status.hooks_attached,
+            status.readiness_phase, status.official_connection_epoch,
+            status.transport_epoch, status.public_capabilities,
+            status.private_capabilities, status.wire_committed,
+            (unsigned long long)status.challenges_queued,
+            (unsigned long long)status.client_ready_records,
+            (unsigned long long)status.server_active_records,
+            (unsigned long long)status.rx_carriers,
+            (unsigned long long)status.rx_commits,
+            (unsigned long long)status.rx_repeat_refreshes,
+            (unsigned long long)status.legacy_join_observations,
+            (unsigned long long)status.command_matches,
+            (unsigned long long)status.command_mismatches,
+            (unsigned long long)status.sample_offset_mismatches,
+            status.ack_eligible,
+            (unsigned long long)status.tx_ack_prepares,
+            (unsigned long long)status.tx_ack_handoffs,
+            (unsigned long long)status.async_rate_deferrals,
+            (unsigned long long)status.async_fragment_deferrals,
+            (unsigned long long)status.async_wake_attempts,
+            (unsigned long long)status.async_ack_handoffs,
+            (unsigned long long)status.async_wake_no_handoff,
+            (unsigned long long)status.rx_rejections,
+            (unsigned long long)status.tx_ack_rejections,
+            (unsigned long long)status.rx_drained,
+            (unsigned long long)status.drain_entries,
+            (unsigned long long)status.failures,
+            status.last_failure);
+    }
 }
 
 /*
@@ -1930,6 +2003,7 @@ static const cmdreg_t c_server[] = {
     { "kick", SV_Kick_f, SV_SetPlayer_c },
     { "kickban", SV_Kick_f, SV_SetPlayer_c },
     { "status", SV_Status_f },
+    { "sv_worr_native_shadow_status", SV_WorrNativeShadowStatus_f },
     { "serverinfo", SV_Serverinfo_f },
     { "dumpuser", SV_DumpUser_f, SV_SetPlayer_c },
     { "stuff", SV_Stuff_f, SV_SetPlayer_c },

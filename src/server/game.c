@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // sv_game.c -- interface to the game dll
 
 #include "server.h"
+#include "server/command_context.h"
+#include "server/rewind_collision.h"
 #include "game3_proxy/game3_proxy.h"
 #include "common/loc.h"
 #include "common/gamedll.h"
@@ -1166,6 +1168,15 @@ static void *PF_GetExtension(const char *name)
     if (!strcmp(name, FILESYSTEM_API_V1))
         return (void *)&filesystem_api_v1;
 
+    if (!strcmp(name, WORR_EVENT_SHADOW_IMPORT_V1))
+        return (void *)SV_EventShadowImportV1();
+
+    if (!strcmp(name, WORR_COMMAND_CONTEXT_IMPORT_V1))
+        return (void *)SV_CommandContextImportV1();
+
+    if (!strcmp(name, WORR_REWIND_COLLISION_IMPORT_V1))
+        return (void *)SV_RewindCollisionImportV1();
+
 #if USE_REF && USE_DEBUG
     if (!strcmp(name, DEBUG_DRAW_API_V1) && !dedicated->integer)
         return (void *)&debug_draw_api_v1;
@@ -1186,6 +1197,8 @@ it is changing to a different game directory.
 */
 void SV_ShutdownGameProgs(void)
 {
+    /* Never expose callback-scoped command authority during module teardown. */
+    SV_CommandContextReset();
     g_restart_fs = NULL;
     if (ge) {
         ge->Shutdown();

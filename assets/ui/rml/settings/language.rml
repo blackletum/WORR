@@ -7,48 +7,72 @@
   </head>
   <body id="settings-language" data-route-id="language" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="language-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="settings-language-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="settings-language-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="settings-language-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Language</h1>
+        <div class="worr-titlerow"><button id="settings-language-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="m_language">Language</h1></div>
       </header>
 
+      <nav class="worr-tabstrip">
+        <button id="settings-language-tab-video" class="worr-tab" type="button" data-command="popmenu; pushmenu video" data-route-target="video" data-menu-sound="move" data-loc-key="worr_ui_video">Video</button>
+        <button id="settings-language-tab-screen" class="worr-tab" type="button" data-command="popmenu; pushmenu screen" data-route-target="screen" data-menu-sound="move" data-loc-key="worr_ui_screen">Screen</button>
+        <button id="settings-language-tab-sound" class="worr-tab" type="button" data-command="popmenu; pushmenu sound" data-route-target="sound" data-menu-sound="move" data-loc-key="m_sound">Sound</button>
+        <button id="settings-language-tab-input" class="worr-tab" type="button" data-command="popmenu; pushmenu input" data-route-target="input" data-menu-sound="move" data-loc-key="m_input">Input</button>
+        <button id="settings-language-tab-effects" class="worr-tab" type="button" data-command="popmenu; pushmenu effects" data-route-target="effects" data-menu-sound="move" data-loc-key="worr_ui_effects">Effects</button>
+        <button id="settings-language-tab-performance" class="worr-tab" type="button" data-command="popmenu; pushmenu performance" data-route-target="performance" data-menu-sound="move" data-loc-key="worr_ui_performance">Performance</button>
+        <button id="settings-language-tab-accessibility" class="worr-tab" type="button" data-command="popmenu; pushmenu accessibility" data-route-target="accessibility" data-menu-sound="move" data-loc-key="worr_ui_access">Access</button>
+        <span class="worr-tab is-active" data-loc-key="m_language">Language</span>
+      </nav>
       <main class="settings-form" id="language-settings-form" data-component="common.components.cvar_controls">
         <section class="settings-section" id="language-locale-section">
-          <h2>Localization</h2>
+          <h2 data-loc-key="worr_ui_localization">Localization</h2>
           <div class="setting-row" data-control="select" data-cvar="loc_language">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="language-selection">Language</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="language-selection" data-loc-key="m_language">Language</label>
             <select id="language-selection" data-cvar="loc_language">
-              <option value="auto">Auto (System)</option>
-              <option value="english">English</option>
-              <option value="french">French</option>
-              <option value="german">German</option>
-              <option value="italian">Italian</option>
-              <option value="spanish">Spanish</option>
-              <option value="russian">Russian</option>
-              <option value="arabic">Arabic</option>
-              <option value="bulgarian">Bulgarian</option>
-              <option value="czech">Czech</option>
-              <option value="danish">Danish</option>
-              <option value="dutch">Dutch</option>
-              <option value="finnish">Finnish</option>
-              <option value="norwegian">Norwegian</option>
-              <option value="polish">Polish</option>
-              <option value="portuguese-br">Portuguese (Brazil)</option>
-              <option value="portuguese-pt">Portuguese (Portugal)</option>
-              <option value="swedish">Swedish</option>
-              <option value="turkish">Turkish</option>
-              <option value="chinese-traditional">Chinese (Traditional)</option>
-              <option value="chinese-simplified">Chinese (Simplified)</option>
-              <option value="japanese">Japanese</option>
-              <option value="korean">Korean</option>
+              <option value="auto" data-loc-key="worr_ui_auto_system">Auto (System)</option>
+              <option value="english" data-loc-key="worr_ui_english">English</option>
+              <option value="french" data-loc-key="worr_ui_french">French</option>
+              <option value="german" data-loc-key="worr_ui_german">German</option>
+              <option value="italian" data-loc-key="worr_ui_italian">Italian</option>
+              <option value="spanish" data-loc-key="worr_ui_spanish">Spanish</option>
+              <option value="russian" data-loc-key="worr_ui_russian">Russian</option>
+              <option value="arabic" data-loc-key="worr_ui_arabic">Arabic</option>
+              <option value="bulgarian" data-loc-key="worr_ui_bulgarian">Bulgarian</option>
+              <option value="czech" data-loc-key="worr_ui_czech">Czech</option>
+              <option value="danish" data-loc-key="worr_ui_danish">Danish</option>
+              <option value="dutch" data-loc-key="worr_ui_dutch">Dutch</option>
+              <option value="finnish" data-loc-key="worr_ui_finnish">Finnish</option>
+              <option value="norwegian" data-loc-key="worr_ui_norwegian">Norwegian</option>
+              <option value="polish" data-loc-key="worr_ui_polish">Polish</option>
+              <option value="portuguese-br" data-loc-key="worr_ui_portuguese_brazil">Portuguese (Brazil)</option>
+              <option value="portuguese-pt" data-loc-key="worr_ui_portuguese_portugal">Portuguese (Portugal)</option>
+              <option value="swedish" data-loc-key="worr_ui_swedish">Swedish</option>
+              <option value="turkish" data-loc-key="worr_ui_turkish">Turkish</option>
+              <option value="chinese-traditional" data-loc-key="worr_ui_chinese_traditional">Chinese (Traditional)</option>
+              <option value="chinese-simplified" data-loc-key="worr_ui_chinese_simplified">Chinese (Simplified)</option>
+              <option value="japanese" data-loc-key="worr_ui_japanese">Japanese</option>
+              <option value="korean" data-loc-key="worr_ui_korean">Korean</option>
             </select>
           </div>
         </section>
       </main>
 
       <footer class="menu-footer" id="language-menu-footer">
-        <button id="language-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="language-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="language-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="settings-language-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

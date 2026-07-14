@@ -7,41 +7,56 @@
   </head>
   <body id="shell-game" data-route-id="game" data-route-group="shell" data-route-version="1" data-document-status="first-round-scaffold" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen shell-screen" id="game-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="shell-game-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="shell-game-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="shell-game-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <div class="menu-header">
-        <h1>Game</h1>
-        <p>Resume play, adjust settings, browse servers and demos, or manage saved games.</p>
+        <div class="worr-titlerow"><button id="shell-game-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="m_game">Game</h1></div>
+        <p data-loc-key="worr_ui_resume_play_adjust_settings_browse_servers_and">Resume play, adjust settings, browse servers and demos, or manage saved games.</p>
       </div>
 
       <div class="menu-stack" id="game-menu-stack" data-component="common.components.menu_frame">
         <div class="menu-actions hub-actions" id="game-menu-actions">
           <section class="hub-section" id="game-session-section">
-            <h2>Session</h2>
-            <button id="game-resume" class="ui-button-primary" type="button" data-command="forcemenuoff" data-menu-sound="confirm">Resume Game</button>
-            <button id="game-player-setup" type="button" data-command="pushmenu players" data-route-target="players" data-menu-sound="open">Player Setup</button>
-            <button id="game-options" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open">Options</button>
-            <button id="game-gameflags" type="button" data-command="pushmenu gameflags" data-route-target="gameflags" data-show-if="deathmatch" data-menu-sound="open">Deathmatch Flags</button>
+            <h2 data-loc-key="worr_ui_session">Session</h2>
+            <button id="game-resume" class="ui-button-primary" type="button" data-command="forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_resume_game">Resume Game</button>
+            <button id="game-player-setup" type="button" data-command="pushmenu players" data-route-target="players" data-menu-sound="open" data-loc-key="worr_ui_player_setup">Player Setup</button>
+            <button id="game-options" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open" data-loc-key="m_options">Options</button>
+            <button id="game-gameflags" type="button" data-command="pushmenu gameflags" data-route-target="gameflags" data-show-if="deathmatch" data-menu-sound="open" data-loc-key="worr_ui_deathmatch_flags">Deathmatch Flags</button>
           </section>
 
           <section class="hub-section" id="game-browse-section">
-            <h2>Browse</h2>
-            <button id="game-servers-q2servers" type="button" data-command="pushmenu servers &quot;+https://q2servers.com/?raw=2&quot; &quot;https://q2servers.com/?raw=0&quot;" data-route-target="servers" data-menu-sound="open">Browse q2servers.com</button>
-            <button id="game-servers-addressbook" type="button" data-command="pushmenu servers &quot;favorites://&quot; &quot;file:///servers.lst&quot; &quot;broadcast://&quot;" data-route-target="servers" data-menu-sound="open">Browse Address Book</button>
-            <button id="game-demos" type="button" data-command="pushmenu demos" data-route-target="demos" data-menu-sound="open">Browse Demos</button>
+            <h2 data-loc-key="worr_ui_browse">Browse</h2>
+            <button id="game-servers-q2servers" type="button" data-command="pushmenu servers &quot;+https://q2servers.com/?raw=2&quot; &quot;https://q2servers.com/?raw=0&quot;" data-route-target="servers" data-menu-sound="open" data-loc-key="worr_ui_browse_q2servers_com">Browse q2servers.com</button>
+            <button id="game-servers-addressbook" type="button" data-command="pushmenu servers &quot;favorites://&quot; &quot;file:///servers.lst&quot; &quot;broadcast://&quot;" data-route-target="servers" data-menu-sound="open" data-loc-key="worr_ui_browse_address_book">Browse Address Book</button>
+            <button id="game-demos" type="button" data-command="pushmenu demos" data-route-target="demos" data-menu-sound="open" data-loc-key="worr_ui_browse_demos">Browse Demos</button>
           </section>
 
           <section class="hub-section" id="game-file-section">
-            <h2>Saves &amp; Exit</h2>
-            <button id="game-save" type="button" data-command="pushmenu savegame" data-route-target="savegame" data-enable-if="ingame;deathmatch=0;coop=0" data-menu-sound="open">Save Game</button>
-            <button id="game-load" type="button" data-command="pushmenu loadgame" data-route-target="loadgame" data-show-if="deathmatch=0" data-menu-sound="open">Load Game</button>
-            <button id="game-disconnect" class="ui-button-danger" type="button" data-command="disconnect" data-menu-sound="alert">Disconnect</button>
-            <button id="game-quit" class="ui-button-danger" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert">Quit</button>
+            <h2 data-loc-key="worr_ui_saves_exit">Saves &amp; Exit</h2>
+            <button id="game-save" type="button" data-command="pushmenu savegame" data-route-target="savegame" data-enable-if="ingame;deathmatch=0;coop=0" data-menu-sound="open" data-loc-key="m_save_game">Save Game</button>
+            <button id="game-load" type="button" data-command="pushmenu loadgame" data-route-target="loadgame" data-show-if="deathmatch=0" data-menu-sound="open" data-loc-key="m_load_game">Load Game</button>
+            <button id="game-disconnect" class="ui-button-danger" type="button" data-command="disconnect" data-menu-sound="alert" data-loc-key="worr_ui_disconnect">Disconnect</button>
+            <button id="game-quit" class="ui-button-danger" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert" data-loc-key="m_quit">Quit</button>
           </section>
         </div>
       </div>
 
       <div class="menu-footer" id="game-menu-footer">
-        <button id="game-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="game-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
       </div>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="shell-game-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
+      </footer>
     </div>
   </body>
 </rml>

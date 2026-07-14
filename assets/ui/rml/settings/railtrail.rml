@@ -7,78 +7,92 @@
   </head>
   <body id="settings-railtrail" data-route-id="railtrail" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round3" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="railtrail-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="settings-railtrail-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="settings-railtrail-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="settings-railtrail-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Rail Trail Setup</h1>
+        <div class="worr-titlerow"><button id="settings-railtrail-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_rail_trail_setup">Rail Trail Setup</h1></div>
       </header>
 
       <main class="settings-form" id="railtrail-settings-form" data-component="common.components.cvar_controls">
         <section class="settings-section" id="railtrail-shape-section">
-          <h2>Trail Shape</h2>
+          <h2 data-loc-key="worr_ui_trail_shape">Trail Shape</h2>
           <div class="setting-row" data-control="select" data-cvar="cl_railtrail_type">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="railtrail-type">Rail Trail Type</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="railtrail-type" data-loc-key="worr_ui_rail_trail_type">Rail Trail Type</label>
             <select id="railtrail-type" data-cvar="cl_railtrail_type" data-source-menu-type="values">
-              <option value="0">Default</option>
-              <option value="1">Core Only</option>
-              <option value="2">Core &amp; Spiral</option>
+              <option value="0" data-loc-key="worr_ui_default">Default</option>
+              <option value="1" data-loc-key="worr_ui_core_only">Core Only</option>
+              <option value="2" data-loc-key="worr_ui_core_spiral">Core &amp; Spiral</option>
             </select>
           </div>
           <div class="setting-row" data-control="range" data-cvar="cl_railtrail_time">
-            <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-            <label for="railtrail-duration">Rail Trail Duration (s)</label>
-            <input id="railtrail-duration" type="range" min="0.1" max="3.0" step="0.1" data-cvar="cl_railtrail_time" />
-            <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_railtrail_time" data-meter-min="0.1" data-meter-max="3.0"></span><span class="setting-meter-text" data-bind-cvar="cl_railtrail_time"></span></span>
+            <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+            <label for="railtrail-duration" data-loc-key="worr_ui_rail_trail_duration_s">Rail Trail Duration (s)</label>
+            <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_railtrail_time" data-meter-min="0.1" data-meter-max="3.0"></span><span class="setting-meter-text" data-bind-cvar="cl_railtrail_time"></span></span><input id="railtrail-duration" type="range" min="0.1" max="3.0" step="0.1" data-cvar="cl_railtrail_time" />
+
           </div>
           <div class="setting-row" data-control="range" data-cvar="cl_railcore_width">
-            <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-            <label for="railtrail-core-width">Core Width</label>
-            <input id="railtrail-core-width" type="range" min="1" max="6" step="1" data-cvar="cl_railcore_width" />
-            <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_railcore_width" data-meter-min="1" data-meter-max="6"></span><span class="setting-meter-text" data-bind-cvar="cl_railcore_width"></span></span>
+            <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+            <label for="railtrail-core-width" data-loc-key="worr_ui_core_width">Core Width</label>
+            <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_railcore_width" data-meter-min="1" data-meter-max="6"></span><span class="setting-meter-text" data-bind-cvar="cl_railcore_width"></span></span><input id="railtrail-core-width" type="range" min="1" max="6" step="1" data-cvar="cl_railcore_width" />
+
           </div>
           <div class="setting-row" data-control="range" data-cvar="cl_railspiral_radius">
-            <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-            <label for="railtrail-spiral-radius">Spiral Radius</label>
-            <input id="railtrail-spiral-radius" type="range" min="1" max="6" step="1" data-cvar="cl_railspiral_radius" />
-            <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_railspiral_radius" data-meter-min="1" data-meter-max="6"></span><span class="setting-meter-text" data-bind-cvar="cl_railspiral_radius"></span></span>
+            <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+            <label for="railtrail-spiral-radius" data-loc-key="worr_ui_spiral_radius">Spiral Radius</label>
+            <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_railspiral_radius" data-meter-min="1" data-meter-max="6"></span><span class="setting-meter-text" data-bind-cvar="cl_railspiral_radius"></span></span><input id="railtrail-spiral-radius" type="range" min="1" max="6" step="1" data-cvar="cl_railspiral_radius" />
+
           </div>
         </section>
 
         <section class="settings-section" id="railtrail-color-section">
-          <h2>Trail Color</h2>
+          <h2 data-loc-key="worr_ui_trail_color">Trail Color</h2>
           <div class="setting-row" data-control="select" data-cvar="cl_railcore_color">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="railtrail-core-color">Core Color</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="railtrail-core-color" data-loc-key="worr_ui_core_color">Core Color</label>
             <select id="railtrail-core-color" data-cvar="cl_railcore_color" data-source-menu-type="strings">
-              <option value="black">Black</option>
-              <option value="red">Red</option>
-              <option value="green">Green</option>
-              <option value="yellow">Yellow</option>
-              <option value="blue">Blue</option>
-              <option value="cyan">Cyan</option>
-              <option value="magenta">Magenta</option>
-              <option value="white">White</option>
+              <option value="black" data-loc-key="worr_ui_black">Black</option>
+              <option value="red" data-loc-key="m_red">Red</option>
+              <option value="green" data-loc-key="m_green">Green</option>
+              <option value="yellow" data-loc-key="worr_ui_yellow">Yellow</option>
+              <option value="blue" data-loc-key="m_blue">Blue</option>
+              <option value="cyan" data-loc-key="worr_ui_cyan">Cyan</option>
+              <option value="magenta" data-loc-key="worr_ui_magenta">Magenta</option>
+              <option value="white" data-loc-key="worr_ui_white">White</option>
             </select>
           </div>
           <div class="setting-row" data-control="select" data-cvar="cl_railspiral_color">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="railtrail-spiral-color">Spiral Color</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="railtrail-spiral-color" data-loc-key="worr_ui_spiral_color">Spiral Color</label>
             <select id="railtrail-spiral-color" data-cvar="cl_railspiral_color" data-source-menu-type="strings">
-              <option value="black">Black</option>
-              <option value="red">Red</option>
-              <option value="green">Green</option>
-              <option value="yellow">Yellow</option>
-              <option value="blue">Blue</option>
-              <option value="cyan">Cyan</option>
-              <option value="magenta">Magenta</option>
-              <option value="white">White</option>
+              <option value="black" data-loc-key="worr_ui_black">Black</option>
+              <option value="red" data-loc-key="m_red">Red</option>
+              <option value="green" data-loc-key="m_green">Green</option>
+              <option value="yellow" data-loc-key="worr_ui_yellow">Yellow</option>
+              <option value="blue" data-loc-key="m_blue">Blue</option>
+              <option value="cyan" data-loc-key="worr_ui_cyan">Cyan</option>
+              <option value="magenta" data-loc-key="worr_ui_magenta">Magenta</option>
+              <option value="white" data-loc-key="worr_ui_white">White</option>
             </select>
           </div>
         </section>
       </main>
 
       <footer class="menu-footer" id="railtrail-menu-footer">
-        <button id="railtrail-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="railtrail-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="railtrail-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="settings-railtrail-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

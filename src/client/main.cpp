@@ -18,6 +18,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_main.c  -- client main loop
 
 #include "client.h"
+#include "client/cgame_event_shadow_runtime.h"
+#include "client/command_identity.h"
+#include "client/consumed_cursor.h"
+#include "client/demo_clock.h"
+#include "client/net_capability.h"
+#include "client/native_readiness_pilot.h"
+#include "client/snapshot_recovery.h"
+#include "client/snapshot_shadow.h"
 
 #include "q2proto/q2proto.h"
 
@@ -746,6 +754,13 @@ CL_ClearState
 */
 void CL_ClearState(void)
 {
+    CL_EventShadowReset(WORR_CGAME_EVENT_SHADOW_RESET_CLIENT_STATE);
+    CL_CommandIdentityShutdown();
+    CL_ConsumedCursorShutdown();
+    CL_NetCapabilityShutdown();
+    CL_SnapshotShadowShutdown();
+    CL_SnapshotRecoveryReset();
+    CL_AdaptiveInputReset();
     S_StopAllSounds();
     SCR_StopCinematic();
     CL_ClearEffects();
@@ -809,6 +824,10 @@ void CL_Disconnect(error_type_t type)
     cls.errorReceived = false;
 #endif
 
+    /* Hooks retain process-static pilot state through an opaque pointer.
+     * Clear them before even the final legacy disconnect transmit. */
+    CL_NativeReadinessPilotBeforeNetchanClose(&cls.netchan);
+
     if (cls.netchan.protocol) {
         // send a disconnect message to the server
         q2proto_clc_message_t message = {.type = Q2P_CLC_STRINGCMD};
@@ -828,6 +847,7 @@ void CL_Disconnect(error_type_t type)
     // stop download
     CL_CleanupDownloads();
 
+    CL_DemoClockShutdown();
     CL_ClearState();
 
     CL_GTV_Suspend();
@@ -1082,6 +1102,8 @@ static void CL_Changing_f(void)
 
     if (cls.demo.recording)
         CL_Stop_f();
+
+    CL_NativeReadinessPilotQuiesceMap();
 
     Com_PrintfLoc("$cl_changing_map");
 
@@ -1448,10 +1470,12 @@ static void CL_ConnectionlessPacket(void)
 
         Com_PrintfLoc("$cl_connected_to_server", NET_AdrToString(&cls.serverAddress),
                    cls.serverProtocol);
+        CL_NativeReadinessPilotBeforeNetchanClose(&cls.netchan);
         Netchan_Close(&cls.netchan);
         Netchan_Setup(&cls.netchan, NS_CLIENT, type, &cls.serverAddress,
                       cls.quakePort, 1024, cls.serverProtocol);
         q2proto_init_clientcontext(&cls.q2proto_ctx);
+        (void)CL_NativeReadinessPilotBeginConnection(&cls.netchan);
 
 #if USE_AC_CLIENT
         if (anticheat) {
@@ -1565,8 +1589,13 @@ static void CL_PacketEvent(void)
         return;
     }
 
-    if (!Netchan_Process(&cls.netchan))
+    const netchan_process_result_t process_result =
+        Netchan_ProcessEx(&cls.netchan);
+    if (process_result == NETCHAN_PROCESS_NO_APPLICATION)
         return;     // wasn't accepted for some reason
+    if (process_result == NETCHAN_PROCESS_APPLICATION_REJECTED) {
+        Com_Error(ERR_DROP, "server sent a rejected application payload");
+    }
 
 #if USE_ICMP
     cls.errorReceived = false; // don't drop
@@ -3029,6 +3058,8 @@ static void CL_InitLocal(void)
     info_gender->modified_count = 0; // clear this so we know when user sets it manually
     info_uf = Cvar_Get("uf", "", CVAR_USERINFO);
     info_bobskip = Cvar_Get("bobskip", "0", CVAR_USERINFO | CVAR_ARCHIVE);
+    CL_NativeReadinessPilotRegisterCvar();
+    CL_NetCapabilityRegisterOffer();
 
 
     //

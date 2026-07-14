@@ -50,12 +50,31 @@
 	align-items: center;
 }
 
+#main-menu-actions
+{
+	box-sizing: border-box;
+	padding: 24px 28px 16px 28px;
+	background-color: #17141199;
+	border-width: 1px;
+	border-color: #332d23;
+	border-radius: 6px;
+	decorator: ninepatch(panel, panel-inner) border-box;
+}
+
+#main-menu-actions button,
+#main-menu-actions .ui-button
+{
+	min-height: 46px;
+	font-size: 18px;
+	letter-spacing: 1px;
+}
+
 #main-logo
 {
 	display: block;
 	width: 220px;
 	max-width: 100%;
-	margin-bottom: 20px;
+	margin-bottom: 24px;
 }
 
 #main-player-name
@@ -94,16 +113,18 @@
 {
 	margin-bottom: 0px;
 	color: #7f7f7f;
+	font-family: "WORR Mono";
 	font-size: 11px;
 	text-align: right;
 	white-space: normal;
 	word-break: break-word;
 }
 
+/* 236px buttons + 28px side padding + border, border-box. */
 #main-menu-actions
 {
-	width: 268px;
-	max-width: 268px;
+	width: 300px;
+	max-width: 300px;
 	min-width: 0px;
 }
 
@@ -151,25 +172,30 @@
 {
 	display: flex;
 	flex-direction: column;
+	box-sizing: border-box;
 	width: 252px;
 	min-width: 252px;
 	min-height: 0px;
 	margin-right: 12px;
 	margin-bottom: 12px;
-	padding: 10px;
+	padding: 12px;
 	background-color: #171511;
 	border-width: 1px;
 	border-color: #332d23;
 	border-left-width: 3px;
 	border-left-color: #4b4235;
 	border-radius: 5px;
+	decorator: ninepatch(panel, panel-inner) border-box;
 }
 
 .hub-actions .hub-section h2
 {
 	margin-bottom: 8px;
+	padding-left: 8px;
 	font-size: 18px;
 	color: #ffd967;
+	border-left-width: 3px;
+	border-left-color: #b99b5b;
 }
 
 .hub-actions .hub-section button,
@@ -192,12 +218,19 @@
 	text-align: left;
 }
 
+.hub-actions .hub-section button,
+.hub-actions .hub-section .ui-button
+{
+	transition: background-color border-color color padding-left 0.12s cubic-out;
+}
+
 .hub-actions .hub-section button:hover,
 .hub-actions .hub-section .ui-button:hover
 {
 	background-color: #30291f;
 	border-color: #b99b5b;
 	border-left-color: #ffd967;
+	padding-left: 16px;
 }
 
 .hub-actions .hub-section button:focus,

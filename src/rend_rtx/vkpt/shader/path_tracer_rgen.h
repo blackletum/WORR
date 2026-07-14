@@ -1116,6 +1116,12 @@ get_material(
 		emissive = vec3(0);
 
     emissive += get_emissive_shell(triangle.material_id, triangle.shell) * base_color * (1 - metallic * 0.9);
+
+	// Match the ref API's RF_FULLBRIGHT semantics for native RTX models. Treat
+	// the sampled albedo as a modest emissive contribution so no-world menu
+	// previews remain legible without scene lights or unstable exposure boosts.
+	if ((triangle.material_id & MATERIAL_FLAG_FULLBRIGHT) != 0)
+		emissive += base_color;
 }
 
 bool get_camera_uv(vec2 tex_coord, out vec2 cameraUV)

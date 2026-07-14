@@ -7,31 +7,45 @@
   </head>
   <body id="singleplayer-savegame" data-route-id="savegame" data-route-group="singleplayer" data-route-version="1" data-document-status="scaffolded-round3" data-banner="m_banner_save_game" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen singleplayer-screen" id="savegame-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="singleplayer-savegame-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="singleplayer-savegame-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="singleplayer-savegame-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Save Game</h1>
+        <div class="worr-titlerow"><button id="singleplayer-savegame-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="m_save_game">Save Game</h1></div>
       </header>
 
       <main class="save-slot-list" id="savegame-slot-list" data-component="common.components.save_load" data-model="singleplayer.savegame_slots" data-action-type="savegame">
-        <button class="save-slot" id="savegame-save1" type="button" data-action-type="savegame" data-slot="save1" data-legacy-menu-command="savegame save1" data-command="save &quot;save1&quot;; forcemenuoff" data-menu-sound="confirm">Save 1</button>
-        <button class="save-slot" id="savegame-save2" type="button" data-action-type="savegame" data-slot="save2" data-legacy-menu-command="savegame save2" data-command="save &quot;save2&quot;; forcemenuoff" data-menu-sound="confirm">Save 2</button>
-        <button class="save-slot" id="savegame-save3" type="button" data-action-type="savegame" data-slot="save3" data-legacy-menu-command="savegame save3" data-command="save &quot;save3&quot;; forcemenuoff" data-menu-sound="confirm">Save 3</button>
-        <button class="save-slot" id="savegame-save4" type="button" data-action-type="savegame" data-slot="save4" data-legacy-menu-command="savegame save4" data-command="save &quot;save4&quot;; forcemenuoff" data-menu-sound="confirm">Save 4</button>
-        <button class="save-slot" id="savegame-save5" type="button" data-action-type="savegame" data-slot="save5" data-legacy-menu-command="savegame save5" data-command="save &quot;save5&quot;; forcemenuoff" data-menu-sound="confirm">Save 5</button>
-        <button class="save-slot" id="savegame-save6" type="button" data-action-type="savegame" data-slot="save6" data-legacy-menu-command="savegame save6" data-command="save &quot;save6&quot;; forcemenuoff" data-menu-sound="confirm">Save 6</button>
-        <button class="save-slot" id="savegame-save7" type="button" data-action-type="savegame" data-slot="save7" data-legacy-menu-command="savegame save7" data-command="save &quot;save7&quot;; forcemenuoff" data-menu-sound="confirm">Save 7</button>
-        <button class="save-slot" id="savegame-save8" type="button" data-action-type="savegame" data-slot="save8" data-legacy-menu-command="savegame save8" data-command="save &quot;save8&quot;; forcemenuoff" data-menu-sound="confirm">Save 8</button>
-        <button class="save-slot" id="savegame-save9" type="button" data-action-type="savegame" data-slot="save9" data-legacy-menu-command="savegame save9" data-command="save &quot;save9&quot;; forcemenuoff" data-menu-sound="confirm">Save 9</button>
-        <button class="save-slot" id="savegame-save10" type="button" data-action-type="savegame" data-slot="save10" data-legacy-menu-command="savegame save10" data-command="save &quot;save10&quot;; forcemenuoff" data-menu-sound="confirm">Save 10</button>
-        <button class="save-slot" id="savegame-save11" type="button" data-action-type="savegame" data-slot="save11" data-legacy-menu-command="savegame save11" data-command="save &quot;save11&quot;; forcemenuoff" data-menu-sound="confirm">Save 11</button>
-        <button class="save-slot" id="savegame-save12" type="button" data-action-type="savegame" data-slot="save12" data-legacy-menu-command="savegame save12" data-command="save &quot;save12&quot;; forcemenuoff" data-menu-sound="confirm">Save 12</button>
-        <button class="save-slot" id="savegame-save13" type="button" data-action-type="savegame" data-slot="save13" data-legacy-menu-command="savegame save13" data-command="save &quot;save13&quot;; forcemenuoff" data-menu-sound="confirm">Save 13</button>
-        <button class="save-slot" id="savegame-save14" type="button" data-action-type="savegame" data-slot="save14" data-legacy-menu-command="savegame save14" data-command="save &quot;save14&quot;; forcemenuoff" data-menu-sound="confirm">Save 14</button>
-        <button class="save-slot" id="savegame-save15" type="button" data-action-type="savegame" data-slot="save15" data-legacy-menu-command="savegame save15" data-command="save &quot;save15&quot;; forcemenuoff" data-menu-sound="confirm">Save 15</button>
+        <button class="save-slot" id="savegame-save1" type="button" data-action-type="savegame" data-slot="save1" data-legacy-menu-command="savegame save1" data-command="save &quot;save1&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_1">Save 1</button>
+        <button class="save-slot" id="savegame-save2" type="button" data-action-type="savegame" data-slot="save2" data-legacy-menu-command="savegame save2" data-command="save &quot;save2&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_2">Save 2</button>
+        <button class="save-slot" id="savegame-save3" type="button" data-action-type="savegame" data-slot="save3" data-legacy-menu-command="savegame save3" data-command="save &quot;save3&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_3">Save 3</button>
+        <button class="save-slot" id="savegame-save4" type="button" data-action-type="savegame" data-slot="save4" data-legacy-menu-command="savegame save4" data-command="save &quot;save4&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_4">Save 4</button>
+        <button class="save-slot" id="savegame-save5" type="button" data-action-type="savegame" data-slot="save5" data-legacy-menu-command="savegame save5" data-command="save &quot;save5&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_5">Save 5</button>
+        <button class="save-slot" id="savegame-save6" type="button" data-action-type="savegame" data-slot="save6" data-legacy-menu-command="savegame save6" data-command="save &quot;save6&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_6">Save 6</button>
+        <button class="save-slot" id="savegame-save7" type="button" data-action-type="savegame" data-slot="save7" data-legacy-menu-command="savegame save7" data-command="save &quot;save7&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_7">Save 7</button>
+        <button class="save-slot" id="savegame-save8" type="button" data-action-type="savegame" data-slot="save8" data-legacy-menu-command="savegame save8" data-command="save &quot;save8&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_8">Save 8</button>
+        <button class="save-slot" id="savegame-save9" type="button" data-action-type="savegame" data-slot="save9" data-legacy-menu-command="savegame save9" data-command="save &quot;save9&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_9">Save 9</button>
+        <button class="save-slot" id="savegame-save10" type="button" data-action-type="savegame" data-slot="save10" data-legacy-menu-command="savegame save10" data-command="save &quot;save10&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_10">Save 10</button>
+        <button class="save-slot" id="savegame-save11" type="button" data-action-type="savegame" data-slot="save11" data-legacy-menu-command="savegame save11" data-command="save &quot;save11&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_11">Save 11</button>
+        <button class="save-slot" id="savegame-save12" type="button" data-action-type="savegame" data-slot="save12" data-legacy-menu-command="savegame save12" data-command="save &quot;save12&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_12">Save 12</button>
+        <button class="save-slot" id="savegame-save13" type="button" data-action-type="savegame" data-slot="save13" data-legacy-menu-command="savegame save13" data-command="save &quot;save13&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_13">Save 13</button>
+        <button class="save-slot" id="savegame-save14" type="button" data-action-type="savegame" data-slot="save14" data-legacy-menu-command="savegame save14" data-command="save &quot;save14&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_14">Save 14</button>
+        <button class="save-slot" id="savegame-save15" type="button" data-action-type="savegame" data-slot="save15" data-legacy-menu-command="savegame save15" data-command="save &quot;save15&quot;; forcemenuoff" data-menu-sound="confirm" data-loc-key="worr_ui_save_15">Save 15</button>
       </main>
 
       <footer class="menu-footer" id="savegame-menu-footer">
-        <button id="savegame-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="savegame-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="savegame-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="singleplayer-savegame-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

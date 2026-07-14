@@ -19,6 +19,7 @@ that have not yet been migrated.*/
 
 #include "../../bgame/logger.hpp"
 #include "../g_local.hpp"
+#include "../network/lag_compensation.hpp"
 #include "g_headhunters.hpp"
 #include <algorithm>
 #include <cfloat>
@@ -1572,6 +1573,11 @@ void ClientSpawn(gentity_t *ent) {
 
     return;
   }
+
+  // A client edict survives deathmatch respawns, so spawn_count alone cannot
+  // distinguish lives.  Advance the rewind-only generation exactly when a
+  // valid spawn has been selected, before any new-life pose can be captured.
+  LagCompensation_BeginClientLife(ent);
 
   cl->resp.ctf_state++;
 

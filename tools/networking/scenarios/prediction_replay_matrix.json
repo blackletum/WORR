@@ -1,0 +1,156 @@
+{
+  "schema": "worr.networking.prediction-replay-matrix.v1",
+  "prediction_abi_version": 1,
+  "movement_model_revision": 1,
+  "scenarios": [
+    {
+      "name": "empty",
+      "fixture": "empty-space",
+      "commands": 18
+    },
+    {
+      "name": "floor",
+      "fixture": "infinite-analytic-floor",
+      "commands": 36
+    },
+    {
+      "name": "wall",
+      "fixture": "floor-plus-infinite-analytic-wall",
+      "commands": 56
+    },
+    {
+      "name": "step",
+      "fixture": "floor-plus-analytic-aabb-step",
+      "commands": 60
+    },
+    {
+      "name": "slope",
+      "fixture": "infinite-analytic-walkable-slope",
+      "commands": 40
+    }
+  ],
+  "coverage_cases": [
+    {"name": "pm-normal", "category": "pm-type"},
+    {"name": "pm-grapple", "category": "pm-type"},
+    {"name": "pm-noclip", "category": "pm-type"},
+    {"name": "pm-spectator", "category": "pm-type"},
+    {"name": "pm-dead", "category": "pm-type"},
+    {"name": "pm-gib", "category": "pm-type"},
+    {"name": "pm-freeze", "category": "pm-type"},
+    {"name": "control-jump", "category": "control"},
+    {"name": "control-duck", "category": "control"},
+    {"name": "timer-waterjump", "category": "timer"},
+    {"name": "timer-land", "category": "timer"},
+    {"name": "timer-knockback", "category": "timer"},
+    {"name": "timer-trick", "category": "timer"},
+    {"name": "timer-spawn-lock", "category": "timer"},
+    {"name": "config-n64", "category": "config"},
+    {"name": "config-q3-control-default", "category": "config"},
+    {"name": "config-q3-overbounce", "category": "config"},
+    {"name": "config-air-accel-zero", "category": "config"},
+    {"name": "config-air-accel-high", "category": "config"},
+    {"name": "duration-1", "category": "duration"},
+    {"name": "duration-7", "category": "duration"},
+    {"name": "duration-8", "category": "duration"},
+    {"name": "duration-9", "category": "duration"},
+    {"name": "duration-66", "category": "duration"},
+    {"name": "duration-250", "category": "duration"},
+    {"name": "contents-water-waist", "category": "contents"},
+    {"name": "contents-ladder", "category": "contents"}
+  ],
+  "focused_fixtures": [
+    {
+      "name": "angled-full-output-floor",
+      "category": "full-output",
+      "requires": [
+        "nonzero-canonical-angles",
+        "nonzero-delta-angles",
+        "all-step-output-fields",
+        "bitwise-native-parity"
+      ]
+    },
+    {
+      "name": "snap-initial-stuck-order",
+      "category": "snap-initial",
+      "requires": [
+        "startsolid",
+        "allsolid",
+        "snap-initial-success",
+        "snap-disabled-control",
+        "exact-total-order-result"
+      ]
+    },
+    {
+      "name": "entity-touch-dual-surface-mask",
+      "category": "collision-identity",
+      "requires": [
+        "nonworld-ground-entity",
+        "ordered-touch-identity",
+        "dual-surface",
+        "pass-entity",
+        "world-only-query",
+        "ignore-player-mask-control"
+      ]
+    },
+    {
+      "name": "haste-speed-differential",
+      "category": "movement-flag",
+      "requires": [
+        "default-speed-cap",
+        "haste-speed-cap",
+        "flag-persistence",
+        "multi-command-full-output-parity"
+      ]
+    },
+    {
+      "name": "grapple-velocity-wall",
+      "category": "movement-type",
+      "requires": [
+        "nonzero-initial-velocity",
+        "wall-collision",
+        "no-gravity",
+        "ordered-touch-identity"
+      ]
+    },
+    {
+      "name": "presentation-water-hash-exclusion",
+      "category": "presentation-exclusion",
+      "requires": [
+        "exact-water-blend",
+        "underwater-render-flag",
+        "unchanged-state-hash",
+        "unchanged-collision-hash",
+        "dry-control"
+      ]
+    }
+  ],
+  "fail_closed_cases": [
+    "null-step",
+    "non-finite-state",
+    "unknown-movement-flag",
+    "non-finite-command",
+    "command-reserved-bits",
+    "unknown-model-revision",
+    "unknown-config-flags",
+    "non-boolean-snap",
+    "null-trace-callback",
+    "trace-non-finite-fraction",
+    "trace-surface-without-id",
+    "trace-invalid-struct-size",
+    "trace-conflicting-surface-flags",
+    "trace-throws",
+    "canonicalize-nan",
+    "replay-zero-capacity",
+    "replay-null-count",
+    "replay-range-fills-capacity",
+    "replay-index-out-of-range",
+    "replay-null-sequence"
+  ],
+  "correction_replay": {
+    "first_sequence": 4294967291,
+    "acknowledged_sequence": 4294967294,
+    "current_sequence": 6,
+    "commands": 12,
+    "replayed_commands": 8
+  }
+}

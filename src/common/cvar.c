@@ -1102,6 +1102,78 @@ static void Cvar_ResetAll_f(void)
     }
 }
 
+/*
+============
+Cvar_Unset
+
+Unlinks and frees a user-created cvar, returning the following cvar in the
+sorted list. The caller must not hold a pointer to a user-created cvar, which
+is guaranteed for CVAR_CUSTOM variables (engine code always goes through
+Cvar_Get, which clears the flag).
+============
+*/
+static cvar_t *Cvar_Unset(cvar_t *var)
+{
+    cvar_t *next = var->next;
+    cvar_t *c, **p;
+    unsigned hash;
+
+    // unlink from the sorted list
+    for (p = &cvar_vars; (c = *p) != NULL; p = &c->next) {
+        if (c == var) {
+            *p = var->next;
+            break;
+        }
+    }
+
+    // unlink from the hash chain
+    hash = Com_HashString(var->name, CVARHASH_SIZE);
+    for (p = &cvarHash[hash]; (c = *p) != NULL; p = &c->hashNext) {
+        if (c == var) {
+            *p = var->hashNext;
+            break;
+        }
+    }
+
+    // name is allocated together with the struct, the rest separately
+    Z_Free(var->string);
+    Z_Free(var->latched_string);
+    Z_Free(var->default_string);
+    Z_Free(var);
+
+    return next;
+}
+
+/*
+============
+Cvar_Restart_f
+
+Removes user-created cvars and resets all other writable cvars to their
+default values.
+============
+*/
+static void Cvar_Restart_f(void)
+{
+    cvar_t *var = cvar_vars;
+
+    while (var) {
+        // throw out any variables the user created
+        if (var->flags & CVAR_CUSTOM) {
+            var = Cvar_Unset(var);
+            continue;
+        }
+
+        // reset the rest of the writable cvars to their default values
+        if (!(var->flags & CVAR_ROM) &&
+            !((var->flags & CVAR_NOSET) && com_initialized) &&
+            var != fs_game) {
+            Cvar_SetByVar(var, var->default_string, Cmd_From());
+        }
+
+        var = var->next;
+    }
+}
+
 size_t Cvar_BitInfo(char *info, int bit)
 {
     char    newi[MAX_INFO_STRING], *v;
@@ -1152,6 +1224,7 @@ static const cmdreg_t c_cvar[] = {
     { "dec", Cvar_Inc_f, Cvar_Inc_c },
     { "reset", Cvar_Reset_f, Cvar_Reset_c },
     { "resetall", Cvar_ResetAll_f },
+    { "cvar_restart", Cvar_Restart_f },
 
     { NULL }
 };

@@ -8,64 +8,78 @@
   </head>
   <body id="shell-downloads" data-route-id="downloads" data-route-group="shell" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen shell-screen settings-screen" id="downloads-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="shell-downloads-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="shell-downloads-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="shell-downloads-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <div class="menu-header">
-        <h1>Download Options</h1>
+        <div class="worr-titlerow"><button id="shell-downloads-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_download_options">Download Options</h1></div>
       </div>
 
       <div class="settings-form" id="downloads-settings-form" data-component="common.components.cvar_controls">
         <div class="settings-section" id="downloads-permission-section">
-          <h2>Allowed Content</h2>
+          <h2 data-loc-key="worr_ui_allowed_content">Allowed Content</h2>
           <div class="setting-row" data-control="toggle" data-cvar="allow_download">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="downloads-allow">Allow Downloading</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="downloads-allow" data-loc-key="worr_ui_allow_downloading">Allow Downloading</label>
             <input id="downloads-allow" type="checkbox" data-cvar="allow_download" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="allow_download_maps">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="downloads-maps">Maps</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="downloads-maps" data-loc-key="m_maps">Maps</label>
             <input id="downloads-maps" type="checkbox" data-cvar="allow_download_maps" data-enable-if="allow_download" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="allow_download_players">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="downloads-players">Player Models/Skins</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="downloads-players" data-loc-key="worr_ui_player_models_skins">Player Models/Skins</label>
             <input id="downloads-players" type="checkbox" data-cvar="allow_download_players" data-enable-if="allow_download" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="allow_download_models">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="downloads-models">Models</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="downloads-models" data-loc-key="worr_ui_models">Models</label>
             <input id="downloads-models" type="checkbox" data-cvar="allow_download_models" data-enable-if="allow_download" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="allow_download_sounds">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="downloads-sounds">Sounds</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="downloads-sounds" data-loc-key="worr_ui_sounds">Sounds</label>
             <input id="downloads-sounds" type="checkbox" data-cvar="allow_download_sounds" data-enable-if="allow_download" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="allow_download_textures">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="downloads-textures">Textures</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="downloads-textures" data-loc-key="worr_ui_textures">Textures</label>
             <input id="downloads-textures" type="checkbox" data-cvar="allow_download_textures" data-enable-if="allow_download" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="allow_download_pics">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="downloads-pics">HUD Images</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="downloads-pics" data-loc-key="worr_ui_hud_images">HUD Images</label>
             <input id="downloads-pics" type="checkbox" data-cvar="allow_download_pics" data-enable-if="allow_download" />
           </div>
         </div>
 
         <div class="settings-section" id="downloads-http-section">
-          <h2>Transport</h2>
+          <h2 data-loc-key="worr_ui_transport">Transport</h2>
           <div class="setting-row" data-control="toggle" data-cvar="cl_http_downloads">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="downloads-http">HTTP Downloads</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="downloads-http" data-loc-key="worr_ui_http_downloads">HTTP Downloads</label>
             <input id="downloads-http" type="checkbox" data-cvar="cl_http_downloads" />
           </div>
         </div>
       </div>
 
       <div class="menu-footer" id="downloads-menu-footer">
-        <button id="downloads-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="downloads-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="downloads-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
       </div>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="shell-downloads-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
+      </footer>
     </div>
   </body>
 </rml>

@@ -2370,6 +2370,13 @@ static material_and_shell_t compute_mesh_material_flags(const entity_t* entity, 
 		material_id |= MATERIAL_FLAG_LIGHT;
 	}
 
+	// RF_FULLBRIGHT is the renderer contract used by player-configuration
+	// previews and other deliberately unlit models. Preserve it as a native
+	// path-tracing material flag; the shader turns the sampled albedo into a
+	// stable emissive contribution without changing ordinary world materials.
+	if (entity->flags & RF_FULLBRIGHT)
+		material_id |= MATERIAL_FLAG_FULLBRIGHT;
+
 	if (is_viewer_weapon)
 		material_id |= MATERIAL_FLAG_WEAPON;
 
@@ -3636,7 +3643,9 @@ prepare_ubo(const refdef_t *fd, const mleaf_t* viewleaf,
 			[0] = (float)fd->width / (float)qvk.extent_unscaled.width,
 			[12] = (float)(fd->x * 2 + fd->width - (int)qvk.extent_unscaled.width) / (float)qvk.extent_unscaled.width,
 			[5] = (float)fd->height / (float)qvk.extent_unscaled.height,
-			[13] = -(float)(fd->y * 2 + fd->height - (int)qvk.extent_unscaled.height) / (float)qvk.extent_unscaled.height,
+			// RTX screen coordinates are top-down (the raw projection already
+			// flips Y), so the viewport centre uses the same sign as fd->y.
+			[13] = (float)(fd->y * 2 + fd->height - (int)qvk.extent_unscaled.height) / (float)qvk.extent_unscaled.height,
 			[10] = 1.f,
 			[15] = 1.f
 		};
@@ -4205,7 +4214,7 @@ R_RenderFrame(const refdef_t *fd)
 		vkpt_taa(post_cmd_buf);
 
 		BEGIN_PERF_MARKER(post_cmd_buf, PROFILER_BLOOM);
-		if (cvar_bloom_enable->integer != 0 || qvk.frame_menu_mode)
+		if (render_world && (cvar_bloom_enable->integer != 0 || qvk.frame_menu_mode))
 		{
 			vkpt_bloom_record_cmd_buffer(post_cmd_buf);
 		}
@@ -4226,7 +4235,7 @@ R_RenderFrame(const refdef_t *fd)
 		END_PERF_MARKER(post_cmd_buf, PROFILER_TONE_MAPPING);
 
 		// Skip FSR (upscaling) if image is going to be heavily blurred anyway (menu mode)
-		if(vkpt_fsr_is_enabled() && !qvk.frame_menu_mode)
+		if(render_world && vkpt_fsr_is_enabled() && !qvk.frame_menu_mode)
 		{
 			vkpt_fsr_do(post_cmd_buf);
 		}
@@ -4504,6 +4513,9 @@ retry:;
 	vkpt_draw_set_hud_alpha(1.f);
 }
 
+static BufferResource_t screenshot_readback_buffer;
+static bool IMG_RecordReadbackCopy_RTX(VkCommandBuffer cmd_buf);
+
 void
 R_EndFrame(void)
 {
@@ -4521,11 +4533,40 @@ R_EndFrame(void)
 		vkpt_tone_mapping_draw_debug();
 
 	VkCommandBuffer cmd_buf = vkpt_begin_command_buffer(&qvk.cmd_buffers_graphics);
+	VkRect2D preview_scissor = { 0 };
+	bool preview_overlay = false;
+	if (frame_ready && vkpt_refdef.fd &&
+		(vkpt_refdef.fd->rdflags & RDF_NOWORLDMODEL))
+	{
+		const VkExtent2D draw_extent = qvk.extent_unscaled;
+		int64_t left = Q_clip((int64_t)vkpt_refdef.fd->x, 0, (int64_t)draw_extent.width);
+		int64_t top = Q_clip((int64_t)vkpt_refdef.fd->y, 0, (int64_t)draw_extent.height);
+		int64_t right = Q_clip((int64_t)vkpt_refdef.fd->x + vkpt_refdef.fd->width,
+			left, (int64_t)draw_extent.width);
+		int64_t bottom = Q_clip((int64_t)vkpt_refdef.fd->y + vkpt_refdef.fd->height,
+			top, (int64_t)draw_extent.height);
+		if (right > left && bottom > top)
+		{
+			preview_scissor.offset.x = (int32_t)left;
+			preview_scissor.offset.y = (int32_t)top;
+			preview_scissor.extent.width = (uint32_t)(right - left);
+			preview_scissor.extent.height = (uint32_t)(bottom - top);
+			preview_overlay = true;
+		}
+	}
+
+	if (preview_overlay)
+		vkpt_draw_submit_stretch_pics(cmd_buf);
 
 	if (frame_ready)
 	{
 		bool waterwarp = (vkpt_refdef.fd->rdflags & RDF_UNDERWATER) && cvar_pt_waterwarp->integer;
-		if (vkpt_fsr_is_enabled() && !qvk.frame_menu_mode)
+		if (preview_overlay)
+		{
+			vkpt_final_blit_rect(cmd_buf, VKPT_IMG_TAA_OUTPUT,
+				qvk.extent_taa_output, false, false, &preview_scissor);
+		}
+		else if (vkpt_fsr_is_enabled() && !qvk.frame_menu_mode)
 		{
 			vkpt_fsr_final_blit(cmd_buf, waterwarp);
 		}
@@ -4549,10 +4590,19 @@ R_EndFrame(void)
 		frame_ready = false;
 	}
 
-	vkpt_draw_submit_stretch_pics(cmd_buf);
+	if (!preview_overlay)
+		vkpt_draw_submit_stretch_pics(cmd_buf);
+	screenshot_t *pending_screenshot = IMG_GetPendingScreenshot_RTX();
+	if (pending_screenshot && !IMG_RecordReadbackCopy_RTX(cmd_buf)) {
+		IMG_FailPendingScreenshot_RTX(Q_ERR(ENOMEM));
+		pending_screenshot = NULL;
+	}
 
 	VkSemaphore wait_semaphores[] = { qvk.semaphores[qvk.current_frame_index][0].image_available };
-	VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	VkPipelineStageFlags wait_stages[] = {
+		pending_screenshot ? VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+		                   : VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+	};
 	uint32_t wait_device_indices[] = { 0 };
 
 	VkSemaphore signal_semaphores[VKPT_MAX_GPUS];
@@ -4570,6 +4620,15 @@ R_EndFrame(void)
 		LENGTH(wait_semaphores), wait_semaphores, wait_stages, wait_device_indices,
 		qvk.device_count, signal_semaphores, signal_device_indices,
 		qvk.fences_frame_sync[qvk.current_frame_index]);
+
+	if (pending_screenshot) {
+		VKPT_QUEUE_WAIT_IDLE(qvk.queue_graphics);
+		if (qvk.surf_is_hdr)
+			IMG_ReadPixelsHDR_RTX(pending_screenshot);
+		else
+			IMG_ReadPixels_RTX(pending_screenshot);
+		IMG_CompletePendingScreenshot_RTX();
+	}
 
 
 #ifdef VKPT_IMAGE_DUMPS
@@ -4985,6 +5044,7 @@ R_Shutdown(bool total)
 	vkpt_textures_destroy_unused();
 
 	_VK(vkpt_destroy_all(VKPT_INIT_DEFAULT));
+	buffer_destroy(&screenshot_readback_buffer);
 	vkpt_destroy_shader_modules();
 
 	if (destroy_vulkan()) {
@@ -4998,6 +5058,88 @@ R_Shutdown(bool total)
 	}
 }
 
+static bool
+IMG_RecordReadbackCopy_RTX(VkCommandBuffer cmd_buf)
+{
+	const VkDeviceSize bytes_per_pixel = qvk.surf_is_hdr ? 8 : 4;
+	const VkDeviceSize required_size = (VkDeviceSize)qvk.extent_unscaled.width
+		* (VkDeviceSize)qvk.extent_unscaled.height * bytes_per_pixel;
+	if (!required_size)
+		return false;
+
+	if (screenshot_readback_buffer.buffer != VK_NULL_HANDLE &&
+		screenshot_readback_buffer.size < required_size) {
+		buffer_destroy(&screenshot_readback_buffer);
+	}
+	if (screenshot_readback_buffer.buffer == VK_NULL_HANDLE) {
+		VkResult result = buffer_create(&screenshot_readback_buffer,
+			required_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+			VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		if (result != VK_SUCCESS) {
+			Com_EPrintf("RTX screenshot: readback buffer creation failed (%s)\n",
+				qvk_result_to_string(result));
+			return false;
+		}
+		buffer_attach_name(&screenshot_readback_buffer,
+			"RTX screenshot readback");
+	}
+
+	VkImage swap_chain_image = qvk.swap_chain_images[qvk.current_swap_chain_image_index];
+	VkImageSubresourceRange subresource_range = {
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.baseMipLevel = 0,
+		.levelCount = 1,
+		.baseArrayLayer = 0,
+		.layerCount = 1,
+	};
+
+	IMAGE_BARRIER(cmd_buf,
+		.image = swap_chain_image,
+		.subresourceRange = subresource_range,
+		.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+		.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+	);
+
+	VkBufferImageCopy copy_region = {
+		.bufferOffset = 0,
+		.bufferRowLength = 0,
+		.bufferImageHeight = 0,
+		.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
+		.imageOffset = { 0, 0, 0 },
+		.imageExtent = { qvk.extent_unscaled.width, qvk.extent_unscaled.height, 1 },
+	};
+	vkCmdCopyImageToBuffer(cmd_buf, swap_chain_image,
+		VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		screenshot_readback_buffer.buffer, 1, &copy_region);
+
+	IMAGE_BARRIER(cmd_buf,
+		.image = swap_chain_image,
+		.subresourceRange = subresource_range,
+		.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+		.dstAccessMask = 0,
+		.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	);
+
+	VkBufferMemoryBarrier host_read_barrier = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+		.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+		.dstAccessMask = VK_ACCESS_HOST_READ_BIT,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.buffer = screenshot_readback_buffer.buffer,
+		.offset = 0,
+		.size = VK_WHOLE_SIZE,
+	};
+	vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_TRANSFER_BIT,
+		VK_PIPELINE_STAGE_HOST_BIT, 0, 0, NULL, 1, &host_read_barrier,
+		0, NULL);
+	return true;
+}
+
 // for screenshots
 void
 IMG_ReadPixels_RTX(screenshot_t *s)
@@ -5009,90 +5151,14 @@ IMG_ReadPixels_RTX(screenshot_t *s)
 		return;
 	}
 
-	VkCommandBuffer cmd_buf = vkpt_begin_command_buffer(&qvk.cmd_buffers_graphics);
-
-	VkImage swap_chain_image = qvk.swap_chain_images[qvk.current_swap_chain_image_index];
-
-	VkImageSubresourceRange subresource_range = {
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		.baseMipLevel = 0,
-		.levelCount = 1,
-		.baseArrayLayer = 0,
-		.layerCount = 1
-	};
-		
-	IMAGE_BARRIER(cmd_buf,
-		.image = swap_chain_image,
-		.subresourceRange = subresource_range,
-		.srcAccessMask = 0,
-		.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-		.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-	);
-
-	IMAGE_BARRIER_STAGES(cmd_buf,
-		VK_PIPELINE_STAGE_HOST_BIT,
-		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-		.image = qvk.screenshot_image,
-		.subresourceRange = subresource_range,
-		.srcAccessMask = VK_ACCESS_HOST_READ_BIT,
-		.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-	);
-
-	VkImageCopy img_copy_region = {
-		.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-		.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-		.extent = { qvk.extent_unscaled.width, qvk.extent_unscaled.height, 1 }
-	};
-
-	vkCmdCopyImage(cmd_buf,
-		swap_chain_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		qvk.screenshot_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		1, &img_copy_region);
-
-	IMAGE_BARRIER(cmd_buf,
-		.image = swap_chain_image,
-		.subresourceRange = subresource_range,
-		.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-		.dstAccessMask = 0,
-		.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-	);
-
-	IMAGE_BARRIER_STAGES(cmd_buf,
-		VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-		VK_PIPELINE_STAGE_HOST_BIT,
-		.image = qvk.screenshot_image,
-		.subresourceRange = subresource_range,
-		.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-		.dstAccessMask = VK_ACCESS_HOST_READ_BIT,
-		.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		.newLayout = VK_IMAGE_LAYOUT_GENERAL
-	);
-
-	vkpt_submit_command_buffer_simple(cmd_buf, qvk.queue_graphics, false);
-	vkpt_wait_idle(qvk.queue_graphics, &qvk.cmd_buffers_graphics);
-
-	VkImageSubresource subresource = {
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		.arrayLayer = 0,
-		.mipLevel = 0
-	};
-
-	VkSubresourceLayout subresource_layout;
-	vkGetImageSubresourceLayout(qvk.device, qvk.screenshot_image, &subresource, &subresource_layout);
-
-	void *device_data;
-	_VK(vkMapMemory(qvk.device, qvk.screenshot_image_memory, 0, qvk.screenshot_image_memory_size, 0, &device_data));
+	byte *device_data = buffer_map(&screenshot_readback_buffer);
 	
 	int pitch = qvk.extent_unscaled.width * 3;
 	s->pixels = FS_AllocTempMem(pitch * qvk.extent_unscaled.height);
 
 	for (int row = 0; row < qvk.extent_unscaled.height; row++)
 	{
-		byte* src_row = (byte*)device_data + subresource_layout.rowPitch * row;
+		byte* src_row = device_data + qvk.extent_unscaled.width * 4 * row;
 		byte* dst_row = s->pixels + pitch * (qvk.extent_unscaled.height - row - 1);
 
 		if (qvk.surf_format.format == VK_FORMAT_B8G8R8A8_SRGB)
@@ -5121,11 +5187,12 @@ IMG_ReadPixels_RTX(screenshot_t *s)
 		}
 	}
 
-	vkUnmapMemory(qvk.device, qvk.screenshot_image_memory);
+	buffer_unmap(&screenshot_readback_buffer);
 
 	s->width = qvk.extent_unscaled.width;
 	s->height = qvk.extent_unscaled.height;
 	s->rowbytes = pitch;
+	s->status = Q_ERR_SUCCESS;
 }
 
 void
@@ -5137,86 +5204,15 @@ IMG_ReadPixelsHDR_RTX(screenshot_t *s)
 		return;
 	}
 
-	VkCommandBuffer cmd_buf = vkpt_begin_command_buffer(&qvk.cmd_buffers_graphics);
-
-	VkImage swap_chain_image = qvk.swap_chain_images[qvk.current_swap_chain_image_index];
-
-	VkImageSubresourceRange subresource_range = {
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		.baseMipLevel = 0,
-		.levelCount = 1,
-		.baseArrayLayer = 0,
-		.layerCount = 1
-	};
-		
-	IMAGE_BARRIER(cmd_buf,
-		.image = swap_chain_image,
-		.subresourceRange = subresource_range,
-		.srcAccessMask = 0,
-		.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-		.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-	);
-
-	IMAGE_BARRIER(cmd_buf,
-		.image = qvk.screenshot_image,
-		.subresourceRange = subresource_range,
-		.srcAccessMask = VK_ACCESS_HOST_READ_BIT,
-		.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-	);
-
-	VkImageCopy img_copy_region = {
-		.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-		.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-		.extent = { qvk.extent_unscaled.width, qvk.extent_unscaled.height, 1 }
-	};
-
-	vkCmdCopyImage(cmd_buf,
-		swap_chain_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		qvk.screenshot_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		1, &img_copy_region);
-
-	IMAGE_BARRIER(cmd_buf,
-		.image = swap_chain_image,
-		.subresourceRange = subresource_range,
-		.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-		.dstAccessMask = 0,
-		.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-		.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-	);
-
-	IMAGE_BARRIER(cmd_buf,
-		.image = qvk.screenshot_image,
-		.subresourceRange = subresource_range,
-		.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-		.dstAccessMask = VK_ACCESS_HOST_READ_BIT,
-		.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		.newLayout = VK_IMAGE_LAYOUT_GENERAL
-	);
-
-	vkpt_submit_command_buffer_simple(cmd_buf, qvk.queue_graphics, false);
-	vkpt_wait_idle(qvk.queue_graphics, &qvk.cmd_buffers_graphics);
-
-	VkImageSubresource subresource = {
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		.arrayLayer = 0,
-		.mipLevel = 0
-	};
-
-	VkSubresourceLayout subresource_layout;
-	vkGetImageSubresourceLayout(qvk.device, qvk.screenshot_image, &subresource, &subresource_layout);
-
-	void *device_data;
-	_VK(vkMapMemory(qvk.device, qvk.screenshot_image_memory, 0, qvk.screenshot_image_memory_size, 0, &device_data));
+	byte *device_data = buffer_map(&screenshot_readback_buffer);
 	
 	int pitch = qvk.extent_unscaled.width * 3;
 	s->pixels = FS_AllocTempMem(pitch * qvk.extent_unscaled.height * sizeof(float));
 
 	for (int row = 0; row < qvk.extent_unscaled.height; row++)
 	{
-		uint16_t* src_row = (uint16_t*)((byte*)device_data + subresource_layout.rowPitch * row);
+		uint16_t* src_row = (uint16_t*)(device_data
+			+ qvk.extent_unscaled.width * 8 * row);
 		float* dst_row = (float*)s->pixels + pitch * (qvk.extent_unscaled.height - row - 1);
 
 		for (int col = 0; col < qvk.extent_unscaled.width; col++)
@@ -5230,11 +5226,12 @@ IMG_ReadPixelsHDR_RTX(screenshot_t *s)
 		}
 	}
 
-	vkUnmapMemory(qvk.device, qvk.screenshot_image_memory);
+	buffer_unmap(&screenshot_readback_buffer);
 
 	s->width = qvk.extent_unscaled.width;
 	s->height = qvk.extent_unscaled.height;
 	s->rowbytes = pitch * sizeof(float);
+	s->status = Q_ERR_SUCCESS;
 }
 
 void

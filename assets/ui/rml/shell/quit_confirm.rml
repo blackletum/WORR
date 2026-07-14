@@ -9,12 +9,12 @@
     <div class="screen shell-screen popup-screen" id="quit-confirm-screen" data-close-command="popmenu">
       <main class="popup-dialog confirmation-dialog" id="quit-confirm-dialog" data-component="common.components.menu_frame" data-confirm-kind="destructive">
         <header class="popup-header" id="quit-confirm-header">
-          <h1>Confirm Quit</h1>
+          <h1 data-loc-key="worr_ui_confirm_quit">Confirm Quit</h1>
         </header>
-        <p class="popup-message" id="quit-confirm-prompt">Are you sure you want to quit?</p>
+        <p class="popup-message" id="quit-confirm-prompt" data-loc-key="worr_ui_are_you_sure_you_want_to_quit">Are you sure you want to quit?</p>
         <footer class="popup-actions" id="quit-confirm-actions">
-          <button class="popup-danger" id="quit-confirm-yes" type="button" data-command="quit" data-loc-key="m_yes" data-menu-sound="confirm">Yes</button>
           <button class="popup-secondary" id="quit-confirm-no" type="button" data-command="popmenu" data-loc-key="m_no" data-menu-sound="cancel">No</button>
+          <button class="popup-danger" id="quit-confirm-yes" type="button" data-command="quit" data-loc-key="m_yes" data-menu-sound="confirm">Yes</button>
         </footer>
       </main>
     </div>

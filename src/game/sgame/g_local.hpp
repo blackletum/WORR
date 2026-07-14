@@ -4930,17 +4930,19 @@ constexpr size_t MAX_PIERCE = 16;
 // base class for pierce args; this stores
 // the stuff we are piercing.
 struct pierce_args_t {
-  // stuff we pierced
-  std::array<gentity_t *, MAX_PIERCE> pierced;
-  std::array<solid_t, MAX_PIERCE> pierce_solidities;
+  // Stable trace-local identities of entities already pierced by this ray.
+  // They are passed to the lag-compensation collision bridge as an ignore set;
+  // live solidity/link state is never changed.
+  std::array<gentity_t *, MAX_PIERCE> pierced{};
   size_t num_pierced = 0;
+  uint32_t lag_compensation_weapon_policy = 0;
   // the last trace that was done, when piercing stopped
   trace_t tr;
 
   // mark entity as pierced
   inline bool mark(gentity_t *ent);
 
-  // restore entities' previous solidities
+  // End the current ray and clear its ignore set.
   inline void restore();
 
   // we hit an entity; return false to stop the piercing.
@@ -5246,7 +5248,8 @@ void G_PlayerNoise(gentity_t *who, const Vector3 &where, PlayerNoise type);
 void P_ProjectSource(gentity_t *ent, const Vector3 &angles, Vector3 distance,
                      Vector3 &result_start, Vector3 &result_dir,
                      ProjectSourceTraceMode traceMode =
-                         ProjectSourceTraceMode::Live);
+                         ProjectSourceTraceMode::Live,
+                     uint32_t lag_compensation_weapon_policy = 0);
 void NoAmmoWeaponChange(gentity_t *ent, bool sound);
 void Weapon_Generic(gentity_t *ent, int FRAME_ACTIVATE_LAST,
                     int FRAME_FIRE_LAST, int FRAME_IDLE_LAST,
@@ -5846,6 +5849,7 @@ struct UiMenuState {
   bool voteActive = false;
   GameTime voteNextUpdate = 0_ms;
   bool mapSelectorActive = false;
+  bool mapSelectorDismissed = false;
   GameTime mapSelectorNextUpdate = 0_ms;
   bool matchStatsActive = false;
   GameTime matchStatsNextUpdate = 0_ms;
@@ -6768,28 +6772,26 @@ enum pois_t : uint16_t {
 
 // implementation of pierce stuff
 inline bool pierce_args_t::mark(gentity_t *ent) {
+  if (!ent)
+    return false;
+
+  for (size_t i = 0; i < num_pierced; ++i) {
+    if (pierced[i] == ent)
+      return true;
+  }
+
   // ran out of pierces
   if (num_pierced == MAX_PIERCE)
     return false;
 
-  pierced[num_pierced] = ent;
-  pierce_solidities[num_pierced] = ent->solid;
-  num_pierced++;
-
-  ent->solid = SOLID_NOT;
-  gi.linkEntity(ent);
+  pierced[num_pierced++] = ent;
 
   return true;
 }
 
-// implementation of pierce stuff
+// implementation of trace-local pierce state
 inline void pierce_args_t::restore() {
-  for (size_t i = 0; i < num_pierced; i++) {
-    auto &ent = pierced[i];
-    ent->solid = pierce_solidities[i];
-    gi.linkEntity(ent);
-  }
-
+  std::fill_n(pierced.begin(), num_pierced, nullptr);
   num_pierced = 0;
 }
 

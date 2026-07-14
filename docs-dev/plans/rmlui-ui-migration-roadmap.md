@@ -1,6 +1,6 @@
 # WORR RmlUi UI Migration Roadmap
 
-Date: 2026-07-01
+Date: 2026-07-14
 
 Status: Living roadmap for replacing the current menu/UI presentation stack with
 RmlUi.
@@ -12,8 +12,11 @@ Primary tasks: `FR-09-T01`, `FR-09-T02`, `FR-09-T03`, `FR-09-T04`,
 
 Supporting linked tasks: `DV-06-T01`, `FR-07-T01`, and `FR-07-T02`.
 
-Execution status: `Active/round-78 multiplayer-match-hub accepted`.
-Round 78 is the latest coordinator-accepted multiplayer/session baseline.
+Execution status: `Done/2026-07-14 all 58 menus accepted as functionally and visually parity-ready across native OpenGL, Vulkan, and RTX/vkpt`.
+Round 79 closes Gates G0 through G4 for the menu runtime. It accepts live
+controllers/providers, localization, accessibility, keyboard/gamepad input,
+responsive design-language compliance, native renderer parity, the 58-route
+three-renderer visual matrix, and the documented legacy-fallback archive.
 Earlier
 parallel rounds produced source asset scaffolds, mock contracts, shared
 theme/component contracts, smoke and route-contract checkers, package-asset
@@ -319,11 +322,18 @@ the JSON fallback without an OpenGL redirect. Implementation and user
 documentation are recorded in
 `docs-dev/rmlui-round78-multiplayer-match-hub-2026-07-10.md` and
 `docs-user/multiplayer-session-menu.md`.
-Native Vulkan/RTX-vkpt renderer
-implementations, remaining live data controllers, localization/text shaping
-parity,
-broad input/navigation parity, automated runtime navigation, full theme/layout
-parity, parity proof, and legacy-removal cutover remain incomplete.
+Round 79 (2026-07-14) promotes every central and feature route to
+`parity_ready`. The final installed-tree matrices pass 58/58 routes in native
+OpenGL, Vulkan, and RTX/vkpt. The audit includes live localization and
+accessibility services, keyboard/gamepad focus and Escape/Back behavior,
+responsive canvas scaling, native Vulkan/RTX Player Setup previews, corrected
+RTX repeated/sRGB menu textures, and a route-wide visual contact-sheet review.
+All nine parity categories are complete for every route. The legacy-removal
+gate is open; legacy JSON/menu sources are intentionally retained only as a
+guarded recovery/reference archive, satisfying Gate G4 without keeping a
+second normal presentation runtime. Detailed closeout is recorded in
+`docs-dev/rmlui-runtime-ux-design-parity-2026-07-14.md` and
+`docs-dev/rmlui-native-vulkan-rtx-renderer-parity-2026-07-14.md`.
 
 Strategic parent:
 `docs-dev/proposals/swot-feature-development-roadmap-2026-02-27.md`.
@@ -347,24 +357,145 @@ Status legend:
 
 | Task | Owner | Current status | Progression path | Completion evidence |
 |---|---|---|---|---|
-| `FR-09-T01` Runtime ownership, inventory, asset layout, and cutover policy | S0, Agent 1 | `Active`: route and ownership manifests seeded; route-ownership metadata, full-route probe coverage, and selected route progression through three guarded menu-entrypoint `runtime_stub` routes accepted; S0 not closed | S0 inventory -> route/data/command contracts -> ownership metadata reconciliation -> full-route probe/route progression evidence -> guarded entrypoint evidence -> Gate G0 | Ownership decision, asset layout, staging plan, coexistence policy, and full menu ownership manifest. |
-| `FR-09-T02` RmlUi dependency, Meson/build wiring, and staging | Agent 1 | `Active`: loose `ui/rml` package staging implemented, client scaffold source wired, full-route runtime document probe, registry drift, runtime asset/import, JSON runtime-asset reporting, detailed runtime asset manifest output, staged loose validation, proposed dependency decision/audit record, RmlUi `6.2` source wrap, default-disabled optional `rmlui` Meson feature gate, dependency-integration checker state `optional`, wrap provide aliases, explicit CMake fallback options, enabled scratch compile/link proof, RmlUi runtime DLL staging, and refreshed `.install` route-load proof accepted; supported build matrix pending | Gate G0 -> full-route runtime document probe accepted -> runtime registry/import validation -> runtime asset JSON/staging/manifest evidence -> dependency decision/audit -> dependency integration -> optional build gate -> runtime-switch/build wiring -> install refresh -> Gate G1 | RmlUi dependency resolves, links in the supported build matrix, and `.install/basew/ui/rml/` refreshes with current RmlUi assets. |
-| `FR-09-T03` Runtime bootstrap and native renderer integration | Agents 1 and 2 | `Active`: runtime smoke document, native renderer guardrails, guarded `ui_rml_enable` switch scaffold, filesystem-backed probe coverage for 57 route documents plus `core.runtime_smoke`, guarded menu-open probes for `main`, `game`, and `download_status`, runtime availability reporting, dependency-free file-interface boundary, runtime-hook boundary, compiled RmlUi Core adapter registration, WORR-backed RmlUi system/file interfaces, explicit `ui_rml_runtime_probe`, native renderer bridge contract/family lanes, OpenGL render-interface scaffold export/registration, OpenGL geometry/texture/scissor primitive bridge with `CanRender=true`, guarded `core.runtime_smoke` context open/update/render path, `ui_rml_runtime_open`/`ui_rml_runtime_close`, UI draw interception, guarded key/text/mouse delivery, runtime counters, `ui_rml_runtime_capture`, smoke bitmap glyph font path, styled smoke RCSS, local screenshot-dir override, automated guarded OpenGL TGA capture with glyph marker and layout assertions, guarded synthetic input/back-close capture evidence, two-viewport OpenGL matrix evidence, guarded `main`/`game`/`download_status` menu-route OpenGL matrix evidence, explicit renderer-family matrix guardrails, aggregate renderer-matrix capture manifests, native Vulkan/RTX bridge-readiness audit, bridge-readiness aggregate renderer manifests, native bridge activation checklist manifests, native bridge activation status reporting, native bridge source-set activation requirements, inactive Vulkan/RTX bridge source wiring, inactive Vulkan/RTX bridge class stubs, inactive Vulkan/RTX family exports, inactive Vulkan/RTX runtime dependencies, installed OpenGL full-route menu-load proof accepted, focused OpenGL navigation-layout proof accepted, deterministic client/cgame `pushmenu` to RmlUi route/popup proof accepted, focused `pushmenu multiplayer` OpenGL proof accepted, and focused SVG texture generation proof accepted; Vulkan/RTX-vkpt implementations, full font/text services, full input services, runtime navigation, responsive widescreen parity, theme/layout parity, and parity proof pending | Gate G0 -> runtime-switch scaffold -> full-route document probe -> guarded menu-entrypoint runtime stubs -> runtime/file interface boundary -> compiled core adapter -> system/file bridge -> native renderer contract -> OpenGL render-interface scaffold -> OpenGL render primitives -> guarded sample route/context draw proof -> guarded sample input/capture proof -> guarded sample screenshot/glyph/layout proof -> guarded synthetic input/back-close proof -> guarded viewport matrix proof -> guarded menu route proof -> renderer-family guardrail -> renderer-matrix capture manifest -> bridge-readiness audit -> bridge-readiness renderer manifest -> native bridge activation checklist -> native bridge activation status -> native bridge source-set activation -> inactive non-OpenGL bridge source wiring -> inactive non-OpenGL bridge class stubs -> inactive non-OpenGL family exports -> inactive non-OpenGL runtime dependencies -> installed route-load proof -> normal pushmenu bridge proof -> multiplayer hub route proof -> SVG texture proof -> native renderer matrix proof -> Gate G1 | Sample `.rml` opens from normal menu entry points in OpenGL, Vulkan, and RTX/vkpt without Vulkan-to-OpenGL fallback. |
-| `FR-09-T04` Fonts, localization, theme, cursor/audio, and accessibility | Agent 2, Agent 4 consumer | `Active`: base, utility, session, and accessibility themes seeded; linked shell/settings/single-player/session/accessibility themes now avoid RmlUi-rejected browser CSS in installed route-load validation; all low-risk settings routes have `controller_stub` metadata; a11y/localization inventory reports 8 static refs and 6 localization keys with 0 malformed hooks; guarded smoke bitmap glyph path validates first text geometry; OpenGL path draws a software cursor; SDL3_ttf-backed RmlUi text textures now validate on staged menu routes; shared settings/navigation surfaces now use the `604px` typed-widget/menu contract; menu music, open-sound, and focus/change feedback plumbing validates through staged RmlUi routes; first-party SVG widget marker styling validates across settings and utility forms after command-menu pictograms were removed; live localization/accessibility services and final shaping policy pending | Gate G1 -> theme/font/input services -> a11y/localization inventory -> content consumption -> widget asset styling -> live localization/a11y services -> Gate G2 | Stable theme/font/input/accessibility services plus at least one migrated page using them. |
-| `FR-09-T05` Reusable data-model and controller bridges | Agent 3 | `Active`: mock contracts, route-contract audit, shared components, controller fixtures, 54 accepted `controller_stub` routes, 3 guarded `runtime_stub` routes, 149 controller-contract references across all 57 advanced routes, command/cvar/data-model/condition/event inventory validation, metadata-sync validation, phase-consistency validation, controller fixture validation, controller-stub coverage, route metadata shape validation, runtime-stub eligibility validation, and controller-stub completion validation landed; Round 78 adds the first live sgame-backed match-hub cvar/command bridge plus bounded, per-frame UI snapshot delivery; broader live C++ controllers remain pending | mock contracts -> controller fixture reconciliation -> selected `controller_stub` routes accepted -> guarded `runtime_stub` eligibility -> utility/list/single-player/local-session/session-vote/lobby/final session controller-stub metadata -> cvar/command/condition/keybind/list/save-load/session bridges -> controller-stub completion gate -> live C++ controllers -> Gate G2 | One cvar control, one command button, one conditional element, one list/table, and one preview component validated through RmlUi. |
-| `FR-09-T06` Shell/settings/single-player menu translation | Agent 4 | `Active`: all 23 Agent 4 source-route starter documents landed; all Agent 4-owned shell/settings/single-player routes now have either `controller_stub` metadata (`20`) or guarded `runtime_stub` metadata (`3`); runtime/parity pending | Agent 4 documents -> smoke manifest -> controller-stub batches -> runtime-stub entrypoint batch -> single-player controller-stub batch -> remaining local-session controller-stub batch -> parity checks -> Gate G3 | Agent 4-owned Wave A and single-player Wave B routes run through RmlUi with settings persistence and back/escape parity. |
-| `FR-09-T07` Browser, player-config, save/load, keybind, and utility surfaces | Agents 3, 4, and 5 | `Active`: all tracked rich utility and save/load starter documents landed; `addressbook`, `keys`, `legacykeys`, `weapons`, `servers`, `demos`, `players`, `ui_list`, `loadgame`, `savegame`, and `downloads` have `controller_stub` metadata; utility/keybind visible copy and long-list layout now have staged TTF screenshot proof; live controllers/parity pending | shared rich components -> utility documents -> utility controller-stub metadata -> utility/list controller-stub metadata -> save/load controller-stub metadata -> download-options controller-stub metadata -> long-list layout proof -> smoke/parity checks -> Gate G3 | Servers, demos, players, ui_list, keybind, addressbook, weapons, loadgame, and savegame routes pass parity checks. |
-| `FR-09-T08` Multiplayer/session/match menu translation | Agent 5 | `Active`: all tracked Wave C source-route starter documents landed; multiplayer/session route metadata covers the multiplayer hub plus all 25 session/match routes; all non-runtime multiplayer/session/vote/tournament/MyMap/map selector/match-stats routes have static `controller_stub` metadata; Round 78 implements the live server-authoritative first-connect and Escape match hub with team/intermission-aware state, branded RmlUi presentation, matching JSON fallback, and focused OpenGL/Vulkan evidence; broader vote/tournament/MyMap/list/controller parity remains pending | session data contract -> Wave C documents -> session route metadata -> vote/callvote controller-stub metadata -> multiplayer/lobby controller-stub metadata -> tournament/MyMap/map-selector/match-stats controller-stub metadata -> player-facing fallback copy -> multiplayer hub parity proof -> live match-state smoke -> remaining Wave C parity -> Gate G3 | Vote, tournament, MyMap, forfeit, replay, map selector, match info, and match stats flows run through RmlUi. |
-| `FR-09-T09` Migration-specific validation | Agent 5 plus all agents | `Active`: smoke, route-contract, command inventory, cvar inventory, data-model inventory, condition inventory, event inventory, a11y/localization inventory, document-id inventory, entrypoint inventory, route-metadata-shape validation, legacy-removal inventory/reporting, metadata sync, phase-consistency, dependency-decision, dependency-integration, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font validation, runtime capture harness glyph-marker, TGA layout, synthetic input/back-close, viewport-matrix validation, menu-route-matrix validation, renderer-family matrix guardrail validation, aggregate renderer-matrix capture validation, Vulkan/RTX bridge-readiness validation, bridge-readiness aggregate manifest validation, native bridge activation checklist validation, native bridge activation status validation, native bridge source-set activation validation, inactive non-OpenGL bridge source wiring validation, and inactive non-OpenGL bridge class-stub validation, inactive non-OpenGL family-export validation, inactive non-OpenGL runtime-dependency validation, installed 57-route load validation, focused navigation-layout capture evidence, deterministic `pushmenu` route/popup validation, focused SVG widget marker validation, controller fixture, controller-stub coverage, controller-stub completion, runtime-stub eligibility, menu-entrypoint, static RML semantics, navigation graph, runtime registry, import-aware runtime asset JSON/manifest, parity checklist/summary, and progress-report tools validate 57/57 source routes with `starter=0`, `controller_stub=54`, and `runtime_stub=3`; runtime navigation/broader input parity coverage pending | smoke manifest -> migration-phase metadata -> static semantics checks -> runtime registry/import checks -> menu-entrypoint/runtime-stub checks -> navigation graph/fixture/parity checks -> command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventories -> metadata/shape/phase/dependency/dependency-integration/legacy guardrails -> controller-stub completion gate -> runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font checks -> guarded screenshot/glyph/layout/input/viewport/menu-route harness -> renderer-family guardrail -> renderer-matrix capture manifest -> bridge-readiness audit -> bridge-readiness renderer manifest -> native bridge activation checklist -> native bridge activation status -> native bridge source-set activation -> inactive non-OpenGL bridge source wiring -> inactive non-OpenGL bridge class stubs -> inactive non-OpenGL family exports -> inactive non-OpenGL runtime dependencies -> progress reports -> document-load checks -> normal pushmenu probes -> SVG widget probes -> renderer/layout/input/session evidence -> Gate G4 | Automated smoke coverage and manual parity checklist cover all migrated routes and selected renderer/layout matrix. |
-| `FR-09-T10` Legacy JSON removal and final docs/staging cleanup | Agent 5 plus all agents | `Blocked`: waits on Gate G3/G4; legacy-removal inventory/checker tracks 6 items with 4 blocked, 2 pending, 0 ready, and 0 complete; progress reports surface the closed parity gate; controller-bindings parity is complete, but navigation, renderer, broad screenshot/input/back, and legacy-fallback evidence remain pending; no legacy removal attempted | legacy inventory -> progress gate summaries -> parity-ready evidence -> delete/archive -> docs/staging updates -> Gate G4 | Legacy JSON loader/widgets and dead assets are removed or intentionally archived with a documented reason. |
-| `FR-03-T08` Complete engine-side/cgame-side UI ownership split | S0, Agents 1 and 3 | `Active`: client-owned presentation/data-provider contract seeded; route ownership metadata, full-route probe registry, 54 selected `controller_stub` routes, 3 guarded menu-entrypoint `runtime_stub` routes, and all 57 central routes matched to feature metadata validated; ownership audit pending | ownership audit -> route ownership metadata -> selected route progression accepted -> guarded entrypoint route progression -> all static controller-stub progression -> data bridge contract -> Gate G0/G2 | Client runtime ownership and cgame/sgame data-provider boundaries are explicit and documented. |
-| `DV-03-T07` UI automation harness | Agent 5 | `Active`: manifest, route-contract, command inventory, cvar inventory, data-model inventory, condition inventory, event inventory, a11y/localization inventory, document-id inventory, entrypoint inventory, route-metadata-shape validation, legacy-removal inventory/reporting, metadata sync, phase-consistency, dependency-decision, dependency-integration, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font checks, guarded runtime capture harness with glyph marker, layout assertions, synthetic input/back-close counters, exact geometry validation, viewport-matrix manifest output, menu-route-matrix manifest output, renderer-family matrix guardrail output, aggregate renderer-matrix manifest output, Vulkan/RTX bridge-readiness audit output, bridge-readiness renderer-manifest output, native bridge activation checklist output, native bridge activation status output, native bridge source-set activation output, inactive non-OpenGL bridge source wiring output, and inactive non-OpenGL bridge class-stub output, inactive non-OpenGL family-export output, inactive non-OpenGL runtime-dependency output, installed 57-route load output, controller fixture, controller-stub coverage, controller-stub completion, runtime-stub eligibility, menu-entrypoint, navigation graph, parity manifest/summary, import, phase, package, static semantics, runtime registry/asset text/JSON/manifest, and text/markdown/JSON progress-report checks landed; runtime navigation/broader input parity harness pending | manifest -> smoke-transition metadata -> static semantics checks -> runtime registry/import checks -> menu-entrypoint/runtime-stub checks -> navigation graph/fixture/parity checks -> command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventories -> dependency/source/build/runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font guardrails -> guarded screenshot/glyph/layout/input/viewport/menu-route smoke -> renderer-family guardrail -> renderer-matrix capture manifest -> bridge-readiness audit -> bridge-readiness renderer manifest -> native bridge activation checklist -> native bridge activation status -> native bridge source-set activation -> inactive non-OpenGL bridge source wiring -> inactive non-OpenGL bridge class stubs -> inactive non-OpenGL family exports -> inactive non-OpenGL runtime dependencies -> metadata/progress reports -> controller-stub completion -> load/navigation smoke -> broader screenshot/layout capture -> Gate G4 | Harness can prove document load, route navigation, renderer smoke, and session transition coverage. |
-| `DV-04-T02` Reduce mixed ownership and refactor risk | S0, Agent 3 | `Active`: mock bridge boundaries, guarded client runtime switch, full-route probe registry, 54 selected `controller_stub` routes, 3 guarded menu-entrypoint `runtime_stub` ownership progression, all 57 central routes matched to feature metadata, and route metadata shape guardrails accepted; live bridge simplification pending | ownership contract -> runtime-switch/controller contracts -> selected `controller_stub` routes accepted -> guarded `runtime_stub` routes accepted -> all static controller-stub progression -> metadata-sync/shape coverage -> bridge simplification -> parity validation | New UI path uses narrow data/command bridges instead of recreating legacy ownership tangles. |
-| `DV-07-T02` Visual/readability modernization support | Agent 2 | `Active`: readable base, utility, session, and accessibility theme hooks landed; utility/session fallback copy, keybind long-list layout, and first-party SVG widget markers are refined with staged screenshot evidence | theme tokens -> readable defaults -> long-list layout proof -> widget asset proof -> high-visibility checks -> Gate G2/G4 | Theme and readability policy are shared by all migrated documents and validated against long strings. |
-| `DV-07-T04` Regression/parity hardening support | Agent 2 and Agent 5 | `Active`: full source-route manifest, route shape, asset import, loose staging, phase metadata, command/cvar/data-model/condition/event/a11y/document-id/entrypoint inventory, legacy-removal guardrails, metadata-sync/shape guardrails, phase-consistency guardrails, dependency-decision validation, dependency-integration validation, runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font validation, guarded runtime screenshot/glyph/layout/input-back/viewport-matrix/menu-route evidence, renderer-family matrix guardrails, aggregate renderer-matrix evidence, Vulkan/RTX bridge-readiness evidence, bridge-readiness aggregate manifest evidence, native bridge activation checklist evidence, native bridge activation status evidence, native bridge source-set activation evidence, inactive non-OpenGL bridge source wiring evidence, inactive non-OpenGL bridge class-stub evidence, inactive non-OpenGL family-export evidence, inactive non-OpenGL runtime-dependency evidence, installed 57-route load evidence, focused SVG widget generation evidence, controller-contract/fixture/coverage/completion, runtime-stub eligibility, menu-entrypoint, navigation graph, parity checklist/summary, static semantics, runtime registry/asset JSON/manifest, and structured progress-report checks landed; broader parity evidence pending | renderer/layout checks -> migration metadata evidence -> static semantics/runtime registry/import/menu-entrypoint/navigation/parity/command/cvar/data-model/condition/event/a11y/document-id/entrypoint/dependency/legacy/metadata/progress reports -> controller-stub completion -> runtime-adapter/system-file/renderer-contract/OpenGL-scaffold/OpenGL-primitive/context/input-capture/glyph-font guardrails -> guarded screenshot/glyph/layout/input/viewport/menu-route evidence -> SVG widget evidence -> renderer-family guardrail -> renderer-matrix capture manifest -> bridge-readiness audit -> bridge-readiness renderer manifest -> native bridge activation checklist -> native bridge activation status -> native bridge source-set activation -> inactive non-OpenGL bridge source wiring -> inactive non-OpenGL bridge class stubs -> inactive non-OpenGL family exports -> inactive non-OpenGL runtime dependencies -> migration regression checklist -> Gate G4 | Manual and automated parity evidence covers renderer, layout, accessibility, and content stress cases. |
+| `FR-09-T01` Runtime ownership, inventory, asset layout, and cutover policy | S0, Agent 1 | `Done`: the client-owned RmlUi runtime, route namespace, cgame/sgame provider boundary, asset layout, guarded fallback, and all 58 route owners are accepted. | Contract freeze -> runtime ownership -> 58-route parity -> documented fallback archive -> Gate G0/G4 | Accepted; see the 2026-07-14 runtime UX/design parity record. |
+| `FR-09-T02` RmlUi dependency, Meson/build wiring, and staging | Agent 1 | `Done`: RmlUi 6.2 resolves in the supported renderer targets, runtime DLL/assets package successfully, and the final refresh validated `.install/`. | Dependency audit -> build integration -> package/install refresh -> Gate G1 | Accepted for the menu runtime; unrelated networking symbols still block the aggregate engine link. |
+| `FR-09-T03` Runtime bootstrap and native renderer integration | Agents 1 and 2 | `Done`: all 58 routes render through native OpenGL, Vulkan, and RTX/vkpt; native Vulkan/RTX Player Setup previews and RTX texture/color parity are accepted. | Runtime bootstrap -> native renderer bridges -> 58x3 route sweeps -> Gate G1 | Accepted; see `docs-dev/rmlui-native-vulkan-rtx-renderer-parity-2026-07-14.md`. |
+| `FR-09-T04` Fonts, localization, theme, cursor/audio, and accessibility | Agent 2, Agent 4 consumer | `Done`: rerelease font services, 1,123 localization hooks, responsive theme, cursor/audio, high-contrast, large-text, reduced-motion, keyboard, and gamepad services are live. | Shared UX services -> route consumption -> design/a11y validation -> Gate G2/G4 | Accepted; 14/14 runtime UX services pass. |
+| `FR-09-T05` Reusable data-model and controller bridges | Agent 3 | `Done`: typed cvar, command, condition, event, list/table, save/load, keybind, browser, preview, and live session/provider bridges cover all 58 routes. | Shared contracts -> live providers -> route-wide functional validation -> Gate G2 | Accepted by the route contract and provider regression suite. |
+| `FR-09-T06` Shell/settings/single-player menu translation | Agent 4 | `Done`: all Wave A and owned Wave B routes use RmlUi with persistence, responsive layout, localization, and Escape/Back parity. | Document translation -> live bindings -> renderer/design parity -> Gate G3 | Accepted in all three renderer matrices. |
+| `FR-09-T07` Browser, player-config, save/load, keybind, and utility surfaces | Agents 3, 4, and 5 | `Done`: servers, demos, Player Setup, lists, keybinds, Address Book, weapons, and save/load use live providers and pass visual/functional parity checks. | Rich components -> live providers -> native preview -> renderer/design parity -> Gate G3 | Accepted, including native Vulkan and RTX Player Setup previews. |
+| `FR-09-T08` Multiplayer/session/match menu translation | Agent 5 | `Done`: all 25 Wave C routes and the multiplayer hub use live sgame-backed state/actions with safe confirmations and complete renderer/design parity. | Session providers -> connected actions -> 58-route matrix -> Gate G3 | Accepted; existing player workflows remain documented under `docs-user/`. |
+| `FR-09-T09` Migration-specific validation | Agent 5 plus all agents | `Done`: 58 routes are parity-ready with all nine evidence categories complete, 58x3 live renderer sweeps pass, and the complete UI smoke suite is green. | Static inventories -> runtime services -> contact-sheet audit -> parity gate -> Gate G4 | Accepted; durable evidence is recorded in the 2026-07-14 parity documents. |
+| `FR-09-T10` Legacy JSON removal and final docs/staging cleanup | Agent 5 plus all agents | `Done`: the cutover gate is open, final docs/staging are current, and legacy JSON/menu sources are intentionally archived as guarded recovery/reference material rather than a normal runtime. | Parity gate -> archive decision -> docs/install refresh -> Gate G4 | Accepted under Gate G4's documented-archive alternative; physical deletion remains optional cleanup. |
+| `FR-03-T08` Complete engine-side/cgame-side UI ownership split | S0, Agents 1 and 3 | `Done`: presentation is client-owned RmlUi while cgame/sgame publish narrow data and command contracts; all 58 routes are metadata-synchronized. | Ownership audit -> provider boundary -> parity acceptance | Accepted for the menu runtime. |
+| `DV-03-T07` UI automation harness | Agent 5 | `Done`: static inventories, provider checks, runtime UX checks, installed route sweeps, input evidence, screenshots, and renderer matrices cover every registered menu. | Harness foundation -> route/renderer matrices -> parity gate | Accepted; the complete `tools/ui_smoke` suite is the regression gate. |
+| `DV-04-T02` Reduce mixed ownership and refactor risk | Agents 1 and 3 | `Done`: client presentation and cgame/sgame provider responsibilities are explicit, with manifest/metadata drift checks protecting the boundary. | Ownership contract -> live-provider boundary -> metadata sync | Accepted for menu ownership. |
+| `DV-07-T02` Visual/readability modernization support | Agent 2 | `Done`: all routes consume the canonical metal theme, readable typography, responsive containment, high-contrast, large-text, reduced-motion, and long-string fallbacks. | Design language -> shared theme -> route-wide visual audit | Accepted across OpenGL, Vulkan, and RTX contact sheets. |
+| `DV-07-T04` Regression/parity hardening support | Agent 2 and Agent 5 | `Done`: renderer, layout, localization, accessibility, controller, and content-stress evidence is complete for all 58 routes. | Focused regressions -> 58x3 runtime matrices -> parity-ready promotion | Accepted by the 2026-07-14 parity gate. |
 | `DV-06-T01` Dependency baseline audit | Agent 1 | `Active`: proposed RmlUi dependency decision/audit record, validation checker, upstream RmlUi `6.2` wrap URL/hash, license/provenance notes, wrap provide aliases, explicit CMake fallback options, enabled scratch compile/link proof, WORR-backed RmlUi file-interface proof, renderer-contract dependency boundary, OpenGL-scoped renderer scaffold/primitive/context/input-capture/glyph-font/layout/input-back/viewport/menu-route dependency wiring, renderer-family matrix dependency guardrails, aggregate renderer-matrix dependency evidence, native Vulkan/RTX bridge-readiness dependency boundary, aggregate bridge-readiness renderer-manifest evidence, native bridge activation checklist dependency boundary, native bridge activation status dependency boundary, native bridge source-set activation dependency boundary, inactive non-OpenGL bridge source wiring, inactive non-OpenGL bridge class stubs, inactive non-OpenGL family exports, and inactive non-OpenGL runtime dependencies accepted; final notice/update/local-patch/supported-matrix policy and full font service pending | RmlUi dependency review -> proposed decision record -> proposed/not-implemented guardrail -> accepted source/version/license audit -> optional Meson build gate -> vendoring/build-link decision -> system/file bridge -> renderer contract -> OpenGL-scoped renderer scaffold -> OpenGL primitive bridge -> guarded sample context -> guarded input/capture -> guarded screenshot/glyph/layout/input bootstrap -> viewport matrix -> guarded menu route matrix -> renderer-family guardrail -> renderer-matrix capture manifest -> bridge-readiness audit -> bridge-readiness renderer manifest -> native bridge activation checklist -> native bridge activation status -> native bridge source-set activation -> inactive non-OpenGL bridge source wiring -> inactive non-OpenGL bridge class stubs -> inactive non-OpenGL family exports -> inactive non-OpenGL runtime dependencies -> Gate G1 | Dependency choice is documented and accepted before first-class build integration lands. |
-| `FR-07-T01` Map vote, MyMap, and nextmap validation scenarios | Agent 5 | `Active`: MyMap, map selector, and match stats now have static `controller_stub` hooks/metadata; live validation pending | session contract -> RmlUi match flows -> static MyMap/map-selector/match-stats controller-stub metadata -> session transition smoke -> Gate G3/G4 | RmlUi session documents preserve map vote, MyMap queue, and nextmap transition behavior. |
-| `FR-07-T02` Tournament veto/replay flow hardening | Agent 5 | `Active`: tournament/veto/replay documents now have static `controller_stub` hooks/metadata; live validation pending | session contract -> tournament/replay documents -> static tournament/veto/replay controller-stub metadata -> match-state smoke -> Gate G3/G4 | RmlUi tournament veto and replay reset flows preserve current error handling and state reset behavior. |
+| `FR-07-T01` Map vote, MyMap, and nextmap validation scenarios | Agent 5 | `Done`: MyMap and Map Selector retain authoritative state, safe actions, acknowledgements, and renderer/input parity through RmlUi. | Live provider -> transition validation -> Gate G3/G4 | Accepted. |
+| `FR-07-T02` Tournament veto/replay flow hardening | Agent 5 | `Done`: tournament info, map choices, veto, and replay confirmation retain server ownership, safe reset behavior, and renderer/input parity. | Live provider -> destructive-action guardrails -> Gate G3/G4 | Accepted. |
+
+2026-07-13 fixed-list progress applies to `FR-09-T05`, `FR-09-T07`,
+`FR-09-T09`, `FR-03-T08`, `DV-03-T07`, `DV-04-T02`, and `DV-07-T04`:
+`ui_list` now keeps list authority in sgame, uses the generic per-frame cvar
+and command bridge for presentation, runs close cleanup consistently from the
+backplate and back keys, has a focused regression checker, and has deterministic
+960x720 populated/empty/error capture evidence. Full session-list automation
+and native cross-renderer parity remain open.
+
+2026-07-13 keybind-family progress applies to `FR-09-T05`, `FR-09-T07`,
+`FR-09-T09`, `FR-03-T08`, `DV-03-T07`, `DV-04-T02`, and `DV-07-T04`:
+`keys`, `legacykeys`, and `weapons` now expose live Primary/Alternate chips
+without destructive command-wide replacement. The shared native controller
+hydrates two slots, preserves the untouched slot, clears only the selected
+slot, times out after eight seconds, confirms conflicts inline, and uses the
+established keyboard/mouse/gamepad key artwork with text fallback. A focused
+checker and nine regression tests cover all 38 commands plus deterministic
+reduced-motion visibility; clean installed 960x720 reduced-motion captures
+cover all three routes. Action-level mutation/restore
+automation and native cross-renderer parity remain open. Implementation log:
+`docs-dev/rmlui-live-keybind-provider-2026-07-13.md`.
+
+2026-07-13 Address Book progress applies to `FR-09-T05`, `FR-09-T07`,
+`FR-09-T09`, `FR-03-T08`, `DV-03-T07`, `DV-04-T02`, and `DV-07-T04`:
+`addressbook` now truthfully records the generic live archived-cvar bridge for
+all 16 legacy address slots and its favorites/file/broadcast handoff to the
+live server provider. A focused six-test checker locks cvar registration,
+pre-show hydration, writeback, source arguments, and four-column monospace
+layout. The clean seeded reduced-motion 960x720 capture covers IPv4, hostname,
+and IPv6 values. This pass also removed unreliable decorative load-time fades
+that could leave compiled geometry invisible while preserving interaction
+feedback. Implementation logs:
+`docs-dev/rmlui-live-addressbook-provider-2026-07-13.md` and
+`docs-dev/rmlui-deterministic-route-visibility-2026-07-13.md`.
+
+2026-07-13 session-entry progress applies to `FR-09-T05`, `FR-09-T08`,
+`FR-09-T09`, `FR-07-T01`, `FR-07-T02`, `DV-03-T07`, `DV-04-T02`, and
+`DV-07-T04`: `dm_welcome`, `dm_join`, `join`, `dm_hostinfo`, and
+`dm_matchinfo` now consume live native cvar/condition/command state. A focused
+12-test checker locks all 49 current sgame-published cvars, command-cvar
+actions, team/non-team branches, first-connect modal protection, responsive
+resumable close behavior, disconnected command hygiene, single-back info
+layouts, accessible styles, metadata, and capture coverage. Five clean seeded
+installed 960x720 frames cover compatibility welcome, team and non-team hubs,
+host details, and complete match details. Connected destructive-action
+automation and native cross-renderer parity remain open. Implementation log:
+`docs-dev/rmlui-live-session-entry-provider-2026-07-13.md`.
+
+2026-07-13 vote/callvote progress applies to `FR-09-T08`, `FR-09-T09`,
+`FR-07-T01`, `FR-07-T02`, `DV-03-T07`, `DV-04-T02`, and `DV-07-T04`:
+`vote_menu` and all seven callvote documents now consume their existing live
+sgame-published cvar, condition, label, tri-state flag, and command contracts.
+A focused 12-test checker locks 41 published values, twenty registered
+commands, the complete thirteen-option empty-state conjunction, active/ready/
+idle vote gating, single-back close ownership, accessible two-column layouts,
+metadata, and capture coverage. Eleven clean canonical `.install` 960x720
+frames cover all eight routes plus active/ready/idle and populated/empty state
+variants. The capture harness now derives custom-staging executables correctly,
+and disconnected/cinematic vote cleanup is warning-free while connected
+cleanup remains authoritative. Connected mutation automation and native
+cross-renderer parity remain open. Implementation log:
+`docs-dev/rmlui-live-vote-callvote-provider-2026-07-13.md`.
+
+2026-07-13 MyMap progress applies to `FR-09-T08`, `FR-09-T09`,
+`FR-07-T01`, `FR-07-T02`, `DV-03-T07`, `DV-04-T02`, and `DV-07-T04`:
+`mymap_main` and `mymap_flags` now consume all fifteen existing sgame-published
+status, availability, summary, and tri-state flag values while the live generic
+list retains map selection. The focused eight-test checker locks the six
+commands, enabled-state behavior, single-back ownership, compact main layout,
+two-column flags, metadata, and capture coverage. Three clean canonical
+`.install` 960x720 frames cover enabled, login-gated, and tri-state flag
+states. Connected mutation/queue automation and native cross-renderer parity
+remain open. Implementation log:
+`docs-dev/rmlui-live-mymap-provider-2026-07-13.md`.
+
+2026-07-13 Tournament progress applies to `FR-09-T08`, `FR-09-T09`,
+`FR-07-T02`, `DV-03-T07`, `DV-04-T02`, and `DV-07-T04`: `tourney_info`,
+`tourney_mapchoices`, `tourney_veto`, and `tourney_replay_confirm` now consume
+their live sgame-published state and registered commands. Pick, Ban, and Replay
+selection keep server ownership through the shared live `ui_list` provider.
+Replay is an explicit destructive confirmation whose warning matches native
+result truncation, while Ban-locked is a non-actionable semantic control. The
+focused checker and eleven regressions cover ten map-order rows, six veto
+bindings, participant/admin command boundaries, replay reset fields, single-
+back ownership, metadata, and capture registration; the complete UI suite now
+passes 327 tests. Seven clean canonical
+`.install` 960x720 frames cover info, a five-map report, inactive/waiting/
+actionable/Ban-locked veto states, and game-2 Replay. Connected mutation/
+restore automation and native cross-renderer parity remain open.
+Implementation log:
+`docs-dev/rmlui-live-tournament-provider-2026-07-13.md`.
+
+2026-07-13 Map Selector progress applies to `FR-09-T05`, `FR-09-T08`,
+`FR-09-T09`, `FR-07-T01`, `DV-03-T07`, `DV-04-T02`, and `DV-07-T04`:
+`map_selector` now consumes the live three-candidate sgame snapshot, shows a
+numeric and shrinking remaining-time display, replaces candidates with a
+post-vote acknowledgement, and preserves a client's Close for the current
+ballot instead of reopening on the next frame. The stable heading cannot be
+blanked by post-vote state, the empty fallback cannot overlap the
+acknowledgement, and disconnected direct-route Close is warning-free while
+connected cleanup remains authoritative. Eleven focused regressions, a
+338-test complete UI suite, and two clean canonical `.install` 960x720 frames
+pass. Connected mutation/transition automation and native renderer parity
+remain open. Implementation log:
+`docs-dev/rmlui-live-map-selector-provider-2026-07-13.md`.
+
+2026-07-13 Match Stats progress applies to `FR-09-T05`, `FR-09-T08`,
+`FR-09-T09`, `FR-07-T02`, `DV-03-T07`, `DV-04-T02`, and `DV-07-T04`:
+`match_stats` now publishes a semantic ten-value player snapshot every second
+while preserving all sixteen compatibility lines for the JSON fallback. The
+RmlUi route groups Combat, Damage, and Accuracy into responsive cards, uses an
+explicit `N/A` for undefined ratios, keeps live and unavailable states
+exclusive, and has one connection-aware Back path. Ten focused regressions,
+a 348-test complete UI suite, and two clean canonical `.install` 960x720
+frames pass. The UI capture harness now disables sound at startup to remove
+machine-dependent OpenAL/EAX diagnostics from UI evidence. Connected mutation
+automation and native renderer parity remain open. Implementation log:
+`docs-dev/rmlui-live-match-stats-provider-2026-07-13.md`.
+
+Wave C now records all 25 session routes as `live_provider`; the provider pass
+is complete.
 
 ### Round 1 Evidence (2026-07-02)
 
@@ -3785,6 +3916,38 @@ remaining representative utility long-list containment issues at `960x720`.
   clipping assertions, native Vulkan/RTX-vkpt RmlUi rendering, and full visual
   parity remain pending.
 
+### Round 79 Evidence (2026-07-14)
+
+Round 79 closes the RmlUi menu migration and accepts Gates G0 through G4.
+
+- All 58 central and feature route records are `parity_ready`; parity,
+  metadata-sync, phase-consistency, and legacy-removal gate checks pass with
+  zero missing evidence.
+- The complete `tools/ui_smoke` suite passes `362` tests.
+- Final installed-tree manifests record 58/58 routes in each native renderer:
+  `.tmp/rmlui/runtime-capture/full-opengl-final-20260714/manifest.json`,
+  `.tmp/rmlui/runtime-capture/full-vulkan-final-20260714/manifest.json`, and
+  `.tmp/rmlui/runtime-capture/full-rtx-final-20260714/manifest.json`.
+- Four labeled contact sheets per renderer were visually inspected. The audit
+  accepted the canonical design language across all routes and drove fixes for
+  Vulkan/RTX Player Setup composition plus RTX backdrop repeat and sRGB color.
+- Runtime services consume all 1,123 localizable leaf hooks, apply live
+  high-contrast/large-text/reduced-motion preferences, scale the 960x720
+  reference canvas responsively, and provide keyboard/gamepad focus plus
+  Escape/Back behavior.
+- OpenGL, Vulkan, RTX shader, and RTX renderer targets build successfully. The
+  final `tools/refresh_install.py` run refreshed and validated `.install/`.
+- Durable implementation records:
+  `docs-dev/rmlui-runtime-ux-design-parity-2026-07-14.md` and
+  `docs-dev/rmlui-native-vulkan-rtx-renderer-parity-2026-07-14.md`.
+- The legacy JSON/menu sources are intentionally archived behind the guarded
+  fallback as recovery/reference material. They are not the normal runtime;
+  physical deletion is optional follow-up cleanup under the accepted Gate G4
+  archive alternative.
+- The aggregate engine DLL link remains blocked by unrelated concurrent
+  networking symbols. No networking files were changed for this closeout, and
+  the affected renderer DLLs compile, link, stage, and run.
+
 ### Round 78 Evidence (2026-07-10)
 
 Round 78 is accepted as the first live, server-authoritative multiplayer
@@ -4596,69 +4759,69 @@ later.
 
 ### Wave A: Shell and Settings
 
-- [ ] `main`
-- [ ] `game`
-- [ ] `options`
-- [ ] `video`
-- [ ] `multimonitor`
-- [ ] `performance`
-- [ ] `accessibility`
-- [ ] `sound`
-- [ ] `railtrail`
-- [ ] `effects`
-- [ ] `crosshair`
-- [ ] `screen`
-- [ ] `language`
-- [ ] `downloads`
-- [ ] `download_status`
-- [ ] `addressbook`
-- [ ] `input`
-- [ ] `keys`
-- [ ] `legacykeys`
-- [ ] `weapons`
-- [ ] `quit_confirm`
+- [x] `main`
+- [x] `game`
+- [x] `options`
+- [x] `video`
+- [x] `multimonitor`
+- [x] `performance`
+- [x] `accessibility`
+- [x] `sound`
+- [x] `railtrail`
+- [x] `effects`
+- [x] `crosshair`
+- [x] `screen`
+- [x] `language`
+- [x] `downloads`
+- [x] `download_status`
+- [x] `addressbook`
+- [x] `input`
+- [x] `keys`
+- [x] `legacykeys`
+- [x] `weapons`
+- [x] `quit_confirm`
 
 ### Wave B: Single-Player, Local Session, and Utility Tools
 
-- [ ] `gameflags`
-- [ ] `startserver`
-- [ ] `multiplayer`
-- [ ] `singleplayer`
-- [ ] `skill_select`
-- [ ] `loadgame`
-- [ ] `savegame`
-- [ ] `servers`
-- [ ] `demos`
-- [ ] `players`
-- [ ] `ui_list`
+- [x] `gameflags`
+- [x] `startserver`
+- [x] `multiplayer`
+- [x] `singleplayer`
+- [x] `skill_select`
+- [x] `loadgame`
+- [x] `savegame`
+- [x] `servers`
+- [x] `demos`
+- [x] `players`
+- [x] `ui_list`
 
 ### Wave C: Multiplayer and Match Session Flows
 
-- [ ] `dm_welcome`
-- [ ] `dm_join`
-- [ ] `join`
-- [ ] `dm_hostinfo`
-- [ ] `dm_matchinfo`
-- [ ] `callvote_main`
-- [ ] `callvote_ruleset`
-- [ ] `callvote_timelimit`
-- [ ] `callvote_scorelimit`
-- [ ] `callvote_unlagged`
-- [ ] `callvote_random`
-- [ ] `callvote_map_flags`
-- [ ] `mymap_main`
-- [ ] `mymap_flags`
-- [ ] `forfeit_confirm`
-- [ ] `leave_match_confirm`
-- [ ] `admin_menu`
-- [ ] `admin_commands`
-- [ ] `tourney_info`
-- [ ] `tourney_mapchoices`
-- [ ] `tourney_veto`
-- [ ] `tourney_replay_confirm`
-- [ ] `vote_menu`
-- [ ] `map_selector`
-- [ ] `match_stats`
+- [x] `dm_welcome`
+- [x] `dm_join`
+- [x] `join`
+- [x] `dm_hostinfo`
+- [x] `dm_matchinfo`
+- [x] `callvote_main`
+- [x] `callvote_ruleset`
+- [x] `callvote_timelimit`
+- [x] `callvote_scorelimit`
+- [x] `callvote_unlagged`
+- [x] `callvote_random`
+- [x] `callvote_map_flags`
+- [x] `mymap_main`
+- [x] `mymap_flags`
+- [x] `forfeit_confirm`
+- [x] `leave_match_confirm`
+- [x] `admin_menu`
+- [x] `admin_commands`
+- [x] `tourney_info`
+- [x] `tourney_mapchoices`
+- [x] `tourney_veto`
+- [x] `tourney_replay_confirm`
+- [x] `vote_menu`
+- [x] `map_selector`
+- [x] `match_stats`
 
 ## Scrutiny Findings
 
@@ -4900,15 +5063,73 @@ Owned paths:
 Work packets:
 - [ ] Translate the Agent 5-owned Wave A utility/keybind surfaces:
   `addressbook`, `keys`, `legacykeys`, and `weapons`.
+- [ ] Complete Address Book archived-cvar and Browse Favorites behavior. The
+  2026-07-13 live-provider audit locks all 16 immediate archived fields, the
+  complete favorites/file/broadcast server-source handoff, monospace address
+  readability, focused regression tests, and clean seeded reduced-motion
+  960x720 evidence. Action-level edit/browse/restore automation and native
+  renderer-matrix parity remain before this packet closes.
+- [ ] Complete live keybind behavior for `keys`, `legacykeys`, and `weapons`.
+  The 2026-07-13 two-slot provider now preserves Primary/Alternate bindings,
+  clears only the chosen slot, times out capture, confirms replacement
+  conflicts, renders keyboard/mouse/gamepad artwork with text fallback, and
+  has focused contract tests plus clean installed reduced-motion 960x720
+  captures for all three routes. The runtime preloads accessibility classes
+  and the shared theme no longer creates unreliable load-time opacity
+  animations, so reduced-motion routes cannot remain partially hidden.
+  Action-level mutation/restore automation and native renderer-
+  matrix parity remain before this packet closes.
 - [ ] Translate the Agent 5-owned Wave B utility/multiplayer surfaces:
   `multiplayer`, `servers`, `demos`, `players`, and `ui_list`.
 - [ ] Translate `servers` with sorting, refresh, connect, and status feedback.
+  The native provider, route-argument bridge, live status/error handling,
+  paging, safe numeric connect path, focused checks, and installed empty plus
+  populated OpenGL evidence landed on 2026-07-13. Action-level automation and
+  native renderer-matrix parity remain before this packet closes.
 - [ ] Translate `demos` with directory navigation, cache behavior, and sorting.
+  The native provider, paging, safe playback, and focused static/compiled
+  validation landed on 2026-07-13; live renderer-matrix evidence remains
+  before this packet closes.
+- [ ] Translate `ui_list` with owner-published states, bounded paging, and safe
+  command dispatch. The live sgame provider, eight-row layout, explicit
+  empty/error states, owner-aware back cleanup, focused checker, reusable cvar
+  capture seeds, and installed populated/empty/error OpenGL evidence landed on
+  2026-07-13; action automation and native renderer-matrix parity remain.
 - [ ] Translate `players` with model/skin/weapon preview and current bind/icon
-  behavior.
+  behavior. The 2026-07-13 live provider enumerates compatible model/skin
+  pairs, persists Name/Dogtag/Hand plus composite skin immediately, renders
+  live skin/dogtag thumbnails, authors loading/empty/error states, and adds
+  the established staged animation, attached weapon, weapon-switch, muzzle
+  flash, and reduced-motion behavior. A cached scrap-atlas UV correction keeps
+  the original PCX thumbnails usable in OpenGL RmlUi. Focused checks and the
+  seeded `rmlui_players_live_provider_final2_20260713` 960x720 installed
+  capture pass; action automation and native renderer-matrix parity remain.
 - [ ] Translate other rich utility surfaces that depend on table/list/keybind
   controllers.
 - [ ] Translate the Wave C menu set into RmlUi documents.
+- [ ] Complete the live session-entry family (`dm_welcome`, `dm_join`, `join`,
+  `dm_hostinfo`, and `dm_matchinfo`). The native provider, 49-cvar publication
+  contract, dynamic command/condition state, first-connect versus resumable
+  close semantics, single-back information layouts, focused 12-test checker,
+  and five clean installed 960x720 captures landed on 2026-07-13. Connected
+  team/spectate/ready/resume/child-route/leave automation and native renderer-
+  matrix parity remain before this packet closes.
+- [ ] Complete the destructive session confirmation family
+  (`forfeit_confirm` and `leave_match_confirm`). The 2026-07-13 live provider
+  locks native popup routing, safe No-first focus, destructive treatment,
+  authoritative forfeit dispatch, close-before-disconnect ordering, localized
+  leave copy, eight focused regressions, and two clean 960x720 installed-tree
+  captures. Connected action/restore automation, canonical `.install` refresh
+  after an unrelated process releases its DLL lock, and native renderer-matrix
+  parity remain before this packet closes.
+- [ ] Complete the live Admin family (`admin_menu` and `admin_commands`). The
+  2026-07-13 provider locks sgame Replay availability, admin-only route
+  commands, exact parity with all 28 registered admin commands, matching usage
+  rows, compact and scroll-bounded layouts, single-back behavior, eight
+  focused regressions, and three clean 960x720 installed-tree captures.
+  Connected Replay automation, canonical `.install` refresh after the current
+  DLL lock, localization/input review, and native renderer-matrix parity remain
+  before this packet closes.
 - [ ] Keep sgame/cgame data publication narrow and explicit for tournament,
   vote, MyMap, forfeit, replay, map selector, match info, and match stats
   flows.

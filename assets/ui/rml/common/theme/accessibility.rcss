@@ -2,8 +2,9 @@
  * WORR RmlUi accessibility hook contract.
  *
  * Import last so test and user-preference classes can override page themes.
- * Runtime support is still pending; these classes define the contract for the
- * future bridge and for smoke documents that exercise accessibility states.
+ * The compiled runtime applies these classes from archived menu preferences;
+ * smoke documents may also set them directly when exercising accessibility
+ * states.
  */
 
 body.ui-a11y-large-text,
@@ -23,6 +24,19 @@ body.ui-a11y-large-text,
 	min-height: 48px;
 	font-size: 21px;
 	line-height: 1.2;
+}
+
+/* Keep the eight-tab Settings strip readable on one row at the 960x720
+ * reference size. The slightly smaller tab type remains substantially larger
+ * than the normal 12px labels while leaving room for long labels to wrap. */
+.ui-a11y-large-text button.worr-tab,
+.ui-a11y-large-text span.worr-tab
+{
+	flex: 1 1 112px;
+	min-width: 96px;
+	font-size: 18px;
+	white-space: normal;
+	overflow: visible;
 }
 
 body.ui-high-visibility,
@@ -71,6 +85,94 @@ body.ui-a11y-reduced-motion,
 .ui-a11y-reduced-motion [class] [class] *
 {
 	animation: none;
+	transition: none;
+}
+
+.ui-reduced-motion button:focus,
+.ui-a11y-reduced-motion button:focus,
+.ui-reduced-motion .ui-button:focus,
+.ui-a11y-reduced-motion .ui-button:focus,
+.ui-reduced-motion progress fill,
+.ui-a11y-reduced-motion progress fill,
+.ui-reduced-motion .menu-header,
+.ui-a11y-reduced-motion .menu-header,
+.ui-reduced-motion .page-header,
+.ui-a11y-reduced-motion .page-header,
+.ui-reduced-motion .menu-footer,
+.ui-a11y-reduced-motion .menu-footer,
+.ui-reduced-motion .popup-dialog,
+.ui-a11y-reduced-motion .popup-dialog,
+.ui-reduced-motion .worr-topbar,
+.ui-a11y-reduced-motion .worr-topbar,
+.ui-reduced-motion .worr-statusbar,
+.ui-a11y-reduced-motion .worr-statusbar,
+.ui-reduced-motion .worr-cardrow,
+.ui-a11y-reduced-motion .worr-cardrow,
+.ui-reduced-motion .worr-card-open,
+.ui-a11y-reduced-motion .worr-card-open
+{
+	animation: none;
+}
+
+/* RmlUi can retain the sampled opacity when a running entrance animation is
+ * cancelled by a class change. Pin animated containers to their completed
+ * visual state so reduced motion never produces partially invisible menus. */
+.ui-reduced-motion .screen,
+.ui-a11y-reduced-motion .screen,
+.ui-reduced-motion .page-header,
+.ui-a11y-reduced-motion .page-header,
+.ui-reduced-motion .menu-header,
+.ui-a11y-reduced-motion .menu-header,
+.ui-reduced-motion .content,
+.ui-a11y-reduced-motion .content,
+.ui-reduced-motion .settings-form,
+.ui-a11y-reduced-motion .settings-form,
+.ui-reduced-motion .menu-stack,
+.ui-a11y-reduced-motion .menu-stack,
+.ui-reduced-motion .session-flow,
+.ui-a11y-reduced-motion .session-flow,
+.ui-reduced-motion .session-main,
+.ui-a11y-reduced-motion .session-main,
+.ui-reduced-motion .utility-content,
+.ui-a11y-reduced-motion .utility-content,
+.ui-reduced-motion .bind-group,
+.ui-a11y-reduced-motion .bind-group,
+.ui-reduced-motion .selector-section,
+.ui-a11y-reduced-motion .selector-section,
+.ui-reduced-motion .menu-footer,
+.ui-a11y-reduced-motion .menu-footer,
+.ui-reduced-motion .actions,
+.ui-a11y-reduced-motion .actions,
+.ui-reduced-motion .worr-topbar,
+.ui-a11y-reduced-motion .worr-topbar,
+.ui-reduced-motion .worr-statusbar,
+.ui-a11y-reduced-motion .worr-statusbar,
+.ui-reduced-motion .popup-dialog,
+.ui-a11y-reduced-motion .popup-dialog,
+.ui-reduced-motion .worr-cardrow,
+.ui-a11y-reduced-motion .worr-cardrow,
+.ui-reduced-motion .worr-card-open,
+.ui-a11y-reduced-motion .worr-card-open
+{
+	opacity: 1;
+	animation: none;
+}
+
+.ui-reduced-motion .page-header,
+.ui-a11y-reduced-motion .page-header,
+.ui-reduced-motion .menu-header,
+.ui-a11y-reduced-motion .menu-header,
+.ui-reduced-motion .popup-dialog,
+.ui-a11y-reduced-motion .popup-dialog
+{
+	margin-top: 0px;
+}
+
+.ui-reduced-motion button:hover,
+.ui-a11y-reduced-motion button:hover,
+.ui-reduced-motion button:active,
+.ui-a11y-reduced-motion button:active
+{
 	transition: none;
 }
 
@@ -294,6 +396,8 @@ body.ui-a11y-reduced-motion,
 .ui-high-visibility #callvote-main-menu button,
 .ui-high-visibility #map-selector-options button,
 .ui-high-visibility #singleplayer-save-load-actions button,
+.ui-high-visibility .save-slot[data-save-state="ready"],
+.ui-high-visibility .save-slot[data-save-state="empty"],
 .ui-high-visibility .match-hub-tab,
 .ui-high-visibility button.match-hub-tab,
 .ui-high-visibility .match-hub-tools button,
@@ -306,6 +410,8 @@ body.ui-a11y-reduced-motion,
 .ui-high-visibility .session-vote-prompt,
 .ui-high-visibility .session-match-summary,
 .ui-high-visibility .session-admin-summary,
+.ui-high-visibility .session-info-row,
+.ui-high-visibility .session-info-line,
 .ui-high-visibility .setting-row[data-control="field"] input,
 .ui-high-visibility .setting-row[data-control="combo"] select,
 .ui-high-visibility .setting-row[data-control="imagevalues"] select,
@@ -459,6 +565,77 @@ body.ui-a11y-reduced-motion,
 {
 	background-color: #000000;
 	color: #ffffff;
+	decorator: none;
+}
+
+/* Tab strip, gauge, editor card. */
+.ui-high-visibility button.worr-tab,
+.ui-high-visibility span.worr-tab,
+.ui-high-visibility span.worr-tab.is-active,
+.ui-high-visibility .worr-gauge,
+.ui-high-visibility .worr-editor-card
+{
+	background-color: #000000;
+	border-color: #ffffff;
+	color: #ffffff;
+	decorator: none;
+}
+
+.ui-high-visibility span.worr-tab.is-active
+{
+	border-bottom-color: #ffff00;
+	color: #ffff00;
+}
+
+.ui-high-visibility button.worr-tab:hover,
+.ui-high-visibility button.worr-tab:focus
+{
+	background-color: #202000;
+	border-bottom-color: #ffff00;
+	color: #ffff00;
+	decorator: none;
+}
+
+/* Global chrome (topbar/statusbar/backplate/cards/CTA). */
+.ui-high-visibility .worr-topbar,
+.ui-high-visibility .worr-statusbar,
+.ui-high-visibility .worr-brandplate,
+.ui-high-visibility .worr-card,
+.ui-high-visibility button.ui-button-cta,
+.ui-high-visibility button.worr-iconbtn,
+.ui-high-visibility button.worr-backplate,
+.ui-high-visibility button.worr-card-face,
+.ui-high-visibility button.worr-statusbar-chip
+{
+	background-color: #000000;
+	border-color: #ffffff;
+	color: #ffffff;
+	decorator: none;
+}
+
+.ui-high-visibility button.ui-button-cta:hover,
+.ui-high-visibility button.ui-button-cta:focus,
+.ui-high-visibility button.worr-iconbtn:hover,
+.ui-high-visibility button.worr-iconbtn:focus,
+.ui-high-visibility button.worr-backplate:hover,
+.ui-high-visibility button.worr-backplate:focus,
+.ui-high-visibility button.worr-card-face:hover,
+.ui-high-visibility button.worr-card-face:focus
+{
+	background-color: #202000;
+	border-color: #ffff00;
+	color: #ffff00;
+	decorator: none;
+}
+
+.ui-high-visibility button.ui-button-cta:active,
+.ui-high-visibility button.worr-iconbtn:active,
+.ui-high-visibility button.worr-backplate:active,
+.ui-high-visibility button.worr-card-face:active
+{
+	background-color: #ffff00;
+	border-color: #ffffff;
+	color: #000000;
 	decorator: none;
 }
 

@@ -635,29 +635,31 @@ static void UI_PushMenu_c(genctx_t *ctx, int argnum)
 static void UI_PushMenu_f(void)
 {
     menuFrameWork_t *menu;
-    char *s;
+    char menu_name[MAX_QPATH];
+    char route_arguments[MAX_STRING_CHARS];
 
     if (Cmd_Argc() < 2) {
         Com_PrintfLoc("$e_auto_e13d46568ae9", Cmd_Argv(0));
         return;
     }
-    s = Cmd_Argv(1);
+    Q_strlcpy(menu_name, Cmd_Argv(1), sizeof(menu_name));
+    Q_strlcpy(route_arguments, Cmd_RawArgsFrom(2), sizeof(route_arguments));
 
-    if (UI_Rml_IsEnabled() && UI_Rml_DocumentForRoute(s)) {
-        if (UI_Rml_RouteIsPopup(s)) {
-            if (UI_Rml_OpenPopupRoute(s)) {
+    if (UI_Rml_IsEnabled() && UI_Rml_DocumentForRoute(menu_name)) {
+        if (UI_Rml_RouteIsPopup(menu_name)) {
+            if (UI_Rml_OpenPopupRoute(menu_name)) {
                 return;
             }
-        } else if (UI_Rml_OpenRoute(s)) {
+        } else if (UI_Rml_OpenRouteWithArguments(menu_name, route_arguments)) {
             return;
         }
     }
 
-    menu = UI_FindMenu(s);
+    menu = UI_FindMenu(menu_name);
     if (menu) {
         UI_PushMenu(menu);
     } else {
-        Com_PrintfLoc("$e_auto_ad494789521e", s);
+        Com_PrintfLoc("$e_auto_ad494789521e", menu_name);
     }
 }
 

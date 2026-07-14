@@ -263,16 +263,11 @@ def validate_renderer_matrix(
         if not report.contract_facts[fact_name]:
             report.errors.append(error)
 
-    non_gl_api_block = find_if_block(renderer_api_text, "USE_REF != REF_GL")
-    gl_export_block = find_if_block(renderer_api_text, "USE_REF == REF_GL")
-
-    api_non_gl_unavailable = (
-        "Renderer_RmlUiCanRender" in non_gl_api_block
-        and has_return(non_gl_api_block, "false")
-        and "Renderer_RmlUiNativeRenderInterface" in non_gl_api_block
-        and has_return(non_gl_api_block, "NULL")
-    )
-    api_gl_exports_native_hooks = (
+    api_exports_native_hooks = (
+        "#if USE_REF == REF_GL || defined(RENDERER_VULKAN_LEGACY)"
+        in renderer_api_text
+        and "RENDERER_VULKAN_RTX" in renderer_api_text
+        and
         all(
             has_export_assignment(renderer_api_text, field_name, function_name)
             for field_name, function_name in (
@@ -281,49 +276,32 @@ def validate_renderer_matrix(
             )
         )
         and all(
-            has_export_assignment(gl_export_block, field_name, function_name)
+            has_export_assignment(renderer_api_text, field_name, function_name)
             for field_name, function_name in (
                 ("RmlUiCanRender", "R_RmlUiCanRender"),
                 ("RmlUiNativeRenderInterface", "R_RmlUiNativeRenderInterface"),
             )
         )
     )
-    api_else_exports_unavailable_hooks = all(
-        has_export_assignment(renderer_api_text, field_name, function_name)
-        for field_name, function_name in (
-            ("RmlUiRendererFamily", "R_RmlUiRendererFamily"),
-            ("RmlUiRendererName", "R_RmlUiRendererName"),
-            ("RmlUiCanRender", "Renderer_RmlUiCanRender"),
-            ("RmlUiNativeRenderInterface", "Renderer_RmlUiNativeRenderInterface"),
-        )
-    )
-
     meson_gl_runtime_enabled = (
         "renderer_gl_deps += rmlui_dep" in meson_build_text
         and "renderer_gl_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" in meson_build_text
-    )
-    meson_vk_runtime_disabled = (
-        "renderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" not in meson_build_text
-        and "renderer_vk_deps += rmlui_dep" not in meson_build_text
     )
     meson_vk_runtime_enabled = (
         "renderer_vk_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" in meson_build_text
         and "renderer_vk_deps += rmlui_dep" in meson_build_text
     )
-    meson_rtx_runtime_disabled = (
-        "renderer_vk_rtx_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" not in meson_build_text
-        and "renderer_vk_rtx_deps += rmlui_dep" not in meson_build_text
-    )
     meson_rtx_runtime_enabled = (
         "renderer_vk_rtx_cpp_args += '-DUI_RML_HAS_RUNTIME=1'" in meson_build_text
         and "renderer_vk_rtx_deps += rmlui_dep" in meson_build_text
     )
-    capture_harness_opengl_only = (
+    capture_harness_native_renderers = (
         '"r_renderer"' in capture_checker_text
         and '"opengl"' in capture_checker_text
+        and '"vulkan"' in capture_checker_text
+        and '"rtx"' in capture_checker_text
+        and "RENDERER_FAMILIES" in capture_checker_text
         and "DEFAULT_ROUTE_MATRIX" in capture_checker_text
-        and '"vulkan"' not in capture_checker_text.lower()
-        and '"rtx"' not in capture_checker_text.lower()
     )
 
     opengl_lane = RendererLaneReport(
@@ -340,7 +318,7 @@ def validate_renderer_matrix(
     validate_lane_fact(
         opengl_lane,
         "renderer_api_exports_native_hooks",
-        api_gl_exports_native_hooks,
+        api_exports_native_hooks,
         "renderer API must export native RmlUi hooks in the REF_GL lane",
     )
     validate_lane_fact(
@@ -389,16 +367,16 @@ def validate_renderer_matrix(
     )
     validate_lane_fact(
         opengl_lane,
-        "capture_harness_uses_opengl",
-        capture_harness_opengl_only,
-        "guarded runtime capture matrix must remain explicitly OpenGL-scoped",
+        "capture_harness_supports_opengl",
+        capture_harness_native_renderers,
+        "guarded runtime capture harness must support the OpenGL native lane",
     )
     report.lanes["opengl"] = opengl_lane
 
     vulkan_lane = RendererLaneReport(
         lane_id="vulkan",
         label=LANE_LABELS["vulkan"],
-        expected_status="blocked_until_native",
+        expected_status="native_guarded",
     )
     validate_lane_fact(
         vulkan_lane,
@@ -418,34 +396,30 @@ def validate_renderer_matrix(
     )
     validate_lane_fact(
         vulkan_lane,
-        "renderer_api_non_gl_unavailable",
-        api_non_gl_unavailable and api_else_exports_unavailable_hooks,
-        "non-OpenGL renderer exports must identify the lane while keeping CanRender=false and the native interface NULL",
+        "renderer_api_exports_native_hooks",
+        api_exports_native_hooks,
+        "legacy Vulkan must export the native RmlUi hooks",
     )
     validate_lane_fact(
         vulkan_lane,
-        "runtime_dependency_inactive",
-        meson_vk_runtime_disabled
-        or (
-            meson_vk_runtime_enabled
-            and api_non_gl_unavailable
-            and api_else_exports_unavailable_hooks
-        ),
-        "Vulkan runtime dependency must stay inactive until native rendering is available",
+        "runtime_dependency_active",
+        meson_vk_runtime_enabled,
+        "Vulkan runtime dependency must be enabled for native rendering",
     )
     validate_lane_fact(
         vulkan_lane,
-        "native_family_export_inactive",
-        (
-            "R_RENDERER_RMLUI_FAMILY_VULKAN" not in renderer_bridge_text
-            and "R_RENDERER_RMLUI_FAMILY_VULKAN" not in renderer_api_text
-        )
-        or (
-            api_non_gl_unavailable
-            and api_else_exports_unavailable_hooks
-            and (meson_vk_runtime_disabled or meson_vk_runtime_enabled)
-        ),
-        "Vulkan family export must stay inactive until native rendering is available",
+        "native_render_interface_active",
+        "class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface"
+        in renderer_bridge_text
+        and "return &r_rmlui_vulkan_render_interface;" in renderer_bridge_text
+        and "R_RmlUiDrawGeometry" in renderer_bridge_text,
+        "Vulkan lane must own and return its native indexed-geometry render interface",
+    )
+    validate_lane_fact(
+        vulkan_lane,
+        "capture_harness_supports_vulkan",
+        capture_harness_native_renderers,
+        "guarded runtime capture harness must support the Vulkan native lane",
     )
     validate_lane_fact(
         vulkan_lane,
@@ -458,7 +432,7 @@ def validate_renderer_matrix(
     rtx_lane = RendererLaneReport(
         lane_id="rtx_vkpt",
         label=LANE_LABELS["rtx_vkpt"],
-        expected_status="blocked_until_native",
+        expected_status="native_guarded",
     )
     validate_lane_fact(
         rtx_lane,
@@ -478,34 +452,31 @@ def validate_renderer_matrix(
     )
     validate_lane_fact(
         rtx_lane,
-        "renderer_api_non_gl_unavailable",
-        api_non_gl_unavailable and api_else_exports_unavailable_hooks,
-        "non-OpenGL renderer exports must identify the lane while keeping CanRender=false and the native interface NULL",
+        "renderer_api_exports_native_hooks",
+        api_exports_native_hooks,
+        "RTX/vkpt must export the native RmlUi hooks",
     )
     validate_lane_fact(
         rtx_lane,
-        "runtime_dependency_inactive",
-        meson_rtx_runtime_disabled
-        or (
-            meson_rtx_runtime_enabled
-            and api_non_gl_unavailable
-            and api_else_exports_unavailable_hooks
-        ),
-        "RTX/vkpt runtime dependency must stay inactive until native rendering is available",
+        "runtime_dependency_active",
+        meson_rtx_runtime_enabled,
+        "RTX/vkpt runtime dependency must be enabled for native rendering",
     )
     validate_lane_fact(
         rtx_lane,
-        "native_family_export_inactive",
-        (
-            "R_RENDERER_RMLUI_FAMILY_RTX_VKPT" not in renderer_bridge_text
-            and "R_RENDERER_RMLUI_FAMILY_RTX_VKPT" not in renderer_api_text
-        )
-        or (
-            api_non_gl_unavailable
-            and api_else_exports_unavailable_hooks
-            and (meson_rtx_runtime_disabled or meson_rtx_runtime_enabled)
-        ),
-        "RTX/vkpt family export must stay inactive until native rendering is available",
+        "native_render_interface_active",
+        "class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface"
+        in renderer_bridge_text
+        and "return &r_rmlui_vulkan_render_interface;" in renderer_bridge_text
+        and "RENDERER_VULKAN_RTX" in renderer_bridge_text
+        and "R_RmlUiDrawGeometry" in renderer_bridge_text,
+        "RTX/vkpt lane must own and return its native indexed-geometry render interface",
+    )
+    validate_lane_fact(
+        rtx_lane,
+        "capture_harness_supports_rtx",
+        capture_harness_native_renderers,
+        "guarded runtime capture harness must support the RTX/vkpt native lane",
     )
     validate_lane_fact(
         rtx_lane,

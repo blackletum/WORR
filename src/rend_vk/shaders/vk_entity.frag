@@ -6,6 +6,7 @@
 #define VK_ENTITY_VERTEX_NO_SHADOW 8u
 #define VK_ENTITY_VERTEX_NO_DLIGHT 16u
 #define VK_ENTITY_VERTEX_INTENSITY 32u
+#define VK_ENTITY_VERTEX_DEFAULT_FLARE 64u
 #define SHADOW_VISIBILITY_EXPONENT 2.0
 #define VK_SHADOW_MAX_PAGES 64
 #define VK_SHADOW_MAX_DLIGHTS 64
@@ -276,6 +277,11 @@ void main() {
     if (base.a < 0.01 ||
         ((in_flags & VK_ENTITY_VERTEX_ALPHATEST) != 0u && base.a < 0.666)) {
         discard;
+    }
+
+    if ((in_flags & VK_ENTITY_VERTEX_DEFAULT_FLARE) != 0u) {
+        base.rgb *= (base.r + base.g + base.b) / 3.0;
+        base.rgb *= in_color.a;
     }
 
     vec3 normal = safe_normal(in_normal);

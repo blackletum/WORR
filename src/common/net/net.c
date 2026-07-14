@@ -28,6 +28,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/files.h"
 #endif
 #include "common/msg.h"
+#include "common/net/impair.h"
+#include "common/net/impair_queue.h"
 #include "common/net/net.h"
 #include "common/protocol.h"
 #include "common/zone.h"
@@ -95,6 +97,20 @@ static cvar_t   *net_clientport;
 static cvar_t   *net_dropsim;
 #endif
 
+static cvar_t   *net_impair_enable;
+static cvar_t   *net_impair_seed;
+static cvar_t   *net_impair_latency_ms;
+static cvar_t   *net_impair_jitter_ms;
+static cvar_t   *net_impair_loss_pct;
+static cvar_t   *net_impair_burst_loss_pct;
+static cvar_t   *net_impair_burst_length;
+static cvar_t   *net_impair_reorder_pct;
+static cvar_t   *net_impair_duplicate_pct;
+static cvar_t   *net_impair_corrupt_pct;
+static cvar_t   *net_impair_upstream_stall_ms;
+static cvar_t   *net_impair_rate_kbps;
+static cvar_t   *net_impair_queue_limit;
+
 #if USE_DEBUG
 static cvar_t   *net_log_enable;
 static cvar_t   *net_log_name;
@@ -142,6 +158,29 @@ static uint64_t     net_bytes_rcvd;
 static uint64_t     net_bytes_sent;
 static uint64_t     net_packets_rcvd;
 static uint64_t     net_packets_sent;
+
+// The queue is fixed-capacity and allocated once during NET_Init.  Packet send
+// and release never allocate, so hostile or pathological profiles cannot grow
+// memory without bound.
+typedef struct {
+    netsrc_t    sock;
+    netadr_t    to;
+    size_t      len;
+    byte        data[MAX_PACKETLEN];
+} net_impair_packet_t;
+
+typedef struct {
+    net_impair_packet_t *packets;
+    net_impair_queue_t scheduler;
+    uint64_t    queue_resets;
+} net_impair_packet_queue_t;
+
+static net_impair_model_t net_impair_models[NS_COUNT];
+static net_impair_packet_queue_t net_impair_queue;
+static net_impair_clock_t net_impair_clock;
+
+static bool NET_SendPacketRaw(netsrc_t sock, const void *data,
+                              size_t len, const netadr_t *to);
 
 //=============================================================================
 
@@ -574,10 +613,6 @@ static bool NET_SendLoopPacket(netsrc_t sock, const void *data,
     loopback_t *loop;
     loopmsg_t *msg;
 
-    if (net_dropsim->integer > 0 && (Q_rand() % 100) < net_dropsim->integer) {
-        return false;
-    }
-
     loop = &loopbacks[sock ^ 1];
 
     msg = &loop->msgs[loop->send & (MAX_LOOPBACK - 1)];
@@ -657,6 +692,314 @@ const char *NET_ErrorString(void)
     return os_error_string(net_error);
 }
 
+//=============================================================================
+// Deterministic packet impairment
+
+static uint16_t NET_ImpairPercentToBasisPoints(const cvar_t *value)
+{
+    float scaled = value->value * 100.0f + 0.5f;
+    if (scaled <= 0.0f)
+        return 0;
+    if (scaled >= NET_IMPAIR_PERCENT_SCALE)
+        return NET_IMPAIR_PERCENT_SCALE;
+    return (uint16_t)scaled;
+}
+
+static net_impair_config_t NET_ImpairReadConfig(void)
+{
+    net_impair_config_t config;
+    memset(&config, 0, sizeof(config));
+    config.seed = (uint32_t)net_impair_seed->integer;
+    config.latency_ms = (uint32_t)net_impair_latency_ms->integer;
+    config.jitter_ms = (uint32_t)net_impair_jitter_ms->integer;
+    config.upstream_stall_ms =
+        (uint32_t)net_impair_upstream_stall_ms->integer;
+    // Kilobits/second to bytes/second.  The cvar clamp keeps this in range.
+    config.rate_bytes_per_sec = (uint32_t)net_impair_rate_kbps->integer * 125u;
+    config.loss_basis_points =
+        NET_ImpairPercentToBasisPoints(net_impair_loss_pct);
+    config.burst_start_basis_points =
+        NET_ImpairPercentToBasisPoints(net_impair_burst_loss_pct);
+    config.reorder_basis_points =
+        NET_ImpairPercentToBasisPoints(net_impair_reorder_pct);
+    config.duplicate_basis_points =
+        NET_ImpairPercentToBasisPoints(net_impair_duplicate_pct);
+    config.corrupt_basis_points =
+        NET_ImpairPercentToBasisPoints(net_impair_corrupt_pct);
+    config.burst_length = (uint16_t)net_impair_burst_length->integer;
+    return config;
+}
+
+static void NET_ImpairResetState(bool clear_counters)
+{
+    const net_impair_config_t base = NET_ImpairReadConfig();
+    const uint64_t old_resets = net_impair_queue.queue_resets;
+    const uint64_t old_overflows =
+        net_impair_queue.scheduler.overflow_count;
+
+    NetImpairQueue_Init(&net_impair_queue.scheduler);
+    net_impair_queue.scheduler.overflow_count =
+        clear_counters ? 0 : old_overflows;
+    net_impair_queue.queue_resets =
+        clear_counters ? 0 : old_resets + 1u;
+
+    for (unsigned i = 0; i < NS_COUNT; ++i) {
+        net_impair_config_t directional = base;
+        directional.seed ^= UINT32_C(0x9e3779b9) * (i + 1u);
+        NetImpair_Init(&net_impair_models[i], &directional);
+    }
+}
+
+static uint64_t NET_ImpairNow(void)
+{
+    return NetImpairClock_Extend(&net_impair_clock, com_eventTime);
+}
+
+static bool NET_ImpairQueueOne(netsrc_t sock, const void *data, size_t len,
+                               const netadr_t *to, uint64_t release_ms,
+                               const net_impair_decision_t *decision,
+                               uint64_t now_ms)
+{
+    byte immediate[MAX_PACKETLEN];
+
+    if (release_ms <= now_ms) {
+        if (!decision->corrupt)
+            return NET_SendPacketRaw(sock, data, len, to);
+        memcpy(immediate, data, len);
+        if (decision->corrupt_offset < len)
+            immediate[decision->corrupt_offset] ^= decision->corrupt_xor;
+        return NET_SendPacketRaw(sock, immediate, len, to);
+    }
+
+    const unsigned limit = (unsigned)net_impair_queue_limit->integer;
+    uint16_t id;
+    if (!NetImpairQueue_Reserve(&net_impair_queue.scheduler, limit,
+                                release_ms, &id)) {
+        return true; // the local send succeeded; the virtual link dropped it
+    }
+
+    net_impair_packet_t *packet = &net_impair_queue.packets[id];
+    packet->sock = sock;
+    packet->to = *to;
+    packet->len = len;
+    memcpy(packet->data, data, len);
+    if (decision->corrupt && decision->corrupt_offset < len)
+        packet->data[decision->corrupt_offset] ^= decision->corrupt_xor;
+    return true;
+}
+
+static net_impair_packet_flags_t NET_ImpairPacketFlags(netsrc_t sock,
+                                                        const void *data,
+                                                        size_t len)
+{
+    uint32_t sequence;
+    if (sock != NS_CLIENT || len < sizeof(sequence) * 2u)
+        return NET_IMPAIR_PACKET_NONE;
+    memcpy(&sequence, data, sizeof(sequence));
+    if (sequence == UINT32_MAX) // connectionless packets do not carry an ack
+        return NET_IMPAIR_PACKET_NONE;
+    return NET_IMPAIR_PACKET_UPSTREAM_SEQUENCED;
+}
+
+static bool NET_ImpairSendPacket(netsrc_t sock, const void *data, size_t len,
+                                 const netadr_t *to)
+{
+    const uint64_t now_ms = NET_ImpairNow();
+    const net_impair_decision_t decision = NetImpair_Decide(
+        &net_impair_models[sock], now_ms, len,
+        NET_ImpairPacketFlags(sock, data, len));
+    if (decision.drop)
+        return true;
+
+    bool result = NET_ImpairQueueOne(sock, data, len, to,
+                                    decision.release_ms[0], &decision, now_ms);
+    if (decision.copies == 2) {
+        result = NET_ImpairQueueOne(sock, data, len, to,
+                                   decision.release_ms[1], &decision, now_ms) &&
+                 result;
+    }
+    return result;
+}
+
+static void NET_ImpairPump(void)
+{
+    if (!net_impair_queue.packets)
+        return;
+
+    const uint64_t now_ms = NET_ImpairNow();
+    uint16_t id;
+    uint64_t release_ms;
+    while (NetImpairQueue_Peek(&net_impair_queue.scheduler, &id,
+                               &release_ms)) {
+        net_impair_packet_t *packet = &net_impair_queue.packets[id];
+        if (release_ms > now_ms)
+            break;
+
+        (void)NetImpairQueue_Pop(&net_impair_queue.scheduler, &id);
+        (void)NET_SendPacketRaw(packet->sock, packet->data,
+                                packet->len, &packet->to);
+        NetImpairQueue_Release(&net_impair_queue.scheduler, id);
+    }
+}
+
+static int NET_ImpairSleepTime(int requested_ms)
+{
+    uint16_t id;
+    uint64_t release_ms;
+    if (!NetImpairQueue_Peek(&net_impair_queue.scheduler, &id, &release_ms))
+        return requested_ms;
+
+    const uint64_t now_ms = NET_ImpairNow();
+    if (release_ms <= now_ms)
+        return 0;
+    const uint64_t delay = release_ms - now_ms;
+    if (requested_ms >= 0 && delay >= (uint64_t)requested_ms)
+        return requested_ms;
+    if (delay > INT_MAX)
+        return INT_MAX;
+    return (int)delay;
+}
+
+static void NET_ImpairStatus_f(void)
+{
+    uint64_t seen = 0, dropped = 0, burst = 0, reordered = 0;
+    uint64_t duplicated = 0, corrupted = 0, upstream_stalled = 0;
+    uint64_t throttled = 0;
+    for (unsigned i = 0; i < NS_COUNT; ++i) {
+        const net_impair_model_t *model = &net_impair_models[i];
+        seen += model->packets_seen;
+        dropped += model->packets_dropped;
+        burst += model->packets_burst_dropped;
+        reordered += model->packets_reordered;
+        duplicated += model->packets_duplicated;
+        corrupted += model->packets_corrupted;
+        upstream_stalled += model->packets_upstream_stalled;
+        throttled += model->packets_throttled;
+    }
+
+    Com_Printf(
+        "net_impair: enabled=%d seed=%d latency=%d jitter=%d loss=%.2f "
+        "burst=%.2f/%d reorder=%.2f duplicate=%.2f corrupt=%.2f "
+        "upstream_stall=%d rate_kbps=%d queue=%u/%d high_water=%u\n",
+        net_impair_enable->integer, net_impair_seed->integer,
+        net_impair_latency_ms->integer, net_impair_jitter_ms->integer,
+        net_impair_loss_pct->value, net_impair_burst_loss_pct->value,
+        net_impair_burst_length->integer, net_impair_reorder_pct->value,
+        net_impair_duplicate_pct->value, net_impair_corrupt_pct->value,
+        net_impair_upstream_stall_ms->integer,
+        net_impair_rate_kbps->integer,
+        net_impair_queue.scheduler.heap_count,
+        net_impair_queue_limit->integer,
+        net_impair_queue.scheduler.high_water);
+    Com_Printf(
+        "net_impair counters: seen=%" PRIu64 " dropped=%" PRIu64
+        " burst_dropped=%" PRIu64 " reordered=%" PRIu64
+        " duplicated=%" PRIu64 " corrupted=%" PRIu64
+        " upstream_stalled=%" PRIu64 " throttled=%" PRIu64
+        " overflow=%" PRIu64 " resets=%" PRIu64 "\n",
+        seen, dropped, burst, reordered, duplicated, corrupted,
+        upstream_stalled,
+        throttled, net_impair_queue.scheduler.overflow_count,
+        net_impair_queue.queue_resets);
+}
+
+static void NET_ImpairReset_f(void)
+{
+    NET_ImpairResetState(true);
+    Com_Printf("Deterministic network impairment state reset.\n");
+}
+
+static void NET_ImpairQueueSelfTest_f(void)
+{
+    static const byte payload[] = {0x57, 0x4f, 0x52, 0x52};
+    const netadr_t destination = { .type = NA_UNSPECIFIED };
+    net_impair_decision_t decision;
+    const unsigned limit = (unsigned)net_impair_queue_limit->integer;
+    const uint64_t now_ms = NET_ImpairNow();
+    memset(&decision, 0, sizeof(decision));
+    decision.copies = 1;
+
+    NET_ImpairResetState(true);
+    for (unsigned i = 0; i <= limit; ++i) {
+        (void)NET_ImpairQueueOne(NS_SERVER, payload, sizeof(payload),
+                                &destination, now_ms + 1000u + limit - i,
+                                &decision, now_ms);
+    }
+
+    const bool filled = net_impair_queue.scheduler.heap_count == limit &&
+                        net_impair_queue.scheduler.high_water == limit &&
+                        net_impair_queue.scheduler.overflow_count == 1 &&
+                        net_impair_queue.scheduler.free_count ==
+                            NET_IMPAIR_QUEUE_CAPACITY - limit;
+    const unsigned observed_high_water =
+        net_impair_queue.scheduler.high_water;
+    const uint64_t observed_overflow =
+        net_impair_queue.scheduler.overflow_count;
+
+    bool ordered = true;
+    bool have_previous = false;
+    uint64_t previous_release = 0;
+    uint16_t id;
+    while (NetImpairQueue_Pop(&net_impair_queue.scheduler, &id)) {
+        const uint64_t release =
+            net_impair_queue.scheduler.keys[id].release_ms;
+        if (have_previous && release < previous_release)
+            ordered = false;
+        have_previous = true;
+        previous_release = release;
+        NetImpairQueue_Release(&net_impair_queue.scheduler, id);
+    }
+
+    uint16_t reused_id;
+    const bool reused = NetImpairQueue_Reserve(
+        &net_impair_queue.scheduler, limit, now_ms + 1u, &reused_id);
+    uint16_t popped_id;
+    const bool popped = NetImpairQueue_Pop(&net_impair_queue.scheduler,
+                                           &popped_id);
+    if (popped)
+        NetImpairQueue_Release(&net_impair_queue.scheduler, popped_id);
+    const bool passed = filled && ordered && reused && popped &&
+                        popped_id == reused_id &&
+                        net_impair_queue.scheduler.free_count ==
+                            NET_IMPAIR_QUEUE_CAPACITY;
+    NET_ImpairResetState(true);
+
+    if (!passed) {
+        Com_Error(ERR_FATAL,
+                  "net impairment queue self-test failed: capacity=%u "
+                  "high_water=%u overflow=%" PRIu64,
+                  limit, observed_high_water, observed_overflow);
+    }
+    Com_Printf("net_impair_queue_selftest: pass capacity=%u "
+               "high_water=%u overflow=%" PRIu64
+               " ordered=1 reused=1\n",
+               limit, observed_high_water, observed_overflow);
+}
+
+static void net_impair_param_changed(cvar_t *self)
+{
+    if (self == net_impair_enable)
+        Cvar_ClampInteger(self, 0, 1);
+    else if (self == net_impair_latency_ms || self == net_impair_jitter_ms ||
+             self == net_impair_upstream_stall_ms)
+        Cvar_ClampInteger(self, 0, 2000);
+    else if (self == net_impair_loss_pct ||
+             self == net_impair_burst_loss_pct ||
+             self == net_impair_reorder_pct ||
+             self == net_impair_duplicate_pct ||
+             self == net_impair_corrupt_pct)
+        Cvar_ClampValue(self, 0.0f, 100.0f);
+    else if (self == net_impair_burst_length)
+        Cvar_ClampInteger(self, 1, 64);
+    else if (self == net_impair_rate_kbps)
+        Cvar_ClampInteger(self, 0, 1000000);
+    else if (self == net_impair_queue_limit)
+        Cvar_ClampInteger(self, 1, NET_IMPAIR_QUEUE_CAPACITY);
+
+    if (net_impair_queue.packets)
+        NET_ImpairResetState(false);
+}
+
 /*
 =============
 NET_AllocPollFd
@@ -712,6 +1055,9 @@ Sleeps msec or until some file descriptor is ready.
 int NET_Sleep(int msec)
 {
     int ret;
+
+    NET_ImpairPump();
+    msec = NET_ImpairSleepTime(msec);
 
     if (!io_numfds) {
         // don't bother with poll()
@@ -796,6 +1142,8 @@ net_from variable receives source address.
 */
 void NET_GetPackets(netsrc_t sock, void (*packet_cb)(void))
 {
+    NET_ImpairPump();
+
 #if USE_CLIENT
     memset(&net_from, 0, sizeof(net_from));
     net_from.type = NA_LOOPBACK;
@@ -817,8 +1165,8 @@ NET_SendPacket
 
 =============
 */
-bool NET_SendPacket(netsrc_t sock, const void *data,
-                    size_t len, const netadr_t *to)
+static bool NET_SendPacketRaw(netsrc_t sock, const void *data,
+                              size_t len, const netadr_t *to)
 {
     int ret;
     struct pollfd *s;
@@ -875,6 +1223,29 @@ bool NET_SendPacket(netsrc_t sock, const void *data,
     net_packets_sent++;
 
     return true;
+}
+
+bool NET_SendPacket(netsrc_t sock, const void *data,
+                    size_t len, const netadr_t *to)
+{
+    // Validate before copying into the bounded impairment queue.
+    if (!len || len > MAX_PACKETLEN)
+        return NET_SendPacketRaw(sock, data, len, to);
+
+    if (net_impair_enable && net_impair_enable->integer)
+        return NET_ImpairSendPacket(sock, data, len, to);
+
+#if USE_CLIENT
+    // Preserve the historical loopback-only loss cvar for compatibility.  It
+    // remains intentionally outside the deterministic harness; new tests and
+    // diagnostics use net_impair_*.
+    if (to->type == NA_LOOPBACK && net_dropsim->integer > 0 &&
+        (Q_rand() % 100) < net_dropsim->integer) {
+        return false;
+    }
+#endif
+
+    return NET_SendPacketRaw(sock, data, len, to);
 }
 
 //=============================================================================
@@ -1839,6 +2210,66 @@ void NET_Init(void)
     net_dropsim = Cvar_Get("net_dropsim", "0", 0);
 #endif
 
+    net_impair_enable = Cvar_Get("net_impair_enable", "0", CVAR_NOARCHIVE);
+    net_impair_seed = Cvar_Get("net_impair_seed", "1", CVAR_NOARCHIVE);
+    net_impair_latency_ms =
+        Cvar_Get("net_impair_latency_ms", "0", CVAR_NOARCHIVE);
+    net_impair_jitter_ms =
+        Cvar_Get("net_impair_jitter_ms", "0", CVAR_NOARCHIVE);
+    net_impair_loss_pct =
+        Cvar_Get("net_impair_loss_pct", "0", CVAR_NOARCHIVE);
+    net_impair_burst_loss_pct =
+        Cvar_Get("net_impair_burst_loss_pct", "0", CVAR_NOARCHIVE);
+    net_impair_burst_length =
+        Cvar_Get("net_impair_burst_length", "3", CVAR_NOARCHIVE);
+    net_impair_reorder_pct =
+        Cvar_Get("net_impair_reorder_pct", "0", CVAR_NOARCHIVE);
+    net_impair_duplicate_pct =
+        Cvar_Get("net_impair_duplicate_pct", "0", CVAR_NOARCHIVE);
+    net_impair_corrupt_pct =
+        Cvar_Get("net_impair_corrupt_pct", "0", CVAR_NOARCHIVE);
+    net_impair_upstream_stall_ms =
+        Cvar_Get("net_impair_upstream_stall_ms", "0", CVAR_NOARCHIVE);
+    net_impair_rate_kbps =
+        Cvar_Get("net_impair_rate_kbps", "0", CVAR_NOARCHIVE);
+    net_impair_queue_limit =
+        Cvar_Get("net_impair_queue_limit",
+                 STRINGIFY(NET_IMPAIR_QUEUE_CAPACITY),
+                 CVAR_NOARCHIVE);
+
+    Cvar_ClampInteger(net_impair_enable, 0, 1);
+    Cvar_ClampInteger(net_impair_latency_ms, 0, 2000);
+    Cvar_ClampInteger(net_impair_jitter_ms, 0, 2000);
+    Cvar_ClampInteger(net_impair_upstream_stall_ms, 0, 2000);
+    Cvar_ClampValue(net_impair_loss_pct, 0.0f, 100.0f);
+    Cvar_ClampValue(net_impair_burst_loss_pct, 0.0f, 100.0f);
+    Cvar_ClampValue(net_impair_reorder_pct, 0.0f, 100.0f);
+    Cvar_ClampValue(net_impair_duplicate_pct, 0.0f, 100.0f);
+    Cvar_ClampValue(net_impair_corrupt_pct, 0.0f, 100.0f);
+    Cvar_ClampInteger(net_impair_burst_length, 1, 64);
+    Cvar_ClampInteger(net_impair_rate_kbps, 0, 1000000);
+    Cvar_ClampInteger(net_impair_queue_limit, 1,
+                      NET_IMPAIR_QUEUE_CAPACITY);
+
+    net_impair_enable->changed = net_impair_param_changed;
+    net_impair_seed->changed = net_impair_param_changed;
+    net_impair_latency_ms->changed = net_impair_param_changed;
+    net_impair_jitter_ms->changed = net_impair_param_changed;
+    net_impair_loss_pct->changed = net_impair_param_changed;
+    net_impair_burst_loss_pct->changed = net_impair_param_changed;
+    net_impair_burst_length->changed = net_impair_param_changed;
+    net_impair_reorder_pct->changed = net_impair_param_changed;
+    net_impair_duplicate_pct->changed = net_impair_param_changed;
+    net_impair_corrupt_pct->changed = net_impair_param_changed;
+    net_impair_upstream_stall_ms->changed = net_impair_param_changed;
+    net_impair_rate_kbps->changed = net_impair_param_changed;
+    net_impair_queue_limit->changed = net_impair_param_changed;
+
+    net_impair_queue.packets = Z_TagMallocz(
+        sizeof(*net_impair_queue.packets) * NET_IMPAIR_QUEUE_CAPACITY,
+        TAG_GENERAL);
+    NET_ImpairResetState(true);
+
 #if USE_DEBUG
     net_log_enable = Cvar_Get("net_log_enable", "0", 0);
     net_log_enable->changed = net_log_enable_changed;
@@ -1863,6 +2294,9 @@ void NET_Init(void)
 
     Cmd_AddCommand("net_restart", NET_Restart_f);
     Cmd_AddCommand("net_stats", NET_Stats_f);
+    Cmd_AddCommand("net_impair_status", NET_ImpairStatus_f);
+    Cmd_AddCommand("net_impair_reset", NET_ImpairReset_f);
+    Cmd_AddCommand("net_impair_queue_selftest", NET_ImpairQueueSelfTest_f);
     Cmd_AddCommand("showip", NET_ShowIP_f);
     Cmd_AddCommand("dns", NET_Dns_f);
 
@@ -1885,8 +2319,14 @@ void NET_Shutdown(void)
     NET_Config(NET_NONE);
     os_net_shutdown();
 
+    Z_Freep(&net_impair_queue.packets);
+    memset(&net_impair_queue.scheduler, 0, sizeof(net_impair_queue.scheduler));
+
     Cmd_RemoveCommand("net_restart");
     Cmd_RemoveCommand("net_stats");
+    Cmd_RemoveCommand("net_impair_status");
+    Cmd_RemoveCommand("net_impair_reset");
+    Cmd_RemoveCommand("net_impair_queue_selftest");
     Cmd_RemoveCommand("showip");
     Cmd_RemoveCommand("dns");
 }

@@ -3,6 +3,11 @@
 Related roadmap: `docs-dev/plans/rmlui-ui-migration-roadmap.md` (visual parity /
 polish tasks), strategic project `docs-dev/proposals/swot-feature-development-roadmap-2026-02-27.md`.
 
+**Design intent is governed by `docs-dev/worr-ux-ui-design-language-2026-07-12.md`**
+(canonical UX/UI design language, QC-inspired layout architecture, tokens,
+widget/motion specs). This document covers the asset pipeline and engine
+constraints that implement it.
+
 ## Summary
 
 Full-menu-set production pass on the RmlUi UI: a generated grimy-rusty-metal
@@ -128,9 +133,106 @@ Deliberately left to the existing roadmap (controller work, not menu polish):
 server/demo browser data providers, save-slot metadata gating, dm_welcome
 bindings publisher, localization pipeline, Vulkan/RTX native RmlUi bridges.
 
+## Motion system (AAA polish round)
+
+All motion works within the bridge constraints (no transforms): opacity,
+layout properties (margins/padding), and the animatable `image-color`
+property, which tints decorator quads (verified: DecoratorNinePatch
+multiplies by `computed.image_color()`).
+
+- Entrance choreography: screens fade (route-enter 0.18s); headers slide
+  down and fade (header-enter, margin-top -8px -> 0); content containers and
+  footers stagger in via percentage-hold keyframes (content-enter holds 30%,
+  footer-enter holds 55%) since the shorthand delay would need per-element
+  values.
+- Popups drop in (popup-enter: opacity + margin-top 14px -> 0) over the
+  route-fade scrim.
+- Focused buttons pulse a warm tint (focus-pulse, image-color white ->
+  #ffd9a8, 1.1s infinite alternate); progress fills breathe teal
+  (fill-breathe, 1.8s).
+- Microinteractions: left-aligned action lists (hub sections, callvote,
+  menu-list, save/load tiles) slide 4px right on hover via padding-left
+  transitions; dropdown options slide and light a gold left accent.
+- Hero composition: the main menu action column sits on a framed metal
+  plate with larger type; hub sections are framed metal cards with
+  brass-barred headings; the version block is monospace.
+- Reduced-motion: the [class] ladder plus explicit guards
+  (button:focus pulse, headers/footers/popup-dialog/progress fill) disable
+  every animation and transition.
+
 ## Regeneration
 
 ```
 python tools/ui_gen_metal_skins.py [--seed N]
 python tools/ui_smoke/check_rmlui_manifest.py   # validates RML + imports
 ```
+
+## Design-language compliance round (2026-07-12)
+
+Implemented the non-gated backlog of the design language across all menus:
+
+- Global chrome: `worr-topbar` (brand plate, green PLAY CTA slab, gear/power
+  icon buttons) and `worr-statusbar` (identity, mono version, download chip)
+  on every shell/settings/singleplayer/multiplayer/utility page; session
+  pages keep their own translucent chrome per the doc.
+- `worr-backplate` (riveted chevron plate, new sprites) in a `worr-titlerow`
+  on every standard and session page; footer Back buttons removed (Close
+  retained); Escape and the plate share `ui.back`.
+- New `shell/play.rml` Card-select route (`pushmenu play`): Campaign / Load
+  Game / Host Match / Servers cards with in-place expansion driven by
+  `ui_play_card` cvar conditions and `card`/`card-hover`/`card-selected`
+  hollow frames; registered in ui_rml.cpp, shell/routes.json, and the smoke
+  manifest.
+- New sprites: `cta*` slime-green CTA ninepatches, `backplate*`, `card*`;
+  new `gear.svg`/`power.svg` icons within the rasterizer subset.
+- QC-pattern details: dialog intent underglow (bottom band colored by
+  `data-confirm-kind`), safe-button-first ordering in all confirm dialogs,
+  dropdown panel fade, slider readouts moved left of the track, settings
+  section headers as brass-barred slabs, table dress (microlabel headers,
+  36px slab rows, hover/selected edges).
+- All chrome covered in high-visibility and reduced-motion modes; 11/11
+  ui_smoke checks pass; engine rebuilt with the new route.
+
+Chrome buttons carry document-scoped ids (semantics check requires ids on
+command buttons); the transform script lives in the session scratchpad and is
+one-shot — future pages should author the chrome directly per the design doc.
+
+### Compliance round 2 (same day)
+
+Closed the remaining non-data-gated backlog:
+
+- Settings tab strip on the eight primary settings pages (replace-navigation
+  via `popmenu; pushmenu <route>`; static is-active plate; green underline).
+- `shell/play.rml` and `multiplayer.rml` card sets now use generated key-art
+  tiles (`cardart-*.png`: themed washes, glyphs, hazard band, baked title
+  gradient) behind hollow card frames; hover lifts art via image-color.
+- Editor preview column on startserver: new runtime binding `data-src-cvar`
+  (+`data-src-prefix`/`-suffix`) rebinds <img> src from a cvar so the
+  levelshot follows the map select through the engine image pipeline.
+- Gauge primitive: `gauge-q0..q4` ring sprites + `.worr-gauge` + runtime
+  `data-gauge-cvar` (+min/max) quartile class mapper; reference usage on the
+  download page. Stats pages adopt when providers publish data.
+- High-visibility/reduced-motion coverage extended to tabs/gauge/editor card.
+- 11/11 ui_smoke checks pass; engine rebuilt (two new runtime bindings).
+
+### Icon raster pass (2026-07-12)
+
+All rendered SVGs replaced with generated high-quality PNGs: the generator
+now includes an SVG-subset renderer (xml parse -> 8x supersampled Pillow
+draw -> LANCZOS downscale) that produces a `.png` sibling for every icon in
+`common/icons/**` (21 sources incl. the brand mark), sized at 2x each
+icon's largest display size (32px widget glyphs, 40px topbar gear/power,
+126px brand mark). 229 `<img>` references across 34 documents now point at
+the PNGs; zero SVG renders remain in shipped documents. The SVGs stay as
+editable sources and the renderer-neutral fallback set, as do the legacy
+`skins/widgets/*.svg` decorator fallbacks (unreferenced by shipped RCSS).
+Engine support for the icon pass: new `IF_NOSCRAP` image flag
+(inc/renderer/renderer.h, honored in src/rend_gl/texture.c) — the RmlUi
+bridge registers file textures with `IF_REPEAT | IF_NOSCRAP` so sub-64px
+icon PNGs own their GL texture instead of landing in the scrap atlas, whose
+sub-rect texcoords require special handling. The 2026-07-13 Player Setup
+follow-up adds per-texture atlas rectangles and draw-time UV remapping for
+legacy images that were already cached in the scrap before RmlUi requested
+them. Authored repeat decorators still use standalone assets; the cached-atlas
+path is for non-repeating legacy `<img>` content such as player icons and
+dogtags.

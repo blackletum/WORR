@@ -6,6 +6,23 @@ Date: 2026-02-27
 Create a repository-grounded SWOT and convert it into actionable, task-based project roadmaps that can guide coordinated team execution.
 
 ## Status Updates
+- `FR-11-T01` through `FR-11-T07` FnQuake3 console integration complete:
+  - Added `docs-dev/plans/fnquake3-console-integration-roadmap.md` as the
+    task-based implementation backbone for porting FnQuake3's unique in-game
+    console features while preserving WORR's stronger UTF-8, font, history,
+    timestamp, and Quake II completion foundations.
+  - The ratified scope covers smooth scrollback/new-output motion, live fuzzy
+    completion, mouse interaction and selection, interactive scrollbars,
+    console extents/appearance/fading, raw quoted chat, validation, user docs,
+    and `.install/` staging under `FR-11-T01` through `FR-11-T07`.
+  - Completed the WORR-native implementation with generator-backed live/fuzzy
+    completion, smooth scrolling, captured mouse/pointer ownership, draggable
+    scrollbars, UTF-8 input/log selection and drag reuse, centered extents,
+    appearance/fade controls, raw quoted chat, RmlUi-to-console ownership
+    transfer, automated `console-integration-check`, staged runtime self-test,
+    visual capture, user documentation, and validated `.install/` refresh.
+    Implementation log:
+    `docs-dev/fnquake3-console-integration-2026-07-12.md`.
 - `FR-04-T02` / `FR-04-T03` / `FR-04-T04` / `FR-04-T05` /
   `FR-04-T06` / `FR-04-T07` / `FR-04-T15` Bot completion roadmap:
   - Added `docs-dev/plans/bot-implementation-completion-roadmap.md` as the
@@ -811,6 +828,32 @@ umclusters = 4`, with travel counts including walk, jump, ladder, walk-off-ledge
   - Implementation and user docs:
     `docs-dev/rmlui-round78-multiplayer-match-hub-2026-07-10.md` and
     `docs-user/multiplayer-session-menu.md`.
+  - 2026-07-13 live-provider follow-up: `dm_welcome`, `dm_join`, `join`,
+    `dm_hostinfo`, and `dm_matchinfo` now truthfully declare the native session
+    cvar/condition/command bridge. A focused checker locks 49 current
+    sgame-published cvars, team/non-team and ready/spectate branches,
+    first-connect modal protection, responsive resumable close behavior,
+    disconnected remote-command hygiene, single-back information layouts,
+    accessibility, metadata, and guarded capture coverage. Five clean installed
+    960x720 captures plus the 279-test UI smoke suite pass. Implementation log:
+    `docs-dev/rmlui-live-session-entry-provider-2026-07-13.md`.
+  - 2026-07-13 confirmation follow-up: `forfeit_confirm` and
+    `leave_match_confirm` now run as native version 2 live-provider popups.
+    Safe No-first focus, destructive action hierarchy, sgame-owned forfeit,
+    close-before-disconnect ordering, localized leave copy, eight focused
+    regressions, two clean 960x720 installed-tree captures, and the 308-test UI
+    smoke suite pass. Canonical `.install` refresh remains queued behind an
+    unrelated staged-engine DLL lock. Implementation log:
+    `docs-dev/rmlui-live-session-confirm-provider-2026-07-13.md`.
+  - 2026-07-13 Admin follow-up: `admin_menu` and `admin_commands` now run as
+    native version 2 live-provider routes. The focused checker locks the
+    sgame-published Replay condition, admin-only route registrations, exact
+    parity between the read-only reference and all 28 `AdminOnly` commands,
+    matching usage rows, single-back navigation, compact/scrollable layouts,
+    eight focused regressions, three clean 960x720 installed-tree captures,
+    and the 316-test UI smoke suite. Canonical `.install` refresh remains
+    queued behind the same unrelated DLL lock. Implementation log:
+    `docs-dev/rmlui-live-admin-provider-2026-07-13.md`.
   - These umbrella tasks remain open for broader live controllers, automated
     navigation/input/layout coverage, native Vulkan/RTX-vkpt RmlUi bridges,
     Wave C parity, and legacy removal.
@@ -889,6 +932,11 @@ umclusters = 4`, with travel counts including walk, jump, ladder, walk-off-ledge
   - Implementation log: `docs-dev/vulkan-md5-mesh-frame-alpha-parity-fix-2026-02-27.md`.
   - Completed Vulkan MD5 `.md5scale` + scale-position parity and MD5 skin-routing correction in `src/rend_vk/vk_entity.c`.
   - Implementation log: `docs-dev/vulkan-md5-mesh-parity-revision-2026-02-27.md`.
+  - Replaced flat per-triangle MD5 normals with OpenGL-compatible bind-pose,
+    angle-weighted, position-welded smooth normals transformed through the
+    animated joint weights. Visible and shadow geometry now skin each unique
+    mesh vertex once instead of repeating weighted skinning per triangle corner.
+  - Implementation log: `docs-dev/renderer/vulkan-md5-smooth-normal-parity-2026-07-12.md`.
   - Fixed Vulkan sky re-registration crash on same-map reload (`VK_World_SetSky` handle invalidation ordering) in `src/rend_vk/vk_world.c`.
   - Implementation log: `docs-dev/vulkan-sky-reregister-crash-fix-2026-02-27.md`.
   - Aligned Vulkan MD2 mesh decode topology handling with RTX/GL remap behavior in `src/rend_vk/vk_entity.c`:
@@ -1120,16 +1168,44 @@ Exit Criteria:
 - Known parity blockers from Vulkan audits are closed or explicitly deferred with owner/date.
 
 Tasks:
-- [ ] `FR-01-T01` Implement Vulkan equivalents for particle style controls (`gl_partstyle` parity map to `vk_/r_` cvars).
+- [x] `FR-01-T01` Implement Vulkan equivalents for particle style controls (`gl_partstyle` parity map to `vk_/r_` cvars).
   Dependency: none. Priority: P0.
-- [ ] `FR-01-T02` Implement Vulkan beam style parity (`gl_beamstyle` behavior equivalents).
+  Progress: Native Vulkan now exposes `vk_particle_style` with the same blended (`0`)
+  and saturating/additive (nonzero) behavior as OpenGL `gl_partstyle`. Particle
+  batches select between prebuilt alpha and additive Vulkan pipelines without
+  rebuilding pipelines or adding per-particle draw submissions.
+  Implementation log: `docs-dev/renderer/vulkan-particle-style-parity-2026-07-12.md`.
+- [x] `FR-01-T02` Implement Vulkan beam style parity (`gl_beamstyle` behavior equivalents).
   Dependency: `FR-01-T01`. Priority: P0.
-- [ ] `FR-01-T03` Add `RF_FLARE` behavior parity in Vulkan entity path.
+  Progress: Native Vulkan now exposes `vk_beam_style`, reproduces OpenGL's
+  textured billboard and 12-sided polygonal beam modes, applies the matching
+  style-specific width scales, and generates segmented `RF_GLOW` lightning in
+  either mode. Beam-specific alpha is consumed independently of
+  `RF_TRANSLUCENT`, matching the client/OpenGL contract, and generated geometry
+  remains coalesced into descriptor-compatible entity batches.
+  Implementation log: `docs-dev/renderer/vulkan-beam-style-parity-2026-07-12.md`.
+- [x] `FR-01-T03` Add `RF_FLARE` behavior parity in Vulkan entity path.
   Dependency: none. Priority: P1.
+  Progress: Native Vulkan now classifies `RF_FLARE` separately from ordinary
+  entities, uses asynchronous per-entity occlusion queries with the OpenGL
+  frustum/rate-limit/stale-state behavior, and reproduces the additive flare
+  fan, scale, orientation, tint, default-flare shader treatment, and fade
+  policy. Query-pool resets are coalesced outside the render pass, query reads
+  never wait, and flare-specific pipelines are not bound on flare-free frames.
+  Implementation log: `docs-dev/renderer/vulkan-flare-occlusion-parity-2026-07-12.md`.
 - [ ] `FR-01-T04` Complete MD2 and MD5 visual parity pass with map-driven validation scenes.
   Dependency: none. Priority: P0.
-  Progress: Native Vulkan now renders MD2/MD5 entity receivers with dynamic shadows, keeps MD5 skin selection aligned with GL, and fixes first-person view weapon depthhack rendering with separate opaque/alpha depthhack pipelines. `RF_GLOW` item pulse parity is restored in the Vulkan entity light path.
-  Implementation logs: `docs-dev/renderer/vulkan-entity-lightmap-shadow-receiver-repair-2026-06-11.md`, `docs-dev/renderer/vulkan-viewweapon-dlight-glow-fixes-2026-06-12.md`.
+  Progress: Native Vulkan now renders MD2/MD5 entity receivers with dynamic
+  shadows, keeps MD5 skin selection aligned with GL, fixes first-person view
+  weapon depthhack rendering with separate opaque/alpha depthhack pipelines,
+  and restores `RF_GLOW` item pulse parity. MD5 replacement meshes now use the
+  same weighted smooth-normal construction and animated normal skinning as
+  OpenGL; visible and shadow paths cache each skinned vertex once per mesh.
+  A deterministic `fact2` scene covering infantry frames 0 and 150 matched
+  OpenGL for MD2 fallback and the 18-joint MD5 replacement within a mean
+  absolute channel error of about `0.12/255`. Remaining special render flags
+  and durable comparison automation keep this task open.
+  Implementation logs: `docs-dev/renderer/vulkan-entity-lightmap-shadow-receiver-repair-2026-06-11.md`, `docs-dev/renderer/vulkan-viewweapon-dlight-glow-fixes-2026-06-12.md`, `docs-dev/renderer/vulkan-md5-smooth-normal-parity-2026-07-12.md`.
 - [ ] `FR-01-T05` Resolve remaining sky seam/artifact issues for all six faces and transitions.
   Dependency: none. Priority: P0.
 - [ ] `FR-01-T06` Finalize bmodel initial-state correctness on first render frame.
@@ -1206,6 +1282,13 @@ Tasks:
   Dependency: `FR-03-T01`. Priority: P1.
 - [ ] `FR-03-T05` Implement model preview widget for player visuals pages.
   Dependency: `FR-03-T01`. Priority: P1.
+  2026-07-13 Player Setup progress: the RmlUi `players` route now owns a live
+  `RDF_NOWORLDMODEL` preview with seven animation stages, attached weapon
+  discovery/switching, muzzle flash, rotation, interpolation, reduced-motion
+  behavior, and an authored preview surface with loading/empty/error states.
+  The wider player-visuals preview modes remain open, so the task is not yet
+  marked complete. Implementation log:
+  `docs-dev/rmlui-live-player-setup-provider-2026-07-13.md`.
 - [ ] `FR-03-T06` Audit and complete settings page cvar wiring for Video/Audio/Input/HUD/Downloads.
   Dependency: `FR-03-T02..T05`. Priority: P0.
   Progress: The cgame Effects menu now exposes `cg_weapon_bob` as a 0/1/2 selector for disabled, Quake 3, and Doom 3 viewweapon bob modes.
@@ -1219,6 +1302,19 @@ Tasks:
   RmlUi or cgame JSON presentation and preserves the ordinary game-menu path
   for coop, demos, other game directories, and legacy servers. Broader UI
   ownership audit and bridge simplification remain open.
+  2026-07-13 fixed-list progress: Callvote, MyMap, and tournament list/page
+  authority stays in sgame. The client runtime only renders published cvars,
+  evaluates presentation conditions, and dispatches registered commands; the
+  backplate and back keys both run the sgame close side effect. This narrows a
+  previously mixed generic-list path, while the broader ownership audit
+  remains open. Implementation log:
+  `docs-dev/rmlui-live-ui-list-provider-2026-07-13.md`.
+  2026-07-13 Player Setup progress: the native client remains responsible for
+  filesystem-backed player media and the renderer-owned preview, while the
+  generic cvar/image bridge handles immediate presentation bindings. No
+  player-media or userinfo authority moved into cgame or sgame. The broader
+  ownership audit remains open. Implementation log:
+  `docs-dev/rmlui-live-player-setup-provider-2026-07-13.md`.
 - [x] `FR-03-T09` Complete multi-monitor settings hierarchy and monitor targeting behavior for fullscreen modes.
   Dependency: `FR-03-T06`. Priority: P1.
 - [x] `FR-03-T10` Align the fixed-layout main menu framing with Quake II rerelease reference captures.
@@ -1602,7 +1698,23 @@ Exit Criteria:
   cutover.
 
 Tasks:
-- [ ] `FR-09-T01` Define final runtime ownership, translation inventory, asset
+
+2026-07-14 closeout (`FR-09-T01` through `FR-09-T10`, `DV-03-T07`,
+`DV-07-T02`, `DV-07-T04`): all 58 registered menu routes are accepted as
+`parity_ready` with live runtime/controller/provider behavior, 1,123 consumed
+localization hooks, accessibility and keyboard/gamepad navigation services,
+responsive canonical design-language compliance, and native OpenGL, Vulkan,
+and RTX/vkpt rendering. Final installed-tree sweeps pass 58/58 routes in each
+renderer and the complete route contact sheets were visually reviewed. The
+legacy-removal gate is open; JSON/menu sources are intentionally archived only
+as guarded recovery/reference material, satisfying the documented Gate G4
+alternative. `.install/` is refreshed and validated. Evidence:
+`docs-dev/rmlui-runtime-ux-design-parity-2026-07-14.md` and
+`docs-dev/rmlui-native-vulkan-rtx-renderer-parity-2026-07-14.md`. The aggregate
+engine DLL link remains independently blocked by unrelated concurrent
+networking symbols; the affected renderer targets build, stage, and run.
+
+- [x] `FR-09-T01` Define final runtime ownership, translation inventory, asset
   layout, and cutover policy for the RmlUi migration.
   Dependency: `FR-03-T08`, `DV-04-T02`. Priority: P0.
   Progress: `docs-dev/plans/rmlui-ui-migration-roadmap.md` now defines the
@@ -1827,7 +1939,7 @@ Tasks:
   Gate G1, G2, G3, and G4 remain open for the real RmlUi dependency, renderer
   bridge, live controllers/services, native runtime navigation, screenshots,
   parity evidence, and legacy removal.
-- [ ] `FR-09-T02` Add RmlUi dependency integration, Meson/build wiring, and
+- [x] `FR-09-T02` Add RmlUi dependency integration, Meson/build wiring, and
   `.install` asset staging for the new document/theme path.
   Dependency: `FR-09-T01`, `DV-06-T01`. Priority: P0.
   Progress: `tools/package_assets.py` now mirrors `assets/ui/rml/` loose into
@@ -1882,7 +1994,7 @@ Tasks:
   now forces `builddir-win` to `-Drmlui=enabled`, stages `rmlui_core.dll`, and
   makes the first launch profile an OpenGL RmlUi menu run; Vulkan and RTX
   launch profiles remain separate until native RmlUi renderer bridges exist.
-- [ ] `FR-09-T03` Implement the RmlUi runtime bootstrap plus native
+- [x] `FR-09-T03` Implement the RmlUi runtime bootstrap plus native
   renderer/input/file/system bridges.
   Dependency: `FR-09-T02`. Priority: P0.
   Round 4 note: guarded runtime-switch scaffolding is compiled and reachable
@@ -2316,7 +2428,7 @@ Tasks:
   launch path still reported a `960x720` RmlUi canvas when smaller geometry
   was requested. Implementation log:
   `docs-dev/rmlui-round66-menu-containment-popup-refinement-2026-07-07.md`.
-- [ ] `FR-09-T04` Integrate fonts, localization, theme assets, cursor/audio
+- [x] `FR-09-T04` Integrate fonts, localization, theme assets, cursor/audio
   affordances, and accessibility policy into the RmlUi stack.
   Dependency: `FR-09-T03`. Priority: P1.
   Progress: source theme contracts now include base, utility, session, and
@@ -2463,13 +2575,25 @@ Tasks:
   explicit high-visibility styling. Matching JSON action sizing/color support
   preserves a readable native-renderer fallback. Broader localization and
   accessibility-service completion remains pending.
-- [ ] `FR-09-T05` Implement reusable data-model and controller bridges for
+  2026-07-13 deterministic-visibility note: the RmlUi loader now applies
+  archived high-visibility and reduced-motion classes before document
+  construction, then keeps those classes synchronized on both the document and
+  body. Unreliable decorative route-entry opacity animations were removed from
+  the shared theme while focus, progress, and active key-capture feedback remain
+  intact. This prevents accessibility-mode captures and real menu opens from
+  retaining transparent geometry after animation cancellation. Large-text,
+  localization, and broader input-service parity remain open. Implementation
+  log: `docs-dev/rmlui-deterministic-route-visibility-2026-07-13.md`.
+- [x] `FR-09-T05` Implement reusable data-model and controller bridges for
   cvars, commands, conditions, dynamic labels, and shared list/table flows.
   Dependency: `FR-09-T03`. Priority: P0.
-  Progress: mock contracts and reusable RmlUi component templates now cover
-  cvar controls, command buttons, conditionals, list/table, preview,
-  save/load, keybind capture, and image-grid selectors. C++ controllers remain
-  pending.
+  Progress: mock contracts and reusable RmlUi component templates cover cvar
+  controls, command buttons, conditionals, list/table, preview, save/load,
+  keybind capture, and image-grid selectors. Live runtime controllers now
+  cover cvars, commands, conditions, map/image/directory selectors, player
+  preview, two-slot keybind capture/conflict handling, save/load slots, demo
+  discovery, server discovery/status, and the generic fixed-list bridge;
+  remaining session-specific list providers remain pending.
   Round 4 note: controller fixtures sharpen the
   cvar/command/condition/navigation/list-provider contract before live C++
   controller work is accepted.
@@ -2535,7 +2659,44 @@ Tasks:
   sends one chunk per frame, and waits for the queue to drain before the
   one-second live refresh. The remaining list, browser, save/load, keybind,
   player-preview, vote, and tournament controllers remain open.
-- [ ] `FR-09-T06` Translate shell/settings/single-player menus from the current
+  2026-07-13 note: the RmlUi save/load controller is now live. Both routes
+  hydrate the authored slot rows through the server-owned `SV_GetSaveInfo()`
+  API, present engine-formatted map/date metadata, disable missing load slots,
+  keep empty save slots writable, and free returned metadata. A focused smoke
+  checker locks the 16 load/15 save slot contracts, pre-show hydration order,
+  and command wiring. Live 960x720 OpenGL inspection also corrected shared
+  topbar containment and the widget-PNG scrap-atlas failure; the final staged
+  captures show complete chrome, save metadata, actions, and status bars.
+  Browser, session-list, vote, and tournament providers remain open.
+  2026-07-13 server-browser note: the live client provider preserves public
+  q2servers and Saved + LAN/favorites/file/broadcast sources, bounded address
+  parsing and deduplication, paced three-stage status queries, status/error
+  reply consumption, five-column signed sorting, eight-row paging, selection,
+  and numeric-address connect safety. Route arguments now survive the
+  cgame/client bridge without shared argv lifetime bugs. Focused checks and
+  installed 960x720 empty plus real localhost-populated captures validate the
+  provider, layout, Q2R font, input/back-close path, and a live 5ms status row.
+  Generic/session list, vote, and tournament providers remain open.
+  2026-07-13 fixed-list note: the generic `ui_list` provider is now live while
+  preserving sgame authority. It publishes eight-row pages plus explicit
+  ready/empty/error status, clears all twelve compatibility slots, rejects
+  actionless focus rows, and uses the shared per-frame cvar/command bridge.
+  Backplate and back-key closure now execute route pop plus owner cleanup in a
+  single ordered command sequence. A focused checker and deterministic cvar
+  seeding capture coverage validate populated, empty, and error layouts at
+  960x720. Remaining session-specific list, vote, and tournament providers
+  remain open. Implementation log:
+  `docs-dev/rmlui-live-ui-list-provider-2026-07-13.md`.
+  2026-07-13 Player Setup note: `players` now uses a live native provider for
+  composite model/skin discovery and writeback, immediate Name/Dogtag/Hand
+  cvars, directory-backed dogtags, cvar-backed skin/dogtag images, explicit
+  provider states, and a native staged 3D preview. The OpenGL bridge now
+  preserves cached scrap-atlas UV rectangles instead of rejecting existing
+  small PCX images. Focused checks and seeded installed capture evidence pass;
+  wider action automation and the native renderer matrix remain open.
+  Implementation log:
+  `docs-dev/rmlui-live-player-setup-provider-2026-07-13.md`.
+- [x] `FR-09-T06` Translate shell/settings/single-player menus from the current
   JSON definitions into RmlUi documents.
   Dependency: `FR-09-T04`, `FR-09-T05`. Priority: P0.
   Progress: Agent 4 starter documents now cover `main`, `game`, `options`,
@@ -2601,12 +2762,15 @@ Tasks:
   Deathmatch Flags/Begin Game actions while keeping the static fallback view
   visible above Back/Close at `960x720`. Live condition evaluation, settings
   persistence, navigation parity, and controller behavior remain pending.
-- [ ] `FR-09-T07` Translate browser, player-config, save/load, keybind, and
+- [x] `FR-09-T07` Translate browser, player-config, save/load, keybind, and
   other rich utility surfaces that need shared controllers or preview support.
   Dependency: `FR-09-T05`. Priority: P0.
-  Progress: starter documents now cover `servers`, `demos`, `players`,
-  `addressbook`, `keys`, `legacykeys`, `weapons`, and `ui_list`; save/load
-  remains metadata/component-contract only.
+  Progress: starter documents cover `servers`, `demos`, `players`,
+  `addressbook`, `keys`, `legacykeys`, `weapons`, and `ui_list`; live runtime
+  support now also covers player preview, two-slot keybind capture/conflicts,
+  archived address fields, save/load slot hydration, demo browsing, server
+  browsing, and generic sgame-published fixed lists while remaining
+  session-specific providers stay open.
   Third-round update: `loadgame` and `savegame` starter documents now exist,
   so all tracked rich utility/save-load source routes have starter coverage.
   Round 9 note: `addressbook`, `keys`, `legacykeys`, and `weapons` now have
@@ -2667,7 +2831,88 @@ Tasks:
   `data-menu-sound` or `data-menu-sound-change` intent, and Key Bindings
   containment has fresh staged OpenGL evidence. Live keybind capture, list
   providers, player preview behavior, and utility parity remain pending.
-- [ ] `FR-09-T08` Translate multiplayer/session/match menus and their
+  2026-07-13 note: `loadgame` and `savegame` now have a live engine provider
+  instead of static slot labels. Occupied rows expose the existing friendly
+  save metadata, empty load rows cannot activate, and empty manual save rows
+  remain available. General route-capture automation now covers these routes;
+  providers hydrate before the document is shown, and guarded 960x720 OpenGL
+  captures validate the complete load/save layouts plus keyboard, text,
+  pointer, wheel, and back-close input. Server/demo/session list providers and
+  the full native renderer/layout matrix remain pending.
+  2026-07-13 demo-browser note: the `demos` route now has a live native RmlUi
+  filesystem provider instead of an honestly disabled placeholder. It scans
+  the four legacy demo formats, reads map/POV metadata through
+  `CL_GetDemoInfo()`, retains unchanged metadata in a size/mtime-keyed session
+  cache, preserves local-game versus all-location discovery, rejects unsafe
+  command characters, and supports directory entry/up, refresh, five-column
+  sorting, eight-row paging, status totals, and direct playback. Focused smoke
+  coverage validates the runtime, document, security, five-column table, and
+  36px row/pagination styling contracts. Two consecutive populated 960x720
+  OpenGL captures are byte-identical and validate the complete shared chrome,
+  five-column/eight-row layout, one-line source toggle, paging, live totals,
+  font path, synthetic input, and clean back-close behavior. The capture
+  harness now reapplies reduced motion after config loading so archived user
+  state cannot race the evidence frame. Empty-fixture/action automation,
+  server and session list providers, and the full native renderer/layout matrix
+  remain pending. Implementation log:
+  `docs-dev/rmlui-live-demo-browser-provider-2026-07-13.md`.
+  2026-07-13 server-browser note: the `servers` route now has a live native
+  provider instead of a disabled placeholder. Public and Saved + LAN source
+  groups, binary/text address parsing, bounded deduplication, broadcast,
+  rate-limited status refresh, restriction/error rows, legacy signed
+  five-column sorting, eight-row paging, selection, and safe numeric connect
+  behavior are active. The client/cgame route bridge preserves explicit source
+  arguments, and status/error replies are offered through the narrow optional
+  RmlUi runtime callbacks before the legacy handler. Focused provider/capture
+  checks pass; installed 960x720 evidence covers the truthful empty state and
+  a real private localhost server row (`basew`, `q2dm1`, `0/8`, 5ms) with clean
+  route/font/input/back-close diagnostics. Generic/session list providers,
+  action-level runtime automation, and the full native renderer/layout matrix
+  remain pending. Implementation log:
+  `docs-dev/rmlui-live-server-browser-provider-2026-07-13.md`.
+  2026-07-13 fixed-list note: `ui_list` now presents the live sgame-published
+  Callvote, MyMap, tournament pick/ban, and replay lists through eight-row
+  pages. Explicit empty/error states replace actionless buttons, unused
+  toolbar/paging slabs disappear, long labels wrap, and the standard top
+  backplate owns cleanup. Guarded populated, empty, and error OpenGL captures
+  pass at 960x720, backed by a provider/document/style checker and reusable
+  capture cvar seeding. Remaining session-specific list providers,
+  action-level automation, and the native renderer/layout matrix remain open.
+  Implementation log:
+  `docs-dev/rmlui-live-ui-list-provider-2026-07-13.md`.
+  2026-07-13 Player Setup note: the `players` route is promoted to
+  `live_provider`. It enumerates compatible models and icon-paired skins,
+  initializes and persists composite skin plus Name/Dogtag/Hand, shows live
+  selected-skin and dogtag PCX thumbnails, and renders staged player/weapon
+  behavior with reduced-motion support. The seeded 960x720 installed capture
+  validates the complete form, thumbnails, preview, font, input, and back-close
+  path without texture or clipping errors. Action-level control automation and
+  native renderer/layout parity remain open. Implementation log:
+  `docs-dev/rmlui-live-player-setup-provider-2026-07-13.md`.
+  2026-07-13 keybind-family note: `keys`, `legacykeys`, and `weapons` are
+  promoted to `live_provider` with Primary/Alternate chips for all 38 source
+  commands. The native controller preserves the untouched slot, clears only
+  the chosen slot, enforces an eight-second timeout, pauses on conflicts for
+  Replace/Cancel, and renders established keyboard/mouse/gamepad artwork with
+  text fallback. Nine focused tests and clean installed reduced-motion
+  960x720 captures cover the three routes; pre-load accessibility classes and
+  removal of unreliable decorative load-time fades keep menu geometry
+  deterministic. Action-level mutation/restore automation and native
+  renderer/layout parity remain open. Implementation log:
+  `docs-dev/rmlui-live-keybind-provider-2026-07-13.md`.
+  2026-07-13 Address Book note: `addressbook` is promoted to `live_provider`.
+  All sixteen archived `adr0` through `adr15` fields hydrate before show and
+  write back immediately through the generic cvar bridge, retain the legacy
+  32-character limit, and expose Browse Favorites with the exact saved-file,
+  broadcast, and favorites sources consumed by the live server provider. Six
+  focused tests and a clean seeded installed 960x720 capture cover IPv4,
+  hostname, and IPv6 values, route/font/input/back-close behavior, and complete
+  four-column geometry. No separate user guide is required because this restores
+  the existing workflow without a new cvar or concept. Action-level
+  mutation/restore automation and native renderer/layout parity remain open.
+  Implementation log:
+  `docs-dev/rmlui-live-addressbook-provider-2026-07-13.md`.
+- [x] `FR-09-T08` Translate multiplayer/session/match menus and their
   cgame/sgame-driven state flows into RmlUi documents.
   Dependency: `FR-09-T05`. Priority: P0.
   Progress: starter documents now cover `multiplayer`, `vote_menu`,
@@ -2782,7 +3027,80 @@ Tasks:
   explicit `match_auto_join=1` preserving the historical immediate-assignment
   override. Other Wave C flow/controller parity remains open. Implementation
   log: `docs-dev/rmlui-round78-multiplayer-match-hub-2026-07-10.md`.
-- [ ] `FR-09-T09` Add migration-specific validation for navigation, scaling,
+  2026-07-13 session-entry note: `dm_welcome`, `dm_join`, `join`,
+  `dm_hostinfo`, and `dm_matchinfo` are promoted to `live_provider`. The native
+  bridge consumes all current sgame-published labels, text, conditions, enable
+  state, and command-cvar actions before show. First-connect hubs remain modal;
+  resumable hubs close locally without waiting for a server round trip and
+  still send authoritative cleanup while connected. Host and Match Info use
+  bounded wrapping rows, explicit empty states, and a single standardized Back
+  plate. Twelve focused tests and five clean seeded installed 960x720 captures
+  cover compatibility welcome, team and non-team hubs, host details, and match
+  details. Connected action automation and native renderer/layout parity remain
+  open. Implementation log:
+  `docs-dev/rmlui-live-session-entry-provider-2026-07-13.md`.
+  2026-07-13 vote/callvote note: `vote_menu`, `callvote_main`,
+  `callvote_ruleset`, `callvote_timelimit`, `callvote_scorelimit`,
+  `callvote_unlagged`, `callvote_random`, and `callvote_map_flags` are promoted
+  to `live_provider`. The native bridge consumes 41 current sgame-published
+  values, complete option/empty-state conditions, current values, dynamic
+  score labels, tri-state flag labels, and all existing commands. The routes
+  now use one canonical backplate and bounded two-column choice grids; active,
+  preready, idle, populated, and empty states have clean canonical `.install`
+  evidence. Twelve focused tests and eleven 960x720 frames pass. Connected
+  mutation automation and native renderer/layout parity remain open.
+  Implementation log:
+  `docs-dev/rmlui-live-vote-callvote-provider-2026-07-13.md`.
+  2026-07-13 MyMap note: `mymap_main` and `mymap_flags` are promoted to
+  `live_provider`. The native bridge consumes all fifteen current status,
+  availability, summary, and tri-state flag values, while the live generic
+  `ui_list` provider retains map selection. Both pages now use one canonical
+  backplate; the main page is a compact enabled-state launcher and the flag
+  editor uses the shared two-column grid. Eight focused tests and three clean
+  canonical `.install` 960x720 frames pass. Connected mutation/queue automation
+  and native renderer/layout parity remain open. Implementation log:
+  `docs-dev/rmlui-live-mymap-provider-2026-07-13.md`.
+  2026-07-13 Tournament note: `tourney_info`, `tourney_mapchoices`,
+  `tourney_veto`, and `tourney_replay_confirm` are promoted to
+  `live_provider`. Sgame continues to own map order, actor identity, Pick/Ban
+  legality, remaining candidates, replay selection, and replay reset. The
+  RmlUi routes consume the published state and use the shared live `ui_list`
+  provider for Pick, Ban, and Replay selection. Replay now warns that results
+  from the selected game onward are discarded, authors safe No before
+  destructive Yes, and is guarded by the existing admin-only commands. Eleven
+  focused regressions, a 327-test complete UI suite, and seven clean canonical
+  `.install` 960x720 frames
+  cover info, map order, all veto presentation branches, and replay
+  confirmation. Wave C now has 23 of 25 routes at `live_provider`, leaving
+  `map_selector` and `match_stats`. Connected mutation/restore automation and
+  native renderer/layout parity remain open. Implementation log:
+  `docs-dev/rmlui-live-tournament-provider-2026-07-13.md`.
+  2026-07-13 Map Selector note: `map_selector` is promoted to
+  `live_provider`. Sgame continues to own its three candidates, ballot
+  validation, strict-majority/timeout finalization, chosen map, and per-client
+  lifecycle. RmlUi now presents a stable heading, live candidate buttons,
+  numeric seconds plus a shrinking bar, and an exclusive post-vote
+  acknowledgement. Explicit Close persists for the current ballot instead of
+  reopening on the next server frame; disconnected direct-route cleanup is
+  warning-free while connected cleanup still reaches sgame. Eleven focused
+  regressions, a 338-test complete UI suite, and two clean canonical
+  `.install` 960x720 frames pass. Wave C now has 24 of 25 routes at
+  `live_provider`, leaving only `match_stats`. Connected ballot/transition
+  automation and native renderer/layout parity remain open. Implementation
+  log: `docs-dev/rmlui-live-map-selector-provider-2026-07-13.md`.
+  2026-07-13 Match Stats note: `match_stats` is promoted to
+  `live_provider`, completing the 25-route Wave C provider pass. Sgame keeps
+  counter and one-second refresh authority, publishes a ten-value semantic
+  snapshot, and retains all sixteen legacy line cvars for the JSON fallback.
+  RmlUi groups Combat, Damage, and Accuracy into responsive cards, reports
+  undefined ratios as `N/A`, keeps unavailable/live states exclusive, and
+  exposes one connection-aware Back path. Ten focused regressions, a 348-test
+  complete UI suite, and two clean canonical `.install` 960x720 frames pass.
+  The capture harness now disables sound at startup so optional OpenAL/EAX
+  diagnostics cannot contaminate UI-only evidence. Connected counter/refresh
+  automation and native renderer/layout parity remain open. Implementation
+  log: `docs-dev/rmlui-live-match-stats-provider-2026-07-13.md`.
+- [x] `FR-09-T09` Add migration-specific validation for navigation, scaling,
   localization, and renderer parity.
   Dependency: `FR-09-T06`, `FR-09-T07`, `FR-09-T08`, `DV-03-T07`.
   Priority: P0.
@@ -3306,7 +3624,21 @@ Tasks:
   hub. The build, `225` UI smoke tests, and `.install` refresh passed. This is
   focused session and fallback evidence, not closure of the broad navigation,
   input, viewport, localization, or renderer-native RmlUi matrix.
-- [ ] `FR-09-T10` Remove legacy JSON menu loading/widgets, close migration
+  2026-07-13 fixed-list note: the capture harness now accepts repeated,
+  validated `--seed-cvar NAME=VALUE` inputs after config loading and registers
+  the `ui_list` route. The fixed-list checker covers owner publication,
+  runtime dispatch/conditions, authored states/row count, back cleanup, and
+  layout tokens. Installed populated/empty/error captures validate exact route,
+  font, dimensions, input, and back-close markers. Broader action navigation,
+  localization/large-text, and renderer-native parity remain open.
+  2026-07-13 Player Setup note: the capture registry now includes `players`,
+  and repeated cvar seeds visibly prove Name, composite Skin, and Hand
+  hydration. A route-specific checker covers provider ordering, media/state
+  behavior, live thumbnails, seven-stage 3D preview semantics, reduced motion,
+  layout, and cached scrap-atlas UV handling. The installed 960x720 route
+  capture passes exact route, font, input, and inactive-close checks. Broader
+  action navigation and renderer-native parity remain open.
+- [x] `FR-09-T10` Remove legacy JSON menu loading/widgets, close migration
   bridge fallbacks, and update staging/docs for the final RmlUi path.
   Dependency: `FR-09-T09`. Priority: P1.
   Round 4 note: no legacy JSON removal or fallback cutover is claimed; this
@@ -3347,7 +3679,7 @@ compatibility while giving WORR deterministic client prediction, ordered event
 delivery, resilient snapshots, and fair authoritative lag compensation.
 
 Primary Areas: `src/client/*`, `src/server/*`, `src/game/bgame/*`,
-`src/game/cgame/*`, `src/game/sgame/network/*`, and `tools/net/*`.
+`src/game/cgame/*`, `src/game/sgame/network/*`, and `tools/networking/*`.
 
 Architecture decision: retain `q2proto/` as a read-only legacy wire adapter.
 Validated protocol data is translated above the wire into canonical snapshot,
@@ -3384,54 +3716,287 @@ Tasks:
   superseded.
   Evidence: `docs-dev/plans/progressive-networking-events-snapshots-roadmap.md`
   and `docs-dev/progressive-networking-foundation-2026-07-11.md`.
-- [ ] `FR-10-T02` Establish deterministic shared bgame simulation, fixed tick
-  and clock rules, canonical predicted-state schema, and state hashing.
+- [x] `FR-10-T02` Establish deterministic shared bgame simulation, explicit
+  command-time and clock rules, canonical predicted-state schema, and state
+  hashing.
   Area: `bgame/cgame/sgame`. Priority: P0. Dependencies: `FR-10-T01`.
-  State: In Progress.
+  State: Done (2026-07-12).
   Definition of Done: server/client replay parity is proven from identical
   inputs, hashes detect divergence, and float/time nondeterminism is bounded or
   removed on every predicted path.
-  Progress: cgame prediction now routes through the same C++ PMove export as
-  sgame, initial movement config is synchronized, and both module/engine sides
-  assert a shared PMove layout contract. Game/cgame module APIs advanced to
-  `2024`/`2027` so the expanded command/PMove layout rejects mixed stale
-  binaries. The exactly typed ABI, state schema, hashes, and replay parity
-  harness remain.
-- [ ] `FR-10-T03` Add a deterministic network baseline and fault-injection
+  Outcome: cgame and sgame link one strict-FP C++20 movement core behind a
+  versioned pointer-free ABI. Canonical live-wire commands round-trip through
+  Vanilla, Q2PRO, and Q2REPRO MOVE/BATCH_MOVE, while exact state,
+  configuration, collision-transcript, and replay-chain hashes match through
+  correction and sequence-wrap cases. Windows Clang/Linux GCC reports are
+  byte-identical; the full Windows build, 33/33 repeated networking tests,
+  refreshed install, default-off/impaired loopback, and dedicated map smoke
+  pass. Game/cgame module APIs are `2025`/`2028`.
+  Evidence:
+  `docs-dev/networking-deterministic-prediction-core-2026-07-12.md`.
+- [x] `FR-10-T03` Add a deterministic network baseline and fault-injection
   harness for latency, jitter, loss, duplication, reordering, corruption, and
   bandwidth pressure.
-  Area: `tools/net`, `client/server`. Priority: P0. Dependencies: `FR-10-T01`.
-  State: Backlog.
-  Definition of Done: repeatable scenarios emit machine-readable evidence
-  under `.tmp/` and gate snapshot, event, prediction, and rewind regressions.
-- [ ] `FR-10-T04` Add a negotiated WORR packet envelope and legacy
-  protocol/demo adapters outside `q2proto/`.
+  Area: `tools/networking`, `client/server`. Priority: P0.
+  Dependencies: `FR-10-T01`.
+  State: Done (2026-07-12).
+  Definition of Done: the production integer model, bounded scheduler, extended
+  clock, and netchan sequence/acknowledgement validators are exercised by an
+  ordinary CI suite; repeatable scenarios and checked-in goldens emit
+  machine-readable evidence under `.tmp/networking/`; a staged default-off
+  control and impaired loopback profile pass without queue overflow.
+  Evidence:
+  `docs-dev/networking-deterministic-impairment-harness-2026-07-12.md`.
+- [ ] `FR-10-T04` Add a negotiated WORR packet envelope and canonical adapters
+  outside `q2proto/`.
   Area: `common/net`, `client/server`. Priority: P0.
-  Dependencies: `FR-10-T01`, `FR-10-T03`. State: Backlog.
-  Definition of Done: negotiation cannot downgrade silently, MTU and malformed
-  input are bounded, and both modern and legacy compatibility matrices pass.
+  Dependencies: `FR-10-T03`, `FR-10-T05`, `FR-10-T06`, `FR-10-T09`.
+  State: In Progress at capability negotiation and native envelope,
+  session-retention, receipt-hardening, canonical byte-codec, WTC1 packet-
+  carrier, transport-confirmed dispatch, serialized retained-ACK handoff,
+  post-assembly TX plus admitted-RX netchan seams, endpoint readiness,
+  signed-setting proof carrier, default-off production readiness adapters, and
+  a default-off one-command canonical DATA/ACK observation; general canonical
+  adapters and advertisement are not implemented.
+  Definition of Done: the envelope serializes the accepted canonical command,
+  snapshot, and event models rather than owning parallel schemas; downgrade,
+  MTU, malformed-input, reconnect, and modern/legacy matrices pass.
+  Progress: a pointer-free capability core, userinfo offer, server-owned
+  session epoch, adjacent confirmation tuple, packet-boundary validation,
+  downgrade/failure handling, and reconnect lifecycle are live. Only the
+  legacy command-sideband and consumed-cursor bits are advertised;
+  `WORR_NET_CAP_NATIVE_ENVELOPE_V1` remains reserved and excluded from the live
+  mask. An allocation-free transport-only V1 core now frames opaque canonical
+  command/snapshot/event references, enforces a 1,200-byte datagram ceiling,
+  fragments/reassembles up to 65,536 bytes/64 fragments with datagram and
+  message CRCs, accepts reordered fragments and identical duplicates
+  idempotently, rejects conflicting duplicates, conflicting message metadata,
+  malformed inputs, and unsafe buffer overlap transactionally, and schedules
+  bounded caller-owned handles with deterministic priority aging. An isolated,
+  pointer-free session layer now binds that envelope to confirmed connection
+  epochs, retains reliable commands/events and supersedable snapshots until
+  exact receipt, reproduces acknowledgements for exact committed duplicates,
+  freezes each retained message's fragmentation layout across PMTU changes,
+  and fails closed on transport/canonical identity conflicts. Commit-only
+  snapshot freshness, a bounded touch-refreshed retry-identity/tombstone set,
+  active-retry protection, caller-owned reassembly storage, deterministic
+  timeouts, epoch reset, and receipt-window scheduling harden ACK loss,
+  corruption, and hostile retry order without changing a live path. A `WNC1`
+  common header and transactional allocation-free fieldwise codecs now cover
+  command V1, all eleven event V1 payload kinds, and snapshot V2 within the
+  65,536-byte payload ceiling. Boundary, malformed/truncation, aliasing, hash,
+  signed-zero, sanitizer, static-analysis, C/C++, and i686 layout evidence
+  passes. A bounded WTC1 wire-carrier core now appends up to eight atomic WNE1
+  DATA or inclusive exact-range ACK entries and a strict 32-byte terminal
+  footer after an unchanged legacy prefix. It enforces the complete 1,200-byte
+  packet budget, confirmed epoch equality, carrier-only CRC, nested-envelope
+  validity, fail-closed matching magic, pointer-free transactional output, and
+  safe overlapping byte inputs. It remains unadvertised and general adapters
+  remain open. The native-session bridge now uses non-mutating due tickets, a
+  process-local
+  non-reusable connection-incarnation owner, a single-active connection gate,
+  per-fragment build/reject/confirm outcomes, immutable payload verification,
+  and final-fragment-only send accounting. A separate fixed 80-identity receipt
+  ledger accepts authority only from retained RX commit or a combined admitted
+  `ALREADY_COMMITTED` path. Its owner-bound active token serializes receipt
+  mutation with prepare/bind/transport/terminal accounting and binds full packet
+  length/CRC plus ordered ACK identity before spending retry credits. It never
+  bridges gaps while coalescing, emits up to eight ACK-only ranges, and rearms
+  bounded proactive delivery through exact committed-DATA retry. A cross-
+  component property now proves the 64-sequence sender stall, retained RX
+  authority, repeat rearm, and reverse-path recovery after every proactive ACK
+  is lost. A transactional NEW-channel transmit hook now sees the exact
+  final reliable-plus-unreliable application slice after qport/header assembly,
+  replaces it only through a bounded staging buffer, bypasses legacy
+  fragmentation, preserves byte-identical fallback, and reports exact
+  all-copy synchronous handoff outcomes plus the final application bytes.
+  `Netchan_ProcessEx` now exposes the symmetric exact unread application slice
+  only after NEW-channel sequence/ACK admission, final reliable/fragment
+  assembly, liveness, and accounting, and production call sites terminally
+  handle explicit rejection. A pointer-free role-specific readiness core binds
+  capability mask, globally non-reused epoch, nonce, generation, clock, and
+  deadline across an exact three-record echo; its live RX/TX gates apply sticky
+  clock/deadline checks. A strict packet-scoped 13-pair signed-setting carrier
+  transports those records in either legacy direction with CRC32 record and
+  ordered CRC16 commit validation. A 64-slot default-off command shadow builds
+  sequential canonical records, owns immutable generation-safe codec payloads,
+  joins either arrival order, and reports only ID/command/sample-offset evidence
+  while explicitly declining watermark/full-record parity. Deep validation
+  binds reports to retained records and the active baseline. The default-off
+  production pilot now gives eligible NEW client/server connections process-
+  stable owners and registers the hooks behind `cl_worr_native_shadow=0` /
+  `sv_worr_native_shadow=0`. Public capability offer/confirmation remains
+  exactly `3`, only the private readiness proof binds `0x13`, and legacy
+  `MOVE`/`BATCH_MOVE` remains the sole command authority. After the exact
+  written legacy range is known, the client may retain its newest command and
+  append at most one `WTC1(DATA(WNE1(WNC1)))` observation per private transport
+  epoch. The admitted server RX path validates one 110-byte command payload,
+  joins either native/legacy arrival order, commits an exact receipt, strips the
+  trailer, and exposes the unchanged legacy prefix. The reverse path emits one
+  ACK-only range with 100 ms retry and three proactive handoffs; an exact
+  committed duplicate rearms delivery. Current plus one retired DRAIN bank
+  preserve old-epoch ACK liveness across one map transition, with fair ACK
+  selection. A second distinct current-epoch DATA strips to legacy and drains;
+  malformed, wrong-direction, unknown-epoch, or mismatched-reference traffic is
+  rejected. Reliable-queue point-of-no-return latches keep hooks installed once
+  either peer may legitimately send WTC1; the server's exact committed-epoch
+  fallback still strips the carrier if later local initialization fails. An
+  invalid post-`CLIENT_READY` same-epoch ACTIVE leaves the client in DRAIN and
+  cannot be resurrected by a later valid ACTIVE; only a validated fresh map
+  challenge after quiesce may rearm it. The server stamps the admission clock
+  before `Netchan_ProcessEx`, and its async
+  ACK wake runs after rate/fragment gates. Exact 1,024-byte boundaries are 818
+  bytes of client legacy prefix plus 206 native bytes and 976 bytes of server
+  prefix plus a 48-byte ACK; 819/977 bypass and retry without changing legacy.
+  Mixed DATA-plus-ACK packing, full real-netchan reliable/async-wake impairment
+  evidence, comprehensive demo/spectator policy, load/cross-platform parity,
+  general command/event/snapshot adapters, and advertisement remain open, so
+  `FR-10-T04` remains In Progress. No `q2proto/` file changed. Evidence:
+  `docs-dev/fr-10-t04-native-envelope-foundation-2026-07-13.md`,
+  `docs-dev/fr-10-t04-native-transport-session-retention-2026-07-13.md`,
+  `docs-dev/fr-10-t04-native-canonical-byte-codecs-2026-07-13.md`,
+  `docs-dev/fr-10-t04-native-packet-carrier-trailer-core-2026-07-13.md`,
+  `docs-dev/fr-10-t04-transport-confirmed-session-carrier-and-receipts-2026-07-13.md`,
+  `docs-dev/fr-10-t04-post-assembly-netchan-hook-2026-07-13.md`,
+  `docs-dev/fr-10-t04-post-admission-netchan-rx-seam-2026-07-14.md`,
+  `docs-dev/fr-10-t04-native-endpoint-readiness-core-2026-07-14.md`,
+  `docs-dev/fr-10-t04-native-readiness-setting-sideband-2026-07-14.md`, and
+  `docs-dev/fr-10-t04-native-command-shadow-core-2026-07-14.md`, with current
+  integration validation in
+  `docs-dev/fr-10-t04-rx-readiness-command-shadow-integration-validation-2026-07-14.md`,
+  readiness-only pilot evidence in
+  `docs-dev/fr-10-t04-default-off-native-readiness-production-pilot-2026-07-14.md`,
+  and the current production DATA/ACK observation in
+  `docs-dev/fr-10-t04-one-shot-native-command-shadow-production-pilot-2026-07-14.md`.
 - [ ] `FR-10-T05` Implement the typed, sequenced event journal with predictable,
   authoritative, reliable, and persistent delivery classes.
   Area: `bgame/cgame/sgame/client/server`. Priority: P0.
-  Dependencies: `FR-10-T02`, `FR-10-T04`. State: In Progress.
+  Dependencies: `FR-10-T02`, `FR-10-T03`. State: In Progress.
   Definition of Done: multiple events per tick retain order, event IDs and
   prediction correlation suppress duplicates, acknowledgement controls
   retention, and legacy one-byte events translate without changing q2proto.
-  Progress: the first cgame-owned bounded event journal and snapshot-derived
-  identity/deduplication foundation is active behind the legacy event adapter;
-  authoritative wire sequencing remains pending. Evidence:
-  `docs-dev/progressive-networking-foundation-2026-07-11.md`.
+  Progress: a pointer-free canonical event ABI and caller-owned bounded journal
+  now implement validation, authoritative/prediction identities, delivery
+  classes, selective receipt, sequence wrap, matching, coalescing, expiry, and
+  at-most-once state. Stable typed payloads cover legacy entity events,
+  temporary entities, player/monster muzzle flashes, and spatial audio with
+  padding-independent semantic comparison. Named optional extensions shadow
+  final authoritative legacy entity events into an engine-owned 4096-record
+  journal. The V2 client/cgame range now captures typed temporary entities,
+  player/monster muzzle flashes, normalized spatial sounds, and accepted-frame
+  entity events in legacy decode order with bounded carrier status/provenance
+  and strict failure atomicity. Packets, demos, legacy presenters, and rendered
+  behavior are unchanged. Cgame now owns a 2,048-record value-only
+  presentation journal with reset/overwrite-safe cursors, ordered future
+  blocking, at-most-once audit advancement, and explicit overrun recovery.
+  The local-action v2 core derives stable gameplay/audio/effect prediction keys
+  from canonical command identity and adapts them into this event ABI. Direct
+  authoritative multi-event producers, unified lifecycle propagation across
+  server snapshots and client ranges, live predicted matching/presentation,
+  reliable acknowledgement, and negotiated retention remain. Evidence:
+  `docs-dev/networking-canonical-event-journal-core-2026-07-12.md` and
+  `docs-dev/networking-legacy-entity-event-shadow-2026-07-12.md`,
+  `docs-dev/networking-client-cgame-legacy-event-shadow-2026-07-12.md`, and
+  `docs-dev/networking-event-payload-catalog-2026-07-12.md`,
+  `docs-dev/networking-client-cgame-typed-event-range-v2-2026-07-12.md`,
+  `docs-dev/networking-cgame-canonical-event-presentation-journal-2026-07-13.md`,
+  and `docs-dev/networking-canonical-local-action-transaction-v2-2026-07-13.md`.
 - [ ] `FR-10-T06` Build canonical acknowledged-baseline snapshot history,
-  keyframe recovery, removals/PVS rules, component deltas, and packet budgets.
-  Area: `client/server`. Priority: P0. Dependencies: `FR-10-T02`, `FR-10-T04`.
-  State: Backlog.
-  Definition of Done: distinct packet/snapshot/tick/baseline IDs are validated,
-  acknowledged baselines recover under loss, and no entity or payload limit
-  truncates silently.
+  keyframe recovery, removals/PVS rules, component deltas, packet budgets, and
+  legacy shadow-parity validation.
+  Area: `client/server`. Priority: P0.
+  Dependencies: `FR-10-T02`, `FR-10-T03`, `FR-10-T05`.
+  State: In Progress at live client/server legacy shadows, exact sent
+  references, repeatable 100,000-snapshot offline final-emission/projector
+  evidence, default-off keyframe recovery, a staged schema-v3 live cgame parity
+  gate, and a current-build 115,914-frame target-count live gate; native serialized
+  parity, broad release acceptance, and promotion remain open.
+  Definition of Done: distinct packet/snapshot/tick/baseline IDs are validated;
+  acknowledged baselines recover under loss; no entity or payload limit
+  truncates silently; and zero unexplained semantic mismatches occur across the
+  fault matrix and at least 100,000 shadowed snapshots before consumer cutover.
+  The later WORR adapter consumes the same canonical constructors.
   Baseline note: the current engine already deltas from a client-acknowledged
   frame in `src/server/entities.c`; this task generalizes that correct behavior
   into the canonical model rather than reimplementing a previous-frame-only
   design.
+  Progress: Stage A supplies a pointer-free component-aware snapshot ABI,
+  explicit snapshot/base/previous and discontinuity rules, authoritative or
+  legacy-inferred generation provenance, T02 player state, ordered T05 event
+  references, fieldwise semantic hashes, and a fixed-capacity transactional
+  immutable store with generation-safe validating copy-out. Its deterministic
+  100,000-publication, cross-compiler, sanitizer, corruption, exhaustion, and
+  atomic-failure evidence passes. Stage B adds an isolated public-q2proto
+  projector that reconstructs exact retained `deltaframe` branches, baselines,
+  removals, full frames, and per-base inferred entity lineage into immutable V2
+  views. Separate endpoint/parity domains and public q2proto wire round trips
+  prove equivalent Vanilla, R1Q2, Q2PRO, and Q2REPRO semantics; focused tests
+  cover base jumps, fragment-stall gaps, controlled-entity omission then first
+  appearance, transport-only truncation, and hostile aliases. The live client
+  captures baselines, frame headers and entity deltas, attaches the negotiated
+  consumed-command cursor, resolves a stateful canonical server clock across
+  FPS changes, retains lineage before precache and during demo seek, compares
+  accepted legacy state independently, and delivers only parity-qualified
+  promotion-eligible immutable views to the external cgame timeline.
+  Client-generated stored seek snapshots additionally carry a
+  checksum/commit-validated exact frame/time tuple for every backup frame,
+  preserving accumulated clock time across rate changes. Stage C observes each
+  peer's final accepted q2proto frame/entity services at the real emission
+  boundary, retains generation-safe exact base/endpoint refs, marks
+  truncation, commits only after the entity terminator, and records an exact
+  map simulation tick/time domain independent of wire frame numbers. Legacy
+  packet delivery remains authoritative even if projection fails. The map
+  simulation clock now advances exactly once after each completed `RunFrame`
+  and before client snapshots are built; `sv.framenum` remains stable through
+  emission and advances afterward, so post-simulation state cannot retain the
+  preceding tick's time. Validated acknowledgements retain the exact emitted
+  `server_time_us`, which command contexts consume directly instead of
+  reconstructing from a tick and the current interval. A fixed-seed offline
+  corpus now compares 100,000 server final-emission refs with a separately
+  allocated receiver projection across acknowledged branches, keyframes,
+  invalid-base recovery, entity lifecycle/visibility, transport discontinuity
+  causes, chronology, authoritative tick wrap, and the signed wire-frame
+  boundary. Two executions are byte-identical with digest
+  `7b185107eeb0f6e7` and record 100,000/100,000 endpoint, legacy, component,
+  and chronology matches. It also caught and now
+  covers the legacy unchanged non-beam `old_origin` rule without mutating a
+  retained base. That corpus is explicitly public-API/offline, not a live
+  serialized-datagram acceptance run. A pointer-free recovery
+  policy separately observes legacy reconstruction failures and canonical
+  projection/parity failures. Default-off `cl_snapshot_recovery` can reuse the
+  existing legacy `lastframe = -1` request through a bounded three-request
+  burst and two-opportunity cooldown; accepted keyframes and connection resets
+  clear the request, while ordinary legacy invalid-frame recovery remains
+  unconditional and unchanged. Copyable saturating status records expose the
+  recovery generation, reasons, streaks, retries, cooldown, and outcomes. The
+  staged protocol-1038 runtime gate now parses the direct snapshot-shadow and
+  attached-cgame status under `worr.networking.impairment-runtime.v3`: clean
+  latest staged loopback accepts 388/388 cgame
+  publications and the impaired
+  profile accepts 386/386, with zero shadow mismatch, frame/capture failure, or
+  consumer rejection in either profile. This is a short single-client live gate, not
+  the required 100,000-frame, load, soak, or release-platform matrix.
+  A target-count runner now schedules an accelerated production session and
+  requires exact terminal pipeline counts, attached consumer flags, exercised
+  impairment, nonce completion, pre/post launcher/engine/cgame/sgame/renderer
+  hashes, and retained log hashes. It exposed a sustained command-gap failure;
+  the bounded fix is implemented, and the rerun passed 115,914 exact attempts,
+  projections, publications, comparisons, promotion-eligible frames, and
+  consumer accepts against a 100,000 target. Mismatch, consumer rejection,
+  capture/queue overflow, and accidental wall-clock throttle were all zero
+  under deterministic loss, jitter, reorder, duplicate, and upstream-stall
+  conditions. This closes the single-client live-count item, not bandwidth or
+  native-serialization evidence. Authoritative event attachment, serialized
+  parity, keyframe impairment/promotion evidence, load/budget gates, and broad
+  rendering promotion remain open. Evidence:
+  `docs-dev/networking-canonical-snapshot-stage-a-2026-07-12.md` and
+  `docs-dev/networking-canonical-snapshot-stage-b-q2proto-projection-2026-07-12.md`,
+  `docs-dev/networking-live-client-snapshot-prediction-and-demo-clock-2026-07-12.md`,
+  `docs-dev/fr-10-t06-stage-c-server-final-emission-shadow-2026-07-13.md`,
+  `docs-dev/fr-10-t06-final-emission-projector-parity-corpus-2026-07-13.md`,
+  `docs-dev/networking-snapshot-keyframe-recovery-policy-2026-07-13.md`,
+  `docs-dev/networking-live-snapshot-parity-runtime-gate-2026-07-13.md`, and
+  `docs-dev/fr-10-t06-live-100k-snapshot-acceptance-gate-2026-07-13.md`.
 - [ ] `FR-10-T07` Move cgame to an immutable snapshot timeline with explicit
   transitions, discontinuities, adaptive interpolation, bounded extrapolation,
   and event playback.
@@ -3440,38 +4005,172 @@ Tasks:
   Definition of Done: cgame consumes value/range APIs instead of mutable engine
   internals on migrated paths, remote entities remain smooth under the fault
   matrix, and teleport/epoch/entity-generation changes never interpolate.
-  Progress: the first fixed-capacity cgame snapshot metadata timeline and
-  discontinuity/telemetry seam is active while legacy rendering behavior
-  remains active. Evidence:
-  `docs-dev/progressive-networking-foundation-2026-07-11.md`.
+  Progress: the client accepted-frame shadow feeds parity-qualified immutable
+  V2 views to `WORR_CGAME_SNAPSHOT_TIMELINE_EXPORT_V1`. External cgame owns a
+  bounded copied canonical timeline and exposes clock, pair selection, entity
+  sampling, snapshot/player copy-out, event iteration, reset, and diagnostics
+  helpers. Selecting a stored seek snapshot starts a new projection/timeline
+  epoch with monotonic per-frame exact times, while sequential forward seeking
+  preserves existing clock lineage. Each render frame now advances the
+  canonical clock with explicit pause/resume, selects an immutable pair at the
+  legacy-equivalent time, and audits or parity-promotes remote transforms per
+  entity behind `cg_snapshot_timeline_render`; local prediction and rejected
+  samples retain their fallbacks. The durable event journal advances an
+  ordered audit cursor at the pair time. Legacy effect/audio presentation and
+  default rendering remain authoritative; actual canonical presenters,
+  impairment parity, adaptive extrapolation, budgets, and classic-cgame
+  migration remain open. Evidence:
+  `docs-dev/networking-snapshot-timeline-core-t07-2026-07-12.md`,
+  `docs-dev/networking-live-client-snapshot-prediction-and-demo-clock-2026-07-12.md`,
+  `docs-dev/networking-live-cgame-canonical-render-promotion-2026-07-13.md`,
+  and `docs-dev/networking-cgame-canonical-event-presentation-journal-2026-07-13.md`.
 - [ ] `FR-10-T08` Complete client prediction, input replay, reconciliation,
   predicted-state caching, and predicted-side-effect suppression.
   Area: `bgame/cgame/client`. Priority: P0.
-  Dependencies: `FR-10-T02`, `FR-10-T05`, `FR-10-T07`. State: Backlog.
-  Definition of Done: authoritative input sequence is the replay watermark,
-  all eligible local movement/gameplay is predicted, corrections meet visual
-  budgets, and replay never duplicates effects.
-- [ ] `FR-10-T09` Add adaptive input delivery with explicit command sequences,
-  acknowledgements, pacing, batching, selective redundancy, and simulation /
-  packet / render rate decoupling.
-  Area: `client/server/common/net`. Priority: P1.
-  Dependencies: `FR-10-T04`, `FR-10-T06`, `FR-10-T08`. State: Backlog.
-  Definition of Done: input age and loss remain bounded under the fault matrix,
-  duplicate inputs are idempotent, and rate control meets bandwidth budgets.
+  Dependencies: `FR-10-T02`, `FR-10-T05`, `FR-10-T07`, `FR-10-T09`.
+  State: In Progress at authoritative movement replay, local fail-closed
+  reconciliation, and diagnostic prediction/authority audit scope.
+  Definition of Done: the authoritative consumed-command identity is the replay
+  watermark, all eligible local movement/gameplay is predicted, corrections
+  meet visual budgets, and replay never duplicates effects.
+  Progress: a versioned value-copy engine/cgame input-range ABI maps the live
+  server-consumed command ID to exact retained local history, verifies and
+  replays only canonical successors, and makes packet ACK unavailable after
+  cursor establishment. Negotiated `{0,0}` bootstrap and non-capable legacy
+  peers retain an explicit provisional fallback. Missing/ambiguous history,
+  identity discontinuity, invalid input, and capacity exhaustion clear
+  prediction caches and snap to current authority. A transport-neutral
+  local-action v2 core now proves exact-command weapon/ammo/phase transitions,
+  command-derived gameplay/audio/effect keys, canonical-event adaptation,
+  correction classification, and 4,096-command prediction/authority parity.
+  A caller-owned audit ring now pairs predicted and authoritative local-action
+  transactions by canonical command identity in either arrival order, retains
+  immutable correction evidence, blocks pruning across unmatched work, and
+  exposes conflict, stale, capacity, lifecycle, and correction telemetry. It
+  remains diagnostic-only for live gameplay, but its operational-cost
+  promotion blocker is closed: allocation-free O(n) operational validation is
+  separate from explicit whole-ring deep audit, and maximum-capacity
+  benchmarks enforce a 500 microsecond hot-path gate plus a 10 ms destructive-
+  lifecycle gate. Live cgame/sgame weapon-catalog adapters, audiovisual
+  suppression, shadow parity, live-integrated correction auditing, and
+  correction budgets remain open.
+  Evidence:
+  `docs-dev/networking-authoritative-prediction-input-range-2026-07-12.md`,
+  `docs-dev/networking-canonical-local-action-transaction-v2-2026-07-13.md`,
+  and
+  `docs-dev/networking-local-action-prediction-authority-audit-ring-2026-07-13.md`.
+- [ ] `FR-10-T09` Establish wrap-safe canonical command identity, validated
+  timing, and authoritative consumed-input acknowledgement.
+  Area: `bgame/cgame/client/server`. Priority: P0.
+  Dependencies: `FR-10-T02`, `FR-10-T03`, `FR-10-T05`, `FR-10-T06`.
+  State: In Progress at live negotiated legacy-carrier, authoritative
+  consumed-cursor, prediction, and rewind integration scope.
+  Definition of Done: the consumed-command watermark drives prediction, rewind,
+  and event correlation; duplicate input is idempotent; legacy mapping and
+  sequence-wrap behavior pass the fault matrix.
+  Progress: Phase 1 now supplies a pointer-free canonical record embedding the
+  T02 command payload, explicit `{epoch, sequence}` IDs, validated cumulative
+  sample and render timing, provenance-aware fieldwise hashes, and a bounded
+  caller-owned stream with independent receive/consume cursors. It rejects
+  gaps, conflicts, stale/future epochs, duration/sample overflow, invalid
+  aliasing, and unconsumed-capacity loss transactionally; consumed head records
+  alone may be reclaimed. Meson, strict ABI, hostile wrap/reset, sanitizer, and
+  static-analysis checks pass. Phase 2 adds the strict nine-pair signed-setting
+  sideband and transactional MOVE/BATCH adapter, including CRC/commit,
+  adjacency, duplicate/stale backup, phantom-bootstrap, 124-command, wrap,
+  reorder, capacity, and byte-identical failure coverage in the Meson suite.
+  Packet ACK remains explicitly excluded. The client now assigns contiguous
+  IDs and atomically stages their range with MOVE/BATCH_MOVE. The server
+  validates the negotiated adjacent range, advances `consumed_cursor` only
+  around authoritative simulation, and publishes the post-callback cursor
+  before snapshots. The client strictly binds that tuple to the negotiated
+  session, rejects regression, attaches it to snapshots and demos, and drives
+  cgame replay from the exact consumed ID. Each validated source-frame
+  acknowledgement also retains the exact emitted server time beside its
+  simulation frame; the callback-scoped command/rewind context consumes that
+  retained time directly rather than deriving it as
+  `server_tick * current_interval`, and identifies the last completed tick
+  between frames. Client-generated stored seek snapshots stage their validated
+  exact-time tuple before the existing cursor tuple, preserving cursor-to-frame
+  adjacency and consumed-input authority. Event correlation now has a
+  command-derived local-action key model. The diagnostic local-action audit
+  ring now enforces that command ID plus the active connection epoch as the
+  prediction/authority pairing boundary, preserves full command-epoch prune
+  watermarks, and rejects stale-connection aliases without changing transport
+  or authority. Its allocation-free O(n) operational V2 path now separates
+  maximum-capacity hot checks from explicit whole-ring deep audit and enforces
+  measured 500 microsecond hot-path and 10 ms destructive-lifecycle budgets.
+  The default-off native production pilot now also maps one command selected
+  from the exact encoded legacy range into `WNC1`, using the shared
+  `usercmd_t`-to-prediction converter and each transport bank's official
+  command epoch. The server joins either arrival order and records command or
+  sample-offset agreement without changing the legacy consumed cursor or
+  simulation authority. Separately, server-observed transport gaps no longer
+  inherit the 128-slot
+  retention ceiling: O(1) identity distance, a 4,096-command policy cap,
+  complete time/epoch preflight, bounded synthesis, and transactional advance
+  cover the reproduced 161/401-command failures with distinct telemetry. Live
+  producer/consumer cutover, native exact render watermarks, repeated native
+  command delivery/authority, and full impairment/runtime acceptance remain
+  open.
+  Evidence:
+  `docs-dev/networking-canonical-command-stream-core-2026-07-12.md` and
+  `docs-dev/networking-legacy-command-adapter-core-2026-07-12.md`,
+  `docs-dev/networking-consumed-command-cursor-svc-setting-sideband-2026-07-12.md`,
+  `docs-dev/networking-consumed-command-cursor-server-live-carrier-2026-07-12.md`,
+  `docs-dev/networking-authoritative-prediction-input-range-2026-07-12.md`,
+  `docs-dev/networking-live-client-snapshot-prediction-and-demo-clock-2026-07-12.md`,
+  `docs-dev/networking-canonical-local-action-transaction-v2-2026-07-13.md`,
+  `docs-dev/networking-local-action-prediction-authority-audit-ring-2026-07-13.md`,
+  `docs-dev/fr-10-t09-bounded-command-gap-fast-forward-2026-07-13.md`, and
+  `docs-dev/fr-10-t04-one-shot-native-command-shadow-production-pilot-2026-07-14.md`.
 - [ ] `FR-10-T10` Establish server clock mapping and bounded timestamped
   full-collision-pose history with a non-mutating historical query scene.
   Area: `server/sgame/network`. Priority: P0.
-  Dependencies: `FR-10-T02`, `FR-10-T06`, `FR-10-T09`. State: In Progress.
+  Dependencies: `FR-10-T02`, `FR-10-T06`, `FR-10-T09`. State: In Progress at
+  authenticated player history, observation, and immutable inline-BSP
+  collision-provider Stage A scope.
   Definition of Done: commands use a server-validated snapshot-to-simulation
   watermark, history stores time/frame/origin/bounds/angles/validity, samples
   interpolate without crossing discontinuities, and historical collision
   queries cannot mutate or relink the authoritative live world.
-  Progress: the initial authority fix maps acknowledged network snapshots back
-  to server simulation frames and validated contiguous-snapshot intervals
-  before sgame sees a command; first/suppressed gaps use an explicit
-  no-interpolation sentinel. Bounded full-pose player history now feeds a
-  non-mutating historical proxy collision scene for the legacy path. Explicit
-  per-command render time, movers, and load gates remain.
+  Progress: server-validated acknowledgements retain the exact emitted server
+  time while mapping to authoritative simulation frames and validated
+  contiguous-snapshot intervals; source time is never reconstructed from the
+  current tick interval, and the live between-frame context names the last
+  completed tick rather than the next tick yet to run. First/suppressed gaps
+  use an explicit no-interpolation sentinel. The live canonical command path
+  exports an API-version-2 callback scope with inactive-legacy, active-valid,
+  and active-rejected states, so canonical proof rejection and synthesized-gap
+  commands cannot fall back to packet-ack rewind. Sgame uses the common
+  512-pose history, lifecycle/discontinuity policy, per-map/client resets, one
+  sealed player-bounds scene per command, immutable trace views,
+  generation-checked live revalidation, and per-ray ignore sets. The source
+  snapshot is still a server-owned projection of the legacy frame ring rather
+  than a materialized canonical server snapshot store. A pointer-free
+  256-entry observation journal records path/reason/times/candidate/scene/hit/
+  duration data and a live-state before/after guard. Stage A now exposes a
+  versioned engine-to-game collision extension that resolves map-epoch-bound
+  immutable inline-BSP assets and performs explicit transformed box traces
+  without accepting, relinking, unlinking, or returning an edict. Stable asset
+  identity includes the authoritative advertised collision-map checksum,
+  inline-model namespace holes are validated, outputs are transactional, and
+  the process-local import layout is checked in C and C++ for both 32- and
+  64-bit pointer widths. A generated real IBSP38 fixture now loads through the
+  production map path and matches direct `SV_Clip` versus extension results for
+  ten translated/rotated ray/box cases and four rejection classes while live
+  edict/link bytes remain unchanged. This does not yet capture mover poses or
+  make a historical brush trace authoritative. A versioned 40-case,
+  three-repeat common-core runner covers all eight weapon tags at
+  0/50/100/200 ms plus cap, stale/future, history, teleport, respawn,
+  slot-reuse, and disable boundaries. Server-owned mover capture,
+  current-world mover exclusion, broader BSP/BSPX geometry,
+  historical brush audit, live promotion, real engine trace/damage scenarios,
+  sustained load, and release-platform evidence remain open. Evidence:
+  `docs-dev/networking-authenticated-command-context-2026-07-12.md`,
+  `docs-dev/networking-live-canonical-rewind-scene-and-hitscan-2026-07-12.md`,
+  `docs-dev/networking-rewind-observability-acceptance-evidence-2026-07-13.md`,
+  and `docs-dev/fr-10-t10-immutable-brush-collision-extension-2026-07-13.md`.
 - [ ] `FR-10-T11` Ship fair hitscan lag compensation with validation, rewind
   caps, diagnostics, and weapon-specific acceptance coverage.
   Area: `sgame/network`, `sgame/player`. Priority: P0.
@@ -3479,38 +4178,257 @@ Tasks:
   Definition of Done: hitscan traces use scoped interpolated history, cannot
   trust client-authored time, do not cross spawn/teleport discontinuities, and
   pass zero/low/high-latency fairness scenarios.
-  Progress: supported hitscan convergence/traces use historical player proxies
-  and restore-before-mutation query boundaries; damage remains current and
-  authoritative. The deterministic latency/fairness matrix remains pending.
+  Progress: machinegun, chaingun, shotgun, super shotgun, railgun, disruptor,
+  plasma beam, and thunderbolt convergence/trace queries use one cached
+  canonical decision and sealed historical scene per command. Piercing uses
+  generation-checked per-ray ignore identities rather than mutating or
+  relinking live entities. A canonical rejection produces an uncompensated
+  authoritative trace and cannot use the legacy estimate. Damage, knockback,
+  death, effects, and radius damage execute against current authoritative
+  state. Every integrated query supplies an explicit weapon-policy tag to the
+  bounded observation seam, and the deterministic common-core matrix proves
+  its declared timing/discontinuity boundaries. `g_lag_compensation` remains
+  default-off. Live damage/fairness scenarios, movers, operator documentation,
+  abuse/load gates, and release promotion remain open. Evidence:
+  `docs-dev/networking-live-canonical-rewind-scene-and-hitscan-2026-07-12.md`
+  and `docs-dev/networking-rewind-observability-acceptance-evidence-2026-07-13.md`.
 - [ ] `FR-10-T12` Extend declared compensation policies to projectile spawn /
   fast-forward, melee, continuous beams, splash, movers, and triggers.
   Area: `sgame/network`, `sgame/gameplay`. Priority: P1.
-  Dependencies: `FR-10-T10`, `FR-10-T11`. State: Backlog.
+  Dependencies: `FR-10-T10`, `FR-10-T11`.
+  State: In Progress at trace-only continuous-beam and narrow
+  projectile-convergence scope.
   Definition of Done: each interaction class has an explicit fairness/collision
   policy and deterministic tests; world state is never globally left rewound.
+  Progress: plasma/heat-beam and thunderbolt main, water-retrace, and side-ray
+  queries use the historical scene, and the complete thunderbolt footprint is
+  resolved before damage. Disruptor target acquisition uses historical point/
+  expanded convergence. Projectile spawn fast-forward, ongoing projectile
+  simulation, melee, splash/radius, movers, deployables, triggers, and coop
+  policies remain open.
 - [ ] `FR-10-T13` Preserve modern and legacy demo, MVD, spectator, GTV, seeking,
   and replay semantics across snapshot/event transitions.
   Area: `client/server/mvd`. Priority: P1.
-  Dependencies: `FR-10-T04` through `FR-10-T07`. State: Backlog.
+  Dependencies: `FR-10-T04` through `FR-10-T07`, plus `FR-10-T09`.
+  State: In Progress at client-demo capability/cursor preservation and
+  canonical seek-lineage scope.
   Definition of Done: record/play/seek/relay matrices preserve ordered commands,
   events, discontinuities, and canonical snapshot identities.
+  Progress: new client recordings rebuild the confirmed capability tuple, emit
+  the consumed-cursor sideband atomically with synthetic frame/entity data, and
+  replay it through the same strict parser. Client-generated in-memory seek
+  snapshots also carry a private six-setting, checksum/commit-validated exact
+  clock tuple for every backup frame. It is accepted only for an explicitly
+  armed synthetic packet, must match its frame, and precedes the cursor tuple.
+  Selecting any stored snapshot replaces clock/projection lineage, including a
+  forward seek whose backup window starts behind the current frame; sequential
+  forward skipping retains continuity. Focused codec corruption/order,
+  frame-match, C/C++ layout, arming, legacy-fallback, and serverdata-lifecycle
+  checks pass. Legacy demos and protocols without the private tuple retain the
+  stateful fallback. MVD/GTV, spectator switching, native
+  demo schema/versioning, canonical event-order reproduction, and full record/
+  play/seek/relay matrices remain open. Evidence:
+  `docs-dev/networking-live-client-snapshot-prediction-and-demo-clock-2026-07-12.md`.
 - [ ] `FR-10-T14` Add network telemetry, diagnostics, security/load tests, and
   enforceable CPU, memory, bandwidth, correction, and rewind budgets.
   Area: `client/server/cgame/sgame/tools`. Priority: P1.
-  Dependencies: `FR-10-T03`, `FR-10-T06`, `FR-10-T08`, `FR-10-T10` through
-  `FR-10-T12`. State: Backlog.
-  Definition of Done: operator and developer telemetry is bounded and
-  actionable, adversarial inputs fail closed, and release gates consume
-  machine-readable budget evidence.
+  Dependencies: `FR-10-T03` through `FR-10-T13`, plus `FR-10-T16`.
+  State: In Progress at rewind, adaptive-input, snapshot-recovery, direct live
+  snapshot/cgame parity, and diagnostic local-action observability plus a
+  versioned acceptance-evidence foundation; full telemetry/load/security gates
+  remain open.
+  Definition of Done: mandatory 1/8/16/32-client profiles include separate
+  10-minute 32-client super-shotgun and chaingun runs with at least 5,000
+  measured frames; snapshot and rewind work each stay within 10% p95 and
+  combined networking within 25% p99 of the authoritative frame budget;
+  steady-state allocations, network-attributable deadline misses, correctness
+  errors, and failures across 100,000 malformed cases per changed decoder/range
+  constructor are all zero. Evidence conforms to the living plan's versioned
+  corpus and machine-readable evidence contract.
+  Progress: the bounded rewind observation journal records path, reason,
+  authenticated times, candidate/scene/hit counts, duration, and a live-state
+  mutation guard. Adaptive input and snapshot recovery expose pointer-free,
+  copyable, saturating policy/status records rather than requiring console-text
+  scraping. The first `worr.networking.acceptance-evidence.v1` producer hashes
+  its source, matrix, and binaries and records platform/build/workload,
+  deterministic outcomes, timings, thresholds, privacy declarations, child
+  artifacts, and explicit limitations. Meson now registers 104 networking
+  tests after the admitted RX seam, readiness core/sideband, command-shadow,
+  and production-pilot additions; the current full suite passes 104/104 and
+  three consecutive complete repetitions pass 312/312. The focused production
+  pilot matrix passes 14/14 and covers exact command-range selection, both
+  arrival orders, current/retired epoch receipt liveness, duplicate rearm,
+  one-shot drain, reliable-queue commitment, admission-clock ordering, async-
+  wake eligibility, and the 818/819 and 976/977 application boundaries. Final
+  production-profile client syntax passes for x86-64 and i686, fresh client
+  ASan/UBSan passes with an 8 MiB stack, and fresh client adapter/test analyzer
+  plists contain zero diagnostics.
+  Focused native proof also covers connection-
+  incarnation owner mismatch, exact packet-bound ACK outcomes, unsafe alias
+  rejection, and end-to-end one-way receipt recovery. Focused carrier proof
+  additionally covers golden framing, exact 1,200-byte packet boundaries,
+  nested WNE1/epoch validation, corruption/truncation/alias failures, and the
+  intentional carrier-only CRC domain. The staged schema-v3 networking
+  post-hook runtime smoke accepts 388/388 clean and 386/386 impaired cgame
+  snapshot publications with zero shadow mismatch,
+  entity mismatch, frame
+  failure, or consumer rejection. The impaired profile exercises 7 drops, 7
+  duplicates, 6 reorders, and 1 throttle event with its queue checks passing,
+  while also enforcing clean default-off recovery/input state and live impaired
+  adaptive-input evaluation. The retained accelerated target-
+  count report separately passes 115,914/115,914 snapshot pipeline and
+  consumer accepts with zero parity, consumer, queue, or throttle failure.
+  All 40 rewind cases pass over 120 invocations with zero outcome/repeat
+  mismatch or authoritative pose mutation. The client engine, dedicated
+  engine, both launchers, cgame, and sgame production targets all build and
+  link. The refreshed
+  `windows-x86_64` `.install/` validates 16 root runtime
+  files, one dependency, the `basew` runtime, a 308-asset `pak0.pkz`, 31
+  botfiles, 214 RmlUi assets, and
+  SHA-256 equality for all six built/staged production binaries.
+  The production rebuild, focused suite, full suite, 312/312 repeat, strict,
+  sanitizer, analyzer, stage, and runtime smoke all pass after the final same-
+  epoch fail-closed client lifecycle fix.
+  The local-action prediction/authority ring now has a measured maximum-
+  capacity cheap/deep audit split, and the immutable brush provider has narrow
+  real-IBSP38 geometric parity. They remain diagnostic/foundation scope because
+  live cgame/sgame correction integration and mover history are absent. These
+  focused, single-platform results do not provide the
+  mandatory live collision/damage, 100,000-malformed-case,
+  1/8/16/32-client, stress, soak, budget, native-adapter, broader BSP/BSPX and
+  mover coverage, or cross-platform evidence; all such acceptance gates remain
+  open.
+  Evidence:
+  `docs-dev/networking-rewind-observability-acceptance-evidence-2026-07-13.md`,
+  `docs-dev/networking-adaptive-input-pacing-and-redundancy-2026-07-13.md`,
+  `docs-dev/networking-snapshot-keyframe-recovery-policy-2026-07-13.md`,
+  `docs-dev/fr-10-t04-native-transport-session-retention-2026-07-13.md`,
+  `docs-dev/networking-live-snapshot-parity-runtime-gate-2026-07-13.md`,
+  `docs-dev/networking-local-action-prediction-authority-audit-ring-2026-07-13.md`,
+  `docs-dev/fr-10-t04-native-canonical-byte-codecs-2026-07-13.md`,
+  `docs-dev/fr-10-t04-native-packet-carrier-trailer-core-2026-07-13.md`,
+  `docs-dev/fr-10-t04-transport-confirmed-session-carrier-and-receipts-2026-07-13.md`,
+  `docs-dev/fr-10-t04-post-assembly-netchan-hook-2026-07-13.md`,
+  `docs-dev/fr-10-t04-one-shot-native-command-shadow-production-pilot-2026-07-14.md`,
+  `docs-dev/fr-10-t06-live-100k-snapshot-acceptance-gate-2026-07-13.md`,
+  `docs-dev/fr-10-t09-bounded-command-gap-fast-forward-2026-07-13.md`, and
+  `docs-dev/fr-10-t10-immutable-brush-collision-extension-2026-07-13.md`.
 - [ ] `FR-10-T15` Complete progressive rollout, dual-stack acceptance,
   operator/end-user documentation, migration defaults, and removal gates.
   Area: `docs-dev/docs-user/tools/release`. Priority: P1.
-  Dependencies: `FR-10-T05` through `FR-10-T14`. State: Backlog.
-  Definition of Done: every phase has a reversible switch and owner, modern
-  defaults meet acceptance budgets, and no legacy adapter is removed before its
-  published compatibility gate is satisfied.
+  Dependencies: `FR-10-T04` through `FR-10-T14`, plus `FR-10-T16`.
+  State: In Progress at controls-documentation scope only; rollout,
+  dual-stack acceptance, defaults, and removal gates remain open.
+  Definition of Done: shadow parity is zero-error across at least 100,000
+  snapshots; every supported platform passes three consecutive full matrices;
+  every supported dedicated-server platform passes a two-hour 32-client soak;
+  R4/R5 complete at least seven opt-in days and 100 server-hours; all rollback
+  drills and mandatory compatibility rows pass, with no unresolved FR-10 P0/P1
+  defects. No legacy adapter is removed before its published compatibility gate
+  is satisfied.
+  Progress: `docs-user/progressive-networking-controls.md` documents the
+  current default-off snapshot timeline/render audit, snapshot recovery,
+  adaptive input, lag-compensation, and impairment controls, their status
+  commands, compatibility behavior, and operator cautions. This documentation
+  does not promote a default, advertise the native envelope, prove dual-stack
+  rollout, authorize legacy removal, or satisfy any release-duration gate.
+- [ ] `FR-10-T16` Add adaptive input pacing, batching, selective redundancy,
+  and simulation/packet/render cadence decoupling.
+  Area: `client/server/common/net`. Priority: P1.
+  Dependencies: `FR-10-T03`, `FR-10-T04`, `FR-10-T08`, `FR-10-T09`.
+  State: In Progress at deterministic controller and default-off live client
+  integration foundation; native-adapter and acceptance gates remain open.
+  Definition of Done: fresh-input age, bounded-loss recovery, idempotence, and
+  bandwidth gates pass on legacy and WORR adapters. Progress: a pointer-free,
+  allocation-free integer V1 controller consumes separately normalized
+  successful-receive and inferred-drop counters, so drops are not counted
+  again in the loss denominator, plus RTT variation, queued-command/
+  acknowledgement pressure, rate, `cl_maxpackets`, and `cl_packetdup`.
+  Sub-threshold windows accumulate until a usable sample exists, while counter
+  rollback, clock reset/wrap, client-state teardown, server change, and map
+  change explicitly rebaseline or reset policy state. Default-off
+  `cl_adaptive_input` applies bounded pacing and selective redundancy only to
+  the existing batch-move path. A configured `cl_maxpackets 0` remains
+  immediately unlimited even during a held decision; stable and cold-start
+  decisions preserve the configured `cl_packetdup` baseline, pressure may only
+  raise it within transport bounds, and low rate may cap it. The non-batched
+  fake-drop path suspends the controller, invalid input fails locally to legacy
+  policy, and machine-readable reason/status counters saturate instead of
+  wrapping. The staged `worr.networking.impairment-runtime.v3` gate now proves
+  clean default-off state and live impaired-profile controller evaluation while
+  the attached cgame snapshot consumer remains exact at
+  388/388 clean and
+  386/386 impaired publications. The local-action prediction/authority audit
+  ring now has a measured bounded operational path, and the default-off WTC1
+  production pilot transports one observational native command DATA beside the
+  authoritative legacy bytes and returns an exact ACK-only receipt,
+  its owner-bound session bridge now defers send accounting until a fully
+  confirmed fragment burst, and its serialized ACK-only ledger has an exact
+  cross-component one-way-loss proof through the 64-sequence sender stall,
+  committed-DATA repeat rearm, and reverse-path recovery. The adaptive delivery
+  path now uses the post-assembly TX and admitted-RX seams with exact packet-
+  copy handoff outcomes, an actual per-direction application ceiling, current
+  plus one retired epoch bank, and a rate/fragment-gated async ACK wake. It does
+  not yet provide repeated native commands, native authority, mixed DATA-plus-
+  ACK packing, or full real-netchan impairment evidence. Legacy canonical
+  intake has bounded over-retention loss recovery. A scoped 50,001-frame rate-
+  shaped diagnostic reached its marker after 24 fast-forwards and 10,229 skips,
+  while the independent 115,914-frame snapshot gate stayed connected. A
+  dedicated command-gap report is still pending. Legacy/native impairment
+  breadth, a complete native adapter, bandwidth, command-age, server-feedback,
+  live-integrated correction-audit evidence, load/soak, and cross-platform gates
+  remain open. Evidence:
+  `docs-dev/networking-adaptive-input-pacing-and-redundancy-2026-07-13.md`,
+  `docs-dev/fr-10-t04-native-transport-session-retention-2026-07-13.md`,
+  `docs-dev/fr-10-t04-native-packet-carrier-trailer-core-2026-07-13.md`,
+  `docs-dev/fr-10-t04-post-assembly-netchan-hook-2026-07-13.md`,
+  `docs-dev/fr-10-t04-one-shot-native-command-shadow-production-pilot-2026-07-14.md`,
+  `docs-dev/networking-live-snapshot-parity-runtime-gate-2026-07-13.md`,
+  `docs-dev/networking-local-action-prediction-authority-audit-ring-2026-07-13.md`,
+  and `docs-dev/fr-10-t09-bounded-command-gap-fast-forward-2026-07-13.md`.
+
+FR-10 release contract: `tools/release/targets.py` is the authoritative platform
+matrix; its current targets are `windows-x86_64`, `linux-x86_64`, and
+`macos-x86_64`, each with client and dedicated-server artifacts. Versioned
+networking scenario manifests live under `tools/networking/scenarios/`; the
+current `worr.networking.impairment-matrix.v1` manifest, checked-in golden,
+ordinary tests, and staged runtime control are the reusable virtual-link
+evidence for `FR-10-T03`. Full cross-subsystem acceptance evidence uses
+the `worr.networking.acceptance-evidence.v1` envelope under
+`.tmp/networking/<run-id>/`, recording source/platform/build/binary identities,
+hashed corpus inputs, scenario and deterministic seed, topology/timing/rate and
+impairment settings, sample counts, p50/p95/p99 metrics with units, thresholds,
+per-gate results, and hashes of child artifacts. The staged live child artifact
+now uses `worr.networking.impairment-runtime.v3`; existing baseline/runtime
+schemas may be child artifacts but cannot alone prove `FR-10-T14` or
+`FR-10-T15`. The detailed contract and privacy exclusions are canonicalized in
+the living plan.
 
 Living plan: `docs-dev/plans/progressive-networking-events-snapshots-roadmap.md`.
+
+## Epic FR-11: Modern In-Game Console Experience
+
+**Outcome:** WORR gains every unique FnQuake3 in-game console interaction and
+presentation feature through WORR-native UTF-8, command-generator, renderer,
+and input-system integrations.
+
+**Project roadmap:**
+`docs-dev/plans/fnquake3-console-integration-roadmap.md`
+
+- [x] `FR-11-T01` Audit FnQuake3/WORR console capabilities and ratify the port
+  matrix, architecture boundaries, cvar naming, and non-regression gates.
+- [x] `FR-11-T02` Add configurable page-aware steps plus frame-time-independent
+  smooth motion for manual scrollback and newly printed lines.
+- [x] `FR-11-T03` Add live/fuzzy completion popup behavior over WORR commands,
+  cvars, aliases, and command-specific argument generators.
+- [x] `FR-11-T04` Add console mouse routing, pointer rendering, interactive
+  scrollbars, UTF-8 input/log selection and copy, and selection drag reuse.
+- [x] `FR-11-T05` Add centered extents and configurable appearance/fade controls
+  through shared renderer APIs, retaining native Vulkan behavior.
+- [x] `FR-11-T06` Add opt-in raw quoted console chat while preserving legacy and
+  slash-command behavior.
+- [x] `FR-11-T07` Complete automated/runtime validation, user documentation,
+  implementation documentation, and `.install/` staging.
 
 ## Development Roadmap (Task-Based Project)
 
@@ -3848,6 +4766,106 @@ Tasks:
 - [ ] `DV-03-T08` Add deterministic renderer semantic tests for gamma/color charts, light-query saturation, shadow alias/cache invalidation, malformed shadowlight records, and GL/Vulkan pixel tolerances.
   Dependency: `DV-02-T03`, `FR-02-T12`. Priority: P1.
 
+2026-07-13 `DV-03-T07` progress: the RmlUi runtime capture harness now accepts
+repeated validated cvar seeds after config loading and knows the `ui_list`
+route. A dedicated fixed-list checker covers the sgame owner, generic runtime
+bridge, authored RML states/rows, back cleanup, and style contract. Installed
+960x720 populated, empty, and error captures pass exact route, font, geometry,
+input, and back-close validation. Broader navigation/action and native renderer
+automation remains open. Implementation log:
+`docs-dev/rmlui-live-ui-list-provider-2026-07-13.md`.
+
+2026-07-13 `DV-03-T07` Player Setup progress: the guarded capture registry now
+opens `players` with deterministic cvar seeds, and the focused provider checker
+locks composite selection, live images, explicit states, preview stages,
+reduced motion, layout, and OpenGL cached-atlas UV behavior. The final installed
+960x720 capture passes font, route, input, back-close, and clean-log gates.
+Broader action automation and native renderer coverage remain open.
+Implementation log:
+`docs-dev/rmlui-live-player-setup-provider-2026-07-13.md`.
+
+2026-07-13 `DV-03-T07` keybind-family progress: the guarded capture registry
+now opens `keys`, `legacykeys`, and `weapons`, and the focused provider checker
+locks two-slot preservation, per-slot clear, timeout, conflict confirmation,
+device artwork, exact command coverage, pre-load accessibility state, and
+route/style contracts. Three clean installed reduced-motion 960x720 captures
+pass font, route, input, back-close, and geometry gates. Non-destructive
+action mutation/restore automation and native renderer
+coverage remain open. Implementation log:
+`docs-dev/rmlui-live-keybind-provider-2026-07-13.md`.
+
+2026-07-13 `DV-03-T07` Address Book and visibility progress: the guarded
+capture registry opens `addressbook` with deterministic archived cvar seeds,
+and the focused checker locks all sixteen fields, immediate generic-bridge
+writeback, length limits, and exact Browse Favorites sources. The shared loader
+now applies accessibility classes before document construction and the theme no
+longer instantiates unreliable decorative load-time opacity fades. A clean
+installed 960x720 Address Book capture plus the full 267-test UI smoke suite
+pass. Action mutation/restore automation and native renderer coverage remain
+open. Implementation logs:
+`docs-dev/rmlui-live-addressbook-provider-2026-07-13.md` and
+`docs-dev/rmlui-deterministic-route-visibility-2026-07-13.md`.
+
+2026-07-13 `DV-03-T07` session-entry progress: the guarded capture registry
+now opens `dm_welcome`, `dm_join`, `join`, `dm_hostinfo`, and `dm_matchinfo`
+with deterministic live-state seeds. The focused checker covers 49
+sgame-published cvars, route/command publication, team and non-team conditions,
+command-cvar actions, first-connect and resumable close semantics, single-back
+information layouts, accessibility, metadata, and capture registration. Five
+clean installed reduced-motion 960x720 captures pass route, font, geometry,
+synthetic input, and back-close gates; the full UI smoke suite passes 279
+tests. Connected action automation and native renderer coverage remain open.
+Implementation log:
+`docs-dev/rmlui-live-session-entry-provider-2026-07-13.md`.
+
+2026-07-13 `DV-03-T07` vote/callvote progress: the guarded registry now opens
+`vote_menu` and all seven callvote routes with deterministic live-state seeds.
+The focused checker covers 41 sgame-published values, twenty registered
+commands, complete option and empty-state gates, current and dynamic labels,
+tri-state map flags, single-back close semantics, accessible two-column
+layouts, metadata, and capture registration. Runtime validation also corrected
+popmenu close-tail filtering and custom-install executable selection. Eleven
+clean canonical `.install` 960x720 captures pass route, font, geometry,
+synthetic-input, inactive-close, and clean-log gates; the full UI smoke suite
+passes 292 tests. Connected action automation and native renderer coverage
+remain open. Implementation log:
+`docs-dev/rmlui-live-vote-callvote-provider-2026-07-13.md`.
+
+2026-07-13 `DV-03-T07` MyMap progress: the guarded registry now opens
+`mymap_main` and `mymap_flags` with deterministic availability and tri-state
+seeds. The focused checker covers fifteen published values, six registered
+commands, enabled conditions, generic-list ownership, single-back behavior,
+compact and two-column layouts, metadata, and capture registration. Three
+clean canonical `.install` 960x720 captures pass route, font, geometry,
+synthetic-input, inactive-close, and clean-log gates; the full UI smoke suite
+passes 300 tests. Connected action automation and native renderer coverage
+remain open. Implementation log:
+`docs-dev/rmlui-live-mymap-provider-2026-07-13.md`.
+
+2026-07-13 `DV-03-T07` session-confirmation progress: the guarded registry now
+opens `forfeit_confirm` and `leave_match_confirm`. The focused checker locks
+native popup routing, safe cancel/back behavior, No-first focus, destructive
+styling, authoritative forfeit dispatch, close-before-disconnect ordering,
+localization hooks, metadata, and capture registration. Two clean 960x720
+installed-tree captures pass route, font, geometry, synthetic-input,
+inactive-close, and clean-log gates; the full UI smoke suite passes 308 tests.
+Canonical `.install` refresh remains queued behind an unrelated staged-engine
+DLL lock. Connected action automation and native renderer coverage remain
+open. Implementation log:
+`docs-dev/rmlui-live-session-confirm-provider-2026-07-13.md`.
+
+2026-07-13 `DV-03-T07` Admin progress: the guarded registry now opens
+`admin_menu` and `admin_commands`. The focused checker locks native route and
+condition paths, sgame Replay publication, admin-only entry commands, exact
+coverage of all 28 registered admin commands, matching reference usages,
+single-back behavior, compact/scrollable layout, metadata, and capture
+registration. Replay-shown, Replay-hidden, and full-reference 960x720 frames
+pass route, font, geometry, synthetic-input, inactive-close, and clean-log
+gates; the full UI smoke suite passes 316 tests. Canonical `.install` refresh
+remains queued behind the unrelated staged-engine DLL lock. Connected Replay,
+localization/input, and native renderer coverage remain open. Implementation
+log: `docs-dev/rmlui-live-admin-provider-2026-07-13.md`.
+
 ## Epic DV-04: Architecture and Code Quality
 Objective: reduce maintenance overhead and complete key modernization tracks.
 
@@ -3916,6 +4934,11 @@ Tasks:
   menu-entrypoint `runtime_stub` routes. Controller-stub completion validation
   keeps the ownership map from regressing to hidden starter surfaces. Live
   bridge simplification remains pending.
+  2026-07-13 fixed-list note: `ui_list` now preserves sgame ownership for
+  list kind, state, entries, commands, and paging while the compiled runtime
+  reuses the generic cvar/condition/command bridge. Ordered route-pop plus
+  owner cleanup removes a back-navigation ownership leak without introducing
+  a route-specific client model. Broader bridge simplification remains open.
 - [ ] `DV-04-T03` Add static analysis and warning-as-error policy for first-party code in CI.
   Dependency: `DV-02-T01`. Priority: P1.
   Progress: First-party string-safety cleanup replaced direct `strcpy()` / `strcat()` usage in command argument assembly, macro keyword expansion, config fallback probing, filesystem write-mode construction, Windows service command construction, and normalization test setup; prompt completion now exposes corrected `com_completion_threshold` naming with legacy fallback.
@@ -4724,6 +5747,85 @@ Tasks:
   Latest match item-policy credit update: the WORR-owned `bot_match_item_policy` umbrella bridge, mode `51` scenario promotion, and objective/nav status ordering fix are recorded as native work with no new upstream imports claimed.
   Docs-progress tracking note: `docs-dev/q3a-botlib-docs-progress-tracking-round-2026-06-18.md` and `docs-dev/q3a-botlib-extensive-round-closeout-2026-06-18.md` record final checklist math, scenario counts, build/test commands, package/install validation status, and the remaining reference-map/long-soak/coop/CI evidence gaps for the current round.
 
+2026-07-13 `DV-07-T04` fixed-list note: the significant implementation and
+regression evidence are recorded in
+`docs-dev/rmlui-live-ui-list-provider-2026-07-13.md`. No new player cvar or
+workflow was introduced, so no separate user guide is required for this
+slice; player-visible behavior now matches the existing Callvote/MyMap/
+tournament list intent. Large-text, localization, controller-navigation, and
+native cross-renderer parity remain open before final user-doc parity.
+
+2026-07-13 `DV-07-T04` Player Setup note: significant implementation and
+regression evidence are recorded in
+`docs-dev/rmlui-live-player-setup-provider-2026-07-13.md`. The existing Player
+Setup workflow gained parity and visual correctness but no new player-facing
+cvar or concept, so a separate user guide is not required. Final large-text,
+localization, controller-navigation, and native cross-renderer user-doc parity
+remains open.
+
+2026-07-13 `DV-07-T04` keybind-family note: significant implementation and
+regression evidence are recorded in
+`docs-dev/rmlui-live-keybind-provider-2026-07-13.md`. The existing binding
+workflow gained the documented Primary/Alternate, timeout, conflict, and key-
+art behavior without a new command, cvar, or concept, so no separate user
+guide is required. Final large-text, localization, controller-navigation, and
+native cross-renderer user-doc parity remains open.
+
+2026-07-13 `DV-07-T04` Address Book and deterministic-visibility note:
+significant implementation and regression evidence are recorded in
+`docs-dev/rmlui-live-addressbook-provider-2026-07-13.md` and
+`docs-dev/rmlui-deterministic-route-visibility-2026-07-13.md`. The existing
+archived address workflow gained complete live-provider and visual parity, and
+the shared accessibility path now opens routes deterministically without
+unreliable decorative load-time fades. No new player-facing cvar or concept was
+introduced, so no separate user guide is required. Final large-text,
+localization, controller-navigation, and native cross-renderer user-doc parity
+remains open.
+
+2026-07-13 `DV-07-T04` session-entry note: significant implementation and
+regression evidence are recorded in
+`docs-dev/rmlui-live-session-entry-provider-2026-07-13.md`. The existing
+session workflow gained truthful live-provider ownership, first-connect versus
+resumable close correctness, decluttered single-back Host/Match Info layouts,
+and clean visual evidence. The established player workflow is already covered
+by `docs-user/multiplayer-session-menu.md`, so no new user guide is required.
+Final connected-action, large-text, localization, controller-navigation, and
+native cross-renderer user-doc parity remains open.
+
+2026-07-13 `DV-07-T04` vote/callvote note: significant implementation and
+regression evidence are recorded in
+`docs-dev/rmlui-live-vote-callvote-provider-2026-07-13.md`. The practical
+active-vote, callvote choice, and map-flag workflow is now documented in
+`docs-user/multiplayer-session-menu.md`. No new player cvar was introduced;
+the routes now present the existing server-owned behavior truthfully. Final
+connected-action, large-text, localization, controller-navigation, and native
+cross-renderer user-doc parity remains open.
+
+2026-07-13 `DV-07-T04` MyMap note: significant implementation and regression
+evidence are recorded in `docs-dev/rmlui-live-mymap-provider-2026-07-13.md`.
+The practical request, flags, selection, clear, and unavailable-state workflow
+is now documented in `docs-user/multiplayer-session-menu.md`. No new player
+cvar was introduced. Final connected-action, large-text, localization,
+controller-navigation, and native cross-renderer user-doc parity remains open.
+
+2026-07-13 `DV-07-T04` session-confirmation note: significant implementation
+and regression evidence are recorded in
+`docs-dev/rmlui-live-session-confirm-provider-2026-07-13.md`. The practical
+Leave Match and Forfeit confirmation behavior, safe default action, and server
+ownership are now documented in `docs-user/multiplayer-session-menu.md`. No
+new player cvar or command was introduced. Final connected-action, large-text,
+localization, controller-navigation, canonical-stage, and native
+cross-renderer user-doc parity remains open.
+
+2026-07-13 `DV-07-T04` Admin note: significant implementation and regression
+evidence are recorded in `docs-dev/rmlui-live-admin-provider-2026-07-13.md`.
+The complete in-game reference, console-execution boundary, and conditional
+tournament Replay behavior are documented in
+`docs-user/competitive-server-tools.md`. No new player cvar or command was
+introduced. Final connected-action, large-text, localization,
+controller-navigation, canonical-stage, and native cross-renderer user-doc
+parity remains open.
+
 ## Epic DV-08: Release and Updater Hardening
 Objective: ensure staged artifacts, update metadata, and updater behavior remain reliable under growth.
 
@@ -4761,14 +5863,14 @@ Tasks:
   Implementation logs: `docs-dev/bootstrap-session-shell-handoff-2026-04-01.md`, `docs-dev/ui-bootstrap-font-handoff-2026-04-27.md`.
 
 ## Immediate 90-Day Priority Queue (2026-07-01 to 2026-09-30)
-- [ ] `P0` `FR-01-T01` Vulkan particle style parity
+- [x] `P0` `FR-01-T01` Vulkan particle style parity
 - [ ] `P0` `FR-01-T04` MD2/MD5 parity pass
 - [ ] `P0` `FR-01-T09` Renderer-neutral gameplay light queries
 - [ ] `P0` `FR-02-T13` Linear-light scene and final presentation contract
 - [ ] `P0` `FR-04-T02` Bot frame logic implementation
-- [ ] `P0` `FR-09-T01` RmlUi runtime ownership and inventory closeout
-- [ ] `P0` `FR-09-T02` RmlUi dependency/bootstrap and staging path
-- [ ] `P0` `FR-09-T08` Multiplayer/session/match menu live-state parity
+- [x] `P0` `FR-09-T01` RmlUi runtime ownership and inventory closeout
+- [x] `P0` `FR-09-T02` RmlUi dependency/bootstrap and staging path
+- [x] `P0` `FR-09-T08` Multiplayer/session/match menu live-state parity
 - [ ] `P0` `DV-01-T01` Project board template rollout
 - [ ] `P0` `DV-02-T01` PR CI workflow
 - [ ] `P0` `DV-03-T01` Integrate q2proto tests into CI

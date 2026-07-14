@@ -5,42 +5,60 @@
     <link type="text/rcss" href="../common/theme/utility.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="utility-servers" data-route-id="servers" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="utility-servers" data-route-id="servers" data-route-group="utility" data-route-version="2" data-document-status="live-provider" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen" id="servers-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="utility-servers-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="utility-servers-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="utility-servers-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="page-header">
-        <h1>Servers</h1>
-        <p id="servers-summary">
+        <div class="worr-titlerow"><button id="utility-servers-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_servers">Servers</h1></div>
+        <p id="servers-summary" data-loc-key="worr_ui_browse_public_multiplayer_servers">
           Browse public multiplayer servers.
         </p>
       </header>
 
       <section class="toolbar" id="servers-toolbar" data-model="server_browser">
-        <button id="servers-refresh" type="button" disabled="disabled" data-menu-sound="none">Refresh</button>
-        <button id="servers-connect" type="button" disabled="disabled" data-menu-sound="none">Connect</button>
-        <button id="servers-favorites" type="button" disabled="disabled" data-menu-sound="none">Favorites</button>
-        <button id="servers-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
+        <button id="servers-refresh" type="button" data-server-action="refresh" data-menu-sound="confirm" data-loc-key="m_refresh">Refresh</button>
+        <button id="servers-source" type="button" data-server-action="toggle-source" data-menu-sound="move" data-loc-key="worr_ui_source_saved_lan">Source: Saved + LAN</button>
+        <button id="servers-connect" class="ui-button-cta" type="button" disabled="disabled" data-server-action="connect" data-menu-sound="confirm" data-loc-key="m_connect">Connect</button>
+        <button id="servers-previous" type="button" disabled="disabled" data-server-action="previous-page" data-menu-sound="move" data-loc-key="worr_ui_previous">Previous</button>
+        <span id="servers-page-label" class="utility-page-label" data-loc-key="worr_ui_page_1_1">Page 1 / 1</span>
+        <button id="servers-next" type="button" disabled="disabled" data-server-action="next-page" data-menu-sound="move" data-loc-key="worr_ui_next">Next</button>
       </section>
 
       <section class="content" id="servers-content">
         <table id="servers-table" class="data-table" data-model="server_browser.servers" data-controller="shared.table">
           <thead>
             <tr>
-              <th data-sort-key="hostname">Server</th>
-              <th data-sort-key="map">Map</th>
-              <th data-sort-key="players">Players</th>
-              <th data-sort-key="ping">Ping</th>
+              <th data-sort-key="hostname"><button id="servers-sort-name" class="table-sort-button" type="button" data-server-action="sort" data-server-sort="0" data-menu-sound="move" data-loc-key="worr_ui_server">Server</button></th>
+              <th data-sort-key="mod"><button id="servers-sort-mod" class="table-sort-button" type="button" data-server-action="sort" data-server-sort="1" data-menu-sound="move" data-loc-key="worr_ui_mod">Mod</button></th>
+              <th data-sort-key="map"><button id="servers-sort-map" class="table-sort-button" type="button" data-server-action="sort" data-server-sort="2" data-menu-sound="move" data-loc-key="m_map">Map</button></th>
+              <th data-sort-key="players"><button id="servers-sort-players" class="table-sort-button" type="button" data-server-action="sort" data-server-sort="3" data-menu-sound="move" data-loc-key="m_players">Players</button></th>
+              <th data-sort-key="ping"><button id="servers-sort-rtt" class="table-sort-button" type="button" data-server-action="sort" data-server-sort="4" data-menu-sound="move" data-loc-key="worr_ui_rtt">RTT</button></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="servers-table-body">
             <tr class="placeholder-row">
-              <td colspan="4">No servers found.</td>
+              <td colspan="5" data-loc-key="worr_ui_no_servers_found_for_this_source">No servers found for this source.</td>
             </tr>
           </tbody>
         </table>
       </section>
 
       <footer class="status-bar" id="servers-status" data-bind="server_browser.status">
-        The server browser will be enabled in an upcoming update.
+        No servers found. Refresh or switch between Public and Saved + LAN.
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="utility-servers-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

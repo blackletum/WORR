@@ -1087,22 +1087,23 @@ typedef enum {
 #define PMF_ON_GROUND                   BIT(2)
 #define PMF_TIME_WATERJUMP              BIT(3)  // pm_time is waterjump
 #define PMF_TIME_LAND                   BIT(4)  // pm_time is time before rejump
-#define PMF_TIME_TELEPORT               BIT(5)  // pm_time is non-moving time
+#define PMF_TIME_KNOCKBACK              BIT(5)  // pm_time is non-moving time
+#define PMF_TIME_TELEPORT               PMF_TIME_KNOCKBACK // legacy source alias
 #define PMF_NO_PREDICTION               BIT(6)  // temporarily disables prediction (used for grappling hook)
 #define PMF_ON_LADDER                   BIT(7)  // signal to game that we are on a ladder
 #define PMF_NO_ANGULAR_PREDICTION       BIT(8)  // temporary disables angular prediction
 #define PMF_IGNORE_PLAYER_COLLISION     BIT(9)  // don't collide with other players
 #define PMF_TIME_TRICK                  BIT(10) // pm_time is trick jump time
 #define PMF_HASTE                       BIT(11) // haste powerup active
+#define PMF_TIME_SPAWN_LOCK             BIT(12) // preserve spawn angles temporarily
 #define PMF_TELEPORT_BIT                BIT(15) // used by Q2PRO (non-extended servers)
 
 typedef uint16_t pmflags_t;
 
-// this structure needs to be communicated bit-accurate
-// from the server to the client to guarantee that
-// prediction stays in sync, so no floats are used.
-// if any part of the game code modifies this struct, it
-// will result in a prediction error of some degree.
+// Transport adapters must reconstruct these values identically on client and
+// server.  Modern WORR prediction converts them into prediction_abi.h's
+// versioned value record and hashes fields explicitly; never compare this C
+// structure's padded object representation.
 typedef struct {
     pmtype_t    pm_type;
 
@@ -1114,7 +1115,6 @@ typedef struct {
     vec3_t      delta_angles;   // add to command angles to get view direction
                                 // changed by spawns, rotating objects, and teleporters
     int8_t      viewheight; // view height, added to origin[2] + viewoffset[2], for crouching
-    bool        haste;
 } pmove_state_t;
 #endif // !defined(GAME3_INCLUDE)
 

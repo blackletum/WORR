@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "ui_rml/ui_rml.h"
 
 extern "C" void SCR_NotifyMouseEvent(int x, int y);
+extern "C" void Con_MouseEvent(int x, int y);
 
 static const cgame_ui_export_t *UI_GetAPI(void)
 {
@@ -95,6 +96,12 @@ void UI_OpenMenu(uiMenu_t menu)
         api->OpenMenu(menu);
 }
 
+void UI_CloseMenu(void)
+{
+    UI_Rml_CloseActiveRoute();
+    Key_SetDest(static_cast<keydest_t>(Key_GetDest() & ~KEY_MENU));
+}
+
 void UI_StartFeedbackSound(uiFeedbackSound_t sound)
 {
     switch (sound) {
@@ -127,6 +134,9 @@ void UI_Frame(int msec)
 
 void UI_StatusEvent(const serverStatus_t *status)
 {
+    if (UI_Rml_StatusEvent(status))
+        return;
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->StatusEvent)
         api->StatusEvent(status);
@@ -134,6 +144,9 @@ void UI_StatusEvent(const serverStatus_t *status)
 
 void UI_ErrorEvent(const netadr_t *from)
 {
+    if (UI_Rml_ErrorEvent(from))
+        return;
+
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->ErrorEvent)
         api->ErrorEvent(from);
@@ -141,6 +154,10 @@ void UI_ErrorEvent(const netadr_t *from)
 
 void UI_MouseEvent(int x, int y)
 {
+    if (Key_GetDest() & KEY_CONSOLE) {
+        Con_MouseEvent(x, y);
+        return;
+    }
     if (Key_GetDest() & KEY_MESSAGE)
         SCR_NotifyMouseEvent(x, y);
     if (UI_Rml_MouseEvent(x, y))

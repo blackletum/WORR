@@ -339,8 +339,10 @@ void IN_Init(void);
 void IN_Shutdown(void);
 void IN_Frame(void);
 void IN_Activate(void);
+bool IN_MouseGrabbed(void);
 
 void CL_RegisterInput(void);
+void CL_AdaptiveInputReset(void);
 void CL_UpdateCmd(int msec);
 void CL_FinalizeCmd(void);
 void CL_SendCmd(void);
@@ -622,6 +624,9 @@ void Con_RendererShutdown(void);
 void Con_CheckResize(void);
 const char *Con_GetChatPromptText(int *skip_chars);
 inputField_t *Con_GetChatInputField(void);
+void Con_MouseEvent(int x, int y);
+void Con_MouseMove(int dx, int dy);
+void Con_MouseButton(bool down);
 
 void Key_Console(int key);
 void Key_Message(int key);

@@ -44,8 +44,13 @@
 .settings-section h2
 {
 	margin-bottom: 6px;
+	padding: 4px 10px;
+	background-color: #1f1c17;
 	color: #ffd967;
 	font-size: 18px;
+	border-left-width: 3px;
+	border-left-color: #b99b5b;
+	border-radius: 3px;
 }
 
 .setting-row

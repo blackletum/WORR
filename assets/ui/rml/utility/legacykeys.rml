@@ -5,31 +5,123 @@
     <link type="text/rcss" href="../common/theme/utility.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="utility-legacykeys" data-route-id="legacykeys" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="utility-legacykeys" data-route-id="legacykeys" data-route-group="utility" data-route-version="2" data-document-status="live-provider" data-controller="native-keybind-capture" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen" id="legacykeys-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="utility-legacykeys-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="utility-legacykeys-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="utility-legacykeys-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="page-header">
-        <h1>Legacy Key Bindings</h1>
-        <p id="legacykeys-summary">
-          Adjust classic turn, look, and sidestep controls.
+        <div class="worr-titlerow"><button id="utility-legacykeys-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_legacy_key_bindings">Legacy Key Bindings</h1></div>
+        <p id="legacykeys-summary" data-loc-key="worr_ui_assign_primary_and_alternate_classic_controls_b">
+          Assign Primary and Alternate classic controls. Backspace clears; Escape cancels.
         </p>
       </header>
 
-      <section class="content" id="legacykeys-content" data-model="utility.legacy_keybinds" data-controller="keybind.capture" data-action-type="capture">
+      <section class="content" id="legacykeys-content" data-model="utility.legacy_keybinds" data-controller="native-keybind-capture" data-action-type="capture">
         <div class="bind-group" id="legacykeys-binds" data-bind-group="legacy">
-          <h2>Classic Controls</h2>
-          <button id="legacykeys-left" type="button" data-bind-command="+left" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Turn Left</span><span class="bind-key"></span></button>
-          <button id="legacykeys-right" type="button" data-bind-command="+right" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Turn Right</span><span class="bind-key"></span></button>
-          <button id="legacykeys-strafe" type="button" data-bind-command="+strafe" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Sidestep</span><span class="bind-key"></span></button>
-          <button id="legacykeys-lookup" type="button" data-bind-command="+lookup" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Look Up</span><span class="bind-key"></span></button>
-          <button id="legacykeys-lookdown" type="button" data-bind-command="+lookdown" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Look Down</span><span class="bind-key"></span></button>
-          <button id="legacykeys-centerview" type="button" data-bind-command="centerview" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Center View</span><span class="bind-key"></span></button>
-          <button id="legacykeys-mlook" type="button" data-bind-command="+mlook" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Mouse Look</span><span class="bind-key"></span></button>
-          <button id="legacykeys-klook" type="button" data-bind-command="+klook" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Keyboard Look</span><span class="bind-key"></span></button>
+          <h2 data-loc-key="worr_ui_classic_controls">Classic Controls</h2>
+          <div class="bind-row" id="legacykeys-left-row">
+            <span class="bind-label" data-loc-key="m_turn_left">Turn Left</span>
+            <div class="bind-slots">
+              <button id="legacykeys-left" class="bind-slot" type="button" title="Primary binding" data-bind-command="+left" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="legacykeys-left-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+left" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="legacykeys-right-row">
+            <span class="bind-label" data-loc-key="m_turn_right">Turn Right</span>
+            <div class="bind-slots">
+              <button id="legacykeys-right" class="bind-slot" type="button" title="Primary binding" data-bind-command="+right" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="legacykeys-right-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+right" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="legacykeys-strafe-row">
+            <span class="bind-label" data-loc-key="m_sidestep">Sidestep</span>
+            <div class="bind-slots">
+              <button id="legacykeys-strafe" class="bind-slot" type="button" title="Primary binding" data-bind-command="+strafe" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="legacykeys-strafe-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+strafe" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="legacykeys-lookup-row">
+            <span class="bind-label" data-loc-key="m_look_up">Look Up</span>
+            <div class="bind-slots">
+              <button id="legacykeys-lookup" class="bind-slot" type="button" title="Primary binding" data-bind-command="+lookup" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="legacykeys-lookup-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+lookup" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="legacykeys-lookdown-row">
+            <span class="bind-label" data-loc-key="m_look_down">Look Down</span>
+            <div class="bind-slots">
+              <button id="legacykeys-lookdown" class="bind-slot" type="button" title="Primary binding" data-bind-command="+lookdown" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="legacykeys-lookdown-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+lookdown" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="legacykeys-centerview-row">
+            <span class="bind-label" data-loc-key="m_center_view">Center View</span>
+            <div class="bind-slots">
+              <button id="legacykeys-centerview" class="bind-slot" type="button" title="Primary binding" data-bind-command="centerview" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="legacykeys-centerview-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="centerview" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="legacykeys-mlook-row">
+            <span class="bind-label" data-loc-key="worr_ui_mouse_look">Mouse Look</span>
+            <div class="bind-slots">
+              <button id="legacykeys-mlook" class="bind-slot" type="button" title="Primary binding" data-bind-command="+mlook" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="legacykeys-mlook-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+mlook" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="legacykeys-klook-row">
+            <span class="bind-label" data-loc-key="worr_ui_keyboard_look">Keyboard Look</span>
+            <div class="bind-slots">
+              <button id="legacykeys-klook" class="bind-slot" type="button" title="Primary binding" data-bind-command="+klook" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="legacykeys-klook-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+klook" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <footer class="actions" id="legacykeys-actions">
-        <button id="legacykeys-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="utility-legacykeys-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

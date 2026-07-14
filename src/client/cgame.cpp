@@ -19,40 +19,98 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client.h"
 #include "cgame_classic.h"
 #include "client/cgame_entity.h"
+#include "client/cgame_event_shadow_runtime.h"
+#include "client/command_identity.h"
+#include "client/consumed_cursor.h"
+#include "client/net_capability.h"
+#include "client/snapshot_shadow.h"
 #include "client/cgame_ui.h"
 #include "client/font.h"
 #include "client/ui_font.h"
 #include "common/mdfour.h"
 #include "common/loc.h"
 #include "common/gamedll.h"
-#include "shared/pmove_abi_layout.hpp"
+#include "common/net/prediction_input.h"
+#include "common/net/usercmd_delta.h"
+#include "shared/cgame_prediction.h"
 
-static_assert(std::is_standard_layout_v<pmove_t>);
-static_assert(std::is_trivially_copyable_v<pmove_t>);
-static_assert(sizeof(pmove_state_t) == worr::pmove_abi_v1::state_size);
-static_assert(sizeof(usercmd_t) == worr::pmove_abi_v1::command_size);
-static_assert(sizeof(pmove_t) == worr::pmove_abi_v1::pmove_size);
-static_assert(alignof(pmove_t) == worr::pmove_abi_v1::pmove_alignment);
-static_assert(offsetof(pmove_t, cmd) == worr::pmove_abi_v1::command_offset);
-static_assert(offsetof(pmove_t, snapinitial) ==
-              worr::pmove_abi_v1::snap_initial_offset);
-static_assert(offsetof(pmove_t, touch) == worr::pmove_abi_v1::touch_offset);
-static_assert(offsetof(pmove_t, viewangles) ==
-              worr::pmove_abi_v1::view_angles_offset);
-static_assert(offsetof(pmove_t, trace) ==
-              worr::pmove_abi_v1::trace_callback_offset);
-static_assert(offsetof(pmove_t, clip) ==
-              worr::pmove_abi_v1::clip_callback_offset);
-static_assert(offsetof(pmove_t, pointcontents) ==
-              worr::pmove_abi_v1::point_contents_callback_offset);
-static_assert(offsetof(pmove_t, impact_delta) ==
-              worr::pmove_abi_v1::impact_delta_offset);
+static_assert(CMD_BACKUP == WORR_CGAME_PREDICTION_INPUT_CAPACITY,
+              "prediction input ABI must retain the engine command ring");
 
 static cvar_t   *cl_alpha;
 
 static void CG_AddCommandString(const char *string);
 static void CG_InsertCommandString(const char *string);
 static const char* CG_Localize(const char *base, const char **args, size_t num_args);
+
+static worr_prediction_command_v1 CG_PredictionInputCommand(
+    const usercmd_t &command, const float *pending_move)
+{
+    worr_prediction_command_v1 output{};
+    if (!pending_move) {
+        (void)NetUsercmd_ToPredictionCommandV1(&command, &output);
+        return output;
+    }
+    output.struct_size = sizeof(output);
+    output.schema_version = WORR_PREDICTION_ABI_VERSION;
+    output.duration_ms = command.msec;
+    output.buttons = command.buttons;
+    VectorCopy(command.angles, output.view_angles);
+    output.forward_move = pending_move ? pending_move[0] : command.forwardmove;
+    output.side_move = pending_move ? pending_move[1] : command.sidemove;
+    return output;
+}
+
+static uint32_t CG_ResolvePredictionInputRange(
+    worr_cgame_prediction_input_range_v1 *range_out)
+{
+    worr_cgame_prediction_input_command_v1
+        history[WORR_CGAME_PREDICTION_INPUT_CAPACITY]{};
+    worr_prediction_input_resolve_request_v1 request{};
+
+    for (uint32_t age = 0; age < CMD_BACKUP; ++age) {
+        const uint32_t sequence = cl.cmdNumber - age;
+        auto &entry = history[age];
+        entry.legacy_sequence = sequence;
+        (void)CL_CommandIdentityForNumber(sequence, &entry.command_id);
+        entry.command =
+            CG_PredictionInputCommand(cl.cmds[sequence & CMD_MASK], nullptr);
+    }
+
+    request.struct_size = sizeof(request);
+    request.schema_version = WORR_PREDICTION_INPUT_RESOLVER_VERSION;
+    if (CL_NetCapabilityHas(WORR_NET_CAP_CONSUMED_COMMAND_CURSOR_V1)) {
+        request.flags |=
+            WORR_PREDICTION_INPUT_RESOLVE_CANONICAL_CAPABILITY;
+        if (CL_ConsumedCursorCanonicalEstablished()) {
+            request.flags |=
+                WORR_PREDICTION_INPUT_RESOLVE_CANONICAL_ESTABLISHED;
+        }
+    }
+    (void)CL_CommandIdentityGetState(
+        &request.identity_initial_epoch,
+        &request.identity_baseline_legacy_sequence);
+    request.current_legacy_sequence = cl.cmdNumber;
+    request.legacy_acknowledged_sequence =
+        cl.history[cls.netchan.incoming_acknowledged & CMD_MASK].cmdNumber;
+    request.history_count = q_countof(history);
+    request.consumed_command = cl.frame.consumed_command;
+    request.pending_present = cl.cmd.msec != 0;
+    if (request.pending_present) {
+        request.pending_command.legacy_sequence = cl.cmdNumber + 1u;
+        request.pending_command.command =
+            CG_PredictionInputCommand(cl.cmd, cl.localmove);
+    }
+    request.history = history;
+    return Worr_PredictionInputResolveV1(&request, range_out);
+}
+
+static const worr_cgame_prediction_input_import_v1
+    cg_prediction_input_import = {
+        .struct_size = sizeof(cg_prediction_input_import),
+        .api_version = WORR_CGAME_PREDICTION_INPUT_API_VERSION,
+        .ResolveInputRange = CG_ResolvePredictionInputRange,
+    };
 
 static bool CGX_IsExtendedServer(void)
 {
@@ -487,18 +545,6 @@ static void CG_Q2Proto_UnpackSolid(uint32_t solid, vec3_t mins, vec3_t maxs)
     q2proto_client_unpack_solid(&cls.q2proto_ctx, solid, mins, maxs);
 }
 
-static void CG_Entity_Pmove(pmove_t *pmove)
-{
-    // External WORR cgame exports the same C++ movement implementation used by
-    // sgame.  Routing prediction through the engine's legacy C pmove made the
-    // authoritative and predicted simulations diverge despite p_move.cpp
-    // being linked into both modules.  The public PMove/pmove_t ABI is layout
-    // compatible by contract; classic built-in cgame retains its own export.
-    if (!cgame || !cgame->Pmove)
-        Com_Error(ERR_DROP, "cgame Pmove export is unavailable");
-    cgame->Pmove(pmove);
-}
-
 static void CG_CL_GTV_Resume(void)
 {
     CL_GTV_Resume();
@@ -634,7 +680,6 @@ static cgame_entity_import_t cg_entity_import = {
 
     .CL_Trace = CL_Trace,
     .CL_PointContents = CL_PointContents,
-    .Pmove = CG_Entity_Pmove,
 
     .Z_Malloc = Z_Malloc,
     .Z_Freep = Z_Freep,
@@ -694,6 +739,10 @@ static void * CG_GetExtension(const char *name)
     }
     if (strcmp(name, CGAME_ENTITY_IMPORT_EXT) == 0) {
         return &cg_entity_import;
+    }
+    if (strcmp(name, WORR_CGAME_PREDICTION_INPUT_IMPORT_V1) == 0) {
+        return const_cast<worr_cgame_prediction_input_import_v1 *>(
+            &cg_prediction_input_import);
     }
     return NULL;
 }
@@ -1448,6 +1497,66 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
             Com_Error(ERR_DROP, "cgame entity extension required");
         }
 
+        const worr_cgame_event_shadow_export_v1 *event_shadow = NULL;
+        if (cgame->GetExtension) {
+            event_shadow = static_cast<
+                const worr_cgame_event_shadow_export_v1 *>(
+                cgame->GetExtension(WORR_CGAME_EVENT_SHADOW_EXPORT_V1));
+            if (event_shadow &&
+                (event_shadow->struct_size != sizeof(*event_shadow) ||
+                 event_shadow->api_version !=
+                     WORR_CGAME_EVENT_SHADOW_API_VERSION ||
+                 !event_shadow->Reset ||
+                 !event_shadow->ConsumeCanonicalEventRange ||
+                 !event_shadow->GetAuditStatus)) {
+                Com_WPrintf("cgame event shadow extension mismatch\n");
+                event_shadow = NULL;
+            }
+        }
+        CL_EventShadowSetConsumer(event_shadow);
+
+        const worr_cgame_event_range_export_v2 *event_range_v2 = NULL;
+        if (cgame->GetExtension) {
+            event_range_v2 = static_cast<
+                const worr_cgame_event_range_export_v2 *>(
+                cgame->GetExtension(WORR_CGAME_EVENT_RANGE_EXPORT_V2));
+            if (event_range_v2 &&
+                (event_range_v2->struct_size != sizeof(*event_range_v2) ||
+                 event_range_v2->api_version !=
+                     WORR_CGAME_EVENT_RANGE_API_VERSION_V2 ||
+                 !event_range_v2->Reset ||
+                 !event_range_v2->ConsumeCanonicalEventRange ||
+                 !event_range_v2->GetAuditStatus)) {
+                Com_WPrintf("cgame event range V2 extension mismatch\n");
+                event_range_v2 = NULL;
+            }
+        }
+        CL_EventRangeSetConsumerV2(event_range_v2);
+
+        const worr_cgame_snapshot_timeline_export_v1 *snapshot_timeline =
+            NULL;
+        if (cgame->GetExtension) {
+            snapshot_timeline = static_cast<
+                const worr_cgame_snapshot_timeline_export_v1 *>(
+                cgame->GetExtension(
+                    WORR_CGAME_SNAPSHOT_TIMELINE_EXPORT_V1));
+            if (snapshot_timeline &&
+                (snapshot_timeline->struct_size !=
+                     sizeof(*snapshot_timeline) ||
+                 snapshot_timeline->api_version !=
+                     WORR_CGAME_SNAPSHOT_TIMELINE_API_VERSION ||
+                 !snapshot_timeline->Reset ||
+                 !snapshot_timeline->ConsumeCanonicalSnapshot ||
+                 !snapshot_timeline->GetStatus)) {
+                Com_WPrintf("cgame snapshot timeline extension mismatch\n");
+                snapshot_timeline = NULL;
+            }
+        }
+        if (!CL_SnapshotShadowSetConsumer(snapshot_timeline) &&
+            snapshot_timeline) {
+            Com_WPrintf("cgame snapshot timeline consumer rejected\n");
+        }
+
         CL_InitEffects();
         CL_InitBrightskins();
         CL_InitTEnts();
@@ -1459,6 +1568,9 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
 
 void CG_Unload(void)
 {
+    (void)CL_SnapshotShadowSetConsumer(NULL);
+    CL_EventRangeSetConsumerV2(NULL);
+    CL_EventShadowSetConsumer(NULL);
     cgame = NULL;
     cgame_entity = NULL;
     cgame_ui = NULL;

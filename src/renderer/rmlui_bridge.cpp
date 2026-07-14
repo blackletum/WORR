@@ -16,17 +16,21 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#include "shared/shared.h"
-#include "renderer/renderer.h"
-#include "renderer/ui_scale.h"
-
 #if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
 
 extern "C" {
 #include "../rend_gl/gl.h"
 }
 
+#else
+
+extern "C" {
+#include "renderer/renderer_api.h"
+}
+
 #endif
+
+#include "renderer/ui_scale.h"
 
 #if UI_RML_HAS_RUNTIME
 
@@ -52,7 +56,7 @@ extern "C" {
 
 #endif
 
-#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
+#if UI_RML_HAS_RUNTIME
 
 namespace {
 
@@ -840,6 +844,9 @@ static bool R_RmlUiSvgLoadFile(const Rml::String &source,
 }
 
 } // namespace
+#endif
+
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
 
 class R_RmlUiOpenGLRenderInterface final : public Rml::RenderInterface {
 public:
@@ -893,13 +900,13 @@ public:
             return;
         }
 
-        const GLuint texnum = TextureForHandle(texture);
+        const R_RmlUiTexture texture_info = TextureForHandle(texture);
 
         if (tess.numverts || tess.numindices) {
             GL_Flush2D();
         }
 
-        tess.texnum[TMU_TEXTURE] = texnum;
+        tess.texnum[TMU_TEXTURE] = texture_info.texnum;
         tess.flags |= GLS_BLEND_BLEND | GLS_SHADE_SMOOTH;
 
         auto *dst_vertices = reinterpret_cast<glVertexDesc2D_t *>(tess.vertices);
@@ -909,6 +916,10 @@ public:
             *dst_vertices = src;
             dst_vertices->xy[0] += translation.x;
             dst_vertices->xy[1] += translation.y;
+            dst_vertices->st[0] =
+                texture_info.sl + src.st[0] * (texture_info.sh - texture_info.sl);
+            dst_vertices->st[1] =
+                texture_info.tl + src.st[1] * (texture_info.th - texture_info.tl);
             ++dst_vertices;
         }
 
@@ -964,24 +975,22 @@ public:
         // IF_REPEAT: RmlUi tiles textures by scaling texcoords past [0,1]
         // (decorator fit modes repeat/repeat-x/repeat-y), which requires
         // wrap-mode repeat instead of the IT_PIC clamp default.
-        const image_t *image = IMG_Find(source.c_str(), IT_PIC, IF_REPEAT);
+        // IF_NOSCRAP asks new loads to own their texture. An image may already
+        // be cached in the legacy scrap atlas, however, so the texture handle
+        // also carries its atlas UV rectangle and RenderGeometry remaps the
+        // RmlUi [0,1] coordinates into that sub-rectangle.
+        const image_t *image =
+            IMG_Find(source.c_str(), IT_PIC,
+                     static_cast<imageflags_t>(IF_REPEAT | IF_NOSCRAP));
         if (!image || image == R_NOTEXTURE || !image->texnum ||
             !image->width || !image->height) {
             return {};
         }
 
-        // Scrap-atlas placements (< 64x64 pics) occupy a sub-rect of a shared
-        // texture; RmlUi samples the full [0,1] range, so such images would
-        // render neighbouring scrap content. Reject them loudly instead.
-        if (image->flags & IF_SCRAP) {
-            Com_WPrintf("RmlUi texture '%s' landed in the scrap atlas; "
-                        "author UI textures at 64x64 or larger.\n",
-                        source.c_str());
-            return {};
-        }
-
         texture_dimensions = {image->width, image->height};
-        return RegisterTexture(image->texnum, false);
+        return RegisterTexture(image->texnum, false,
+                               image->sl, image->sh,
+                               image->tl, image->th);
     }
 
     Rml::TextureHandle GenerateTexture(Rml::Span<const Rml::byte> source,
@@ -1110,6 +1119,10 @@ private:
     struct R_RmlUiTexture {
         GLuint texnum = 0;
         bool owned = false;
+        float sl = 0.0f;
+        float sh = 1.0f;
+        float tl = 0.0f;
+        float th = 1.0f;
     };
 
     static GLenum ClampToEdge()
@@ -1138,29 +1151,36 @@ private:
         }
     }
 
-    static Rml::TextureHandle RegisterTexture(GLuint texnum, bool owned)
+    static Rml::TextureHandle RegisterTexture(GLuint texnum,
+                                              bool owned,
+                                              float sl = 0.0f,
+                                              float sh = 1.0f,
+                                              float tl = 0.0f,
+                                              float th = 1.0f)
     {
         if (!texnum) {
             return {};
         }
 
         const Rml::TextureHandle handle = r_rmlui_next_texture_handle++;
-        r_rmlui_textures.emplace(handle, R_RmlUiTexture{texnum, owned});
+        r_rmlui_textures.emplace(
+            handle,
+            R_RmlUiTexture{texnum, owned, sl, sh, tl, th});
         return handle;
     }
 
-    static GLuint TextureForHandle(Rml::TextureHandle texture)
+    static R_RmlUiTexture TextureForHandle(Rml::TextureHandle texture)
     {
         if (!texture) {
-            return TEXNUM_WHITE;
+            return R_RmlUiTexture{TEXNUM_WHITE, false};
         }
 
         auto it = r_rmlui_textures.find(texture);
         if (it == r_rmlui_textures.end() || !it->second.texnum) {
-            return TEXNUM_WHITE;
+            return R_RmlUiTexture{TEXNUM_WHITE, false};
         }
 
-        return it->second.texnum;
+        return it->second;
     }
 
     static std::unordered_map<Rml::TextureHandle, R_RmlUiTexture> r_rmlui_textures;
@@ -1175,17 +1195,257 @@ static R_RmlUiOpenGLRenderInterface r_rmlui_opengl_render_interface;
 
 #endif
 
-#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_LEGACY)
+#if UI_RML_HAS_RUNTIME && (defined(RENDERER_VULKAN_LEGACY) || \
+                           defined(RENDERER_VULKAN_RTX))
 
-// Intentionally abstract until the native Vulkan methods are implemented.
-class R_RmlUiVulkanRenderInterface : public Rml::RenderInterface {};
+class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface {
+public:
+    Rml::CompiledGeometryHandle CompileGeometry(
+        Rml::Span<const Rml::Vertex> vertices,
+        Rml::Span<const int> indices) override
+    {
+        if (vertices.empty() || indices.empty() ||
+            vertices.size() > UINT32_MAX || indices.size() > UINT32_MAX) {
+            return {};
+        }
 
+        auto geometry = std::make_unique<R_RmlUiCompiledGeometry>();
+        geometry->vertices.reserve(vertices.size());
+        geometry->indices.reserve(indices.size());
+
+        for (const Rml::Vertex &vertex : vertices) {
+            const Rml::Colourb colour = vertex.colour.ToNonPremultiplied();
+            renderer_rmlui_vertex_t out = {};
+            out.position[0] = vertex.position.x;
+            out.position[1] = vertex.position.y;
+            out.tex_coord[0] = vertex.tex_coord.x;
+            out.tex_coord[1] = vertex.tex_coord.y;
+            out.color = COLOR_U32_RGBA(colour.red, colour.green, colour.blue,
+                                       colour.alpha);
+            geometry->vertices.push_back(out);
+        }
+
+        for (int index : indices) {
+            if (index < 0 || static_cast<size_t>(index) >= vertices.size()) {
+                return {};
+            }
+            geometry->indices.push_back(static_cast<uint32_t>(index));
+        }
+
+        return reinterpret_cast<Rml::CompiledGeometryHandle>(geometry.release());
+    }
+
+    void RenderGeometry(Rml::CompiledGeometryHandle geometry,
+                        Rml::Vector2f translation,
+                        Rml::TextureHandle texture) override
+    {
+        auto *compiled = reinterpret_cast<R_RmlUiCompiledGeometry *>(geometry);
+        if (!compiled || compiled->vertices.empty() || compiled->indices.empty()) {
+            return;
+        }
+
+        (void)R_RmlUiDrawGeometry(
+            compiled->vertices.data(), compiled->vertices.size(),
+            compiled->indices.data(), compiled->indices.size(),
+            translation.x, translation.y, TextureForHandle(texture));
+    }
+
+    void ReleaseGeometry(Rml::CompiledGeometryHandle geometry) override
+    {
+        delete reinterpret_cast<R_RmlUiCompiledGeometry *>(geometry);
+    }
+
+    Rml::TextureHandle LoadTexture(Rml::Vector2i &texture_dimensions,
+                                   const Rml::String &source) override
+    {
+        texture_dimensions = {};
+        if (source.empty()) {
+            return {};
+        }
+
+        if (R_RmlUiSvgEndsWithSvg(source)) {
+            std::vector<Rml::byte> rgba;
+            Rml::Vector2i dimensions;
+            if (!R_RmlUiSvgLoadFile(source, &rgba, &dimensions)) {
+                Com_WPrintf("RmlUi Vulkan SVG texture failed: source='%s'.\n",
+                            source.c_str());
+                return {};
+            }
+
+            Rml::TextureHandle handle = GenerateTexture(
+                Rml::Span<const Rml::byte>(rgba.data(), rgba.size()),
+                dimensions);
+            if (handle) {
+                texture_dimensions = dimensions;
+                Com_Printf("RmlUi Vulkan SVG texture generated: source='%s' size=%dx%d.\n",
+                           source.c_str(), dimensions.x, dimensions.y);
+            }
+            return handle;
+        }
+
+        imageflags_t image_flags =
+            static_cast<imageflags_t>(IF_REPEAT | IF_NOSCRAP);
+#if defined(RENDERER_VULKAN_RTX)
+        // Authored RmlUi PNG/JPEG/PCX assets contain sRGB color values. RTX
+        // presents through an sRGB swapchain, so request an sRGB image view
+        // and avoid encoding already-sRGB samples a second time. The mature
+        // GL and raster-Vulkan paths retain their established color handling.
+        image_flags = static_cast<imageflags_t>(image_flags | IF_SRGB);
 #endif
+        const qhandle_t image =
+            R_RegisterImage(source.c_str(), IT_SPRITE, image_flags);
+        if (!image) {
+            return {};
+        }
 
-#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_RTX)
+        int width = 0;
+        int height = 0;
+        (void)R_GetPicSize(&width, &height, image);
+        if (width <= 0 || height <= 0) {
+            return {};
+        }
 
-// Intentionally abstract until the native RTX/vkpt methods are implemented.
-class R_RmlUiRtxVkptRenderInterface : public Rml::RenderInterface {};
+        texture_dimensions = {width, height};
+        return RegisterTexture(image, false);
+    }
+
+    Rml::TextureHandle GenerateTexture(Rml::Span<const Rml::byte> source,
+                                       Rml::Vector2i source_dimensions) override
+    {
+        if (source.empty() || source_dimensions.x <= 0 ||
+            source_dimensions.y <= 0) {
+            return {};
+        }
+
+        const size_t width = static_cast<size_t>(source_dimensions.x);
+        const size_t height = static_cast<size_t>(source_dimensions.y);
+        if (width > (std::numeric_limits<size_t>::max)() / height / 4u) {
+            return {};
+        }
+        const size_t byte_count = width * height * 4u;
+        if (source.size() < byte_count) {
+            return {};
+        }
+
+        std::vector<Rml::byte> rgba(source.data(), source.data() + byte_count);
+        UnpremultiplyTexture(rgba);
+#if defined(RENDERER_VULKAN_RTX)
+        // RTX raw-image registration takes ownership of a zone allocation and
+        // releases it from IMG_Unload_RTX. RmlUi owns the source span, so hand
+        // the renderer an explicit transfer buffer instead of retaining the
+        // temporary vector storage.
+        auto *upload = static_cast<Rml::byte *>(Z_Malloc(byte_count));
+        if (!upload) {
+            return {};
+        }
+        memcpy(upload, rgba.data(), byte_count);
+#else
+        Rml::byte *upload = rgba.data();
+#endif
+        const qhandle_t image = R_RegisterRawImage(
+            va("**rmlui_vk_%llu**",
+               static_cast<unsigned long long>(r_rmlui_next_image_id++)),
+            source_dimensions.x, source_dimensions.y, upload,
+            IT_SPRITE, IF_NOSCRAP);
+#if defined(RENDERER_VULKAN_RTX)
+        if (!image) {
+            Z_Free(upload);
+        }
+#endif
+        return image ? RegisterTexture(image, true) : Rml::TextureHandle{};
+    }
+
+    void ReleaseTexture(Rml::TextureHandle texture) override
+    {
+        auto it = r_rmlui_textures.find(texture);
+        if (it == r_rmlui_textures.end()) {
+            return;
+        }
+        if (it->second.owned && it->second.image) {
+            R_UnregisterImage(it->second.image);
+        }
+        r_rmlui_textures.erase(it);
+    }
+
+    void EnableScissorRegion(bool enable) override
+    {
+        r_rmlui_scissor_enabled = enable;
+        R_SetClipRect(enable ? &r_rmlui_scissor : nullptr);
+    }
+
+    void SetScissorRegion(Rml::Rectanglei region) override
+    {
+        r_rmlui_scissor.left = region.Left();
+        r_rmlui_scissor.top = region.Top();
+        r_rmlui_scissor.right = region.Left() + region.Width();
+        r_rmlui_scissor.bottom = region.Top() + region.Height();
+        if (r_rmlui_scissor_enabled) {
+            R_SetClipRect(&r_rmlui_scissor);
+        }
+    }
+
+private:
+    struct R_RmlUiCompiledGeometry {
+        std::vector<renderer_rmlui_vertex_t> vertices;
+        std::vector<uint32_t> indices;
+    };
+
+    struct R_RmlUiTexture {
+        qhandle_t image = 0;
+        bool owned = false;
+    };
+
+    static void UnpremultiplyTexture(std::vector<Rml::byte> &rgba)
+    {
+        for (size_t i = 0; i + 3 < rgba.size(); i += 4) {
+            const unsigned alpha = rgba[i + 3];
+            if (!alpha) {
+                rgba[i] = rgba[i + 1] = rgba[i + 2] = 0;
+                continue;
+            }
+            rgba[i] = static_cast<Rml::byte>(
+                min(255u, (static_cast<unsigned>(rgba[i]) * 255u) / alpha));
+            rgba[i + 1] = static_cast<Rml::byte>(
+                min(255u, (static_cast<unsigned>(rgba[i + 1]) * 255u) / alpha));
+            rgba[i + 2] = static_cast<Rml::byte>(
+                min(255u, (static_cast<unsigned>(rgba[i + 2]) * 255u) / alpha));
+        }
+    }
+
+    static Rml::TextureHandle RegisterTexture(qhandle_t image, bool owned)
+    {
+        const Rml::TextureHandle handle = r_rmlui_next_texture_handle++;
+        r_rmlui_textures.emplace(handle, R_RmlUiTexture{image, owned});
+        return handle;
+    }
+
+    static qhandle_t TextureForHandle(Rml::TextureHandle texture)
+    {
+        if (!texture) {
+            return 0;
+        }
+        const auto it = r_rmlui_textures.find(texture);
+        return it == r_rmlui_textures.end() ? 0 : it->second.image;
+    }
+
+    static std::unordered_map<Rml::TextureHandle, R_RmlUiTexture>
+        r_rmlui_textures;
+    static Rml::TextureHandle r_rmlui_next_texture_handle;
+    static uint64_t r_rmlui_next_image_id;
+    static clipRect_t r_rmlui_scissor;
+    static bool r_rmlui_scissor_enabled;
+};
+
+std::unordered_map<Rml::TextureHandle,
+                   R_RmlUiVulkanRenderInterface::R_RmlUiTexture>
+    R_RmlUiVulkanRenderInterface::r_rmlui_textures;
+Rml::TextureHandle
+    R_RmlUiVulkanRenderInterface::r_rmlui_next_texture_handle = 1;
+uint64_t R_RmlUiVulkanRenderInterface::r_rmlui_next_image_id = 1;
+clipRect_t R_RmlUiVulkanRenderInterface::r_rmlui_scissor = {};
+bool R_RmlUiVulkanRenderInterface::r_rmlui_scissor_enabled = false;
+
+static R_RmlUiVulkanRenderInterface r_rmlui_vulkan_render_interface;
 
 #endif
 
@@ -1207,9 +1467,9 @@ extern "C" const char *R_RmlUiRendererName(void)
 #if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
     return "OpenGL RmlUi render-interface primitives";
 #elif defined(RENDERER_VULKAN_LEGACY)
-    return "Vulkan RmlUi render-interface inactive";
+    return "Vulkan RmlUi native render-interface primitives";
 #elif defined(RENDERER_VULKAN_RTX)
-    return "RTX/vkpt RmlUi render-interface inactive";
+    return "RTX/vkpt RmlUi native render-interface primitives";
 #else
     return "none";
 #endif
@@ -1217,7 +1477,9 @@ extern "C" const char *R_RmlUiRendererName(void)
 
 extern "C" bool R_RmlUiCanRender(void)
 {
-#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
+#if UI_RML_HAS_RUNTIME && (USE_REF == REF_GL || \
+                           defined(RENDERER_VULKAN_LEGACY) || \
+                           defined(RENDERER_VULKAN_RTX))
     return true;
 #else
     return false;
@@ -1228,6 +1490,9 @@ extern "C" void *R_RmlUiNativeRenderInterface(void)
 {
 #if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
     return &r_rmlui_opengl_render_interface;
+#elif UI_RML_HAS_RUNTIME && (defined(RENDERER_VULKAN_LEGACY) || \
+                             defined(RENDERER_VULKAN_RTX))
+    return &r_rmlui_vulkan_render_interface;
 #else
     return NULL;
 #endif

@@ -49,6 +49,9 @@ enum
 
 #define TEXNUM_WHITE (~0)
 #define MAX_STRETCH_PICS (1<<14)
+#define MAX_RMLUI_VERTICES (1u << 18)
+#define MAX_RMLUI_INDICES  (1u << 19)
+#define MAX_RMLUI_DRAWS    (1u << 14)
 
 static drawStatic_t draw = {
 	.scale = 1.0f,
@@ -68,6 +71,19 @@ typedef struct {
 	uint32_t color, tex_handle;
 } StretchPic_t;
 
+typedef struct {
+	float position[2];
+	float tex_coord[2];
+	uint32_t color;
+	uint32_t tex_handle;
+} RmlUiVertex_t;
+
+typedef struct {
+	uint32_t first_index;
+	uint32_t index_count;
+	VkRect2D scissor;
+} RmlUiDraw_t;
+
 // Not using global UBO b/c it's only filled when a world is drawn, but here we need it all the time
 typedef struct {
 	float hdr_color_scale;
@@ -79,17 +95,30 @@ typedef struct {
 } FinalBlitPushConstants_t;
 
 static clipRect_t clip_rect;
+static clipRect_t clip_rect_pixels;
 static bool clip_enable = false;
 
 static StretchPic_t stretch_pic_queue[MAX_STRETCH_PICS];
+static RmlUiVertex_t rmlui_vertex_queue[MAX_RMLUI_VERTICES];
+static uint32_t rmlui_index_queue[MAX_RMLUI_INDICES];
+static RmlUiDraw_t rmlui_draw_queue[MAX_RMLUI_DRAWS];
+static uint32_t num_rmlui_vertices;
+static uint32_t num_rmlui_indices;
+static uint32_t num_rmlui_draws;
+static uint32_t rmlui_stretch_pic_split;
+
+_Static_assert(sizeof(rmlui_vertex_queue) / (sizeof(StretchPic_t)) == 131072,
+	"stretch_pic.vert UI geometry base must match the native RmlUi vertex arena");
 
 static VkPipelineLayout        pipeline_layout_stretch_pic;
 static VkPipelineLayout        pipeline_layout_final_blit;
 static VkRenderPass            render_pass_stretch_pic;
 static VkPipeline              pipeline_stretch_pic[STRETCH_PIC_NUM_PIPELINES];
+static VkPipeline              pipeline_rmlui[STRETCH_PIC_NUM_PIPELINES];
 static VkPipeline              pipeline_final_blit[FINAL_BLIT_NUM_PIPELINES];
 static VkFramebuffer*          framebuffer_stretch_pic = NULL;
 static BufferResource_t        buf_stretch_pic_queue[MAX_FRAMES_IN_FLIGHT];
+static BufferResource_t        buf_rmlui_indices[MAX_FRAMES_IN_FLIGHT];
 static BufferResource_t        buf_ubo[MAX_FRAMES_IN_FLIGHT];
 static VkDescriptorSetLayout   desc_set_layout_sbo;
 static VkDescriptorSetLayout   desc_set_layout_ubo;
@@ -585,6 +614,108 @@ static inline void enqueue_stretch_pic_rotated(
 	sp->h_t = t2 - t1;
 }
 
+static VkRect2D rmlui_current_scissor(void)
+{
+	const int max_width = (int)qvk.extent_unscaled.width;
+	const int max_height = (int)qvk.extent_unscaled.height;
+	VkRect2D scissor = {
+		.offset = { 0, 0 },
+		.extent = qvk.extent_unscaled,
+	};
+
+	if (!clip_enable)
+		return scissor;
+
+	const int left = max(0, min(max_width, clip_rect_pixels.left));
+	const int top = max(0, min(max_height, clip_rect_pixels.top));
+	const int right = max(0, min(max_width, clip_rect_pixels.right));
+	const int bottom = max(0, min(max_height, clip_rect_pixels.bottom));
+	if (right <= left || bottom <= top) {
+		scissor.extent.width = 0;
+		scissor.extent.height = 0;
+		return scissor;
+	}
+
+	scissor.offset.x = left;
+	scissor.offset.y = top;
+	scissor.extent.width = (uint32_t)(right - left);
+	scissor.extent.height = (uint32_t)(bottom - top);
+	return scissor;
+}
+
+bool R_RmlUiDrawGeometry(const renderer_rmlui_vertex_t *vertices,
+						 size_t vertex_count,
+						 const uint32_t *indices,
+						 size_t index_count,
+						 float translation_x,
+						 float translation_y,
+						 qhandle_t texture)
+{
+	if (!vertices || !indices || !vertex_count || !index_count ||
+		vertex_count > MAX_RMLUI_VERTICES - num_rmlui_vertices ||
+		index_count > MAX_RMLUI_INDICES - num_rmlui_indices ||
+		num_rmlui_draws >= MAX_RMLUI_DRAWS) {
+		return false;
+	}
+
+	for (size_t i = 0; i < index_count; ++i) {
+		if (indices[i] >= vertex_count)
+			return false;
+	}
+
+	const VkRect2D scissor = rmlui_current_scissor();
+	if (!scissor.extent.width || !scissor.extent.height)
+		return true;
+	if (num_rmlui_draws == 0)
+		rmlui_stretch_pic_split = num_stretch_pics;
+
+	uint32_t tex_handle = TEXNUM_WHITE;
+	if (texture > 0 && texture < r_numImages && texture < MAX_RIMAGES &&
+		r_images[texture].registration_sequence) {
+		tex_handle = (uint32_t)texture;
+	}
+
+	float width, height;
+	draw_get_scaled_dimensions(&width, &height);
+	const float scale_x = 2.0f / width;
+	const float scale_y = 2.0f / height;
+	const uint32_t base_vertex = num_rmlui_vertices;
+	const uint32_t base_index = num_rmlui_indices;
+
+	for (size_t i = 0; i < vertex_count; ++i) {
+		RmlUiVertex_t *out = &rmlui_vertex_queue[num_rmlui_vertices++];
+		out->position[0] =
+			(vertices[i].position[0] + translation_x) * scale_x - 1.0f;
+		out->position[1] =
+			(vertices[i].position[1] + translation_y) * scale_y - 1.0f;
+		out->tex_coord[0] = vertices[i].tex_coord[0];
+		out->tex_coord[1] = vertices[i].tex_coord[1];
+		out->color = vertices[i].color;
+		out->tex_handle = tex_handle;
+	}
+
+	for (size_t i = 0; i < index_count; ++i)
+		rmlui_index_queue[num_rmlui_indices++] = base_vertex + indices[i];
+
+	if (num_rmlui_draws > 0) {
+		RmlUiDraw_t *previous = &rmlui_draw_queue[num_rmlui_draws - 1];
+		if (previous->first_index + previous->index_count == base_index &&
+			previous->scissor.offset.x == scissor.offset.x &&
+			previous->scissor.offset.y == scissor.offset.y &&
+			previous->scissor.extent.width == scissor.extent.width &&
+			previous->scissor.extent.height == scissor.extent.height) {
+			previous->index_count += (uint32_t)index_count;
+			return true;
+		}
+	}
+
+	RmlUiDraw_t *draw_call = &rmlui_draw_queue[num_rmlui_draws++];
+	draw_call->first_index = base_index;
+	draw_call->index_count = (uint32_t)index_count;
+	draw_call->scissor = scissor;
+	return true;
+}
+
 static void
 create_render_pass(void)
 {
@@ -643,12 +774,22 @@ VkResult
 vkpt_draw_initialize(void)
 {
 	num_stretch_pics = 0;
+	num_rmlui_vertices = 0;
+	num_rmlui_indices = 0;
+	num_rmlui_draws = 0;
+	rmlui_stretch_pic_split = 0;
 	LOG_FUNC();
 	for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		_VK(buffer_create(buf_stretch_pic_queue + i, sizeof(StretchPic_t) * MAX_STRETCH_PICS, 
+		_VK(buffer_create(buf_stretch_pic_queue + i,
+			sizeof(rmlui_vertex_queue) + sizeof(stretch_pic_queue),
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
-		buffer_attach_name(buf_stretch_pic_queue + i, va("stretch pic queue %d", i));
+		buffer_attach_name(buf_stretch_pic_queue + i, va("UI geometry queue %d", i));
+
+		_VK(buffer_create(buf_rmlui_indices + i, sizeof(rmlui_index_queue),
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+		buffer_attach_name(buf_rmlui_indices + i, va("RmlUi index queue %d", i));
 
 		_VK(buffer_create(buf_ubo + i, sizeof(StretchPic_UBO_t),
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -773,7 +914,6 @@ vkpt_draw_initialize(void)
 		.descriptorSetCount = 1,
 		.pSetLayouts        = &desc_set_layout_sbo,
 	};
-
 	VkDescriptorSetAllocateInfo descriptor_set_alloc_info_ubo = {
 		.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool     = desc_pool_ubo,
@@ -790,24 +930,19 @@ vkpt_draw_initialize(void)
 
 	for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		_VK(vkAllocateDescriptorSets(qvk.device, &descriptor_set_alloc_info, desc_set_sbo + i));
-		BufferResource_t *sbo = buf_stretch_pic_queue + i;
-
 		VkDescriptorBufferInfo buf_info = {
-			.buffer = sbo->buffer,
+			.buffer = buf_stretch_pic_queue[i].buffer,
 			.offset = 0,
-			.range  = sizeof(stretch_pic_queue),
+			.range = sizeof(rmlui_vertex_queue) + sizeof(stretch_pic_queue),
 		};
-
 		VkWriteDescriptorSet output_buf_write = {
-			.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet          = desc_set_sbo[i],
-			.dstBinding      = 0,
-			.dstArrayElement = 0,
-			.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = desc_set_sbo[i],
+			.dstBinding = 0,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			.descriptorCount = 1,
-			.pBufferInfo     = &buf_info,
+			.pBufferInfo = &buf_info,
 		};
-
 		vkUpdateDescriptorSets(qvk.device, 1, &output_buf_write, 0, NULL);
 
 		_VK(vkAllocateDescriptorSets(qvk.device, &descriptor_set_alloc_info_ubo, desc_set_ubo + i));
@@ -842,6 +977,7 @@ vkpt_draw_destroy(void)
 	LOG_FUNC();
 	for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		buffer_destroy(buf_stretch_pic_queue + i);
+		buffer_destroy(buf_rmlui_indices + i);
 		buffer_destroy(buf_ubo + i);
 	}
 	vkDestroyDescriptorPool(qvk.device, desc_pool_sbo, NULL);
@@ -860,6 +996,7 @@ vkpt_draw_destroy_pipelines(void)
 	LOG_FUNC();
 	for(int i = 0; i < STRETCH_PIC_NUM_PIPELINES; i++) {
 		vkDestroyPipeline(qvk.device, pipeline_stretch_pic[i], NULL);
+		vkDestroyPipeline(qvk.device, pipeline_rmlui[i], NULL);
 	}
 	for(int i = 0; i < FINAL_BLIT_NUM_PIPELINES; i++) {
 		vkDestroyPipeline(qvk.device, pipeline_final_blit[i], NULL);
@@ -932,6 +1069,16 @@ vkpt_draw_create_pipelines(void)
 		SHADER_STAGE_SPEC(QVK_MOD_STRETCH_PIC_FRAG, VK_SHADER_STAGE_FRAGMENT_BIT, &specInfo_HDR)
 	};
 
+	VkPipelineShaderStageCreateInfo shader_info_rmlui_SDR[] = {
+		SHADER_STAGE(QVK_MOD_RMLUI_VERT, VK_SHADER_STAGE_VERTEX_BIT),
+		SHADER_STAGE_SPEC(QVK_MOD_STRETCH_PIC_FRAG, VK_SHADER_STAGE_FRAGMENT_BIT, &specInfo_SDR)
+	};
+
+	VkPipelineShaderStageCreateInfo shader_info_rmlui_HDR[] = {
+		SHADER_STAGE(QVK_MOD_RMLUI_VERT, VK_SHADER_STAGE_VERTEX_BIT),
+		SHADER_STAGE_SPEC(QVK_MOD_STRETCH_PIC_FRAG, VK_SHADER_STAGE_FRAGMENT_BIT, &specInfo_HDR)
+	};
+
 	VkPipelineVertexInputStateCreateInfo vertex_input_info = {
 		.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 		.vertexBindingDescriptionCount   = 0,
@@ -944,6 +1091,19 @@ vkpt_draw_create_pipelines(void)
 		.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
 		.primitiveRestartEnable = VK_FALSE,
+	};
+	VkPipelineInputAssemblyStateCreateInfo rmlui_input_assembly_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		.primitiveRestartEnable = VK_FALSE,
+	};
+	VkDynamicState rmlui_dynamic_states[] = {
+		VK_DYNAMIC_STATE_SCISSOR,
+	};
+	VkPipelineDynamicStateCreateInfo rmlui_dynamic_state = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = LENGTH(rmlui_dynamic_states),
+		.pDynamicStates = rmlui_dynamic_states,
 	};
 
 	VkViewport viewport = {
@@ -1044,6 +1204,43 @@ vkpt_draw_create_pipelines(void)
 	_VK(vkCreateGraphicsPipelines(qvk.device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline_stretch_pic[STRETCH_PIC_HDR]));
 	ATTACH_LABEL_VARIABLE(pipeline_stretch_pic[STRETCH_PIC_HDR], PIPELINE);
 
+	pipeline_info.pVertexInputState = &vertex_input_info;
+	pipeline_info.pInputAssemblyState = &rmlui_input_assembly_info;
+	pipeline_info.pDynamicState = &rmlui_dynamic_state;
+	rasterizer_state.cullMode = VK_CULL_MODE_NONE;
+	pipeline_info.layout = pipeline_layout_stretch_pic;
+	pipeline_info.pStages = shader_info_rmlui_SDR;
+	VkResult rmlui_result = vkCreateGraphicsPipelines(qvk.device, VK_NULL_HANDLE,
+		1, &pipeline_info, NULL, &pipeline_rmlui[STRETCH_PIC_SDR]);
+	if (rmlui_result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: SDR RmlUi pipeline creation failed (%s)",
+			qvk_result_to_string(rmlui_result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		return rmlui_result;
+	}
+	ATTACH_LABEL_VARIABLE(pipeline_rmlui[STRETCH_PIC_SDR], PIPELINE);
+	pipeline_info.pStages = shader_info_rmlui_HDR;
+	rmlui_result = vkCreateGraphicsPipelines(qvk.device, VK_NULL_HANDLE, 1,
+		&pipeline_info, NULL, &pipeline_rmlui[STRETCH_PIC_HDR]);
+	if (rmlui_result != VK_SUCCESS) {
+		Com_SetLastError(va("Vulkan: HDR RmlUi pipeline creation failed (%s)",
+			qvk_result_to_string(rmlui_result)));
+		Com_EPrintf("%s\n", Com_GetLastError());
+		vkDestroyPipeline(qvk.device, pipeline_rmlui[STRETCH_PIC_SDR], NULL);
+		pipeline_rmlui[STRETCH_PIC_SDR] = VK_NULL_HANDLE;
+		return rmlui_result;
+	}
+	ATTACH_LABEL_VARIABLE(pipeline_rmlui[STRETCH_PIC_HDR], PIPELINE);
+
+	// Restore the vertex-less quad state consumed by the final-blit pipelines.
+	pipeline_info.pVertexInputState = &vertex_input_info;
+	pipeline_info.pInputAssemblyState = &input_assembly_info;
+	// The normal final blit sets a full-screen dynamic scissor. Native
+	// no-world menu previews reuse the same pipelines with a panel-local
+	// scissor after RmlUi has drawn the surrounding shell.
+	pipeline_info.pDynamicState = &rmlui_dynamic_state;
+	rasterizer_state.cullMode = VK_CULL_MODE_BACK_BIT;
+
 
 	VkSpecializationMapEntry final_blit_spec_entries[] = {
 		{ .constantID = 0, .offset = 0, .size = sizeof(uint32_t) },
@@ -1117,20 +1314,71 @@ VkResult
 vkpt_draw_clear_stretch_pics(void)
 {
 	num_stretch_pics = 0;
+	num_rmlui_vertices = 0;
+	num_rmlui_indices = 0;
+	num_rmlui_draws = 0;
+	rmlui_stretch_pic_split = 0;
 	return VK_SUCCESS;
 }
 
 VkResult
 vkpt_draw_submit_stretch_pics(VkCommandBuffer cmd_buf)
 {
-	if (num_stretch_pics == 0)
+	if (num_stretch_pics == 0 && num_rmlui_draws == 0)
 		return VK_SUCCESS;
 
-	BufferResource_t *buf_spq = buf_stretch_pic_queue + qvk.current_frame_index;
-	StretchPic_t *spq_dev = (StretchPic_t *) buffer_map(buf_spq);
-	memcpy(spq_dev, stretch_pic_queue, sizeof(StretchPic_t) * num_stretch_pics);
-	buffer_unmap(buf_spq);
-	spq_dev = NULL;
+	if (num_stretch_pics > 0) {
+		BufferResource_t *buf_spq = buf_stretch_pic_queue + qvk.current_frame_index;
+		byte *ui_geometry_data = (byte *)buffer_map(buf_spq);
+		StretchPic_t *spq_dev = (StretchPic_t *)(
+			ui_geometry_data + sizeof(rmlui_vertex_queue));
+		memcpy(spq_dev, stretch_pic_queue, sizeof(StretchPic_t) * num_stretch_pics);
+		buffer_unmap(buf_spq);
+	}
+
+	if (num_rmlui_draws > 0) {
+		BufferResource_t *vertex_buffer =
+			buf_stretch_pic_queue + qvk.current_frame_index;
+		RmlUiVertex_t *vertex_data = (RmlUiVertex_t *)buffer_map(vertex_buffer);
+		memcpy(vertex_data, rmlui_vertex_queue,
+		       sizeof(RmlUiVertex_t) * num_rmlui_vertices);
+		buffer_unmap(vertex_buffer);
+
+		BufferResource_t *index_buffer =
+			buf_rmlui_indices + qvk.current_frame_index;
+		uint32_t *index_data = (uint32_t *)buffer_map(index_buffer);
+		memcpy(index_data, rmlui_index_queue,
+		       sizeof(uint32_t) * num_rmlui_indices);
+		buffer_unmap(index_buffer);
+
+		VkBufferMemoryBarrier upload_barriers[] = {
+			{
+				.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+				.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT,
+				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.buffer = vertex_buffer->buffer,
+				.offset = 0,
+				.size = sizeof(RmlUiVertex_t) * num_rmlui_vertices,
+			},
+			{
+				.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+				.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT,
+				.dstAccessMask = VK_ACCESS_INDEX_READ_BIT,
+				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+				.buffer = index_buffer->buffer,
+				.offset = 0,
+				.size = sizeof(uint32_t) * num_rmlui_indices,
+			},
+		};
+		vkCmdPipelineBarrier(cmd_buf,
+			VK_PIPELINE_STAGE_HOST_BIT,
+			VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+				VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+			0, 0, NULL, LENGTH(upload_barriers), upload_barriers, 0, NULL);
+	}
 
 	BufferResource_t *ubo_res = buf_ubo + qvk.current_frame_index;
 	StretchPic_UBO_t *ubo = (StretchPic_UBO_t *) buffer_map(ubo_res);
@@ -1146,26 +1394,60 @@ vkpt_draw_submit_stretch_pics(VkCommandBuffer cmd_buf)
 		.renderArea.offset = { 0, 0 },
 		.renderArea.extent = vkpt_draw_get_extent()
 	};
-
-	VkDescriptorSet desc_sets[] = {
+	VkDescriptorSet stretch_pic_desc_sets[] = {
 		desc_set_sbo[qvk.current_frame_index],
 		qvk_get_current_desc_set_textures(),
 		desc_set_ubo[qvk.current_frame_index],
 	};
-
 	vkCmdBeginRenderPass(cmd_buf, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 	vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-			pipeline_layout_stretch_pic, 0, LENGTH(desc_sets), desc_sets, 0, 0);
-	vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_stretch_pic[qvk.surf_is_hdr ? STRETCH_PIC_HDR : STRETCH_PIC_SDR]);
-	vkCmdDraw(cmd_buf, 4, num_stretch_pics, 0, 0);
+		pipeline_layout_stretch_pic, 0, LENGTH(stretch_pic_desc_sets),
+		stretch_pic_desc_sets, 0, NULL);
+
+	const int pipeline_index =
+		qvk.surf_is_hdr ? STRETCH_PIC_HDR : STRETCH_PIC_SDR;
+	if (num_rmlui_draws > 0 && rmlui_stretch_pic_split > 0) {
+		vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+			pipeline_stretch_pic[pipeline_index]);
+		vkCmdDraw(cmd_buf, 4, rmlui_stretch_pic_split, 0, 0);
+	}
+	if (num_rmlui_draws > 0) {
+		vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+		                  pipeline_rmlui[pipeline_index]);
+		vkCmdBindIndexBuffer(cmd_buf,
+			buf_rmlui_indices[qvk.current_frame_index].buffer,
+			0, VK_INDEX_TYPE_UINT32);
+		for (uint32_t i = 0; i < num_rmlui_draws; ++i) {
+			const RmlUiDraw_t *draw_call = &rmlui_draw_queue[i];
+			vkCmdSetScissor(cmd_buf, 0, 1, &draw_call->scissor);
+			vkCmdDrawIndexed(cmd_buf, draw_call->index_count, 1,
+				draw_call->first_index, 0, 0);
+		}
+	}
+
+	const uint32_t trailing_stretch_pic =
+		num_rmlui_draws > 0 ? rmlui_stretch_pic_split : 0;
+	const uint32_t trailing_stretch_pic_count =
+		num_stretch_pics - trailing_stretch_pic;
+	if (trailing_stretch_pic_count > 0) {
+		vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+		                  pipeline_stretch_pic[pipeline_index]);
+		vkCmdDraw(cmd_buf, 4, trailing_stretch_pic_count, 0,
+			trailing_stretch_pic);
+	}
 	vkCmdEndRenderPass(cmd_buf);
 
 	num_stretch_pics = 0;
+	num_rmlui_vertices = 0;
+	num_rmlui_indices = 0;
+	num_rmlui_draws = 0;
+	rmlui_stretch_pic_split = 0;
 	return VK_SUCCESS;
 }
 
-VkResult
-vkpt_final_blit(VkCommandBuffer cmd_buf, unsigned int image_index, VkExtent2D extent, bool filtered, bool warped)
+static VkResult
+vkpt_final_blit_internal(VkCommandBuffer cmd_buf, unsigned int image_index,
+	VkExtent2D extent, bool filtered, bool warped, const VkRect2D *scissor)
 {
 	VkDescriptorImageInfo img_info_input = {
 		.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
@@ -1210,6 +1492,8 @@ vkpt_final_blit(VkCommandBuffer cmd_buf, unsigned int image_index, VkExtent2D ex
 		.renderArea.offset = { 0, 0 },
 		.renderArea.extent = vkpt_draw_get_extent()
 	};
+	if (scissor)
+		render_pass_info.renderArea = *scissor;
 
 	VkDescriptorSet desc_sets[] = {
 		qvk.desc_set_ubo,
@@ -1223,6 +1507,11 @@ vkpt_final_blit(VkCommandBuffer cmd_buf, unsigned int image_index, VkExtent2D ex
 		pipeline_layout_final_blit, 0, LENGTH(desc_sets), desc_sets, 0, 0);
 	int pipeline_idx = (filtered ? FINAL_BLIT_FILTERED : 0) | (warped ? FINAL_BLIT_WARPED : 0);
 	vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_final_blit[pipeline_idx]);
+	VkRect2D draw_scissor = scissor ? *scissor : (VkRect2D) {
+		.offset = { 0, 0 },
+		.extent = vkpt_draw_get_extent(),
+	};
+	vkCmdSetScissor(cmd_buf, 0, 1, &draw_scissor);
 	vkCmdPushConstants(cmd_buf, pipeline_layout_final_blit,
 		VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants), &push_constants);
 	vkCmdDraw(cmd_buf, 4, 1, 0, 0);
@@ -1231,10 +1520,28 @@ vkpt_final_blit(VkCommandBuffer cmd_buf, unsigned int image_index, VkExtent2D ex
 	return VK_SUCCESS;
 }
 
+VkResult
+vkpt_final_blit(VkCommandBuffer cmd_buf, unsigned int image_index,
+	VkExtent2D extent, bool filtered, bool warped)
+{
+	return vkpt_final_blit_internal(cmd_buf, image_index, extent, filtered,
+		warped, NULL);
+}
+
+VkResult
+vkpt_final_blit_rect(VkCommandBuffer cmd_buf, unsigned int image_index,
+	VkExtent2D extent, bool filtered, bool warped, const VkRect2D *scissor)
+{
+	return vkpt_final_blit_internal(cmd_buf, image_index, extent, filtered,
+		warped, scissor);
+}
+
 void R_SetClipRect(const clipRect_t *clip)
 {
 	if (!clip) {
 		clip_enable = false;
+		memset(&clip_rect, 0, sizeof(clip_rect));
+		memset(&clip_rect_pixels, 0, sizeof(clip_rect_pixels));
 		return;
 	}
 
@@ -1244,8 +1551,11 @@ void R_SetClipRect(const clipRect_t *clip)
 	if (!R_UIScaleClipToPixels(clip, draw.base_scale, draw.scale,
 		r_config.width, r_config.height, &pixel_clip)) {
 		clip_enable = false;
+		memset(&clip_rect, 0, sizeof(clip_rect));
+		memset(&clip_rect_pixels, 0, sizeof(clip_rect_pixels));
 		return;
 	}
+	clip_rect_pixels = pixel_clip;
 
 	float inv_pixel_scale = (draw.base_scale > 0.0f) ? (draw.scale / draw.base_scale) : draw.scale;
 	clip_rect.left = Q_rint(pixel_clip.left * inv_pixel_scale);
@@ -1254,6 +1564,8 @@ void R_SetClipRect(const clipRect_t *clip)
 	clip_rect.bottom = Q_rint(pixel_clip.bottom * inv_pixel_scale);
 	if (clip_rect.right < clip_rect.left || clip_rect.bottom < clip_rect.top) {
 		clip_enable = false;
+		memset(&clip_rect, 0, sizeof(clip_rect));
+		memset(&clip_rect_pixels, 0, sizeof(clip_rect_pixels));
 		return;
 	}
 	clip_enable = true;

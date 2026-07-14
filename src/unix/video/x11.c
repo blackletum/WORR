@@ -872,7 +872,8 @@ static void grab_mouse(bool grab)
     }
 
     x11.mouse.grabbed = grab;
-    bool show_cursor = !(x11.flags & QVF_FULLSCREEN) && !(Key_GetDest() & KEY_MENU);
+    bool show_cursor = !(x11.flags & QVF_FULLSCREEN) &&
+                       !(Key_GetDest() & (KEY_MENU | KEY_CONSOLE));
     set_cursor_visible(show_cursor);
 }
 

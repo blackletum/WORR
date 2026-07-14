@@ -7,47 +7,61 @@
   </head>
   <body id="settings-multimonitor" data-route-id="multimonitor" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="multimonitor-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="settings-multimonitor-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="settings-multimonitor-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="settings-multimonitor-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Multi-Monitor Setup</h1>
+        <div class="worr-titlerow"><button id="settings-multimonitor-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_multi_monitor_setup">Multi-Monitor Setup</h1></div>
       </header>
 
       <main class="settings-form" id="multimonitor-settings-form" data-component="common.components.cvar_controls">
         <section class="settings-section" id="multimonitor-display-section">
-          <h2>Display Selection</h2>
+          <h2 data-loc-key="worr_ui_display_selection">Display Selection</h2>
           <div class="setting-row" data-control="select" data-cvar="r_monitor_mode">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="multimonitor-monitor-mode">Monitor Mode</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="multimonitor-monitor-mode" data-loc-key="worr_ui_monitor_mode">Monitor Mode</label>
             <select id="multimonitor-monitor-mode" data-cvar="r_monitor_mode">
-              <option value="0">Primary</option>
-              <option value="1">Selected</option>
-              <option value="2">Span All</option>
+              <option value="0" data-loc-key="worr_ui_primary">Primary</option>
+              <option value="1" data-loc-key="worr_ui_selected">Selected</option>
+              <option value="2" data-loc-key="worr_ui_span_all">Span All</option>
             </select>
           </div>
           <div class="setting-row" data-control="field" data-cvar="r_display">
-            <span class="setting-widget-icon" data-widget="field"><img src="../common/icons/widgets/field.svg" /></span>
-            <label for="multimonitor-display">Display</label>
+            <span class="setting-widget-icon" data-widget="field"><img src="../common/icons/widgets/field.png" /></span>
+            <label for="multimonitor-display" data-loc-key="m_display">Display</label>
             <input id="multimonitor-display" type="text" data-cvar="r_display" maxlength="18" data-enable-if="r_monitor_mode=1" />
           </div>
           <div class="setting-hint">Monitor number (1-based) or device name. Applies when Monitor Mode is "Selected".</div>
         </section>
 
         <section class="settings-section" id="multimonitor-window-section">
-          <h2>Window Behavior</h2>
+          <h2 data-loc-key="worr_ui_window_behavior">Window Behavior</h2>
           <div class="setting-row" data-control="select" data-cvar="r_borderless">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="multimonitor-borderless">Borderless</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="multimonitor-borderless" data-loc-key="m_borderless">Borderless</label>
             <select id="multimonitor-borderless" data-cvar="r_borderless">
-              <option value="0">Off</option>
-              <option value="1">Fullscreen</option>
-              <option value="2">Always</option>
+              <option value="0" data-loc-key="m_off">Off</option>
+              <option value="1" data-loc-key="m_fullscreen">Fullscreen</option>
+              <option value="2" data-loc-key="m_always">Always</option>
             </select>
           </div>
         </section>
       </main>
 
       <footer class="menu-footer" id="multimonitor-menu-footer">
-        <button id="multimonitor-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="multimonitor-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="multimonitor-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="settings-multimonitor-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

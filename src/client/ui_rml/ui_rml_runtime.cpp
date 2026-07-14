@@ -24,12 +24,16 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/common.h"
 #include "common/cvar.h"
 #include "common/files.h"
+#include "common/loc.h"
 #include "common/mapdb.h"
+#include "common/net/net.h"
 #include "../client.h"
 #include "client/keys.h"
 #include "client/sound/sound.h"
 #include "renderer/renderer.h"
+#include "server/server.h"
 #include "system/system.h"
+#include "../../game/sgame/monsters/m_player.hpp"
 
 #ifdef DotProduct
 #undef DotProduct
@@ -71,6 +75,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <ctime>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -95,8 +100,17 @@ static bool ui_rml_applying_cvar_bindings;
 static cvar_t *ui_rml_log_missing_data_models;
 static cvar_t *ui_rml_high_visibility;
 static cvar_t *ui_rml_reduced_motion;
+static cvar_t *ui_rml_large_text;
+static cvar_t *ui_rml_localization_language;
+static int ui_rml_localization_modified_count = -1;
 static Rml::Element *ui_rml_keybind_capture_element;
 static Rml::String ui_rml_keybind_capture_command;
+static int ui_rml_keybind_capture_slot;
+static unsigned ui_rml_keybind_capture_started;
+static Rml::Element *ui_rml_keybind_conflict_element;
+static Rml::String ui_rml_keybind_conflict_command;
+static Rml::String ui_rml_keybind_conflict_previous_command;
+static int ui_rml_keybind_conflict_key = -1;
 
 static bool UI_Rml_IsMissingDataModelNotice(const Rml::String &message)
 {
@@ -1300,11 +1314,16 @@ static UI_Rml_SmokeFontEngineInterface ui_rml_font_interface;
 static constexpr float UI_RML_REFERENCE_WIDTH = 960.0f;
 static constexpr float UI_RML_REFERENCE_HEIGHT = 720.0f;
 
+static bool UI_Rml_HandleServerBrowserAction(Rml::Element *element);
+static bool UI_Rml_HandleDemoBrowserAction(Rml::Element *element);
+
 static Rml::Element *UI_Rml_FindCommandElement(Rml::Element *element)
 {
     for (Rml::Element *current = element; current; current = current->GetParentNode()) {
         if (!current->GetAttribute<Rml::String>("data-route-target", "").empty() ||
             !current->GetAttribute<Rml::String>("data-route", "").empty() ||
+            !current->GetAttribute<Rml::String>("data-server-action", "").empty() ||
+            !current->GetAttribute<Rml::String>("data-demo-action", "").empty() ||
             !current->GetAttribute<Rml::String>("data-command-cvar", "").empty() ||
             !current->GetAttribute<Rml::String>("data-command", "").empty()) {
             return current;
@@ -1322,6 +1341,25 @@ static bool UI_Rml_QueueCommand(const char *command)
 
     Cbuf_AddText(&cmd_buffer, command);
     Cbuf_AddText(&cmd_buffer, "\n");
+    return true;
+}
+
+// Back/close commands must run before any already-buffered capture or config
+// commands. Inserting the complete sequence also preserves the required
+// runtime-pop-before-owner-cleanup ordering.
+static bool UI_Rml_InsertCommandSequence(const char *first, const char *second)
+{
+    if (!first || !first[0]) {
+        return false;
+    }
+
+    Rml::String sequence = first;
+    sequence += "\n";
+    if (second && second[0]) {
+        sequence += second;
+        sequence += "\n";
+    }
+    Cbuf_InsertText(&cmd_buffer, sequence.c_str());
     return true;
 }
 
@@ -2086,6 +2124,120 @@ static void UI_Rml_ApplyCvarToText(Rml::Element *element, cvar_t *var)
     UI_Rml_SetElementInnerText(element, text.c_str());
 }
 
+static bool UI_Rml_ImageSourceExists(const Rml::String &source)
+{
+    if (source.empty()) {
+        return false;
+    }
+
+    const char *path = source.c_str();
+    while (*path == '/') {
+        ++path;
+    }
+    if (!*path) {
+        return false;
+    }
+
+    if (FS_FileExists(path)) {
+        return true;
+    }
+
+    const char *slash = strrchr(path, '/');
+    const char *dot = strrchr(path, '.');
+    if (dot && (!slash || dot > slash)) {
+        return false;
+    }
+
+    static const char *const image_extensions[] = {
+        ".png", ".pcx", ".tga", ".jpg", ".jpeg", ".wal",
+    };
+    char candidate[MAX_QPATH];
+    for (const char *extension : image_extensions) {
+        Q_concat(candidate, sizeof(candidate), path, extension);
+        if (FS_FileExists(candidate)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// data-src-cvar: rebinds an <img> src from a cvar (optionally wrapped with
+// data-src-prefix/data-src-suffix), e.g. levelshot previews that follow the
+// map select. Missing dynamic images restore data-src-fallback instead of
+// displaying RmlUi's untextured white quad. Change-guarded: setting src
+// reloads the texture.
+static void UI_Rml_ApplyCvarToSrc(Rml::Element *element, cvar_t *var)
+{
+    if (!element || !var || !var->string || !var->string[0]) {
+        return;
+    }
+
+    const Rml::String prefix =
+        element->GetAttribute<Rml::String>("data-src-prefix", "");
+    const Rml::String suffix =
+        element->GetAttribute<Rml::String>("data-src-suffix", "");
+    const Rml::String desired = prefix + var->string + suffix;
+    const Rml::String bound_source =
+        element->GetAttribute<Rml::String>("data-src-bound-source", "");
+
+    if (!UI_Rml_ImageSourceExists(desired)) {
+        const Rml::String fallback =
+            element->GetAttribute<Rml::String>("data-src-fallback", "");
+        if (!fallback.empty() && !bound_source.empty()) {
+            element->SetAttribute("src", fallback);
+            element->RemoveAttribute("data-src-bound-source");
+        }
+        return;
+    }
+
+    if (bound_source != desired) {
+        element->SetAttribute("src", desired);
+        element->SetAttribute("data-src-bound-source", desired);
+    }
+}
+
+// data-gauge-cvar: maps a numeric cvar onto quartile classes is-q0..is-q4 so
+// sprite-ring gauges can present percentages without shader arcs.
+static void UI_Rml_ApplyCvarToGauge(Rml::Element *element, cvar_t *var)
+{
+    if (!element || !var) {
+        return;
+    }
+
+    double value = 0.0;
+    double minimum = 0.0;
+    double maximum = 1.0;
+    int quartile = 0;
+
+    if (UI_Rml_ParseDouble(var->string ? var->string : "", &value) &&
+        UI_Rml_ParseDouble(
+            element->GetAttribute<Rml::String>("data-gauge-min", "0"),
+            &minimum) &&
+        UI_Rml_ParseDouble(
+            element->GetAttribute<Rml::String>("data-gauge-max", "1"),
+            &maximum) &&
+        maximum > minimum) {
+        double ratio = (value - minimum) / (maximum - minimum);
+
+        if (ratio < 0.0) {
+            ratio = 0.0;
+        } else if (ratio > 1.0) {
+            ratio = 1.0;
+        }
+        quartile = (int)(ratio * 4.0 + 0.5);
+    }
+
+    for (int q = 0; q <= 4; q++) {
+        const char *name = va("is-q%d", q);
+        const bool want = (q == quartile);
+
+        if (element->IsClassSet(name) != want) {
+            element->SetClass(name, want);
+        }
+    }
+}
+
 static void UI_Rml_ApplyCvarToMeter(Rml::Element *element, cvar_t *var)
 {
     if (!element || !var) {
@@ -2162,6 +2314,24 @@ static void UI_Rml_RefreshCvarBindings(Rml::Element *element,
         (!only_cvar || meter_cvar == *only_cvar)) {
         if (cvar_t *var = Cvar_FindVar(meter_cvar.c_str())) {
             UI_Rml_ApplyCvarToMeter(element, var);
+        }
+    }
+
+    const Rml::String src_cvar =
+        element->GetAttribute<Rml::String>("data-src-cvar", "");
+    if (!src_cvar.empty() &&
+        (!only_cvar || src_cvar == *only_cvar)) {
+        if (cvar_t *var = Cvar_FindVar(src_cvar.c_str())) {
+            UI_Rml_ApplyCvarToSrc(element, var);
+        }
+    }
+
+    const Rml::String gauge_cvar =
+        element->GetAttribute<Rml::String>("data-gauge-cvar", "");
+    if (!gauge_cvar.empty() &&
+        (!only_cvar || gauge_cvar == *only_cvar)) {
+        if (cvar_t *var = Cvar_FindVar(gauge_cvar.c_str())) {
+            UI_Rml_ApplyCvarToGauge(element, var);
         }
     }
 
@@ -2483,11 +2653,63 @@ static bool UI_Rml_ElementWantsInteractionAudio(Rml::Element *element)
             element->HasAttribute("data-command-cvar") ||
             element->HasAttribute("data-route") ||
             element->HasAttribute("data-route-target") ||
+            element->HasAttribute("data-server-action") ||
+            element->HasAttribute("data-demo-action") ||
             element->HasAttribute("data-cvar") ||
             element->HasAttribute("data-event-click") ||
             element->HasAttribute("data-event-change") ||
             element->HasAttribute("data-menu-sound-focus") ||
-            element->HasAttribute("data-menu-sound-change"));
+           element->HasAttribute("data-menu-sound-change"));
+}
+
+static void UI_Rml_ApplyDemoFocusSelection(Rml::Element *element)
+{
+    if (!element || !ui_rml_document ||
+        element->GetAttribute<Rml::String>("data-demo-action", "") !=
+            "activate") {
+        return;
+    }
+
+    Rml::Element *row = element;
+    while (row && Q_stricmp(row->GetTagName().c_str(), "tr")) {
+        row = row->GetParentNode();
+    }
+    if (!row) {
+        return;
+    }
+
+    if (Rml::Element *selected =
+            ui_rml_document->QuerySelector(".demo-row.is-selected")) {
+        if (selected != row) {
+            selected->SetClass("is-selected", false);
+        }
+    }
+    row->SetClass("is-selected", true);
+}
+
+static void UI_Rml_ApplyServerFocusSelection(Rml::Element *element)
+{
+    if (!element || !ui_rml_document ||
+        element->GetAttribute<Rml::String>("data-server-action", "") !=
+            "select") {
+        return;
+    }
+
+    Rml::Element *row = element;
+    while (row && Q_stricmp(row->GetTagName().c_str(), "tr")) {
+        row = row->GetParentNode();
+    }
+    if (!row) {
+        return;
+    }
+
+    if (Rml::Element *selected =
+            ui_rml_document->QuerySelector(".server-row.is-selected")) {
+        if (selected != row) {
+            selected->SetClass("is-selected", false);
+        }
+    }
+    row->SetClass("is-selected", true);
 }
 
 class UI_Rml_AudioEventListener final : public Rml::EventListener {
@@ -2506,6 +2728,10 @@ public:
         }
 
         Rml::Element *element = event.GetTargetElement();
+        if (event_id == Rml::EventId::Focus) {
+            UI_Rml_ApplyServerFocusSelection(element);
+            UI_Rml_ApplyDemoFocusSelection(element);
+        }
         if (!UI_Rml_ElementWantsInteractionAudio(element)) {
             return;
         }
@@ -2604,6 +2830,242 @@ static void UI_Rml_SetKeybindKeyText(Rml::Element *element, const char *text)
     }
 }
 
+static int UI_Rml_MapKeynumToMouseIcon(int keynum)
+{
+    switch (keynum) {
+    case K_MOUSE1:
+        return 1;
+    case K_MOUSE2:
+        return 2;
+    case K_MOUSE3:
+        return 0;
+    case K_MOUSE4:
+        return 5;
+    case K_MOUSE5:
+        return 6;
+    case K_MOUSE6:
+        return 7;
+    case K_MOUSE7:
+        return 8;
+    case K_MOUSE8:
+        return 9;
+    case K_MWHEELUP:
+        return 3;
+    case K_MWHEELDOWN:
+        return 4;
+    default:
+        return -1;
+    }
+}
+
+static int UI_Rml_MapKeynumToKeyboardIcon(int keynum)
+{
+    switch (keynum) {
+    case K_BACKSPACE:
+        return 8;
+    case K_TAB:
+        return 9;
+    case K_ENTER:
+        return 13;
+    case K_PAUSE:
+        return 271;
+    case K_ESCAPE:
+        return 27;
+    case K_SPACE:
+        return 32;
+    case K_DEL:
+        return 275;
+    case K_CAPSLOCK:
+        return 256;
+    case K_F1:
+        return 257;
+    case K_F2:
+        return 258;
+    case K_F3:
+        return 259;
+    case K_F4:
+        return 260;
+    case K_F5:
+        return 261;
+    case K_F6:
+        return 262;
+    case K_F7:
+        return 263;
+    case K_F8:
+        return 264;
+    case K_F9:
+        return 265;
+    case K_F10:
+        return 266;
+    case K_F11:
+        return 267;
+    case K_F12:
+        return 268;
+    case K_PRINTSCREEN:
+        return 269;
+    case K_SCROLLOCK:
+        return 270;
+    case K_INS:
+        return 272;
+    case K_HOME:
+        return 273;
+    case K_PGUP:
+        return 274;
+    case K_END:
+        return 276;
+    case K_PGDN:
+        return 277;
+    case K_RIGHTARROW:
+        return 278;
+    case K_LEFTARROW:
+        return 279;
+    case K_DOWNARROW:
+        return 280;
+    case K_UPARROW:
+        return 281;
+    case K_NUMLOCK:
+        return 282;
+    case K_KP_SLASH:
+        return 283;
+    case K_KP_MULTIPLY:
+        return 42;
+    case K_KP_MINUS:
+        return 285;
+    case K_KP_PLUS:
+        return 286;
+    case K_KP_ENTER:
+        return 287;
+    case K_KP_END:
+        return 288;
+    case K_KP_DOWNARROW:
+        return 289;
+    case K_KP_PGDN:
+        return 290;
+    case K_KP_LEFTARROW:
+        return 291;
+    case K_KP_5:
+        return 292;
+    case K_KP_RIGHTARROW:
+        return 293;
+    case K_KP_HOME:
+        return 294;
+    case K_KP_UPARROW:
+        return 295;
+    case K_KP_PGUP:
+        return 296;
+    case K_KP_INS:
+        return 297;
+    case K_KP_DEL:
+        return 298;
+    case K_CTRL:
+    case K_LCTRL:
+        return 299;
+    case K_SHIFT:
+    case K_LSHIFT:
+        return 300;
+    case K_ALT:
+    case K_LALT:
+        return 301;
+    case K_RCTRL:
+        return 302;
+    case K_RSHIFT:
+        return 303;
+    case K_RALT:
+        return 304;
+    default:
+        break;
+    }
+
+    if (keynum >= K_ASCIIFIRST && keynum <= K_ASCIILAST) {
+        return keynum;
+    }
+
+    return -1;
+}
+
+static bool UI_Rml_BuildKeybindIconPath(int keynum,
+                                        char *out_path,
+                                        size_t out_size)
+{
+    const int mouse_icon = UI_Rml_MapKeynumToMouseIcon(keynum);
+    if (mouse_icon >= 0) {
+        Q_snprintf(out_path,
+                   out_size,
+                   "/gfx/controller/mouse/f000%i.png",
+                   mouse_icon);
+        return true;
+    }
+
+    if (keynum >= K_GAMEPAD_FIRST && keynum <= K_GAMEPAD_LAST) {
+        Q_snprintf(out_path,
+                   out_size,
+                   "/gfx/controller/generic/f%04x.png",
+                   keynum - K_GAMEPAD_FIRST);
+        return true;
+    }
+
+    const int keyboard_icon = UI_Rml_MapKeynumToKeyboardIcon(keynum);
+    if (keyboard_icon >= 0) {
+        Q_snprintf(out_path,
+                   out_size,
+                   "/gfx/controller/keyboard/%i.png",
+                   keyboard_icon);
+        return true;
+    }
+
+    return false;
+}
+
+static void UI_Rml_SetKeybindIcon(Rml::Element *element, int keynum)
+{
+    if (!element) {
+        return;
+    }
+
+    Rml::Element *icon = element->QuerySelector(".bind-icon");
+    if (!icon) {
+        return;
+    }
+
+    char icon_path[MAX_QPATH];
+    if (keynum >= 0 &&
+        UI_Rml_BuildKeybindIconPath(keynum, icon_path, sizeof(icon_path))) {
+        icon->SetAttribute("src", icon_path);
+        icon->RemoveProperty("display");
+        return;
+    }
+
+    icon->SetProperty("display", "none");
+}
+
+static int UI_Rml_KeybindSlotForElement(Rml::Element *element)
+{
+    if (!element) {
+        return 0;
+    }
+
+    return max(0,
+               atoi(element->GetAttribute<Rml::String>("data-bind-slot", "0")
+                        .c_str()));
+}
+
+static int UI_Rml_KeybindKeyForSlot(const char *command, int slot)
+{
+    int key = 0;
+
+    for (int index = 0; index <= slot; index++) {
+        key = Key_EnumBindings(key, command);
+        if (key == -1) {
+            return -1;
+        }
+        if (index != slot) {
+            key++;
+        }
+    }
+
+    return key;
+}
+
 static void UI_Rml_RefreshKeybindDisplays(Rml::Element *element)
 {
     if (!element) {
@@ -2613,15 +3075,50 @@ static void UI_Rml_RefreshKeybindDisplays(Rml::Element *element)
     const Rml::String bind_command =
         element->GetAttribute<Rml::String>("data-bind-command", "");
     if (!bind_command.empty() && element != ui_rml_keybind_capture_element) {
-        const char *key_name = Key_GetBinding(bind_command.c_str());
+        const int keynum = UI_Rml_KeybindKeyForSlot(
+            bind_command.c_str(), UI_Rml_KeybindSlotForElement(element));
+        const char *key_name =
+            keynum >= 0 ? Key_KeynumToString(keynum) : nullptr;
         UI_Rml_SetKeybindKeyText(element,
                                  key_name && key_name[0] ? key_name : "---");
+        UI_Rml_SetKeybindIcon(element, keynum);
     }
 
     const int num_children = element->GetNumChildren();
     for (int child_index = 0; child_index < num_children; child_index++) {
         UI_Rml_RefreshKeybindDisplays(element->GetChild(child_index));
     }
+}
+
+static Rml::Element *UI_Rml_KeybindRowForElement(Rml::Element *element)
+{
+    for (Rml::Element *walk = element; walk; walk = walk->GetParentNode()) {
+        if (walk->IsClassSet("bind-row")) {
+            return walk;
+        }
+    }
+
+    return nullptr;
+}
+
+static void UI_Rml_ClearKeybindConflict(void)
+{
+    if (ui_rml_keybind_conflict_element) {
+        ui_rml_keybind_conflict_element->SetClass("has-conflict", false);
+        if (Rml::Element *row =
+                UI_Rml_KeybindRowForElement(ui_rml_keybind_conflict_element)) {
+            row->SetClass("has-bind-conflict", false);
+            if (Rml::Element *panel =
+                    row->QuerySelector("[data-keybind-conflict]")) {
+                panel->SetProperty("display", "none");
+            }
+        }
+    }
+
+    ui_rml_keybind_conflict_element = nullptr;
+    ui_rml_keybind_conflict_command.clear();
+    ui_rml_keybind_conflict_previous_command.clear();
+    ui_rml_keybind_conflict_key = -1;
 }
 
 static void UI_Rml_EndKeybindCapture(void)
@@ -2632,6 +3129,8 @@ static void UI_Rml_EndKeybindCapture(void)
     }
 
     ui_rml_keybind_capture_command.clear();
+    ui_rml_keybind_capture_slot = 0;
+    ui_rml_keybind_capture_started = 0;
 
     if (ui_rml_document) {
         UI_Rml_RefreshKeybindDisplays(ui_rml_document);
@@ -2640,6 +3139,7 @@ static void UI_Rml_EndKeybindCapture(void)
 
 static void UI_Rml_BeginKeybindCapture(Rml::Element *element)
 {
+    UI_Rml_ClearKeybindConflict();
     UI_Rml_EndKeybindCapture();
 
     const Rml::String bind_command =
@@ -2650,18 +3150,137 @@ static void UI_Rml_BeginKeybindCapture(Rml::Element *element)
 
     ui_rml_keybind_capture_element = element;
     ui_rml_keybind_capture_command = bind_command;
+    ui_rml_keybind_capture_slot = UI_Rml_KeybindSlotForElement(element);
+    ui_rml_keybind_capture_started = Sys_Milliseconds();
     element->SetClass("is-capturing", true);
-    UI_Rml_SetKeybindKeyText(element, "press a key...");
+    UI_Rml_SetKeybindIcon(element, -1);
+    UI_Rml_SetKeybindKeyText(element, "PRESS A KEY...");
 }
 
-static void UI_Rml_UnbindKeybindCommand(const char *command)
+static void UI_Rml_ClearKeybindSlot(const char *command, int slot)
 {
-    int key = 0;
+    const int key = UI_Rml_KeybindKeyForSlot(command, slot);
+    if (key >= 0) {
+        Key_SetBinding(key, NULL);
+    }
+}
 
+static void UI_Rml_AssignKeybindSlot(const char *command, int slot, int new_key)
+{
+    // The engine stores a command's bindings as an unordered key table. Keep
+    // the other authored chip, replace the selected chip, and normalize any
+    // console-created extras back to the two-slot UI contract.
+    const int other_key =
+        UI_Rml_KeybindKeyForSlot(command, slot == 0 ? 1 : 0);
+    int key = 0;
     while ((key = Key_EnumBindings(key, command)) != -1) {
         Key_SetBinding(key, NULL);
         key++;
     }
+
+    if (other_key >= 0 && other_key != new_key) {
+        Key_SetBinding(other_key, command);
+    }
+    Key_SetBinding(new_key, command);
+}
+
+static void UI_Rml_ShowKeybindConflict(Rml::Element *element,
+                                       const Rml::String &command,
+                                       int key,
+                                       const char *previous_command)
+{
+    ui_rml_keybind_conflict_element = element;
+    ui_rml_keybind_conflict_command = command;
+    ui_rml_keybind_conflict_previous_command =
+        previous_command ? previous_command : "";
+    ui_rml_keybind_conflict_key = key;
+
+    element->SetClass("has-conflict", true);
+    Rml::Element *row = UI_Rml_KeybindRowForElement(element);
+    if (!row) {
+        return;
+    }
+
+    row->SetClass("has-bind-conflict", true);
+    Rml::Element *panel = row->QuerySelector("[data-keybind-conflict]");
+    if (!panel) {
+        return;
+    }
+
+    char detail[256];
+    Q_snprintf(detail,
+               sizeof(detail),
+               "%s is already bound to %s. Replace it?",
+               Key_KeynumToString(key),
+               ui_rml_keybind_conflict_previous_command.c_str());
+    if (Rml::Element *detail_element =
+            panel->QuerySelector(".bind-conflict-detail")) {
+        UI_Rml_SetElementInnerText(detail_element, detail);
+    }
+    panel->RemoveProperty("display");
+
+    if (Rml::Element *replace =
+            panel->QuerySelector("[data-keybind-conflict-action=replace]")) {
+        replace->Focus(true);
+        replace->ScrollIntoView(Rml::ScrollAlignment::Nearest);
+    }
+}
+
+static void UI_Rml_CommitKeybindConflict(void)
+{
+    if (!ui_rml_keybind_conflict_element ||
+        ui_rml_keybind_conflict_key < 0 ||
+        ui_rml_keybind_conflict_command.empty()) {
+        UI_Rml_ClearKeybindConflict();
+        return;
+    }
+
+    UI_Rml_AssignKeybindSlot(
+        ui_rml_keybind_conflict_command.c_str(),
+        UI_Rml_KeybindSlotForElement(ui_rml_keybind_conflict_element),
+        ui_rml_keybind_conflict_key);
+
+    UI_Rml_ClearKeybindConflict();
+    if (ui_rml_document) {
+        UI_Rml_RefreshKeybindDisplays(ui_rml_document);
+    }
+}
+
+static Rml::Element *UI_Rml_FindKeybindConflictAction(Rml::Element *element)
+{
+    for (Rml::Element *walk = element; walk; walk = walk->GetParentNode()) {
+        if (!walk->GetAttribute<Rml::String>("data-keybind-conflict-action", "")
+                 .empty()) {
+            return walk;
+        }
+    }
+
+    return nullptr;
+}
+
+static bool UI_Rml_HandleKeybindConflictAction(Rml::Element *element)
+{
+    if (!element) {
+        return false;
+    }
+
+    const Rml::String action = element->GetAttribute<Rml::String>(
+        "data-keybind-conflict-action", "");
+    if (action == "replace") {
+        UI_Rml_CommitKeybindConflict();
+        UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_ALERT);
+        return true;
+    }
+    if (action == "cancel") {
+        UI_Rml_ClearKeybindConflict();
+        if (ui_rml_document) {
+            UI_Rml_RefreshKeybindDisplays(ui_rml_document);
+        }
+        UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_CLOSE);
+        return true;
+    }
+
+    return false;
 }
 
 static bool UI_Rml_HandleKeybindCaptureKey(int key, bool down)
@@ -2681,16 +3300,28 @@ static bool UI_Rml_HandleKeybindCaptureKey(int key, bool down)
     }
 
     const Rml::String command = ui_rml_keybind_capture_command;
+    Rml::Element *capture_element = ui_rml_keybind_capture_element;
+    const int capture_slot = ui_rml_keybind_capture_slot;
 
     if (key == K_BACKSPACE || key == K_DEL) {
-        UI_Rml_UnbindKeybindCommand(command.c_str());
+        UI_Rml_ClearKeybindSlot(command.c_str(), capture_slot);
         UI_Rml_EndKeybindCapture();
         UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_MOVE);
         return true;
     }
 
-    UI_Rml_UnbindKeybindCommand(command.c_str());
-    Key_SetBinding(key, command.c_str());
+    const char *previous_command = Key_GetBindingForKey(key);
+    if (previous_command && previous_command[0] &&
+        Q_stricmp(previous_command, command.c_str())) {
+        Rml::String conflict_command = previous_command;
+        UI_Rml_EndKeybindCapture();
+        UI_Rml_ShowKeybindConflict(
+            capture_element, command, key, conflict_command.c_str());
+        UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_ALERT);
+        return true;
+    }
+
+    UI_Rml_AssignKeybindSlot(command.c_str(), capture_slot, key);
     UI_Rml_EndKeybindCapture();
     UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_ALERT);
     return true;
@@ -2711,10 +3342,45 @@ static bool UI_Rml_ElementIsDisabled(Rml::Element *element)
     return false;
 }
 
+static bool UI_Rml_CompiledRuntimeHandleBackKey(int key);
+
+static bool UI_Rml_MatchHubCanCloseLocally(const Rml::String &command)
+{
+    return command == "worr_dm_join_close" &&
+           !Cvar_VariableInteger("ui_dm_initial") &&
+           Cvar_VariableInteger("ui_dm_show_resume");
+}
+
+static const char *UI_Rml_RemoteSessionCommandWhenConnected(const char *command)
+{
+    if (!command ||
+        (cls.state >= ca_connected && cls.state <= ca_active)) {
+        return command;
+    }
+
+    if (!strcmp(command, "worr_dm_join_close") ||
+        !strcmp(command, "worr_welcome_continue") ||
+        !strcmp(command, "worr_vote_close") ||
+        !strcmp(command, "worr_mapselector_close") ||
+        !strcmp(command, "worr_matchstats_close")) {
+        return nullptr;
+    }
+
+    return command;
+}
+
 class UI_Rml_CommandEventListener final : public Rml::EventListener {
 public:
     void ProcessEvent(Rml::Event &event) override
     {
+        Rml::Element *conflict_action =
+            UI_Rml_FindKeybindConflictAction(event.GetTargetElement());
+        if (conflict_action &&
+            UI_Rml_HandleKeybindConflictAction(conflict_action)) {
+            event.StopPropagation();
+            return;
+        }
+
         Rml::Element *keybind_element =
             UI_Rml_FindKeybindElement(event.GetTargetElement());
         if (keybind_element) {
@@ -2736,6 +3402,28 @@ public:
 
         if (UI_Rml_ElementIsDisabled(element)) {
             event.StopPropagation();
+            return;
+        }
+
+        if (!element->GetAttribute<Rml::String>("data-server-action", "").empty()) {
+            UI_Rml_PlayElementMenuSound(
+                element,
+                element->GetAttribute<Rml::String>("data-server-action", ""),
+                "");
+            if (UI_Rml_HandleServerBrowserAction(element)) {
+                event.StopPropagation();
+            }
+            return;
+        }
+
+        if (!element->GetAttribute<Rml::String>("data-demo-action", "").empty()) {
+            UI_Rml_PlayElementMenuSound(
+                element,
+                element->GetAttribute<Rml::String>("data-demo-action", ""),
+                "");
+            if (UI_Rml_HandleDemoBrowserAction(element)) {
+                event.StopPropagation();
+            }
             return;
         }
 
@@ -2784,12 +3472,20 @@ public:
             return;
         }
 
-        if (command == "ui.back" ||
-            UI_Rml_CommandStartsWithToken(command, "popmenu")) {
+        if (command == "ui.back") {
+            if (!UI_Rml_CompiledRuntimeHandleBackKey(K_ESCAPE)) {
+                UI_Rml_QueueCommand("ui_rml_runtime_back");
+            }
+            event.StopPropagation();
+            return;
+        }
+
+        if (UI_Rml_CommandStartsWithToken(command, "popmenu")) {
             const char *tail = UI_Rml_CommandTailAfterToken(command, "popmenu");
 
-            UI_Rml_QueueCommand("ui_rml_runtime_back");
-            UI_Rml_QueueCommand(tail);
+            UI_Rml_InsertCommandSequence(
+                "ui_rml_runtime_back",
+                UI_Rml_RemoteSessionCommandWhenConnected(tail));
             event.StopPropagation();
             return;
         }
@@ -2797,13 +3493,25 @@ public:
         if (UI_Rml_CommandStartsWithToken(command, "forcemenuoff")) {
             const char *tail = UI_Rml_CommandTailAfterToken(command, "forcemenuoff");
 
-            UI_Rml_QueueCommand("ui_rml_runtime_close");
-            UI_Rml_QueueCommand(tail);
+            UI_Rml_InsertCommandSequence(
+                "ui_rml_runtime_close",
+                UI_Rml_RemoteSessionCommandWhenConnected(tail));
             event.StopPropagation();
             return;
         }
 
         if (command == "ui.open_route") {
+            event.StopPropagation();
+            return;
+        }
+
+        // A resumable match hub should disappear immediately while its
+        // authoritative sgame close command clears server-side menu state.
+        // The first-connect hub remains modal until team/spectator selection.
+        if (UI_Rml_MatchHubCanCloseLocally(command)) {
+            UI_Rml_InsertCommandSequence("ui_rml_runtime_close",
+                                         UI_Rml_RemoteSessionCommandWhenConnected(
+                                             command.c_str()));
             event.StopPropagation();
             return;
         }
@@ -2860,6 +3568,11 @@ static bool UI_Rml_CompiledRuntimeInit(void)
         Cvar_Get("ui_rml_high_visibility", "0", CVAR_ARCHIVE);
     ui_rml_reduced_motion =
         Cvar_Get("ui_rml_reduced_motion", "0", CVAR_ARCHIVE);
+    ui_rml_large_text =
+        Cvar_Get("ui_rml_large_text", "0", CVAR_ARCHIVE);
+    ui_rml_localization_language =
+        Cvar_Get("loc_language", "auto", CVAR_ARCHIVE);
+    ui_rml_localization_modified_count = -1;
 
     UI_Rml_InstallCoreInterfaces();
 
@@ -3411,6 +4124,1460 @@ static void UI_Rml_PopulateImageValueSelects(Rml::ElementDocument *document)
     }
 }
 
+// ---- Server browser: live legacy discovery with native RmlUi presentation ----
+
+static constexpr size_t UI_RML_SERVER_PAGE_SIZE = 8;
+static constexpr size_t UI_RML_SERVER_MAX_ENTRIES = 1024;
+static constexpr int UI_RML_SERVER_PING_STAGES = 3;
+static constexpr const char *UI_RML_SERVER_PUBLIC_ARGUMENTS =
+    "\"+https://q2servers.com/?raw=2\" \"https://q2servers.com/?raw=0\"";
+static constexpr const char *UI_RML_SERVER_LOCAL_ARGUMENTS =
+    "\"favorites://\" \"file:///servers.lst\" \"broadcast://\"";
+
+enum class UI_Rml_ServerStatus {
+    Idle,
+    Pending,
+    Error,
+    Valid,
+};
+
+enum UI_Rml_ServerSortColumn {
+    UI_RML_SERVER_SORT_NAME = 0,
+    UI_RML_SERVER_SORT_MOD,
+    UI_RML_SERVER_SORT_MAP,
+    UI_RML_SERVER_SORT_PLAYERS,
+    UI_RML_SERVER_SORT_RTT,
+    UI_RML_SERVER_SORT_COUNT,
+};
+
+struct UI_Rml_ServerEntry {
+    UI_Rml_ServerStatus status = UI_Rml_ServerStatus::Idle;
+    netadr_t address = {};
+    Rml::String source_name;
+    Rml::String name;
+    Rml::String mod = "???";
+    Rml::String map = "???";
+    Rml::String players = "?/?";
+    Rml::String rtt = "???";
+    int num_players = 0;
+    int max_players = 0;
+    unsigned timestamp = 0;
+    unsigned ping = 999;
+    bool restricted = false;
+};
+
+static std::vector<UI_Rml_ServerEntry> ui_rml_server_entries;
+static Rml::String ui_rml_server_explicit_arguments;
+static Rml::String ui_rml_server_selected_address;
+static Rml::String ui_rml_server_status_text;
+static size_t ui_rml_server_page;
+static size_t ui_rml_server_ping_index;
+static int ui_rml_server_ping_stage;
+static unsigned ui_rml_server_ping_interval;
+static unsigned ui_rml_server_next_ping;
+static unsigned ui_rml_server_refresh_timestamp;
+static bool ui_rml_server_refreshing;
+static bool ui_rml_server_dirty;
+
+static bool UI_Rml_ServerAddressEqual(const netadr_t &left,
+                                      const netadr_t &right)
+{
+    return NET_IsEqualBaseAdr(&left, &right) && left.port == right.port;
+}
+
+static Rml::String UI_Rml_ServerAddressString(const netadr_t &address)
+{
+    return NET_AdrToString(&address);
+}
+
+static int UI_Rml_ServerStatusRank(UI_Rml_ServerStatus status)
+{
+    switch (status) {
+    case UI_Rml_ServerStatus::Valid: return 0;
+    case UI_Rml_ServerStatus::Pending: return 1;
+    case UI_Rml_ServerStatus::Idle: return 2;
+    case UI_Rml_ServerStatus::Error: return 3;
+    }
+    return 4;
+}
+
+static UI_Rml_ServerEntry *UI_Rml_FindServerEntry(const netadr_t &address)
+{
+    for (UI_Rml_ServerEntry &entry : ui_rml_server_entries) {
+        if (UI_Rml_ServerAddressEqual(entry.address, address)) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+static const UI_Rml_ServerEntry *UI_Rml_SelectedServerEntry(void)
+{
+    for (const UI_Rml_ServerEntry &entry : ui_rml_server_entries) {
+        if (!ui_rml_server_selected_address.empty() &&
+            UI_Rml_ServerAddressString(entry.address) ==
+                ui_rml_server_selected_address) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+static bool UI_Rml_IsLikelyTextServerList(const char *data, size_t length)
+{
+    if (!data || !length) {
+        return false;
+    }
+    const size_t checked = min(length, static_cast<size_t>(256));
+    bool digit = false;
+    bool separator = false;
+    bool newline = false;
+    for (size_t index = 0; index < checked; index++) {
+        const unsigned char character = static_cast<unsigned char>(data[index]);
+        if (character == '\n' || character == '\r') {
+            newline = true;
+            continue;
+        }
+        if (character < 32 || character > 126) {
+            return false;
+        }
+        digit = digit || (character >= '0' && character <= '9');
+        separator = separator || character == '.' || character == ':';
+    }
+    return digit && separator && (newline || length < 64);
+}
+
+static bool UI_Rml_AddServerEntry(const netadr_t *address,
+                                  const char *hostname)
+{
+    netadr_t resolved = {};
+    if (ui_rml_server_entries.size() >= UI_RML_SERVER_MAX_ENTRIES) {
+        return false;
+    }
+    if (!address) {
+        if (!hostname || !hostname[0] ||
+            !NET_StringToAdr(hostname, &resolved, PORT_SERVER)) {
+            if (hostname && hostname[0]) {
+                Com_WPrintf("RmlUi server browser ignored invalid address '%s'.\n",
+                            hostname);
+            }
+            return false;
+        }
+        address = &resolved;
+    }
+    if (UI_Rml_FindServerEntry(*address)) {
+        return false;
+    }
+    if (BigShort(address->port) < 1024) {
+        Com_WPrintf("RmlUi server browser ignored privileged port '%s'.\n",
+                    hostname && hostname[0] ? hostname
+                                            : NET_AdrToString(address));
+        return false;
+    }
+
+    UI_Rml_ServerEntry entry;
+    entry.address = *address;
+    entry.source_name = hostname && hostname[0]
+                            ? hostname
+                            : NET_AdrToString(address);
+    entry.name = entry.source_name;
+    entry.timestamp = Sys_Milliseconds();
+    ui_rml_server_entries.push_back(std::move(entry));
+    return true;
+}
+
+static void UI_Rml_ParsePlainServerList(const void *data, size_t length)
+{
+    if (!data || !length) {
+        return;
+    }
+    const char *bytes = static_cast<const char *>(data);
+    size_t begin = 0;
+    while (begin < length) {
+        size_t end = begin;
+        while (end < length && bytes[end] != '\n' && bytes[end] != '\0') {
+            end++;
+        }
+        size_t trimmed_end = end;
+        while (trimmed_end > begin &&
+               (bytes[trimmed_end - 1] == '\r' || bytes[trimmed_end - 1] == ' ' ||
+                bytes[trimmed_end - 1] == '\t')) {
+            trimmed_end--;
+        }
+        size_t trimmed_begin = begin;
+        while (trimmed_begin < trimmed_end &&
+               (bytes[trimmed_begin] == ' ' || bytes[trimmed_begin] == '\t')) {
+            trimmed_begin++;
+        }
+        if (trimmed_end > trimmed_begin) {
+            const std::string hostname(bytes + trimmed_begin,
+                                       trimmed_end - trimmed_begin);
+            UI_Rml_AddServerEntry(nullptr, hostname.c_str());
+        }
+        begin = end + 1;
+    }
+}
+
+static void UI_Rml_ParseBinaryServerList(const void *data,
+                                         size_t length,
+                                         size_t chunk)
+{
+    if (!data || chunk < 6) {
+        return;
+    }
+    const byte *bytes = static_cast<const byte *>(data);
+    while (length >= chunk) {
+        netadr_t address = {};
+        address.type = NA_IP;
+        memcpy(address.ip.u8, bytes, 4);
+        memcpy(&address.port, bytes + 4, 2);
+        UI_Rml_AddServerEntry(&address, nullptr);
+        bytes += chunk;
+        length -= chunk;
+    }
+}
+
+static void UI_Rml_ParseServerAddressBook(void)
+{
+    for (size_t index = 0; index < UI_RML_SERVER_MAX_ENTRIES; index++) {
+        cvar_t *address = Cvar_FindVar(va("adr%zu", index));
+        if (!address) {
+            break;
+        }
+        if (address->string[0]) {
+            UI_Rml_AddServerEntry(nullptr, address->string);
+        }
+    }
+}
+
+static bool UI_Rml_ServerArgumentsArePublic(const Rml::String &arguments)
+{
+    return arguments.find("q2servers.com") != Rml::String::npos;
+}
+
+static bool UI_Rml_ServerArgumentsAreLocal(const Rml::String &arguments)
+{
+    return arguments.find("favorites://") != Rml::String::npos ||
+           arguments.find("broadcast://") != Rml::String::npos ||
+           arguments.find("servers.lst") != Rml::String::npos;
+}
+
+static const char *UI_Rml_ServerSourceName(void)
+{
+    if (!ui_rml_server_explicit_arguments.empty()) {
+        if (UI_Rml_ServerArgumentsArePublic(ui_rml_server_explicit_arguments)) {
+            return "Public";
+        }
+        if (UI_Rml_ServerArgumentsAreLocal(ui_rml_server_explicit_arguments)) {
+            return "Saved + LAN";
+        }
+        return "Custom";
+    }
+    return !Q_stricmp(Cvar_VariableString("ui_server_source"), "public")
+               ? "Public"
+               : "Saved + LAN";
+}
+
+static Rml::String UI_Rml_CurrentServerArguments(void)
+{
+    if (!ui_rml_server_explicit_arguments.empty()) {
+        return ui_rml_server_explicit_arguments;
+    }
+    return !Q_stricmp(Cvar_VariableString("ui_server_source"), "public")
+               ? UI_RML_SERVER_PUBLIC_ARGUMENTS
+               : UI_RML_SERVER_LOCAL_ARGUMENTS;
+}
+
+static bool UI_Rml_ParseServerSources(const Rml::String &arguments,
+                                      netadr_t *broadcast)
+{
+    bool source_seen = false;
+    Cmd_TokenizeString(arguments.c_str(), false);
+
+    for (int index = 0; index < Cmd_Argc(); index++) {
+        const char *token = Cmd_Argv(index);
+        if (!token || !token[0]) {
+            continue;
+        }
+
+        bool binary = false;
+        size_t chunk = 0;
+        const char *source = token;
+        if (*source == '+' || *source == '-') {
+            char *end = nullptr;
+            chunk = strtoul(source, &end, 10);
+            if (source == end) {
+                chunk = 6;
+                source++;
+            } else {
+                source = end;
+            }
+            if (chunk < 6) {
+                Com_WPrintf("RmlUi server browser ignored invalid binary source '%s'.\n",
+                            token);
+                continue;
+            }
+            binary = true;
+        }
+
+        if (!strncmp(source, "favorites://", 12)) {
+            UI_Rml_ParseServerAddressBook();
+            source_seen = true;
+            continue;
+        }
+        if (!strncmp(source, "broadcast://", 12)) {
+            broadcast->type = NA_BROADCAST;
+            broadcast->port = BigShort(PORT_SERVER);
+            source_seen = true;
+            continue;
+        }
+        if (!strncmp(source, "quake2://", 9)) {
+            UI_Rml_AddServerEntry(nullptr, source + 9);
+            source_seen = true;
+            continue;
+        }
+
+        void *data = nullptr;
+        int length = -1;
+        bool http_data = false;
+        if (!strncmp(source, "file://", 7)) {
+            length = FS_LoadFile(source + 7, &data);
+        } else if (!strncmp(source, "http://", 7) ||
+                   !strncmp(source, "https://", 8)) {
+#if USE_CURL
+            length = HTTP_FetchFile(source, &data);
+            http_data = true;
+#else
+            Com_WPrintf("RmlUi server browser cannot fetch '%s': HTTP support is disabled.\n",
+                        source);
+#endif
+        } else {
+            Com_WPrintf("RmlUi server browser ignored source '%s'.\n", source);
+            continue;
+        }
+
+        if (length >= 0 && data) {
+            const size_t data_length = static_cast<size_t>(length);
+            const bool parse_text = !binary || !chunk ||
+                                    data_length % chunk != 0 ||
+                                    UI_Rml_IsLikelyTextServerList(
+                                        static_cast<const char *>(data),
+                                        data_length);
+            if (parse_text) {
+                UI_Rml_ParsePlainServerList(data, data_length);
+            } else {
+                UI_Rml_ParseBinaryServerList(data, data_length, chunk);
+            }
+            source_seen = true;
+        }
+
+        if (data) {
+            if (http_data) {
+#if USE_CURL
+                HTTP_FreeFile(data);
+#endif
+            } else {
+                FS_FreeFile(data);
+            }
+        }
+    }
+    return source_seen;
+}
+
+static int UI_Rml_ServerCompareText(const Rml::String &left,
+                                    const Rml::String &right)
+{
+    return Q_stricmp(left.c_str(), right.c_str());
+}
+
+static void UI_Rml_SortServerEntries(void)
+{
+    int encoded = Q_clip(Cvar_VariableInteger("ui_sortservers"),
+                         -UI_RML_SERVER_SORT_COUNT,
+                         UI_RML_SERVER_SORT_COUNT);
+    const int direction = encoded < 0 ? -1 : 1;
+    const int column = encoded ? abs(encoded) - 1 : -1;
+
+    std::stable_sort(
+        ui_rml_server_entries.begin(), ui_rml_server_entries.end(),
+        [column, direction](const UI_Rml_ServerEntry &left,
+                            const UI_Rml_ServerEntry &right) {
+            const int left_rank = UI_Rml_ServerStatusRank(left.status);
+            const int right_rank = UI_Rml_ServerStatusRank(right.status);
+            if (left_rank != right_rank) {
+                return left_rank < right_rank;
+            }
+
+            int comparison = 0;
+            switch (column) {
+            case UI_RML_SERVER_SORT_MOD:
+                comparison = UI_Rml_ServerCompareText(left.mod, right.mod);
+                break;
+            case UI_RML_SERVER_SORT_MAP:
+                comparison = UI_Rml_ServerCompareText(left.map, right.map);
+                break;
+            case UI_RML_SERVER_SORT_PLAYERS:
+                comparison = right.num_players - left.num_players;
+                break;
+            case UI_RML_SERVER_SORT_RTT:
+                comparison = left.ping < right.ping
+                                 ? -1
+                                 : left.ping > right.ping ? 1 : 0;
+                break;
+            case UI_RML_SERVER_SORT_NAME:
+                comparison = UI_Rml_ServerCompareText(left.name, right.name);
+                break;
+            default:
+                break;
+            }
+            comparison *= direction;
+            if (comparison) {
+                return comparison < 0;
+            }
+            comparison = UI_Rml_ServerCompareText(left.name, right.name);
+            if (comparison) {
+                return comparison < 0;
+            }
+            return UI_Rml_ServerAddressString(left.address) <
+                   UI_Rml_ServerAddressString(right.address);
+        });
+}
+
+static void UI_Rml_UpdateServerStatusText(void)
+{
+    int valid_servers = 0;
+    int total_players = 0;
+    for (const UI_Rml_ServerEntry &entry : ui_rml_server_entries) {
+        if (entry.status == UI_Rml_ServerStatus::Valid) {
+            valid_servers++;
+            total_players += entry.num_players;
+        }
+    }
+
+    if (ui_rml_server_refreshing) {
+        ui_rml_server_status_text = va(
+            "Querying %zu server%s: %d replied, %d player%s found.",
+            ui_rml_server_entries.size(),
+            ui_rml_server_entries.size() == 1 ? "" : "s",
+            valid_servers,
+            total_players,
+            total_players == 1 ? "" : "s");
+    } else if (valid_servers) {
+        ui_rml_server_status_text = va(
+            "%d player%s on %d server%s. Select a row, then Connect.",
+            total_players,
+            total_players == 1 ? "" : "s",
+            valid_servers,
+            valid_servers == 1 ? "" : "s");
+    } else if (!ui_rml_server_entries.empty()) {
+        ui_rml_server_status_text = va(
+            "No replies from %zu server%s. Refresh or switch sources.",
+            ui_rml_server_entries.size(),
+            ui_rml_server_entries.size() == 1 ? "" : "s");
+    } else {
+        ui_rml_server_status_text =
+            "No servers found. Refresh or switch between Public and Saved + LAN.";
+    }
+}
+
+static void UI_Rml_SetServerControlDisabled(Rml::ElementDocument *document,
+                                            const char *id,
+                                            bool disabled)
+{
+    if (Rml::Element *element = document ? document->GetElementById(id) : nullptr) {
+        if (disabled) {
+            element->SetAttribute("disabled", "");
+        } else {
+            element->RemoveAttribute("disabled");
+        }
+    }
+}
+
+static const char *UI_Rml_ServerStatusClass(UI_Rml_ServerStatus status)
+{
+    switch (status) {
+    case UI_Rml_ServerStatus::Pending: return " is-pending";
+    case UI_Rml_ServerStatus::Error: return " is-error";
+    case UI_Rml_ServerStatus::Valid: return " is-valid";
+    default: return "";
+    }
+}
+
+static void UI_Rml_RenderServerBrowser(Rml::ElementDocument *document,
+                                       bool attach_dynamic_listeners = false)
+{
+    Rml::Element *body = document
+                             ? document->GetElementById("servers-table-body")
+                             : nullptr;
+    if (!body) {
+        return;
+    }
+
+    UI_Rml_SortServerEntries();
+    const size_t page_count = ui_rml_server_entries.empty()
+                                  ? 1
+                                  : (ui_rml_server_entries.size() +
+                                     UI_RML_SERVER_PAGE_SIZE - 1) /
+                                        UI_RML_SERVER_PAGE_SIZE;
+    if (ui_rml_server_page >= page_count) {
+        ui_rml_server_page = page_count - 1;
+    }
+    const size_t first = ui_rml_server_page * UI_RML_SERVER_PAGE_SIZE;
+    const size_t last = min(first + UI_RML_SERVER_PAGE_SIZE,
+                            ui_rml_server_entries.size());
+
+    Rml::String rows;
+    if (first >= last) {
+        rows = "<tr class=\"placeholder-row\"><td colspan=\"5\">"
+               "No servers found for this source.</td></tr>";
+    } else {
+        for (size_t index = first; index < last; index++) {
+            const UI_Rml_ServerEntry &entry = ui_rml_server_entries[index];
+            const Rml::String address = UI_Rml_ServerAddressString(entry.address);
+            rows += "<tr id=\"server-row-";
+            rows += std::to_string(index);
+            rows += "\" class=\"server-row";
+            rows += UI_Rml_ServerStatusClass(entry.status);
+            if (address == ui_rml_server_selected_address) {
+                rows += " is-selected";
+            }
+            if (entry.restricted) {
+                rows += " is-restricted";
+            }
+            rows += "\"><td><button class=\"data-table-row-action\" "
+                    "type=\"button\" data-server-action=\"select\" "
+                    "data-server-index=\"";
+            rows += std::to_string(index);
+            rows += "\" data-menu-sound=\"move\">";
+            rows += UI_Rml_EscapeTextForInnerRml(entry.name.c_str());
+            rows += "</button></td><td>";
+            rows += UI_Rml_EscapeTextForInnerRml(entry.mod.c_str());
+            rows += "</td><td>";
+            rows += UI_Rml_EscapeTextForInnerRml(entry.map.c_str());
+            rows += "</td><td>";
+            rows += UI_Rml_EscapeTextForInnerRml(entry.players.c_str());
+            rows += "</td><td>";
+            rows += UI_Rml_EscapeTextForInnerRml(entry.rtt.c_str());
+            rows += "</td></tr>";
+        }
+    }
+    body->SetInnerRML(rows);
+
+    const UI_Rml_ServerEntry *selected = UI_Rml_SelectedServerEntry();
+    UI_Rml_SetServerControlDisabled(document, "servers-connect",
+                                    !selected ||
+                                        selected->status == UI_Rml_ServerStatus::Error);
+    UI_Rml_SetServerControlDisabled(document, "servers-previous",
+                                    ui_rml_server_page == 0);
+    UI_Rml_SetServerControlDisabled(document, "servers-next",
+                                    ui_rml_server_page + 1 >= page_count);
+
+    if (Rml::Element *source = document->GetElementById("servers-source")) {
+        UI_Rml_SetElementInnerText(source,
+                                   va("Source: %s", UI_Rml_ServerSourceName()));
+    }
+    if (Rml::Element *page = document->GetElementById("servers-page-label")) {
+        UI_Rml_SetElementInnerText(
+            page, va("Page %zu / %zu", ui_rml_server_page + 1, page_count));
+    }
+    if (Rml::Element *summary = document->GetElementById("servers-summary")) {
+        UI_Rml_SetElementInnerText(
+            summary, va("Browse %s multiplayer servers.",
+                        UI_Rml_ServerSourceName()));
+    }
+    UI_Rml_UpdateServerStatusText();
+    if (Rml::Element *status = document->GetElementById("servers-status")) {
+        UI_Rml_SetElementInnerText(status, ui_rml_server_status_text.c_str());
+        status->SetClass("is-ready", !ui_rml_server_entries.empty());
+    }
+
+    static const char *header_ids[UI_RML_SERVER_SORT_COUNT] = {
+        "servers-sort-name", "servers-sort-mod", "servers-sort-map",
+        "servers-sort-players", "servers-sort-rtt"
+    };
+    const int encoded = Cvar_VariableInteger("ui_sortservers");
+    const int active_sort = encoded ? abs(encoded) - 1 : -1;
+    for (int column = 0; column < UI_RML_SERVER_SORT_COUNT; column++) {
+        if (Rml::Element *header = document->GetElementById(header_ids[column])) {
+            if (column == active_sort) {
+                header->SetAttribute("data-sort-state",
+                                     encoded > 0 ? "ascending" : "descending");
+            } else {
+                header->RemoveAttribute("data-sort-state");
+            }
+        }
+    }
+
+    if (attach_dynamic_listeners) {
+        UI_Rml_AttachElementAudioListeners(body);
+    }
+    ui_rml_server_dirty = false;
+}
+
+static void UI_Rml_CalculateServerPingInterval(void)
+{
+    cvar_t *ping_rate = Cvar_Get("ui_pingrate", "0", 0);
+    int rate = ping_rate ? Q_clip(ping_rate->integer, 0, 100) : 0;
+    if (!rate) {
+        cvar_t *network_rate = Cvar_FindVar("rate");
+        rate = Q_clip(network_rate ? network_rate->integer / 450 : 33, 1, 100);
+    }
+    ui_rml_server_ping_interval = max(
+        1, (1000 * UI_RML_SERVER_PING_STAGES) /
+               max(1, rate * max(1, ui_rml_server_ping_stage)));
+}
+
+static void UI_Rml_FinishServerRefresh(void)
+{
+    ui_rml_server_ping_stage = 0;
+    ui_rml_server_ping_index = 0;
+    ui_rml_server_refreshing = false;
+    ui_rml_server_dirty = true;
+    UI_Rml_UpdateServerStatusText();
+}
+
+static void UI_Rml_StartServerRefresh(Rml::ElementDocument *document)
+{
+    Cvar_Get("ui_sortservers", "1", 0);
+    Cvar_Get("ui_server_source", "local", 0);
+    ui_rml_server_entries.clear();
+    ui_rml_server_selected_address.clear();
+    ui_rml_server_page = 0;
+    ui_rml_server_ping_index = 0;
+    ui_rml_server_ping_stage = 0;
+    ui_rml_server_refreshing = true;
+    ui_rml_server_status_text = "Resolving server sources...";
+
+    netadr_t broadcast = {};
+    const Rml::String arguments = UI_Rml_CurrentServerArguments();
+    const bool source_seen = UI_Rml_ParseServerSources(arguments, &broadcast);
+    ui_rml_server_refresh_timestamp = Sys_Milliseconds();
+    for (UI_Rml_ServerEntry &entry : ui_rml_server_entries) {
+        entry.timestamp = ui_rml_server_refresh_timestamp;
+    }
+
+    if (broadcast.type != NA_UNSPECIFIED) {
+        CL_SendStatusRequest(&broadcast);
+    }
+    if (!source_seen || ui_rml_server_entries.empty()) {
+        UI_Rml_FinishServerRefresh();
+    } else {
+        ui_rml_server_ping_stage = UI_RML_SERVER_PING_STAGES;
+        UI_Rml_CalculateServerPingInterval();
+        ui_rml_server_next_ping = Sys_Milliseconds();
+    }
+    UI_Rml_RenderServerBrowser(document, false);
+}
+
+static void UI_Rml_InitializeServerBrowser(Rml::ElementDocument *document)
+{
+    if (!document || !document->GetElementById("servers-table-body")) {
+        return;
+    }
+
+    const char *arguments = UI_Rml_RouteArguments();
+    ui_rml_server_explicit_arguments =
+        arguments && arguments[0] ? arguments : "";
+    cvar_t *source = Cvar_Get("ui_server_source", "local", 0);
+    if (!ui_rml_server_explicit_arguments.empty()) {
+        if (UI_Rml_ServerArgumentsArePublic(ui_rml_server_explicit_arguments)) {
+            Cvar_SetByVar(source, "public", FROM_MENU);
+        } else if (UI_Rml_ServerArgumentsAreLocal(ui_rml_server_explicit_arguments)) {
+            Cvar_SetByVar(source, "local", FROM_MENU);
+        }
+    }
+    UI_Rml_StartServerRefresh(document);
+}
+
+static void UI_Rml_AdvanceServerRefresh(unsigned realtime)
+{
+    (void)realtime;
+    const unsigned now = Sys_Milliseconds();
+
+    if (!ui_rml_server_refreshing || ui_rml_server_ping_stage <= 0 ||
+        static_cast<int>(now - ui_rml_server_next_ping) < 0) {
+        return;
+    }
+
+    while (ui_rml_server_ping_index < ui_rml_server_entries.size()) {
+        UI_Rml_ServerEntry &entry =
+            ui_rml_server_entries[ui_rml_server_ping_index++];
+        if (entry.status == UI_Rml_ServerStatus::Valid ||
+            entry.status == UI_Rml_ServerStatus::Error) {
+            continue;
+        }
+        entry.status = UI_Rml_ServerStatus::Pending;
+        entry.timestamp = Sys_Milliseconds();
+        CL_SendStatusRequest(&entry.address);
+        ui_rml_server_dirty = true;
+        break;
+    }
+
+    if (ui_rml_server_ping_index >= ui_rml_server_entries.size()) {
+        ui_rml_server_ping_index = 0;
+        if (--ui_rml_server_ping_stage <= 0) {
+            UI_Rml_FinishServerRefresh();
+        } else {
+            UI_Rml_CalculateServerPingInterval();
+        }
+    }
+    ui_rml_server_next_ping = now + ui_rml_server_ping_interval;
+}
+
+static bool UI_Rml_ServerStatusEvent(const serverStatus_t *status)
+{
+    if (!status || ui_rml_active_route != "servers") {
+        return false;
+    }
+
+    UI_Rml_ServerEntry *entry = UI_Rml_FindServerEntry(net_from);
+    if (!entry) {
+        if (!UI_Rml_AddServerEntry(&net_from, nullptr)) {
+            return true;
+        }
+        entry = &ui_rml_server_entries.back();
+        entry->timestamp = ui_rml_server_refresh_timestamp;
+    }
+
+    const unsigned now = Sys_Milliseconds();
+    entry->ping = min(now - min(entry->timestamp, now), 999u);
+    entry->status = UI_Rml_ServerStatus::Valid;
+    entry->rtt = va("%u", entry->ping);
+    entry->num_players = Q_clip(status->numPlayers, 0, MAX_STATUS_PLAYERS);
+
+    const char *value = Info_ValueForKey(status->infostring, "hostname");
+    entry->name = value && !COM_IsWhite(value) ? value : entry->source_name;
+    value = Info_ValueForKey(status->infostring, "game");
+    entry->mod = value && !COM_IsWhite(value) ? value : BASEGAME;
+    value = Info_ValueForKey(status->infostring, "mapname");
+    entry->map = value && !COM_IsWhite(value) ? value : "???";
+    value = Info_ValueForKey(status->infostring, "maxclients");
+    entry->max_players = value && COM_IsUint(value) ? Q_atoi(value) : 0;
+    entry->players = entry->max_players > 0
+                         ? va("%d/%d", entry->num_players, entry->max_players)
+                         : va("%d/?", entry->num_players);
+    entry->restricted =
+        Q_atoi(Info_ValueForKey(status->infostring, "needpass")) >= 1 ||
+        Q_atoi(Info_ValueForKey(status->infostring, "anticheat")) >= 2 ||
+        !Q_stricmp(Info_ValueForKey(status->infostring, "NoFake"), "ENABLED");
+    ui_rml_server_dirty = true;
+    return true;
+}
+
+static bool UI_Rml_ServerErrorEvent(const netadr_t *from)
+{
+    if (!from || ui_rml_active_route != "servers") {
+        return false;
+    }
+    UI_Rml_ServerEntry *entry = UI_Rml_FindServerEntry(*from);
+    if (!entry || entry->status != UI_Rml_ServerStatus::Pending) {
+        return true;
+    }
+    const unsigned now = Sys_Milliseconds();
+    entry->ping = min(now - min(entry->timestamp, now), 999u);
+    entry->status = UI_Rml_ServerStatus::Error;
+    entry->mod = "???";
+    entry->map = "???";
+    entry->players = "down";
+    entry->rtt = va("%u", entry->ping);
+    ui_rml_server_dirty = true;
+    return true;
+}
+
+static bool UI_Rml_ConnectSelectedServer(void)
+{
+    const UI_Rml_ServerEntry *entry = UI_Rml_SelectedServerEntry();
+    if (!entry || entry->status == UI_Rml_ServerStatus::Error) {
+        UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_ALERT);
+        return true;
+    }
+
+    const Rml::String address = UI_Rml_ServerAddressString(entry->address);
+    if (address.empty() || address.find_first_of("\n\r\";") != Rml::String::npos) {
+        Com_WPrintf("RmlUi rejected an unsafe server address.\n");
+        UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_ALERT);
+        return true;
+    }
+    return UI_Rml_QueueCommand(va("connect \"%s\"", address.c_str()));
+}
+
+static void UI_Rml_SelectServerEntry(size_t index)
+{
+    if (index >= ui_rml_server_entries.size() || !ui_rml_document) {
+        return;
+    }
+
+    const Rml::String address =
+        UI_Rml_ServerAddressString(ui_rml_server_entries[index].address);
+    const bool activate_selected = address == ui_rml_server_selected_address;
+    ui_rml_server_selected_address = address;
+
+    Rml::ElementList rows;
+    ui_rml_document->QuerySelectorAll(rows, ".server-row");
+    const Rml::String selected_id = va("server-row-%zu", index);
+    for (Rml::Element *row : rows) {
+        row->SetClass("is-selected", row->GetId() == selected_id);
+    }
+    UI_Rml_SetServerControlDisabled(
+        ui_rml_document, "servers-connect",
+        ui_rml_server_entries[index].status == UI_Rml_ServerStatus::Error);
+    if (Rml::Element *status = ui_rml_document->GetElementById("servers-status")) {
+        UI_Rml_SetElementInnerText(
+            status,
+            va("Selected %s (%s). Activate again or choose Connect.",
+               ui_rml_server_entries[index].name.c_str(), address.c_str()));
+    }
+
+    if (activate_selected) {
+        UI_Rml_ConnectSelectedServer();
+    }
+}
+
+static bool UI_Rml_HandleServerBrowserAction(Rml::Element *element)
+{
+    if (!element || !ui_rml_document || ui_rml_active_route != "servers") {
+        return false;
+    }
+
+    const Rml::String action =
+        element->GetAttribute<Rml::String>("data-server-action", "");
+    if (action == "refresh") {
+        UI_Rml_StartServerRefresh(ui_rml_document);
+        return true;
+    }
+    if (action == "toggle-source") {
+        cvar_t *source = Cvar_Get("ui_server_source", "local", 0);
+        const bool public_source =
+            !Q_stricmp(source ? source->string : "local", "public");
+        Cvar_SetByVar(source, public_source ? "local" : "public", FROM_MENU);
+        ui_rml_server_explicit_arguments.clear();
+        UI_Rml_StartServerRefresh(ui_rml_document);
+        return true;
+    }
+    if (action == "connect") {
+        return UI_Rml_ConnectSelectedServer();
+    }
+    if (action == "previous-page") {
+        if (ui_rml_server_page > 0) {
+            ui_rml_server_page--;
+            UI_Rml_RenderServerBrowser(ui_rml_document, true);
+        }
+        return true;
+    }
+    if (action == "next-page") {
+        const size_t page_count = ui_rml_server_entries.empty()
+                                      ? 1
+                                      : (ui_rml_server_entries.size() +
+                                         UI_RML_SERVER_PAGE_SIZE - 1) /
+                                            UI_RML_SERVER_PAGE_SIZE;
+        if (ui_rml_server_page + 1 < page_count) {
+            ui_rml_server_page++;
+            UI_Rml_RenderServerBrowser(ui_rml_document, true);
+        }
+        return true;
+    }
+    if (action == "sort") {
+        const int column = UI_Rml_ElementIntAttribute(
+            element, "data-server-sort", -1);
+        if (column >= 0 && column < UI_RML_SERVER_SORT_COUNT) {
+            cvar_t *sort = Cvar_Get("ui_sortservers", "1", 0);
+            const int requested = column + 1;
+            const int encoded = sort ? sort->integer : 0;
+            Cvar_SetInteger(sort,
+                            abs(encoded) == requested ? -encoded : requested,
+                            FROM_MENU);
+            ui_rml_server_page = 0;
+            UI_Rml_RenderServerBrowser(ui_rml_document, true);
+        }
+        return true;
+    }
+    if (action == "select") {
+        const int index = UI_Rml_ElementIntAttribute(
+            element, "data-server-index", -1);
+        if (index >= 0 &&
+            static_cast<size_t>(index) < ui_rml_server_entries.size()) {
+            UI_Rml_SelectServerEntry(static_cast<size_t>(index));
+        }
+        return true;
+    }
+    return false;
+}
+
+// ---- Demo browser: legacy filesystem parity with native RmlUi presentation ----
+
+static constexpr const char *UI_RML_DEMO_EXTENSIONS =
+    ".dm2;.dm2.gz;.mvd2;.mvd2.gz";
+static constexpr size_t UI_RML_DEMO_PAGE_SIZE = 8;
+static constexpr int UI_RML_DEMO_MAX_ENTRIES = 4096;
+
+enum class UI_Rml_DemoEntryType {
+    Up,
+    Directory,
+    Demo,
+};
+
+enum UI_Rml_DemoSortColumn {
+    UI_RML_DEMO_SORT_NAME = 0,
+    UI_RML_DEMO_SORT_DATE,
+    UI_RML_DEMO_SORT_SIZE,
+    UI_RML_DEMO_SORT_MAP,
+    UI_RML_DEMO_SORT_POV,
+    UI_RML_DEMO_SORT_COUNT,
+};
+
+struct UI_Rml_DemoEntry {
+    UI_Rml_DemoEntryType type = UI_Rml_DemoEntryType::Demo;
+    Rml::String name;
+    Rml::String date;
+    Rml::String size_text;
+    Rml::String map;
+    Rml::String pov;
+    int64_t size = 0;
+    time_t mtime = 0;
+};
+
+struct UI_Rml_DemoMetadataCacheEntry {
+    int64_t size = 0;
+    time_t mtime = 0;
+    demoInfo_t info = {};
+};
+
+static Rml::String ui_rml_demo_browse = "/demos";
+static std::vector<UI_Rml_DemoEntry> ui_rml_demo_entries;
+static std::unordered_map<std::string, UI_Rml_DemoMetadataCacheEntry>
+    ui_rml_demo_metadata_cache;
+static size_t ui_rml_demo_directory_count;
+static size_t ui_rml_demo_page;
+static uint64_t ui_rml_demo_total_bytes;
+static int ui_rml_demo_total_files;
+static bool ui_rml_demo_truncated;
+
+static bool UI_Rml_DemoFilenameIsSafe(const Rml::String &name)
+{
+    if (name.empty()) {
+        return false;
+    }
+
+    for (const char character : name) {
+        if (character == '\n' || character == '\r' ||
+            character == '"' || character == ';') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static Rml::String UI_Rml_DemoPathForName(const Rml::String &name)
+{
+    Rml::String path = ui_rml_demo_browse;
+    if (path.empty() || path.back() != '/') {
+        path += '/';
+    }
+    path += name;
+    return path;
+}
+
+static void UI_Rml_DemoAddDirectory(const char *name,
+                                    UI_Rml_DemoEntryType type)
+{
+    if (!name || !name[0]) {
+        return;
+    }
+
+    UI_Rml_DemoEntry entry;
+    entry.type = type;
+    entry.name = name;
+    entry.date = "-";
+    entry.size_text = "DIR";
+    entry.map = "-";
+    entry.pov = "-";
+    ui_rml_demo_entries.push_back(std::move(entry));
+}
+
+static const Rml::String &UI_Rml_DemoStringSortValue(
+    const UI_Rml_DemoEntry &entry,
+    int column)
+{
+    switch (column) {
+    case UI_RML_DEMO_SORT_MAP:
+        return entry.map;
+    case UI_RML_DEMO_SORT_POV:
+        return entry.pov;
+    default:
+        return entry.name;
+    }
+}
+
+static void UI_Rml_SortDemoEntries(void)
+{
+    int encoded_sort = Cvar_VariableInteger("ui_sortdemos");
+    if (encoded_sort < -UI_RML_DEMO_SORT_COUNT) {
+        encoded_sort = -UI_RML_DEMO_SORT_COUNT;
+    } else if (encoded_sort > UI_RML_DEMO_SORT_COUNT) {
+        encoded_sort = UI_RML_DEMO_SORT_COUNT;
+    }
+
+    if (!encoded_sort || ui_rml_demo_directory_count >= ui_rml_demo_entries.size()) {
+        return;
+    }
+
+    const int direction = encoded_sort > 0 ? 1 : -1;
+    const int column = abs(encoded_sort) - 1;
+    auto begin = ui_rml_demo_entries.begin() + ui_rml_demo_directory_count;
+
+    std::stable_sort(begin, ui_rml_demo_entries.end(),
+                     [column, direction](const UI_Rml_DemoEntry &left,
+                                         const UI_Rml_DemoEntry &right) {
+        int comparison = 0;
+
+        if (column == UI_RML_DEMO_SORT_DATE) {
+            comparison = left.mtime < right.mtime ? -1 :
+                         left.mtime > right.mtime ? 1 : 0;
+        } else if (column == UI_RML_DEMO_SORT_SIZE) {
+            comparison = left.size < right.size ? -1 :
+                         left.size > right.size ? 1 : 0;
+        } else {
+            comparison = Q_stricmp(
+                UI_Rml_DemoStringSortValue(left, column).c_str(),
+                UI_Rml_DemoStringSortValue(right, column).c_str());
+        }
+
+        if (!comparison) {
+            comparison = Q_stricmp(left.name.c_str(), right.name.c_str());
+        }
+        return direction > 0 ? comparison < 0 : comparison > 0;
+    });
+}
+
+static void UI_Rml_BuildDemoEntries(void)
+{
+    Cvar_Get("ui_sortdemos", "1", 0);
+    cvar_t *list_all = Cvar_Get("ui_listalldemos", "0", 0);
+    const unsigned flags = list_all && list_all->integer
+                               ? 0
+                               : FS_TYPE_REAL | FS_PATH_GAME;
+    int num_directories = 0;
+    int num_demos = 0;
+    void **directories = FS_ListFiles(ui_rml_demo_browse.c_str(), nullptr,
+                                      flags | FS_SEARCH_DIRSONLY,
+                                      &num_directories);
+    void **demos = FS_ListFiles(ui_rml_demo_browse.c_str(),
+                                UI_RML_DEMO_EXTENSIONS,
+                                flags | FS_SEARCH_EXTRAINFO,
+                                &num_demos);
+
+    ui_rml_demo_entries.clear();
+    ui_rml_demo_total_bytes = 0;
+    ui_rml_demo_total_files = num_demos;
+    ui_rml_demo_truncated = num_demos > UI_RML_DEMO_MAX_ENTRIES;
+
+    if (ui_rml_demo_browse != "/") {
+        UI_Rml_DemoAddDirectory("..", UI_Rml_DemoEntryType::Up);
+    }
+
+    if (directories) {
+        for (int index = 0; index < num_directories; index++) {
+            const char *name = static_cast<const char *>(directories[index]);
+            if (name && name[0] && strcmp(name, ".") && strcmp(name, "..") &&
+                UI_Rml_DemoFilenameIsSafe(name)) {
+                UI_Rml_DemoAddDirectory(name, UI_Rml_DemoEntryType::Directory);
+            }
+        }
+        FS_FreeList(directories);
+    }
+
+    ui_rml_demo_directory_count = ui_rml_demo_entries.size();
+
+    time_t now = time(nullptr);
+    struct tm *local_now = localtime(&now);
+    const int current_year = local_now ? local_now->tm_year : -1;
+    const int demo_limit = num_demos < UI_RML_DEMO_MAX_ENTRIES
+                               ? num_demos
+                               : UI_RML_DEMO_MAX_ENTRIES;
+
+    for (int index = 0; demos && index < demo_limit; index++) {
+        const file_info_t *file = static_cast<const file_info_t *>(demos[index]);
+        if (!file || !UI_Rml_DemoFilenameIsSafe(file->name)) {
+            continue;
+        }
+
+        UI_Rml_DemoEntry entry;
+        entry.type = UI_Rml_DemoEntryType::Demo;
+        entry.name = file->name;
+        entry.size = file->size;
+        entry.mtime = file->mtime;
+
+        char formatted[64];
+        struct tm *file_time = localtime(&entry.mtime);
+        const char *date_format =
+            file_time && file_time->tm_year == current_year
+                ? "%b %d %H:%M"
+                : "%b %d  %Y";
+        if (!file_time || !strftime(formatted, sizeof(formatted),
+                                    date_format, file_time)) {
+            Q_strlcpy(formatted, "???", sizeof(formatted));
+        }
+        entry.date = formatted;
+
+        Com_FormatSize(formatted, sizeof(formatted), entry.size);
+        entry.size_text = formatted;
+
+        const Rml::String path = UI_Rml_DemoPathForName(entry.name);
+        UI_Rml_DemoMetadataCacheEntry *cached = nullptr;
+        auto cached_it = ui_rml_demo_metadata_cache.find(path);
+        if (cached_it != ui_rml_demo_metadata_cache.end() &&
+            cached_it->second.size == entry.size &&
+            cached_it->second.mtime == entry.mtime) {
+            cached = &cached_it->second;
+        } else {
+            UI_Rml_DemoMetadataCacheEntry metadata;
+            metadata.size = entry.size;
+            metadata.mtime = entry.mtime;
+            Q_strlcpy(metadata.info.map, "???", sizeof(metadata.info.map));
+            Q_strlcpy(metadata.info.pov, "???", sizeof(metadata.info.pov));
+            CL_GetDemoInfo(path.c_str(), &metadata.info);
+            cached = &ui_rml_demo_metadata_cache.insert_or_assign(
+                path, metadata).first->second;
+        }
+
+        entry.map = cached->info.map[0] ? cached->info.map : "???";
+        entry.pov = cached->info.mvd
+                        ? "MVD"
+                        : (cached->info.pov[0] ? cached->info.pov : "???");
+        ui_rml_demo_total_bytes += static_cast<uint64_t>(entry.size);
+        ui_rml_demo_entries.push_back(std::move(entry));
+    }
+
+    if (demos) {
+        FS_FreeList(demos);
+    }
+
+    UI_Rml_SortDemoEntries();
+
+    const size_t page_count = ui_rml_demo_entries.empty()
+                                  ? 1
+                                  : (ui_rml_demo_entries.size() +
+                                     UI_RML_DEMO_PAGE_SIZE - 1) /
+                                        UI_RML_DEMO_PAGE_SIZE;
+    if (ui_rml_demo_page >= page_count) {
+        ui_rml_demo_page = page_count - 1;
+    }
+}
+
+static void UI_Rml_SetDemoControlDisabled(Rml::ElementDocument *document,
+                                          const char *id,
+                                          bool disabled)
+{
+    if (Rml::Element *element = document ? document->GetElementById(id) : nullptr) {
+        if (disabled) {
+            element->SetAttribute("disabled", "");
+        } else {
+            element->RemoveAttribute("disabled");
+        }
+    }
+}
+
+static void UI_Rml_PopulateDemoBrowser(Rml::ElementDocument *document,
+                                       bool attach_dynamic_listeners = false)
+{
+    Rml::Element *body = document
+                             ? document->GetElementById("demos-table-body")
+                             : nullptr;
+    if (!body) {
+        return;
+    }
+
+    UI_Rml_BuildDemoEntries();
+
+    const size_t page_count = ui_rml_demo_entries.empty()
+                                  ? 1
+                                  : (ui_rml_demo_entries.size() +
+                                     UI_RML_DEMO_PAGE_SIZE - 1) /
+                                        UI_RML_DEMO_PAGE_SIZE;
+    const size_t first = ui_rml_demo_page * UI_RML_DEMO_PAGE_SIZE;
+    size_t last = first + UI_RML_DEMO_PAGE_SIZE;
+    if (last > ui_rml_demo_entries.size()) {
+        last = ui_rml_demo_entries.size();
+    }
+
+    Rml::String rows;
+    if (first >= last) {
+        rows = "<tr class=\"placeholder-row\"><td colspan=\"5\">"
+               "No demos found in this directory.</td></tr>";
+    } else {
+        for (size_t index = first; index < last; index++) {
+            const UI_Rml_DemoEntry &entry = ui_rml_demo_entries[index];
+            const bool directory = entry.type != UI_Rml_DemoEntryType::Demo;
+            Rml::String name = UI_Rml_EscapeTextForInnerRml(entry.name.c_str());
+            if (entry.type == UI_Rml_DemoEntryType::Directory) {
+                name += "/";
+            }
+
+            rows += "<tr class=\"demo-row";
+            rows += directory ? " demo-directory-row\">" : "\">";
+            rows += "<td><button class=\"data-table-row-action\" type=\"button\" "
+                    "data-demo-action=\"activate\" data-demo-index=\"";
+            rows += std::to_string(index);
+            rows += "\" data-menu-sound=\"";
+            rows += entry.type == UI_Rml_DemoEntryType::Up ? "out" : "open";
+            rows += "\">";
+            rows += name;
+            rows += "</button></td><td>";
+            rows += UI_Rml_EscapeTextForInnerRml(entry.date.c_str());
+            rows += "</td><td>";
+            rows += UI_Rml_EscapeTextForInnerRml(entry.size_text.c_str());
+            rows += "</td><td>";
+            rows += UI_Rml_EscapeTextForInnerRml(entry.map.c_str());
+            rows += "</td><td>";
+            rows += UI_Rml_EscapeTextForInnerRml(entry.pov.c_str());
+            rows += "</td></tr>";
+        }
+    }
+    body->SetInnerRML(rows);
+
+    UI_Rml_SetDemoControlDisabled(document, "demos-up",
+                                  ui_rml_demo_browse == "/");
+    UI_Rml_SetDemoControlDisabled(document, "demos-previous",
+                                  ui_rml_demo_page == 0);
+    UI_Rml_SetDemoControlDisabled(document, "demos-next",
+                                  ui_rml_demo_page + 1 >= page_count);
+
+    if (Rml::Element *source = document->GetElementById("demos-source")) {
+        UI_Rml_SetElementInnerText(
+            source,
+            Cvar_VariableInteger("ui_listalldemos")
+                ? "Paths: All"
+                : "Paths: Game");
+    }
+    if (Rml::Element *page_label = document->GetElementById("demos-page-label")) {
+        UI_Rml_SetElementInnerText(
+            page_label,
+            va("Page %zu / %zu", ui_rml_demo_page + 1, page_count));
+    }
+    if (Rml::Element *summary = document->GetElementById("demos-summary")) {
+        UI_Rml_SetElementInnerText(
+            summary,
+            va("Browse and play recorded demos in %s.",
+               ui_rml_demo_browse.c_str()));
+    }
+    if (Rml::Element *status = document->GetElementById("demos-status")) {
+        char bytes[64];
+        Com_FormatSizeLong(bytes, sizeof(bytes), ui_rml_demo_total_bytes);
+        UI_Rml_SetElementInnerText(
+            status,
+            ui_rml_demo_truncated
+                ? va("Showing the first %d of %d demos, %s total. Activate a name to open it.",
+                     UI_RML_DEMO_MAX_ENTRIES, ui_rml_demo_total_files, bytes)
+                : va("%d demo%s, %s total. Activate a name to open it.",
+                     ui_rml_demo_total_files,
+                     ui_rml_demo_total_files == 1 ? "" : "s",
+                     bytes));
+        status->SetClass("is-ready", !ui_rml_demo_entries.empty());
+    }
+
+    static const char *sort_header_ids[UI_RML_DEMO_SORT_COUNT] = {
+        "demos-sort-name", "demos-sort-date", "demos-sort-size",
+        "demos-sort-map", "demos-sort-pov"
+    };
+    const int encoded_sort = Cvar_VariableInteger("ui_sortdemos");
+    const int active_sort = encoded_sort ? abs(encoded_sort) - 1 : -1;
+    for (int column = 0; column < UI_RML_DEMO_SORT_COUNT; column++) {
+        if (Rml::Element *header = document->GetElementById(sort_header_ids[column])) {
+            if (column == active_sort) {
+                header->SetAttribute("data-sort-state",
+                                     encoded_sort > 0
+                                         ? "ascending"
+                                         : "descending");
+            } else {
+                header->RemoveAttribute("data-sort-state");
+            }
+        }
+    }
+
+    if (attach_dynamic_listeners) {
+        UI_Rml_AttachElementAudioListeners(body);
+        if (Rml::Element *first_action = body->QuerySelector("button")) {
+            first_action->Focus(true);
+            first_action->ScrollIntoView(Rml::ScrollAlignment::Nearest);
+        }
+    }
+}
+
+static bool UI_Rml_DemoLeaveDirectory(void)
+{
+    if (ui_rml_demo_browse == "/") {
+        return false;
+    }
+
+    const size_t slash = ui_rml_demo_browse.rfind('/');
+    if (slash == Rml::String::npos || slash == 0) {
+        ui_rml_demo_browse = "/";
+    } else {
+        ui_rml_demo_browse.resize(slash);
+    }
+    ui_rml_demo_page = 0;
+    return true;
+}
+
+static bool UI_Rml_HandleDemoBrowserAction(Rml::Element *element)
+{
+    if (!element || !ui_rml_document || ui_rml_active_route != "demos") {
+        return false;
+    }
+
+    const Rml::String action =
+        element->GetAttribute<Rml::String>("data-demo-action", "");
+    if (action == "up") {
+        if (UI_Rml_DemoLeaveDirectory()) {
+            UI_Rml_PopulateDemoBrowser(ui_rml_document, true);
+        }
+        return true;
+    }
+
+    if (action == "refresh") {
+        UI_Rml_PopulateDemoBrowser(ui_rml_document, true);
+        return true;
+    }
+
+    if (action == "toggle-source") {
+        cvar_t *list_all = Cvar_Get("ui_listalldemos", "0", 0);
+        Cvar_SetInteger(list_all, list_all && list_all->integer ? 0 : 1,
+                        FROM_MENU);
+        ui_rml_demo_page = 0;
+        UI_Rml_PopulateDemoBrowser(ui_rml_document, true);
+        return true;
+    }
+
+    if (action == "previous-page") {
+        if (ui_rml_demo_page > 0) {
+            ui_rml_demo_page--;
+            UI_Rml_PopulateDemoBrowser(ui_rml_document, true);
+        }
+        return true;
+    }
+
+    if (action == "next-page") {
+        const size_t page_count = ui_rml_demo_entries.empty()
+                                      ? 1
+                                      : (ui_rml_demo_entries.size() +
+                                         UI_RML_DEMO_PAGE_SIZE - 1) /
+                                            UI_RML_DEMO_PAGE_SIZE;
+        if (ui_rml_demo_page + 1 < page_count) {
+            ui_rml_demo_page++;
+            UI_Rml_PopulateDemoBrowser(ui_rml_document, true);
+        }
+        return true;
+    }
+
+    if (action == "sort") {
+        const int column = UI_Rml_ElementIntAttribute(
+            element, "data-demo-sort", -1);
+        if (column >= 0 && column < UI_RML_DEMO_SORT_COUNT) {
+            cvar_t *sort = Cvar_Get("ui_sortdemos", "1", 0);
+            const int encoded = sort ? sort->integer : 0;
+            const int requested = column + 1;
+            Cvar_SetInteger(sort,
+                            abs(encoded) == requested ? -encoded : requested,
+                            FROM_MENU);
+            ui_rml_demo_page = 0;
+            UI_Rml_PopulateDemoBrowser(ui_rml_document, true);
+        }
+        return true;
+    }
+
+    if (action != "activate") {
+        return false;
+    }
+
+    const int index = UI_Rml_ElementIntAttribute(
+        element, "data-demo-index", -1);
+    if (index < 0 || static_cast<size_t>(index) >= ui_rml_demo_entries.size()) {
+        return true;
+    }
+
+    const UI_Rml_DemoEntry entry = ui_rml_demo_entries[index];
+    if (entry.type == UI_Rml_DemoEntryType::Up) {
+        if (UI_Rml_DemoLeaveDirectory()) {
+            UI_Rml_PopulateDemoBrowser(ui_rml_document, true);
+        }
+        return true;
+    }
+
+    if (!UI_Rml_DemoFilenameIsSafe(entry.name)) {
+        Com_WPrintf("RmlUi rejected an unsafe demo browser entry.\n");
+        UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_ALERT);
+        return true;
+    }
+
+    const Rml::String path = UI_Rml_DemoPathForName(entry.name);
+    if (path.size() >= MAX_OSPATH) {
+        Com_WPrintf("RmlUi demo browser path is too long.\n");
+        UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_ALERT);
+        return true;
+    }
+
+    if (entry.type == UI_Rml_DemoEntryType::Directory) {
+        ui_rml_demo_browse = path;
+        ui_rml_demo_page = 0;
+        UI_Rml_PopulateDemoBrowser(ui_rml_document, true);
+        return true;
+    }
+
+    return UI_Rml_QueueCommand(va("demo \"%s\"", path.c_str()));
+}
+
+// Hydrates the authored save/load rows from the same server-owned save
+// metadata used by the legacy menu. Load rows for missing or unreadable saves
+// are disabled; save rows remain actionable so an empty slot can be created.
+static void UI_Rml_PopulateSaveSlots(Rml::ElementDocument *document)
+{
+    if (!document) {
+        return;
+    }
+
+    Rml::ElementList elements;
+    document->QuerySelectorAll(elements, ".save-slot[data-slot]");
+
+    for (Rml::Element *element : elements) {
+        const Rml::String slot =
+            element->GetAttribute<Rml::String>("data-slot", "");
+        const Rml::String action =
+            element->GetAttribute<Rml::String>("data-action-type", "");
+        if (slot.empty() || (action != "loadgame" && action != "savegame")) {
+            continue;
+        }
+
+        Rml::String label;
+        if (slot == "save0") {
+            label = "Autosave";
+        } else if (slot.size() > 4 && slot.compare(0, 4, "save") == 0) {
+            label = "Slot ";
+            label += slot.substr(4);
+        } else {
+            label = slot;
+        }
+
+        char *save_info = SV_GetSaveInfo(slot.c_str());
+        const bool occupied = save_info && save_info[0];
+        Rml::String visible_text = label;
+        visible_text += "  -  ";
+        visible_text += occupied ? save_info : "Empty";
+        UI_Rml_SetElementInnerText(element, visible_text.c_str());
+
+        element->SetAttribute("data-save-state", occupied ? "ready" : "empty");
+        if (action == "loadgame" && !occupied) {
+            element->SetAttribute("disabled", "");
+        } else {
+            element->RemoveAttribute("disabled");
+        }
+
+        if (save_info) {
+            Z_Free(save_info);
+        }
+    }
+}
+
 // ---- Player setup: model/skin enumeration, dogtags, and 3D preview ----
 
 struct UI_Rml_PlayerModelInfo {
@@ -3423,16 +5590,122 @@ static bool ui_rml_player_models_loaded;
 static bool ui_rml_player_preview_active;
 static qhandle_t ui_rml_player_preview_model;
 static qhandle_t ui_rml_player_preview_skin;
+static std::vector<qhandle_t> ui_rml_player_preview_weapons;
+static int ui_rml_player_preview_weapon_index = -1;
 static int ui_rml_player_preview_frame;
 static int ui_rml_player_preview_oldframe;
 static unsigned ui_rml_player_preview_time;
 static unsigned ui_rml_player_preview_oldtime;
 static unsigned ui_rml_player_preview_realtime;
+static int ui_rml_player_preview_stage;
+static int ui_rml_player_preview_stage_loops;
+static unsigned ui_rml_player_preview_hold_until;
+static unsigned ui_rml_player_preview_muzzle_flash_until;
 
-// Classic Q2 player model stand cycle (FRAME_stand01..FRAME_stand40).
-static constexpr int UI_RML_PLAYER_STAND_FIRST = 0;
-static constexpr int UI_RML_PLAYER_STAND_LAST = 39;
-static constexpr int UI_RML_PLAYER_FRAME_MSEC = 120;
+struct UI_Rml_PlayerPreviewStage {
+    int first_frame;
+    int last_frame;
+    int frame_msec;
+    int loops;
+    int hold_msec;
+    bool fire;
+    bool switch_weapon;
+};
+
+static constexpr UI_Rml_PlayerPreviewStage ui_rml_player_preview_stages[] = {
+    { FRAME_stand01, FRAME_stand40, 120, 2, 0, false, false },
+    { FRAME_run1, FRAME_run6, 90, 4, 0, false, false },
+    { FRAME_pain301, FRAME_pain304, 90, 1, 0, false, true },
+    { FRAME_attack1, FRAME_attack8, 80, 2, 0, true, false },
+    { FRAME_crstnd01, FRAME_crstnd19, 120, 1, 0, false, false },
+    { FRAME_crattak1, FRAME_crattak9, 80, 1, 0, true, false },
+    { FRAME_death101, FRAME_death106, 120, 1, 1200, false, false },
+};
+
+static bool UI_Rml_IsPlayerWeaponModel(const char *name)
+{
+    if (!name || !name[0]) {
+        return false;
+    }
+
+    return !Q_stricmp(name, "weapon.md2") ||
+           !Q_strncasecmp(name, "w_", 2);
+}
+
+static void UI_Rml_AdvancePlayerPreviewWeapon(void)
+{
+    if (ui_rml_player_preview_weapons.empty()) {
+        ui_rml_player_preview_weapon_index = -1;
+        return;
+    }
+
+    ui_rml_player_preview_weapon_index =
+        (ui_rml_player_preview_weapon_index + 1) %
+        static_cast<int>(ui_rml_player_preview_weapons.size());
+}
+
+static void UI_Rml_SetPlayerPreviewStage(int stage)
+{
+    if (stage < 0 || stage >= q_countof(ui_rml_player_preview_stages)) {
+        stage = 0;
+    }
+
+    ui_rml_player_preview_stage = stage;
+    const UI_Rml_PlayerPreviewStage &preview_stage =
+        ui_rml_player_preview_stages[stage];
+    ui_rml_player_preview_stage_loops = max(1, preview_stage.loops);
+    ui_rml_player_preview_hold_until = 0;
+    ui_rml_player_preview_muzzle_flash_until = 0;
+    ui_rml_player_preview_frame = preview_stage.first_frame;
+    ui_rml_player_preview_oldframe = preview_stage.first_frame;
+    ui_rml_player_preview_time = ui_rml_player_preview_realtime;
+    ui_rml_player_preview_oldtime = ui_rml_player_preview_realtime;
+
+    if (preview_stage.switch_weapon) {
+        UI_Rml_AdvancePlayerPreviewWeapon();
+    }
+}
+
+static void UI_Rml_BuildPlayerPreviewWeapons(const Rml::String &model)
+{
+    ui_rml_player_preview_weapons.clear();
+    ui_rml_player_preview_weapon_index = -1;
+
+    char directory[MAX_QPATH];
+    Q_concat(directory, sizeof(directory), "players/", model.c_str());
+
+    int num_files = 0;
+    void **files = FS_ListFiles(directory, ".md2", 0, &num_files);
+    if (!files) {
+        return;
+    }
+
+    std::vector<Rml::String> names;
+    for (int i = 0; i < num_files; ++i) {
+        const char *name = static_cast<const char *>(files[i]);
+        if (UI_Rml_IsPlayerWeaponModel(name)) {
+            names.emplace_back(name);
+        }
+    }
+    FS_FreeList(files);
+
+    std::sort(names.begin(), names.end(),
+              [](const Rml::String &a, const Rml::String &b) {
+                  return Q_stricmp(a.c_str(), b.c_str()) < 0;
+              });
+
+    char path[MAX_QPATH];
+    for (const Rml::String &name : names) {
+        Q_concat(path, sizeof(path), directory, "/", name.c_str());
+        if (qhandle_t handle = R_RegisterModel(path)) {
+            ui_rml_player_preview_weapons.push_back(handle);
+        }
+    }
+
+    if (!ui_rml_player_preview_weapons.empty()) {
+        ui_rml_player_preview_weapon_index = 0;
+    }
+}
 
 static void UI_Rml_LoadPlayerModels(void)
 {
@@ -3516,7 +5789,36 @@ static const UI_Rml_PlayerModelInfo *UI_Rml_FindPlayerModel(const Rml::String &d
     return nullptr;
 }
 
-static void UI_Rml_ReloadPlayerPreviewMedia(const Rml::String &model,
+static void UI_Rml_SetPlayerPreviewState(Rml::ElementDocument *document,
+                                         const char *state)
+{
+    if (!document || !state) {
+        return;
+    }
+
+    static const char *state_ids[] = {
+        "players-preview-loading",
+        "players-preview-empty",
+        "players-preview-error",
+    };
+
+    for (const char *id : state_ids) {
+        if (Rml::Element *element = document->GetElementById(id)) {
+            const bool visible = strstr(id, state) != nullptr;
+            if (visible) {
+                element->RemoveProperty("display");
+            } else {
+                element->SetProperty("display", "none");
+            }
+        }
+    }
+
+    if (Rml::Element *preview = document->GetElementById("players-preview")) {
+        preview->SetAttribute("data-player-preview-state", state);
+    }
+}
+
+static bool UI_Rml_ReloadPlayerPreviewMedia(const Rml::String &model,
                                             const Rml::String &skin)
 {
     char scratch[MAX_QPATH];
@@ -3524,26 +5826,30 @@ static void UI_Rml_ReloadPlayerPreviewMedia(const Rml::String &model,
     ui_rml_player_preview_active = false;
     ui_rml_player_preview_model = 0;
     ui_rml_player_preview_skin = 0;
+    ui_rml_player_preview_weapons.clear();
+    ui_rml_player_preview_weapon_index = -1;
 
     if (model.empty() || skin.empty()) {
-        return;
+        return false;
     }
 
     Q_concat(scratch, sizeof(scratch), "players/", model.c_str(), "/tris.md2");
     ui_rml_player_preview_model = R_RegisterModel(scratch);
     if (!ui_rml_player_preview_model) {
-        return;
+        return false;
     }
 
     Q_concat(scratch, sizeof(scratch), "players/", model.c_str(), "/",
              skin.c_str(), ".pcx");
     ui_rml_player_preview_skin = R_RegisterSkin(scratch);
+    if (!ui_rml_player_preview_skin) {
+        return false;
+    }
 
-    ui_rml_player_preview_frame = UI_RML_PLAYER_STAND_FIRST;
-    ui_rml_player_preview_oldframe = UI_RML_PLAYER_STAND_FIRST;
-    ui_rml_player_preview_time = ui_rml_player_preview_realtime;
-    ui_rml_player_preview_oldtime = ui_rml_player_preview_realtime;
+    UI_Rml_BuildPlayerPreviewWeapons(model);
+    UI_Rml_SetPlayerPreviewStage(0);
     ui_rml_player_preview_active = true;
+    return true;
 }
 
 static void UI_Rml_ApplyPlayerConfigSelection(bool model_changed)
@@ -3599,7 +5905,9 @@ static void UI_Rml_ApplyPlayerConfigSelection(bool model_changed)
     Cvar_SetByVar(skin_var, va("%s/%s", model.c_str(), skin.c_str()),
                   FROM_MENU);
 
-    UI_Rml_ReloadPlayerPreviewMedia(model, skin);
+    UI_Rml_SetPlayerPreviewState(
+        ui_rml_document,
+        UI_Rml_ReloadPlayerPreviewMedia(model, skin) ? "ready" : "error");
 }
 
 class UI_Rml_PlayerConfigEventListener final : public Rml::EventListener {
@@ -3627,9 +5935,6 @@ static void UI_Rml_PopulatePlayerConfig(Rml::ElementDocument *document)
         document->GetElementById("players-model"));
     auto *skin_select = UI_Rml_SelectFromElement(
         document->GetElementById("players-skin"));
-    Rml::Element *placeholder =
-        document->GetElementById("players-preview-placeholder");
-
     if (!model_select || !skin_select) {
         return;
     }
@@ -3637,11 +5942,14 @@ static void UI_Rml_PopulatePlayerConfig(Rml::ElementDocument *document)
     UI_Rml_LoadPlayerModels();
 
     if (ui_rml_player_models.empty()) {
-        if (placeholder) {
-            UI_Rml_SetElementInnerText(placeholder, "No player models found.");
-        }
+        model_select->SetAttribute("disabled", "");
+        skin_select->SetAttribute("disabled", "");
+        UI_Rml_SetPlayerPreviewState(document, "empty");
         return;
     }
+
+    model_select->RemoveAttribute("disabled");
+    skin_select->RemoveAttribute("disabled");
 
     // Split the current userinfo skin ("male/grunt") into model and skin.
     char current_model[MAX_QPATH] = "male";
@@ -3683,11 +5991,11 @@ static void UI_Rml_PopulatePlayerConfig(Rml::ElementDocument *document)
     skin_select->AddEventListener(Rml::EventId::Change,
                                   &ui_rml_player_config_listener);
 
-    if (placeholder) {
-        UI_Rml_SetElementInnerText(placeholder, "");
-    }
-
-    UI_Rml_ReloadPlayerPreviewMedia(current_info->directory, skin);
+    UI_Rml_SetPlayerPreviewState(
+        document,
+        UI_Rml_ReloadPlayerPreviewMedia(current_info->directory, skin)
+            ? "ready"
+            : "error");
 }
 
 // Populates selects marked data-source-dir="<path>" with the file stems of
@@ -3770,27 +6078,65 @@ static void UI_Rml_ResetPlayerPreview(void)
     ui_rml_player_preview_active = false;
     ui_rml_player_preview_model = 0;
     ui_rml_player_preview_skin = 0;
+    ui_rml_player_preview_weapons.clear();
+    ui_rml_player_preview_weapon_index = -1;
+    ui_rml_player_preview_stage = 0;
+    ui_rml_player_preview_stage_loops = 0;
+    ui_rml_player_preview_hold_until = 0;
+    ui_rml_player_preview_muzzle_flash_until = 0;
 }
 
 static void UI_Rml_AdvancePlayerPreview(unsigned realtime)
 {
     ui_rml_player_preview_realtime = realtime;
 
-    if (!ui_rml_player_preview_active) {
+    if (!ui_rml_player_preview_active ||
+        (ui_rml_reduced_motion && ui_rml_reduced_motion->integer)) {
+        return;
+    }
+
+    if (ui_rml_player_preview_hold_until) {
+        ui_rml_player_preview_oldtime = realtime;
+        ui_rml_player_preview_time = realtime;
+        if (realtime >= ui_rml_player_preview_hold_until) {
+            UI_Rml_SetPlayerPreviewStage(
+                (ui_rml_player_preview_stage + 1) %
+                q_countof(ui_rml_player_preview_stages));
+        }
         return;
     }
 
     if (ui_rml_player_preview_time < realtime) {
         ui_rml_player_preview_oldtime = ui_rml_player_preview_time;
-        ui_rml_player_preview_time += UI_RML_PLAYER_FRAME_MSEC;
+        const UI_Rml_PlayerPreviewStage &stage =
+            ui_rml_player_preview_stages[ui_rml_player_preview_stage];
+        ui_rml_player_preview_time += stage.frame_msec;
         if (ui_rml_player_preview_time < realtime) {
             ui_rml_player_preview_time = realtime;
         }
 
         ui_rml_player_preview_oldframe = ui_rml_player_preview_frame;
         ui_rml_player_preview_frame++;
-        if (ui_rml_player_preview_frame > UI_RML_PLAYER_STAND_LAST) {
-            ui_rml_player_preview_frame = UI_RML_PLAYER_STAND_FIRST;
+        if (ui_rml_player_preview_frame > stage.last_frame) {
+            ui_rml_player_preview_stage_loops--;
+            if (ui_rml_player_preview_stage_loops > 0) {
+                ui_rml_player_preview_frame = stage.first_frame;
+            } else if (stage.hold_msec > 0) {
+                ui_rml_player_preview_frame = stage.last_frame;
+                ui_rml_player_preview_hold_until = realtime + stage.hold_msec;
+                ui_rml_player_preview_oldtime = realtime;
+                ui_rml_player_preview_time = realtime;
+            } else {
+                UI_Rml_SetPlayerPreviewStage(
+                    (ui_rml_player_preview_stage + 1) %
+                    q_countof(ui_rml_player_preview_stages));
+                return;
+            }
+        }
+
+        if (stage.fire &&
+            ((ui_rml_player_preview_frame - stage.first_frame) & 1)) {
+            ui_rml_player_preview_muzzle_flash_until = realtime + 60;
         }
     }
 }
@@ -3833,30 +6179,68 @@ static void UI_Rml_RenderPlayerPreview(void)
         backlerp = Q_clipf(backlerp, 0.0f, 1.0f);
     }
 
-    entity_t entity = {};
-    entity.model = ui_rml_player_preview_model;
-    entity.skin = ui_rml_player_preview_skin;
-    entity.flags = RF_FULLBRIGHT;
-    entity.frame = ui_rml_player_preview_frame;
-    entity.oldframe = ui_rml_player_preview_oldframe;
-    entity.backlerp = backlerp;
-    VectorSet(entity.origin, 80.0f, 0.0f, -6.0f);
-    VectorCopy(entity.origin, entity.oldorigin);
-    VectorSet(entity.scale, 1.0f, 1.0f, 1.0f);
-    entity.angles[1] =
-        fmodf(260.0f + ui_rml_player_preview_realtime * 0.02f, 360.0f);
+    entity_t entities[2] = {};
+    entities[0].model = ui_rml_player_preview_model;
+    entities[0].skin = ui_rml_player_preview_skin;
+    entities[0].flags = RF_FULLBRIGHT;
+    entities[0].frame = ui_rml_player_preview_frame;
+    entities[0].oldframe = ui_rml_player_preview_oldframe;
+    entities[0].backlerp = backlerp;
+    VectorSet(entities[0].origin, 80.0f, 0.0f, -6.0f);
+    VectorCopy(entities[0].origin, entities[0].oldorigin);
+    VectorSet(entities[0].scale, 1.0f, 1.0f, 1.0f);
+    entities[0].angles[1] = 260.0f;
+    if (!ui_rml_reduced_motion || !ui_rml_reduced_motion->integer) {
+        entities[0].angles[1] =
+            fmodf(260.0f + ui_rml_player_preview_realtime * 0.02f, 360.0f);
+    }
+
+    int num_entities = 1;
+    if (ui_rml_player_preview_weapon_index >= 0 &&
+        ui_rml_player_preview_weapon_index <
+            static_cast<int>(ui_rml_player_preview_weapons.size())) {
+        entities[1] = entities[0];
+        entities[1].model =
+            ui_rml_player_preview_weapons[ui_rml_player_preview_weapon_index];
+        entities[1].skin = 0;
+        entities[1].skinnum = 0;
+        num_entities = 2;
+    }
+
+    dlight_t muzzle_light = {};
+    int num_dlights = 0;
+    if (num_entities > 1 &&
+        ui_rml_player_preview_realtime <
+            ui_rml_player_preview_muzzle_flash_until &&
+        (!ui_rml_reduced_motion || !ui_rml_reduced_motion->integer)) {
+        vec3_t forward, right, up;
+        AngleVectors(entities[0].angles, forward, right, up);
+        VectorCopy(entities[0].origin, muzzle_light.origin);
+        VectorMA(muzzle_light.origin, 18.0f, forward, muzzle_light.origin);
+        VectorMA(muzzle_light.origin, 8.0f, right, muzzle_light.origin);
+        VectorMA(muzzle_light.origin, 8.0f, up, muzzle_light.origin);
+        muzzle_light.radius = 120.0f;
+        muzzle_light.intensity = 1.0f;
+        VectorSet(muzzle_light.color, 1.0f, 0.8f, 0.4f);
+        num_dlights = 1;
+    }
 
     refdef_t refdef = {};
     refdef.x = x;
     refdef.y = y;
     refdef.width = width;
     refdef.height = height;
-    refdef.fov_x = 40.0f;
+    // Keep the complete player/weapon silhouette inside the authored wide
+    // preview panel, including side-on attack frames and larger weapon.md2
+    // variants. The previous 40-degree crop regularly cut off the weapon.
+    refdef.fov_x = 55.0f;
     refdef.fov_y = V_CalcFov(refdef.fov_x, refdef.width, refdef.height);
     refdef.time = ui_rml_player_preview_realtime * 0.001f;
     refdef.rdflags = RDF_NOWORLDMODEL;
-    refdef.num_entities = 1;
-    refdef.entities = &entity;
+    refdef.num_entities = num_entities;
+    refdef.entities = entities;
+    refdef.num_dlights = num_dlights;
+    refdef.dlights = &muzzle_light;
 
     R_RenderFrame(&refdef);
     R_SetScale(UI_Rml_DrawScale());
@@ -3868,12 +6252,117 @@ static void UI_Rml_ApplyAccessibilityClasses(Rml::ElementDocument *document)
         return;
     }
 
-    document->SetClass("ui-high-visibility",
-                       ui_rml_high_visibility &&
-                           ui_rml_high_visibility->integer != 0);
-    document->SetClass("ui-reduced-motion",
-                       ui_rml_reduced_motion &&
-                           ui_rml_reduced_motion->integer != 0);
+    const bool high_visibility =
+        ui_rml_high_visibility && ui_rml_high_visibility->integer != 0;
+    const bool reduced_motion =
+        ui_rml_reduced_motion && ui_rml_reduced_motion->integer != 0;
+    const bool large_text =
+        ui_rml_large_text && ui_rml_large_text->integer != 0;
+
+    document->SetClass("ui-high-visibility", high_visibility);
+    document->SetClass("ui-reduced-motion", reduced_motion);
+    document->SetClass("ui-a11y-large-text", large_text);
+    if (Rml::Element *body = UI_Rml_DocumentBody(document)) {
+        body->SetClass("ui-high-visibility", high_visibility);
+        body->SetClass("ui-reduced-motion", reduced_motion);
+        body->SetClass("ui-a11y-large-text", large_text);
+    }
+}
+
+static void UI_Rml_ApplyPreloadAccessibilityClasses(Rml::String &contents)
+{
+    Rml::String classes;
+    if (ui_rml_high_visibility && ui_rml_high_visibility->integer != 0) {
+        classes = "ui-high-visibility";
+    }
+    if (ui_rml_reduced_motion && ui_rml_reduced_motion->integer != 0) {
+        if (!classes.empty()) {
+            classes += " ";
+        }
+        classes += "ui-reduced-motion";
+    }
+    if (ui_rml_large_text && ui_rml_large_text->integer != 0) {
+        if (!classes.empty()) {
+            classes += " ";
+        }
+        classes += "ui-a11y-large-text";
+    }
+    if (classes.empty()) {
+        return;
+    }
+
+    // Loading from memory lets accessibility state exist before RmlUi creates
+    // entrance animations. Cancelling an already-created opacity animation
+    // can otherwise leave compiled geometry sampled at an invisible frame.
+    const size_t body = contents.find("<body");
+    if (body == Rml::String::npos) {
+        return;
+    }
+    contents.insert(body + strlen("<body"),
+                    " class=\"" + classes + "\"");
+}
+
+static void UI_Rml_ApplyDocumentLocalization(Rml::ElementDocument *document,
+                                             bool force)
+{
+    if (!document || !ui_rml_localization_language) {
+        return;
+    }
+
+    if (!force && ui_rml_localization_modified_count ==
+                      ui_rml_localization_language->modified_count) {
+        return;
+    }
+
+    Rml::ElementList elements;
+    document->QuerySelectorAll(elements, "[data-loc-key]");
+    for (Rml::Element *element : elements) {
+        const Rml::String key =
+            element->GetAttribute<Rml::String>("data-loc-key", "");
+        if (key.empty()) {
+            continue;
+        }
+
+        Rml::String source_rml =
+            element->GetAttribute<Rml::String>("data-loc-source-rml", "");
+        if (source_rml.empty()) {
+            source_rml = UI_Rml_TrimString(element->GetInnerRML());
+            if (!source_rml.empty()) {
+                element->SetAttribute("data-loc-source-rml", source_rml);
+            }
+        }
+
+        char localization_key[MAX_STRING_CHARS];
+        char localized[MAX_STRING_CHARS];
+        Q_snprintf(localization_key, sizeof(localization_key), "$%s",
+                   key.c_str());
+        Loc_Localize(localization_key, false, NULL, 0,
+                     localized, sizeof(localized));
+
+        // Loc_Localize returns the key name when the selected language does
+        // not yet define it. Preserve the authored English copy in that case
+        // so newly annotated strings remain usable while translators can add
+        // language entries incrementally.
+        const bool missing_translation = !strcmp(localized, key.c_str());
+        if (missing_translation && !source_rml.empty()) {
+            if (element->GetInnerRML() != source_rml) {
+                element->SetInnerRML(source_rml);
+            }
+        } else {
+            UI_Rml_SetElementInnerText(element, localized);
+        }
+
+        if (element->HasAttribute("aria-label")) {
+            element->SetAttribute(
+                "aria-label",
+                missing_translation && !source_rml.empty()
+                    ? source_rml
+                    : Rml::String(localized));
+        }
+    }
+
+    ui_rml_localization_modified_count =
+        ui_rml_localization_language->modified_count;
 }
 
 static bool UI_Rml_CompiledRuntimeProbeRoute(const char *route_id, const char *document_path)
@@ -3921,6 +6410,11 @@ static void UI_Rml_CompiledRuntimeShutdown(void)
     Rml::Shutdown();
     ui_rml_core_initialized = false;
     ui_rml_log_missing_data_models = NULL;
+    ui_rml_high_visibility = NULL;
+    ui_rml_reduced_motion = NULL;
+    ui_rml_large_text = NULL;
+    ui_rml_localization_language = NULL;
+    ui_rml_localization_modified_count = -1;
 }
 
 static bool UI_Rml_CompiledRuntimeOpenRoute(const char *route_id, const char *document_path)
@@ -3934,11 +6428,14 @@ static bool UI_Rml_CompiledRuntimeOpenRoute(const char *route_id, const char *do
         return false;
     }
 
-    if (UI_Rml_RendererFamily() != UI_RML_RENDERER_FAMILY_OPENGL) {
+    const ui_rml_renderer_family_t renderer_family = UI_Rml_RendererFamily();
+    if (renderer_family != UI_RML_RENDERER_FAMILY_OPENGL &&
+        renderer_family != UI_RML_RENDERER_FAMILY_VULKAN &&
+        renderer_family != UI_RML_RENDERER_FAMILY_RTX_VKPT) {
         Com_Printf("RmlUi route '%s' resolved to '%s', but renderer family '%s' does not have a guarded native context path yet.\n",
                    route_id ? route_id : "<null>",
                    document_path ? document_path : "<null>",
-                   UI_Rml_RendererFamilyString(UI_Rml_RendererFamily()));
+                   UI_Rml_RendererFamilyString(renderer_family));
         return false;
     }
 
@@ -3970,6 +6467,8 @@ static bool UI_Rml_CompiledRuntimeOpenRoute(const char *route_id, const char *do
         return false;
     }
 
+    UI_Rml_ApplyPreloadAccessibilityClasses(document_contents);
+
     Rml::ElementDocument *document =
         ui_rml_context->LoadDocumentFromMemory(document_contents, document_path);
     if (!document) {
@@ -3983,7 +6482,6 @@ static bool UI_Rml_CompiledRuntimeOpenRoute(const char *route_id, const char *do
 
     ui_rml_document = document;
     ui_rml_document->AddEventListener(Rml::EventId::Click, &ui_rml_command_event_listener);
-    ui_rml_document->Show();
     ui_rml_active_route = route_id ? route_id : "";
     ui_rml_active_document = document_path;
     // Dynamic option population must run before cvar bindings so the
@@ -3992,10 +6490,19 @@ static bool UI_Rml_CompiledRuntimeOpenRoute(const char *route_id, const char *do
     UI_Rml_PopulateMapDbSelects(ui_rml_document);
     UI_Rml_PopulateImageValueSelects(ui_rml_document);
     UI_Rml_PopulateDirectorySelects(ui_rml_document);
+    UI_Rml_InitializeServerBrowser(ui_rml_document);
+    UI_Rml_PopulateDemoBrowser(ui_rml_document);
+    UI_Rml_PopulateSaveSlots(ui_rml_document);
     UI_Rml_PopulatePlayerConfig(ui_rml_document);
+    UI_Rml_ApplyDocumentLocalization(ui_rml_document, true);
     UI_Rml_ApplyDocumentCvarBindings(ui_rml_document);
     UI_Rml_ApplyAccessibilityClasses(ui_rml_document);
     UI_Rml_RefreshKeybindDisplays(ui_rml_document);
+    // Complete dynamic hydration while the document is still hidden. This
+    // avoids invalidating already-visible compiled geometry (notably when
+    // load-game rows gain disabled state) and guarantees the first presented
+    // frame is the final authored layout.
+    ui_rml_document->Show();
     ui_rml_context->Update();
 
     // Give keyboard/controller users a starting point: focus the first
@@ -4038,7 +6545,22 @@ static void UI_Rml_CompiledRuntimeCloseActiveDocument(void)
 {
     ui_rml_keybind_capture_element = nullptr;
     ui_rml_keybind_capture_command.clear();
+    ui_rml_keybind_capture_slot = 0;
+    ui_rml_keybind_capture_started = 0;
+    ui_rml_keybind_conflict_element = nullptr;
+    ui_rml_keybind_conflict_command.clear();
+    ui_rml_keybind_conflict_previous_command.clear();
+    ui_rml_keybind_conflict_key = -1;
     UI_Rml_ResetPlayerPreview();
+
+    if (ui_rml_active_route == "servers") {
+        ui_rml_server_entries.clear();
+        ui_rml_server_selected_address.clear();
+        ui_rml_server_explicit_arguments.clear();
+        ui_rml_server_refreshing = false;
+        ui_rml_server_ping_stage = 0;
+        ui_rml_server_dirty = false;
+    }
 
     if (ui_rml_document) {
         Rml::ElementDocument *document = ui_rml_document;
@@ -4072,12 +6594,23 @@ static bool UI_Rml_CompiledRuntimeUpdate(int width, int height, unsigned realtim
     }
 
     UI_Rml_AdvancePlayerPreview(realtime);
+    UI_Rml_AdvanceServerRefresh(realtime);
+
+    if (ui_rml_keybind_capture_element &&
+        Sys_Milliseconds() - ui_rml_keybind_capture_started >= 8000u) {
+        UI_Rml_EndKeybindCapture();
+        UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_CLOSE);
+    }
 
     if (!UI_Rml_CompiledRuntimeEnsureContext(width, height)) {
         return false;
     }
 
     UI_Rml_RefreshDocumentCvarDisplays(ui_rml_document);
+    UI_Rml_ApplyDocumentLocalization(ui_rml_document, false);
+    if (ui_rml_server_dirty && ui_rml_active_route == "servers") {
+        UI_Rml_RenderServerBrowser(ui_rml_document, true);
+    }
     UI_Rml_ApplyAccessibilityClasses(ui_rml_document);
     (void)ui_rml_context->Update();
     return true;
@@ -4213,13 +6746,20 @@ static Rml::String UI_Rml_ActiveDocumentCloseCommand(void)
     return value;
 }
 
-// Handles Escape/Mouse2 back requests: an active keybind capture consumes
-// the key, and documents that declare data-close-command run their legacy
-// close side effects (worr_vote_close etc.) instead of a bare back-pop.
+// Handles Escape/Mouse2 back requests: an active keybind capture or conflict
+// consumes the key, and documents that declare data-close-command run their
+// legacy close side effects (worr_vote_close etc.) instead of a bare back-pop.
 static bool UI_Rml_CompiledRuntimeHandleBackKey(int key)
 {
     if (!ui_rml_context || !ui_rml_document) {
         return false;
+    }
+
+    if (ui_rml_keybind_conflict_element) {
+        UI_Rml_ClearKeybindConflict();
+        UI_Rml_RefreshKeybindDisplays(ui_rml_document);
+        UI_Rml_PlayMenuFeedbackSound(UI_FEEDBACK_CLOSE);
+        return true;
     }
 
     if (ui_rml_keybind_capture_element) {
@@ -4234,22 +6774,38 @@ static bool UI_Rml_CompiledRuntimeHandleBackKey(int key)
     if (UI_Rml_CommandStartsWithToken(close_command, "popmenu")) {
         const char *tail = UI_Rml_CommandTailAfterToken(close_command, "popmenu");
 
-        UI_Rml_QueueCommand("ui_rml_runtime_back");
-        UI_Rml_QueueCommand(tail);
-        return true;
+        return UI_Rml_InsertCommandSequence(
+            "ui_rml_runtime_back",
+            UI_Rml_RemoteSessionCommandWhenConnected(tail));
     }
 
     if (UI_Rml_CommandStartsWithToken(close_command, "forcemenuoff")) {
         const char *tail =
             UI_Rml_CommandTailAfterToken(close_command, "forcemenuoff");
 
-        UI_Rml_QueueCommand("ui_rml_runtime_close");
-        UI_Rml_QueueCommand(tail);
-        return true;
+        return UI_Rml_InsertCommandSequence(
+            "ui_rml_runtime_close",
+            UI_Rml_RemoteSessionCommandWhenConnected(tail));
+    }
+
+    if (UI_Rml_MatchHubCanCloseLocally(close_command)) {
+        return UI_Rml_InsertCommandSequence("ui_rml_runtime_close",
+                                            UI_Rml_RemoteSessionCommandWhenConnected(
+                                                close_command.c_str()));
     }
 
     // Bare commands (e.g. download_cancel) own the close side effects.
     return UI_Rml_QueueCommand(close_command.c_str());
+}
+
+static bool UI_Rml_CompiledRuntimeStatusEvent(const serverStatus_t *status)
+{
+    return UI_Rml_ServerStatusEvent(status);
+}
+
+static bool UI_Rml_CompiledRuntimeErrorEvent(const netadr_t *from)
+{
+    return UI_Rml_ServerErrorEvent(from);
 }
 
 void UI_Rml_RegisterCompiledRuntime(void)
@@ -4268,6 +6824,8 @@ void UI_Rml_RegisterCompiledRuntime(void)
         UI_Rml_CompiledRuntimeName,
         UI_Rml_CompiledRuntimeCanOpenRoutes,
         UI_Rml_CompiledRuntimeHandleBackKey,
+        UI_Rml_CompiledRuntimeStatusEvent,
+        UI_Rml_CompiledRuntimeErrorEvent,
     };
 
     UI_Rml_SetRuntimeInterface(&runtime);

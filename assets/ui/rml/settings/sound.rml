@@ -7,89 +7,109 @@
   </head>
   <body id="settings-sound" data-route-id="sound" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="sound-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="settings-sound-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="settings-sound-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="settings-sound-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Sound Setup</h1>
+        <div class="worr-titlerow"><button id="settings-sound-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_sound_setup">Sound Setup</h1></div>
       </header>
 
+      <nav class="worr-tabstrip">
+        <button id="settings-sound-tab-video" class="worr-tab" type="button" data-command="popmenu; pushmenu video" data-route-target="video" data-menu-sound="move" data-loc-key="worr_ui_video">Video</button>
+        <button id="settings-sound-tab-screen" class="worr-tab" type="button" data-command="popmenu; pushmenu screen" data-route-target="screen" data-menu-sound="move" data-loc-key="worr_ui_screen">Screen</button>
+        <span class="worr-tab is-active" data-loc-key="m_sound">Sound</span>
+        <button id="settings-sound-tab-input" class="worr-tab" type="button" data-command="popmenu; pushmenu input" data-route-target="input" data-menu-sound="move" data-loc-key="m_input">Input</button>
+        <button id="settings-sound-tab-effects" class="worr-tab" type="button" data-command="popmenu; pushmenu effects" data-route-target="effects" data-menu-sound="move" data-loc-key="worr_ui_effects">Effects</button>
+        <button id="settings-sound-tab-performance" class="worr-tab" type="button" data-command="popmenu; pushmenu performance" data-route-target="performance" data-menu-sound="move" data-loc-key="worr_ui_performance">Performance</button>
+        <button id="settings-sound-tab-accessibility" class="worr-tab" type="button" data-command="popmenu; pushmenu accessibility" data-route-target="accessibility" data-menu-sound="move" data-loc-key="worr_ui_access">Access</button>
+        <button id="settings-sound-tab-language" class="worr-tab" type="button" data-command="popmenu; pushmenu language" data-route-target="language" data-menu-sound="move" data-loc-key="m_language">Language</button>
+      </nav>
       <main class="settings-form form-compact cols-2" id="sound-settings-form" data-component="common.components.cvar_controls">
         <div class="settings-columns" id="sound-settings-columns">
           <div class="settings-column" id="sound-primary-column">
             <section class="settings-section" id="sound-engine-section">
-              <h2>Sound Engine</h2>
+              <h2 data-loc-key="worr_ui_sound_engine">Sound Engine</h2>
               <div class="setting-row" data-control="select" data-cvar="s_enable">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="sound-engine">Sound Engine</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="sound-engine" data-loc-key="worr_ui_sound_engine">Sound Engine</label>
                 <select id="sound-engine" data-cvar="s_enable">
-                  <option value="0">No Sound</option>
-                  <option value="1">Software</option>
-                  <option value="2">OpenAL</option>
+                  <option value="0" data-loc-key="worr_ui_no_sound">No Sound</option>
+                  <option value="1" data-loc-key="worr_ui_software">Software</option>
+                  <option value="2" data-loc-key="worr_ui_openal">OpenAL</option>
                 </select>
               </div>
               <div class="setting-row" data-control="range" data-cvar="s_mixahead">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="sound-latency">Sound Latency (s)</label>
-                <input id="sound-latency" type="range" min="0.05" max="0.2" step="0.01" data-cvar="s_mixahead" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="s_mixahead" data-meter-min="0.05" data-meter-max="0.2"></span><span class="setting-meter-text" data-bind-cvar="s_mixahead"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="sound-latency" data-loc-key="worr_ui_sound_latency_s">Sound Latency (s)</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="s_mixahead" data-meter-min="0.05" data-meter-max="0.2"></span><span class="setting-meter-text" data-bind-cvar="s_mixahead"></span></span><input id="sound-latency" type="range" min="0.05" max="0.2" step="0.01" data-cvar="s_mixahead" />
+
               </div>
             </section>
 
             <section class="settings-section" id="sound-volume-section">
-              <h2>Volume</h2>
+              <h2 data-loc-key="worr_ui_volume">Volume</h2>
               <div class="setting-row" data-control="range" data-cvar="s_volume">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="sound-volume">Sound Volume</label>
-                <input id="sound-volume" type="range" min="0" max="1" step="0.01" data-cvar="s_volume" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="s_volume" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="s_volume" data-display-scale="100" data-display-suffix="%"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="sound-volume" data-loc-key="m_sound_volume">Sound Volume</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="s_volume" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="s_volume" data-display-scale="100" data-display-suffix="%"></span></span><input id="sound-volume" type="range" min="0" max="1" step="0.01" data-cvar="s_volume" />
+
               </div>
               <div class="setting-row" data-control="range" data-cvar="ogg_volume">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="sound-music-volume">Music Volume</label>
-                <input id="sound-music-volume" type="range" min="0" max="1" step="0.01" data-cvar="ogg_volume" data-enable-if="ogg_enable" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="ogg_volume" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="ogg_volume" data-display-scale="100" data-display-suffix="%"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="sound-music-volume" data-loc-key="m_music_volume">Music Volume</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="ogg_volume" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="ogg_volume" data-display-scale="100" data-display-suffix="%"></span></span><input id="sound-music-volume" type="range" min="0" max="1" step="0.01" data-cvar="ogg_volume" data-enable-if="ogg_enable" />
+
               </div>
             </section>
           </div>
 
           <div class="settings-column" id="sound-music-column">
             <section class="settings-section" id="sound-music-section">
-              <h2>Music &amp; Effects</h2>
+              <h2 data-loc-key="worr_ui_music_effects">Music &amp; Effects</h2>
               <div class="setting-row" data-control="toggle" data-cvar="ogg_enable">
-                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-                <label for="sound-music-enable">Enable Music</label>
+                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+                <label for="sound-music-enable" data-loc-key="worr_ui_enable_music">Enable Music</label>
                 <input id="sound-music-enable" type="checkbox" data-cvar="ogg_enable" />
               </div>
               <div class="setting-row" data-control="toggle" data-cvar="ogg_shuffle">
-                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-                <label for="sound-music-shuffle">Shuffle Tracks</label>
+                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+                <label for="sound-music-shuffle" data-loc-key="worr_ui_shuffle_tracks">Shuffle Tracks</label>
                 <input id="sound-music-shuffle" type="checkbox" data-cvar="ogg_shuffle" data-enable-if="ogg_enable" />
               </div>
               <div class="setting-row" data-control="field" data-cvar="ogg_menu_track">
-                <span class="setting-widget-icon" data-widget="number"><img src="../common/icons/widgets/number.svg" /></span>
-                <label for="sound-menu-track">Menu Track</label>
+                <span class="setting-widget-icon" data-widget="number"><img src="../common/icons/widgets/number.png" /></span>
+                <label for="sound-menu-track" data-loc-key="worr_ui_menu_track">Menu Track</label>
                 <input id="sound-menu-track" type="number" min="0" step="1" data-cvar="ogg_menu_track" data-integer="true" data-width="3" data-numeric="true" data-enable-if="ogg_enable" />
-                <span class="setting-value">0 - off</span>
+                <span class="setting-value" data-loc-key="worr_ui_0_off">0 - off</span>
               </div>
               <div class="setting-row" data-control="toggle" data-cvar="s_underwater">
-                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-                <label for="sound-underwater">Underwater Effect</label>
+                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+                <label for="sound-underwater" data-loc-key="worr_ui_underwater_effect">Underwater Effect</label>
                 <input id="sound-underwater" type="checkbox" data-cvar="s_underwater" />
               </div>
               <div class="setting-row" data-control="select" data-cvar="s_ambient">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="sound-ambient">Ambient Sounds</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="sound-ambient" data-loc-key="worr_ui_ambient_sounds">Ambient Sounds</label>
                 <select id="sound-ambient" data-cvar="s_ambient">
-                  <option value="0">No</option>
-                  <option value="1">Yes</option>
-                  <option value="2">Only Player's Own</option>
+                  <option value="0" data-loc-key="m_no">No</option>
+                  <option value="1" data-loc-key="m_yes">Yes</option>
+                  <option value="2" data-loc-key="worr_ui_only_player_s_own">Only Player's Own</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="cl_chat_sound">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="sound-chat-beep">Chat Beep</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="sound-chat-beep" data-loc-key="worr_ui_chat_beep">Chat Beep</label>
                 <select id="sound-chat-beep" data-cvar="cl_chat_sound">
-                  <option value="0">Disabled</option>
-                  <option value="1">Default</option>
-                  <option value="2">Alternative</option>
+                  <option value="0" data-loc-key="worr_ui_disabled">Disabled</option>
+                  <option value="1" data-loc-key="worr_ui_default">Default</option>
+                  <option value="2" data-loc-key="worr_ui_alternative">Alternative</option>
                 </select>
               </div>
             </section>
@@ -98,8 +118,12 @@
       </main>
 
       <footer class="menu-footer" id="sound-menu-footer">
-        <button id="sound-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="sound-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="sound-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="settings-sound-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

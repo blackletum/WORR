@@ -18,6 +18,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_ents.c -- entity parsing and management
 
 #include "cg_entity_local.h"
+#include "cg_canonical_snapshot_timeline.hpp"
+#include "cg_event_shadow.hpp"
 #include "cg_snapshot_timeline.hpp"
 
 extern qhandle_t cl_mod_powerscreen;
@@ -36,6 +38,372 @@ static vec3_t listener_forward;
 static vec3_t listener_right;
 static vec3_t listener_up;
 static int listener_entnum;
+
+namespace {
+
+/*
+ * FR-10-T07 progressive render cutover.
+ *
+ * Mode 0 keeps legacy rendering authoritative while still advancing the
+ * canonical render clock.  Mode 1 performs a live transform parity audit.
+ * Mode 2 promotes a sampled transform only after the same parity checks pass;
+ * every rejected/missing/discontinuous entity falls back independently.
+ */
+enum canonical_snapshot_render_mode_t {
+    CANONICAL_SNAPSHOT_RENDER_LEGACY = 0,
+    CANONICAL_SNAPSHOT_RENDER_AUDIT = 1,
+    CANONICAL_SNAPSHOT_RENDER_PROMOTE = 2,
+};
+
+struct canonical_snapshot_render_stats_t {
+    std::uint32_t epoch;
+    std::uint32_t last_clock_result;
+    std::uint32_t last_pair_result;
+    std::uint32_t last_pair_mode;
+    std::uint32_t last_pair_blocks;
+    std::uint64_t clock_frames;
+    std::uint64_t clock_failures;
+    std::uint64_t pair_frames;
+    std::uint64_t pair_failures;
+    std::uint64_t alignment_failures;
+    std::uint64_t sample_attempts;
+    std::uint64_t sample_failures;
+    std::uint64_t sample_invisible;
+    std::uint64_t sample_discontinuities;
+    std::uint64_t parity_matches;
+    std::uint64_t parity_mismatches;
+    std::uint64_t promoted_transforms;
+    std::uint64_t event_ready_records;
+    std::uint64_t event_future_frames;
+    std::uint64_t event_audit_failures;
+    float max_origin_error;
+    float max_old_origin_error;
+    float max_angle_error;
+    unsigned last_debug_time_ms;
+};
+
+struct canonical_snapshot_render_frame_t {
+    worr_snapshot_timeline_policy_v1 policy;
+    worr_snapshot_timeline_pair_v1 pair;
+    std::uint32_t mode;
+    bool pair_valid;
+};
+
+cvar_t *cg_snapshot_timeline_render;
+cvar_t *cg_snapshot_timeline_render_epsilon;
+canonical_snapshot_render_stats_t canonical_render_stats;
+canonical_snapshot_render_frame_t canonical_render_frame;
+
+void increment_saturated(std::uint64_t &value)
+{
+    if (value != UINT64_MAX)
+        ++value;
+}
+
+void add_saturated(std::uint64_t &value, std::uint32_t amount)
+{
+    if (value > UINT64_MAX - amount)
+        value = UINT64_MAX;
+    else
+        value += amount;
+}
+
+float maximum_component_error(const float left[3], const float right[3])
+{
+    float error = 0.0f;
+    for (int axis = 0; axis < 3; ++axis)
+        error = max(error, fabsf(left[axis] - right[axis]));
+    return error;
+}
+
+float maximum_angle_error(const float left[3], const float right[3])
+{
+    float error = 0.0f;
+    for (int axis = 0; axis < 3; ++axis) {
+        float delta = fmodf(right[axis] - left[axis], 360.0f);
+        if (delta < -180.0f)
+            delta += 360.0f;
+        else if (delta >= 180.0f)
+            delta -= 360.0f;
+        error = max(error, fabsf(delta));
+    }
+    return error;
+}
+
+void reset_canonical_render_stats(std::uint32_t epoch)
+{
+    canonical_render_stats = {};
+    canonical_render_stats.epoch = epoch;
+    canonical_render_stats.last_debug_time_ms = cls.realtime;
+}
+
+bool canonical_desired_render_time_us(std::uint64_t *time_out)
+{
+    if (!time_out)
+        return false;
+
+    if (cl.frame.canonical_server_time_valid) {
+        const std::uint64_t current = cl.frame.canonical_server_time_us;
+        if (cl.oldframe.valid && cl.oldframe.canonical_server_time_valid &&
+            cl.oldframe.canonical_server_time_us <= current) {
+            const std::uint64_t previous =
+                cl.oldframe.canonical_server_time_us;
+            const double fraction =
+                static_cast<double>(Q_clipf(cl.lerpfrac, 0.0f, 1.0f));
+            *time_out = previous + static_cast<std::uint64_t>(
+                static_cast<double>(current - previous) * fraction);
+            return true;
+        }
+        *time_out = current;
+        return true;
+    }
+
+    if (cl.time < 0)
+        return false;
+    *time_out = static_cast<std::uint64_t>(cl.time) * UINT64_C(1000);
+    return true;
+}
+
+worr_snapshot_timeline_result_v1 advance_canonical_render_clock(
+    const cg_canonical_snapshot_timeline_diagnostics_v1 &diagnostics,
+    worr_snapshot_timeline_clock_state_v1 *clock_out)
+{
+    worr_snapshot_timeline_clock_request_v1 request{};
+    request.struct_size = sizeof(request);
+    request.schema_version = WORR_SNAPSHOT_TIMELINE_VERSION;
+    request.reset_reason = WORR_SNAPSHOT_TIMELINE_CLOCK_RESET_NONE;
+    request.host_time_us =
+        static_cast<std::uint64_t>(cls.realtime) * UINT64_C(1000);
+    if (request.host_time_us < diagnostics.clock.host_time_us)
+        request.host_time_us = diagnostics.clock.host_time_us;
+
+    const cvar_t *paused = CG_SvPausedVar();
+    const bool should_pause = paused && paused->integer != 0;
+    if (should_pause && !diagnostics.clock.paused)
+        request.operation = WORR_SNAPSHOT_TIMELINE_CLOCK_PAUSE;
+    else if (!should_pause && diagnostics.clock.paused)
+        request.operation = WORR_SNAPSHOT_TIMELINE_CLOCK_RESUME;
+    else
+        request.operation = WORR_SNAPSHOT_TIMELINE_CLOCK_ADVANCE;
+
+    return CG_CanonicalSnapshotTimelineClockApply(&request, clock_out);
+}
+
+void begin_canonical_snapshot_render_frame()
+{
+    canonical_render_frame = {};
+
+    cg_canonical_snapshot_timeline_diagnostics_v1 diagnostics{};
+    if (!CG_CanonicalSnapshotTimelineGetDiagnostics(&diagnostics) ||
+        !diagnostics.active || diagnostics.pending_clock_reset) {
+        return;
+    }
+
+    if (canonical_render_stats.epoch != diagnostics.active_epoch)
+        reset_canonical_render_stats(diagnostics.active_epoch);
+
+    worr_snapshot_timeline_clock_state_v1 clock{};
+    const auto clock_result =
+        advance_canonical_render_clock(diagnostics, &clock);
+    canonical_render_stats.last_clock_result = clock_result;
+    increment_saturated(canonical_render_stats.clock_frames);
+    if (clock_result != WORR_SNAPSHOT_TIMELINE_OK) {
+        increment_saturated(canonical_render_stats.clock_failures);
+        return;
+    }
+
+    const int configured_mode = cg_snapshot_timeline_render
+        ? Q_clip(cg_snapshot_timeline_render->integer,
+                 static_cast<int>(CANONICAL_SNAPSHOT_RENDER_LEGACY),
+                 static_cast<int>(CANONICAL_SNAPSHOT_RENDER_PROMOTE))
+        : CANONICAL_SNAPSHOT_RENDER_LEGACY;
+    canonical_render_frame.mode = static_cast<std::uint32_t>(configured_mode);
+    if (configured_mode == CANONICAL_SNAPSHOT_RENDER_LEGACY)
+        return;
+
+    std::uint64_t desired_time_us = 0;
+    if (!canonical_desired_render_time_us(&desired_time_us) ||
+        desired_time_us > clock.render_time_us ||
+        clock.render_time_us - desired_time_us >
+            WORR_SNAPSHOT_TIMELINE_MAX_INTERPOLATION_DELAY_US) {
+        increment_saturated(canonical_render_stats.alignment_failures);
+        return;
+    }
+
+    auto &policy = canonical_render_frame.policy;
+    policy.struct_size = sizeof(policy);
+    policy.schema_version = WORR_SNAPSHOT_TIMELINE_VERSION;
+    policy.interpolation_delay_us = clock.render_time_us - desired_time_us;
+    policy.max_extrapolation_us = 0;
+    /* Legacy cgame rejects any individual-axis jump above 512 units.  The
+     * Euclidean bound below admits exactly that axis-aligned cube; the parity
+     * promotion gate remains the final authority for model/event discontinuities. */
+    policy.teleport_distance = 887.0f;
+    policy.max_linear_velocity = WORR_SNAPSHOT_TIMELINE_MAX_LINEAR_VELOCITY;
+    policy.max_angular_velocity = WORR_SNAPSHOT_TIMELINE_MAX_ANGULAR_VELOCITY;
+    policy.allow_extrapolation = 0;
+
+    const auto pair_result = CG_CanonicalSnapshotTimelineSelectPair(
+        &policy, &canonical_render_frame.pair);
+    canonical_render_stats.last_pair_result = pair_result;
+    increment_saturated(canonical_render_stats.pair_frames);
+    if (pair_result != WORR_SNAPSHOT_TIMELINE_OK) {
+        increment_saturated(canonical_render_stats.pair_failures);
+        return;
+    }
+
+    canonical_render_stats.last_pair_mode =
+        canonical_render_frame.pair.mode;
+    canonical_render_stats.last_pair_blocks =
+        canonical_render_frame.pair.blocking_reasons;
+    canonical_render_frame.pair_valid = true;
+
+    std::uint32_t ready_events = 0;
+    const auto event_result = CG_CanonicalEventPresentationAdvanceAudit(
+        canonical_render_frame.pair.target_time_us,
+        WORR_CGAME_EVENT_RANGE_MAX_RECORDS_V2, &ready_events);
+    add_saturated(canonical_render_stats.event_ready_records, ready_events);
+    if (event_result == CG_CANONICAL_EVENT_PRESENTATION_NOT_READY) {
+        increment_saturated(canonical_render_stats.event_future_frames);
+    } else if (event_result != CG_CANONICAL_EVENT_PRESENTATION_OK &&
+               event_result != CG_CANONICAL_EVENT_PRESENTATION_UNINITIALIZED) {
+        increment_saturated(canonical_render_stats.event_audit_failures);
+    }
+}
+
+bool sample_canonical_entity_transform(
+    const entity_state_t *state, const centity_t *cent,
+    worr_snapshot_timeline_entity_sample_v1 *sample_out)
+{
+    if (!state || !cent || !sample_out ||
+        !canonical_render_frame.pair_valid || state->number <= 0 ||
+        static_cast<std::uint32_t>(state->number) >=
+            CG_CANONICAL_SNAPSHOT_MAX_ENTITY_IDENTITIES) {
+        return false;
+    }
+
+    increment_saturated(canonical_render_stats.sample_attempts);
+    worr_snapshot_timeline_entity_sample_v1 sample{};
+    const auto result = CG_CanonicalSnapshotTimelineSampleEntity(
+        &canonical_render_frame.policy, &canonical_render_frame.pair,
+        static_cast<std::uint32_t>(state->number), &sample);
+    if (result != WORR_SNAPSHOT_TIMELINE_OK) {
+        increment_saturated(canonical_render_stats.sample_failures);
+        return false;
+    }
+    if (!sample.visible ||
+        !(sample.entity.component_mask & WORR_SNAPSHOT_ENTITY_TRANSFORM)) {
+        increment_saturated(canonical_render_stats.sample_invisible);
+        return false;
+    }
+
+    constexpr std::uint32_t unsafe_blocks =
+        WORR_SNAPSHOT_TIMELINE_ENTITY_BLOCK_SNAPSHOT |
+        WORR_SNAPSHOT_TIMELINE_ENTITY_BLOCK_GENERATION |
+        WORR_SNAPSHOT_TIMELINE_ENTITY_BLOCK_MISSING |
+        WORR_SNAPSHOT_TIMELINE_ENTITY_BLOCK_COMPONENT |
+        WORR_SNAPSHOT_TIMELINE_ENTITY_BLOCK_TELEPORT |
+        WORR_SNAPSHOT_TIMELINE_ENTITY_BLOCK_LINEAR_SPEED |
+        WORR_SNAPSHOT_TIMELINE_ENTITY_BLOCK_ANGULAR_SPEED |
+        WORR_SNAPSHOT_TIMELINE_ENTITY_BLOCK_POLICY;
+    if (sample.blocking_reasons & unsafe_blocks) {
+        increment_saturated(canonical_render_stats.sample_discontinuities);
+        return false;
+    }
+
+    vec3_t legacy_origin;
+    vec3_t legacy_old_origin;
+    vec3_t legacy_angles;
+    LerpVector(cent->prev.origin, cent->current.origin,
+               cl.lerpfrac, legacy_origin);
+    LerpVector(cent->prev.old_origin, cent->current.old_origin,
+               cl.lerpfrac, legacy_old_origin);
+    LerpAngles(cent->prev.angles, cent->current.angles,
+               cl.lerpfrac, legacy_angles);
+
+    const float origin_error = maximum_component_error(
+        legacy_origin, sample.entity.origin);
+    const float old_origin_error = maximum_component_error(
+        legacy_old_origin, sample.entity.old_origin);
+    const float angle_error = maximum_angle_error(
+        legacy_angles, sample.entity.angles);
+    canonical_render_stats.max_origin_error = max(
+        canonical_render_stats.max_origin_error, origin_error);
+    canonical_render_stats.max_old_origin_error = max(
+        canonical_render_stats.max_old_origin_error, old_origin_error);
+    canonical_render_stats.max_angle_error = max(
+        canonical_render_stats.max_angle_error, angle_error);
+
+    const float epsilon = cg_snapshot_timeline_render_epsilon
+        ? Cvar_ClampValue(cg_snapshot_timeline_render_epsilon,
+                          0.0001f, 8.0f)
+        : 0.125f;
+    const bool old_origin_matters =
+        (state->renderfx & RF_BEAM) != 0;
+    if (origin_error > epsilon || angle_error > epsilon ||
+        (old_origin_matters && old_origin_error > epsilon)) {
+        increment_saturated(canonical_render_stats.parity_mismatches);
+        return false;
+    }
+
+    increment_saturated(canonical_render_stats.parity_matches);
+    *sample_out = sample;
+    if (canonical_render_frame.mode == CANONICAL_SNAPSHOT_RENDER_PROMOTE) {
+        increment_saturated(canonical_render_stats.promoted_transforms);
+        return true;
+    }
+    return false;
+}
+
+void end_canonical_snapshot_render_frame()
+{
+    if (canonical_render_frame.mode == CANONICAL_SNAPSHOT_RENDER_LEGACY ||
+        cls.realtime - canonical_render_stats.last_debug_time_ms < 1000) {
+        return;
+    }
+
+    Com_LPrintf(
+        PRINT_ALL,
+        "cg_snapshot_timeline_render: epoch=%u mode=%u clock=%llu/%llu "
+        "pair=%llu/%llu align_fail=%llu pair_mode=%u pair_blocks=0x%x "
+        "samples=%llu fail=%llu invisible=%llu discontinuity=%llu "
+        "parity=%llu/%llu promoted=%llu events=%llu/%llu/%llu "
+        "max_error=%.4f/%.4f/%.4f\n",
+        canonical_render_stats.epoch, canonical_render_frame.mode,
+        static_cast<unsigned long long>(canonical_render_stats.clock_frames),
+        static_cast<unsigned long long>(canonical_render_stats.clock_failures),
+        static_cast<unsigned long long>(canonical_render_stats.pair_frames),
+        static_cast<unsigned long long>(canonical_render_stats.pair_failures),
+        static_cast<unsigned long long>(canonical_render_stats.alignment_failures),
+        canonical_render_stats.last_pair_mode,
+        canonical_render_stats.last_pair_blocks,
+        static_cast<unsigned long long>(canonical_render_stats.sample_attempts),
+        static_cast<unsigned long long>(canonical_render_stats.sample_failures),
+        static_cast<unsigned long long>(canonical_render_stats.sample_invisible),
+        static_cast<unsigned long long>(canonical_render_stats.sample_discontinuities),
+        static_cast<unsigned long long>(canonical_render_stats.parity_matches),
+        static_cast<unsigned long long>(canonical_render_stats.parity_mismatches),
+        static_cast<unsigned long long>(canonical_render_stats.promoted_transforms),
+        static_cast<unsigned long long>(canonical_render_stats.event_ready_records),
+        static_cast<unsigned long long>(canonical_render_stats.event_future_frames),
+        static_cast<unsigned long long>(canonical_render_stats.event_audit_failures),
+        canonical_render_stats.max_origin_error,
+        canonical_render_stats.max_old_origin_error,
+        canonical_render_stats.max_angle_error);
+    canonical_render_stats.last_debug_time_ms = cls.realtime;
+}
+
+} // namespace
+
+void CG_CanonicalSnapshotRender_InitCvars(void)
+{
+    if (!cgei)
+        return;
+    cg_snapshot_timeline_render = Cvar_Get(
+        "cg_snapshot_timeline_render", "0", CVAR_NOARCHIVE);
+    cg_snapshot_timeline_render_epsilon = Cvar_Get(
+        "cg_snapshot_timeline_render_epsilon", "0.125", CVAR_NOARCHIVE);
+}
 
 static constexpr float FLASHLIGHT_CLASSIC_DISTANCE = 256.0f;
 static constexpr float FLASHLIGHT_SHADOW_DISTANCE = 1024.0f;
@@ -1120,6 +1488,12 @@ static void CL_AddPacketEntities(void)
         ent.id = cent->id + RESERVED_ENTITY_COUNT;
         ent.owner_entity = s1->number;
 
+        worr_snapshot_timeline_entity_sample_v1 canonical_sample{};
+        const bool canonical_transform =
+            s1->number != cl.frame.clientNum + 1 &&
+            sample_canonical_entity_transform(
+                s1, cent, &canonical_sample);
+
         has_trail = false;
         bool is_player = CL_IsPlayerEntity(s1);
         const clientinfo_t *render_ci = NULL;
@@ -1199,15 +1573,23 @@ static void CL_AddPacketEntities(void)
 
         if (renderfx & RF_BEAM) {
             // interpolate start and end points for beams
-            LerpVector(cent->prev.origin, cent->current.origin,
-                        cl.lerpfrac, ent.origin);
-            LerpVector(cent->prev.old_origin, cent->current.old_origin,
-                        cl.lerpfrac, ent.oldorigin);
+            if (canonical_transform) {
+                VectorCopy(canonical_sample.entity.origin, ent.origin);
+                VectorCopy(canonical_sample.entity.old_origin, ent.oldorigin);
+            } else {
+                LerpVector(cent->prev.origin, cent->current.origin,
+                           cl.lerpfrac, ent.origin);
+                LerpVector(cent->prev.old_origin, cent->current.old_origin,
+                           cl.lerpfrac, ent.oldorigin);
+            }
         } else {
             if (s1->number == cl.frame.clientNum + 1) {
                 // use predicted origin
                 VectorCopy(cl.playerEntityOrigin, ent.origin);
                 VectorCopy(cl.playerEntityOrigin, ent.oldorigin);
+            } else if (canonical_transform) {
+                VectorCopy(canonical_sample.entity.origin, ent.origin);
+                VectorCopy(ent.origin, ent.oldorigin);
             } else {
                 // interpolate origin
                 LerpVector(cent->prev.origin, cent->current.origin,
@@ -1394,6 +1776,10 @@ static void CL_AddPacketEntities(void)
             CL_AddEntityLight(s1, effects, start, 100, 1, 0, 0);
         } else if (s1->number == cl.frame.clientNum + 1) {
             VectorCopy(cl.playerEntityAngles, ent.angles);      // use predicted angles
+        } else if (canonical_transform) {
+            VectorCopy(canonical_sample.entity.angles, ent.angles);
+            if (s1->modelindex == MODELINDEX_PLAYER && cl_rollhack->integer && !cl.csr.extended)
+                ent.angles[ROLL] = -ent.angles[ROLL];
         } else { // interpolate angles
             LerpAngles(cent->prev.angles, cent->current.angles,
                        cl.lerpfrac, ent.angles);
@@ -2365,6 +2751,7 @@ Emits all entities, particles, and lights to the renderer
 */
 void CL_AddEntities(void)
 {
+    begin_canonical_snapshot_render_frame();
     CL_CalcViewValues();
     CL_FinishViewValues();
     CL_AddPacketEntities();
@@ -2374,6 +2761,7 @@ void CL_AddEntities(void)
     CL_AddLightStyles();
     CL_AddShadowLights();
     LOC_AddLocationsToScene();
+    end_canonical_snapshot_render_frame();
 }
 
 /*

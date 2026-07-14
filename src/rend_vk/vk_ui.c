@@ -1683,6 +1683,89 @@ static bool VK_UI_EnqueueQuad(float x, float y, float w, float h,
     return true;
 }
 
+bool VK_UI_DrawRmlGeometry(const renderer_rmlui_vertex_t *vertices,
+                           size_t vertex_count,
+                           const uint32_t *indices,
+                           size_t index_count,
+                           float translation_x,
+                           float translation_y,
+                           qhandle_t texture)
+{
+    if (!vk_ui.initialized || !vertices || !indices || !vertex_count ||
+        !index_count || vertex_count > UINT32_MAX || index_count > UINT32_MAX) {
+        return false;
+    }
+
+    VK_UI_EnsureDefaultImages();
+    VK_UI_ResolvePic(&texture);
+
+    vk_ui_image_t *image = VK_UI_ImageForHandle(texture);
+    if (!image || !image->descriptor_set) {
+        return false;
+    }
+
+    const uint32_t vertex_delta = (uint32_t)vertex_count;
+    const uint32_t index_delta = (uint32_t)index_count;
+    uint32_t needed_vertices;
+    uint32_t needed_indices;
+    uint32_t needed_draws;
+    if (!VK_UI_AddCount(vk_ui.vertex_count, vertex_delta, &needed_vertices,
+                        "RmlUi vertex") ||
+        !VK_UI_AddCount(vk_ui.index_count, index_delta, &needed_indices,
+                        "RmlUi index") ||
+        !VK_UI_AddCount(vk_ui.draw_count, 1, &needed_draws, "RmlUi draw") ||
+        !VK_UI_EnsureDrawCapacity(needed_vertices, needed_indices,
+                                  needed_draws)) {
+        return false;
+    }
+
+    const uint32_t base_vertex = vk_ui.vertex_count;
+    const uint32_t base_index = vk_ui.index_count;
+    for (uint32_t i = 0; i < vertex_delta; ++i) {
+        float ndc_x;
+        float ndc_y;
+        VK_UI_ToNdc(vertices[i].position[0] + translation_x,
+                    vertices[i].position[1] + translation_y,
+                    &ndc_x, &ndc_y);
+        vk_ui.vertices[base_vertex + i] = (vk_ui_vertex_t){
+            .pos = { ndc_x, ndc_y },
+            .uv = { vertices[i].tex_coord[0], vertices[i].tex_coord[1] },
+            .color = vertices[i].color,
+        };
+    }
+
+    for (uint32_t i = 0; i < index_delta; ++i) {
+        if (indices[i] >= vertex_delta) {
+            return false;
+        }
+        vk_ui.indices[base_index + i] = base_vertex + indices[i];
+    }
+
+    vk_ui.vertex_count = needed_vertices;
+    vk_ui.index_count = needed_indices;
+
+    const VkRect2D scissor = VK_UI_CurrentScissor();
+    if (vk_ui.draw_count > 0) {
+        vk_ui_draw_t *previous = &vk_ui.draws[vk_ui.draw_count - 1];
+        if (previous->descriptor_set == image->descriptor_set &&
+            previous->scissor.offset.x == scissor.offset.x &&
+            previous->scissor.offset.y == scissor.offset.y &&
+            previous->scissor.extent.width == scissor.extent.width &&
+            previous->scissor.extent.height == scissor.extent.height &&
+            previous->first_index + previous->index_count == base_index) {
+            previous->index_count += index_delta;
+            return true;
+        }
+    }
+
+    vk_ui_draw_t *draw = &vk_ui.draws[vk_ui.draw_count++];
+    draw->first_index = base_index;
+    draw->index_count = index_delta;
+    draw->descriptor_set = image->descriptor_set;
+    draw->scissor = scissor;
+    return true;
+}
+
 // Emits an 8-vertex vignette ring (solid outer edge fading to a transparent
 // inner rect), mirroring the GL renderer's GL_DrawVignette.
 static bool VK_UI_EnqueueVignette(float x, float y, float w, float h,
@@ -2509,6 +2592,12 @@ bool VK_UI_IsImageTransparent(qhandle_t pic)
     }
 
     return image->transparent;
+}
+
+imageflags_t VK_UI_GetImageFlags(qhandle_t pic)
+{
+    vk_ui_image_t *image = VK_UI_ImageForHandle(pic);
+    return image ? image->flags : IF_NONE;
 }
 
 VkDescriptorSetLayout VK_UI_GetDescriptorSetLayout(void)

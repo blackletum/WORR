@@ -176,6 +176,13 @@ VkResult vkpt_debugdraw_create(void)
 {
 	LOG_FUNC();
 
+	// The intrusive debug-line lists must be valid before the first
+	// R_RenderFrame call. Menu-only RDF_NOWORLDMODEL frames (notably the
+	// player setup preview) can arrive before gameplay adds or expires any
+	// debug primitive; zero-initialized list heads otherwise look non-empty
+	// and VKPT_DrawDebugLines dereferences an invalid entry.
+	R_ClearDebugLines();
+
 	vkpt_debug_linewidth = Cvar_Get("pt_debug_linewidth", "2", 0);
 	vkpt_debug_distfrac = Cvar_Get("pt_debug_distfrac", "0.004", 0);
 

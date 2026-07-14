@@ -1,0 +1,12 @@
+<svg width="24" height="24" viewBox="0 0 24 24">
+  <rect x="10" y="2" width="4" height="4" fill="#c9beb0"/>
+  <rect x="10" y="18" width="4" height="4" fill="#c9beb0"/>
+  <rect x="2" y="10" width="4" height="4" fill="#c9beb0"/>
+  <rect x="18" y="10" width="4" height="4" fill="#c9beb0"/>
+  <polygon points="4.9,6.5 6.5,4.9 9,7.4 7.4,9" fill="#c9beb0"/>
+  <polygon points="17.5,4.9 19.1,6.5 16.6,9 15,7.4" fill="#c9beb0"/>
+  <polygon points="4.9,17.5 6.5,19.1 9,16.6 7.4,15" fill="#c9beb0"/>
+  <polygon points="19.1,17.5 17.5,19.1 15,16.6 16.6,15" fill="#c9beb0"/>
+  <circle cx="12" cy="12" r="6.4" fill="#c9beb0"/>
+  <circle cx="12" cy="12" r="3" fill="#1b1916"/>
+</svg>

@@ -15,6 +15,7 @@ Practical Guides
 
 - link:server-quickstart.md[Server Quickstart]
 - link:competitive-server-tools.md[Competitive Server Tools]
+- link:progressive-networking-controls.md[Progressive Networking Controls]
 - link:bots.md[Bots]
 - link:bot-map-readiness.md[Bot Map Readiness]
 
@@ -71,6 +72,27 @@ net_maxmsglen::
     header). Higher values may cause IP fragmentation for misconfigured clients
     which is better to avoid. Don't change this variable unless you know
     exactly what you are doing.
+
+sv_snapshot_shadow::
+    Keeps an observational copy of each final per-client snapshot endpoint for
+    progressive validation. Default value is 1 (enabled). This does not add a
+    second packet or replace legacy delivery; shadow failure cannot reject a
+    valid outgoing snapshot. Set it to 0 before clients connect to avoid
+    creating this diagnostic state. See
+    link:progressive-networking-controls.md[Progressive Networking Controls].
+
+sv_worr_native_shadow::
+    Enables the server half of a developer-only native command-shadow
+    diagnostic. Default value is 0 (disabled). A client must also enable
+    `cl_worr_native_shadow`, and the connection must support the compatible
+    NEW-netchan path. The diagnostic observes at most one input command per map
+    or native transport epoch while the established movement command remains
+    authoritative. It is not a server-performance option and does not enable
+    full native netcode. Set it before clients connect and have existing clients
+    reconnect after changing it. An unsupported peer or diagnostic failure
+    silently falls back to the normal path. When disabled, legacy connections
+    and demo behavior are unchanged. See
+    link:progressive-networking-controls.md[Progressive Networking Controls].
 
 Generic
 ~~~~~~~
@@ -298,6 +320,42 @@ sv_prioritize_entities::
     Default value is 0, which simply throws out entities with higher numbers
     that don't fit into frame. Sorting is potentially CPU intensive and thus
     disabled by default.
+
+Progressive gameplay networking
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+g_lag_compensation::
+    Compatibility master switch for historical player-bounds hit validation.
+    Default value is 0 (current-world collision). Value 1 allows the staged
+    historical path for eligible deathmatch weapon traces. This remains an
+    evaluation feature while moving-geometry, fairness, load, and platform
+    release gates are incomplete.
+
+sg_lag_compensation_max_ms::
+    Maximum historical player rewind window in milliseconds. Default value is
+    200 and the policy limit is 0 to 250. Value 0 prevents historical rewind
+    even when ‘g_lag_compensation’ is enabled.
+
+sg_lag_compensation_interp_ms::
+    Additional interpolation allowance in milliseconds. Default value is -1,
+    which derives the allowance from the estimated snapshot interval. A
+    non-negative value supplies an explicit allowance limited by
+    ‘sg_lag_compensation_max_ms’.
+
+sg_lag_compensation_legacy_error_ms::
+    Largest accepted error bound for a legacy packet-shared time mapping.
+    Default value is 50 milliseconds and the policy limit is 0 to 250.
+
+sg_lag_compensation_debug::
+    Controls rewind diagnostics. Default value is 0.
+       - 0 — diagnostics and the detailed observation journal are disabled
+       - 1 — print one aggregate status line per second
+       - 2 — also retain a bounded 256-record query journal without per-query
+         console output
+       - 3 or greater — also print one detailed console line per query
+
+See link:progressive-networking-controls.md[Progressive Networking Controls]
+before enabling this path on a server.
 
 Downloads
 ~~~~~~~~~

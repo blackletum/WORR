@@ -21,6 +21,7 @@ change game behavior on the fly.*/
 #include "../bots/bot_includes.hpp"
 #include "../commands/commands.hpp"
 #include "../g_local.hpp"
+#include "../network/event_shadow.hpp"
 #include "../network/lag_compensation.hpp"
 #include "../../../../inc/shared/bot_admin_audit_status.h"
 #include "../../../../inc/shared/bot_chat_policy_status.h"
@@ -1190,7 +1191,9 @@ static void InitGame() {
   g_itemBobbing = gi.cvar("g_item_bobbing", "1", CVAR_NOFLAGS);
   g_knockbackScale = gi.cvar("g_knockback_scale", "0.8", CVAR_NOFLAGS);
   g_ladderSteps = gi.cvar("g_ladder_steps", "1", CVAR_NOFLAGS);
-  g_lagCompensation = gi.cvar("g_lag_compensation", "1", CVAR_NOFLAGS);
+  // FR-10-R4: historical hit validation remains explicit opt-in until the
+  // deterministic fairness, abuse, and performance gates are complete.
+  g_lagCompensation = gi.cvar("g_lag_compensation", "0", CVAR_NOFLAGS);
   LagCompensation_Init();
   g_level_rulesets = gi.cvar("g_level_rulesets", "0", CVAR_NOFLAGS);
   match_maps_list = gi.cvar("match_maps_list", "", CVAR_NOFLAGS);
@@ -1545,6 +1548,8 @@ and global variables
 Q2GAME_API game_export_t *GetGameAPI(game_import_t *import) {
   gi = *import;
 
+  SG_EventShadowInitialize();
+
   InitServerLogging();
 
   FRAME_TIME_S = FRAME_TIME_MS = GameTime::from_ms(gi.frameTimeMs);
@@ -1560,8 +1565,6 @@ Q2GAME_API game_export_t *GetGameAPI(game_import_t *import) {
   globals.WriteLevelJson = WriteLevelJson;
   globals.ReadLevelJson = ReadLevelJson;
   globals.CanSave = CanSave;
-
-  globals.Pmove = Pmove;
 
   globals.GetExtension = G_GetExtension;
 
@@ -2642,6 +2645,8 @@ void G_RunFrame(bool main_loop) {
       ReportMatchDetails(false);
     }
   }
+
+  SG_EventShadowCaptureAuthoritativeTick();
 }
 
 /*

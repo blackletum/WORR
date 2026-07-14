@@ -21,6 +21,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 //
 
 #include "client.h"
+#include "client/cgame_event_shadow_runtime.h"
+#include "client/consumed_cursor.h"
+#include "client/demo_clock.h"
+#include "client/net_capability.h"
+#include "client/snapshot_shadow.h"
 
 static byte     demo_buffer[MAX_MSGLEN];
 
@@ -98,27 +103,34 @@ static void CL_PackEntity_q2proto(q2proto_packed_entity_state_t *out, const enti
     }
 }
 
-static void write_delta_entity(const q2proto_packed_entity_state_t *oldpack, const q2proto_packed_entity_state_t *newpack, int newnum, msgEsFlags_t flags)
+static bool write_delta_entity(
+    const q2proto_packed_entity_state_t *oldpack,
+    const q2proto_packed_entity_state_t *newpack, int newnum,
+    msgEsFlags_t flags, uintptr_t io_arg)
 {
     q2proto_svc_message_t message_entity_delta = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
     bool entity_differs = Q2PROTO_MakeEntityDelta(&cls.demo.q2proto_context, &message_entity_delta.frame_entity_delta.entity_delta, oldpack, newpack, flags);
     message_entity_delta.frame_entity_delta.newnum = newnum;
 
     if (!(flags & MSG_ES_FORCE) && !entity_differs)
-        return;
-    q2proto_server_write(&cls.demo.q2proto_context, Q2PROTO_IOARG_DEMO_WRITE, &message_entity_delta);
+        return true;
+    return q2proto_server_write(&cls.demo.q2proto_context, io_arg,
+                                &message_entity_delta) == Q2P_ERR_SUCCESS;
 }
 
-static void write_entity_remove(int num)
+static bool write_entity_remove(int num, uintptr_t io_arg)
 {
     q2proto_svc_message_t message_entity_delta = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
     message_entity_delta.frame_entity_delta.remove = true;
     message_entity_delta.frame_entity_delta.newnum = num;
-    q2proto_server_write(&cls.demo.q2proto_context, Q2PROTO_IOARG_DEMO_WRITE, &message_entity_delta);
+    return q2proto_server_write(&cls.demo.q2proto_context, io_arg,
+                                &message_entity_delta) == Q2P_ERR_SUCCESS;
 }
 
 // writes a delta update of an entity_state_t list to the message.
-static void emit_packet_entities(const server_frame_t *from, const server_frame_t *to)
+static bool emit_packet_entities(const server_frame_t *from,
+                                 const server_frame_t *to,
+                                 uintptr_t io_arg)
 {
     q2proto_packed_entity_state_t oldpack, newpack;
     entity_state_t *oldent, *newent;
@@ -162,7 +174,10 @@ static void emit_packet_entities(const server_frame_t *from, const server_frame_
                 flags = static_cast<msgEsFlags_t>(flags | MSG_ES_NEWENTITY);
             CL_PackEntity_q2proto(&oldpack, oldent);
             CL_PackEntity_q2proto(&newpack, newent);
-            write_delta_entity(&oldpack, &newpack, newnum, flags);
+            if (!write_delta_entity(&oldpack, &newpack, newnum, flags,
+                                    io_arg)) {
+                return false;
+            }
             oldindex++;
             newindex++;
             continue;
@@ -172,15 +187,21 @@ static void emit_packet_entities(const server_frame_t *from, const server_frame_
             // this is a new entity, send it from the baseline
             CL_PackEntity_q2proto(&oldpack, &cl.baselines[newnum]);
             CL_PackEntity_q2proto(&newpack, newent);
-            write_delta_entity(&oldpack, &newpack, newnum,
-                               static_cast<msgEsFlags_t>(MSG_ES_FORCE | MSG_ES_NEWENTITY));
+            if (!write_delta_entity(
+                    &oldpack, &newpack, newnum,
+                    static_cast<msgEsFlags_t>(MSG_ES_FORCE |
+                                              MSG_ES_NEWENTITY),
+                    io_arg)) {
+                return false;
+            }
             newindex++;
             continue;
         }
 
         if (newnum > oldnum) {
             // the old entity isn't present in the new message
-            write_entity_remove(oldnum);
+            if (!write_entity_remove(oldnum, io_arg))
+                return false;
             oldindex++;
             continue;
         }
@@ -188,12 +209,122 @@ static void emit_packet_entities(const server_frame_t *from, const server_frame_
 
     // end of packetentities
     q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
-    q2proto_server_write(&cls.demo.q2proto_context, Q2PROTO_IOARG_DEMO_WRITE, &message);
+    return q2proto_server_write(&cls.demo.q2proto_context, io_arg,
+                                &message) == Q2P_ERR_SUCCESS;
 }
 
-static void emit_delta_frame(const server_frame_t *from, const server_frame_t *to,
-                             int fromnum, int tonum)
+static bool write_demo_setting_to(sizebuf_t *buffer, int32_t index,
+                                  int32_t value)
 {
+    if (!buffer || buffer->overflowed ||
+        buffer->cursize > buffer->maxsize ||
+        buffer->maxsize - buffer->cursize < 9u) {
+        return false;
+    }
+    int opcode;
+    if (cls.serverProtocol == PROTOCOL_VERSION_RERELEASE) {
+        opcode = svc_rr_setting;
+    } else if (cls.serverProtocol == PROTOCOL_VERSION_Q2PRO ||
+               cls.serverProtocol == PROTOCOL_VERSION_R1Q2) {
+        opcode = svc_q2pro_setting;
+    } else {
+        return false;
+    }
+    SZ_WriteByte(buffer, opcode);
+    SZ_WriteLong(buffer, index);
+    SZ_WriteLong(buffer, value);
+    return !buffer->overflowed;
+}
+
+static bool write_demo_setting(int32_t index, int32_t value)
+{
+    return write_demo_setting_to(&cls.demo.buffer, index, value);
+}
+
+static bool demo_clock_carrier_supported()
+{
+    return cls.serverProtocol == PROTOCOL_VERSION_RERELEASE ||
+           cls.serverProtocol == PROTOCOL_VERSION_Q2PRO ||
+           cls.serverProtocol == PROTOCOL_VERSION_R1Q2;
+}
+
+static bool emit_demo_clock_anchor(
+    const worr_demo_clock_anchor_v1 *anchor, sizebuf_t *buffer)
+{
+    if (!anchor)
+        return true;
+    worr_demo_clock_setting_pair_v1 pairs[
+        WORR_DEMO_CLOCK_SIDEBAND_PAIR_COUNT]{};
+    if (!buffer || buffer->overflowed ||
+        !Worr_DemoClockAnchorEncodeV1(
+            anchor, pairs, WORR_DEMO_CLOCK_SIDEBAND_PAIR_COUNT) ||
+        buffer->cursize > buffer->maxsize ||
+        buffer->maxsize - buffer->cursize <
+            WORR_DEMO_CLOCK_SIDEBAND_PAIR_COUNT * 9u) {
+        return false;
+    }
+    for (const auto &pair : pairs) {
+        if (!write_demo_setting_to(buffer, pair.index, pair.value))
+            return false;
+    }
+    return true;
+}
+
+static bool emit_consumed_cursor_sideband(
+    const worr_snapshot_consumed_command_v2 *consumed_command,
+    sizebuf_t *buffer)
+{
+    if (!CL_NetCapabilityHas(
+            WORR_NET_CAP_CONSUMED_COMMAND_CURSOR_V1)) {
+        return true;
+    }
+    if (!consumed_command || consumed_command->reserved0 != 0)
+        return false;
+
+    worr_command_cursor_v1 cursor{};
+    if (consumed_command->provenance ==
+        WORR_SNAPSHOT_CONSUMED_COMMAND_SERVER_CONSUMED) {
+        if (consumed_command->cursor.epoch == 0)
+            return false;
+        cursor = consumed_command->cursor;
+    } else if (consumed_command->provenance !=
+                   WORR_SNAPSHOT_CONSUMED_COMMAND_NONE ||
+               consumed_command->cursor.epoch != 0 ||
+               consumed_command->cursor.contiguous_sequence != 0) {
+        return false;
+    }
+
+    worr_consumed_cursor_sideband_v1 sideband{};
+    worr_consumed_cursor_setting_pair_v1 pairs[
+        WORR_CONSUMED_CURSOR_SIDEBAND_PAIR_COUNT]{};
+    if (!Worr_ConsumedCursorSidebandInitV1(&sideband, cursor) ||
+        !Worr_ConsumedCursorSidebandEncodeV1(
+            &sideband, pairs,
+            WORR_CONSUMED_CURSOR_SIDEBAND_PAIR_COUNT) ||
+        !buffer || buffer->overflowed ||
+        buffer->cursize > buffer->maxsize ||
+        buffer->maxsize - buffer->cursize <
+            WORR_CONSUMED_CURSOR_SIDEBAND_PAIR_COUNT * 9u) {
+        return false;
+    }
+
+    for (const auto &pair : pairs) {
+        if (!write_demo_setting_to(buffer, pair.index, pair.value))
+            return false;
+    }
+    return true;
+}
+
+static bool emit_delta_frame(const server_frame_t *from,
+                             const server_frame_t *to,
+                             int fromnum, int tonum,
+                             const worr_demo_clock_anchor_v1 *clock_anchor)
+{
+    if (!to || cls.demo.buffer.overflowed ||
+        cls.demo.buffer.cursize > cls.demo.buffer.maxsize) {
+        return false;
+    }
+
     q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME, .frame = {0}};
 
     message.frame.serverframe = tonum;
@@ -216,9 +347,36 @@ static void emit_delta_frame(const server_frame_t *from, const server_frame_t *t
         message.frame.playerstate.delta_bits |= Q2P_PSD_CLIENTNUM;
     }
 
-    q2proto_server_write(&cls.demo.q2proto_context, Q2PROTO_IOARG_DEMO_WRITE, &message);
+    const uint32_t available =
+        cls.demo.buffer.maxsize - cls.demo.buffer.cursize;
+    if (available == 0 || available > MAX_MSGLEN)
+        return false;
 
-    emit_packet_entities(from, to);
+    byte staging_data[MAX_MSGLEN];
+    sizebuf_t staging;
+    SZ_InitWrite(&staging, staging_data, available);
+    q2protoio_ioarg_t staging_io = demo_q2protoio_ioarg;
+    staging_io.sz_write = &staging;
+    staging_io.max_msg_len = available;
+    staging_io.deflate = nullptr;
+    const uintptr_t staging_arg =
+        reinterpret_cast<uintptr_t>(&staging_io);
+
+    /* Exact demo clock, cursor, frame header, and every entity delta are one
+     * transaction.  The clock tuple precedes the cursor tuple so the latter
+     * remains exactly adjacent to its frame. */
+    if (!emit_demo_clock_anchor(clock_anchor, &staging) ||
+        !emit_consumed_cursor_sideband(&to->consumed_command, &staging) ||
+        q2proto_server_write(&cls.demo.q2proto_context,
+                             staging_arg, &message) != Q2P_ERR_SUCCESS ||
+        !emit_packet_entities(from, to, staging_arg) ||
+        staging.overflowed || staging.cursize == 0 ||
+        staging.cursize > available) {
+        return false;
+    }
+
+    SZ_Write(&cls.demo.buffer, staging.data, staging.cursize);
+    return !cls.demo.buffer.overflowed;
 }
 
 // frames_written counter starts at 0, but we add 1 to every frame number
@@ -256,7 +414,13 @@ void CL_EmitDemoFrame(void)
     }
 
     // emit and flush frame
-    emit_delta_frame(oldframe, &cl.frame, lastframe, FRAME_CUR);
+    if (!emit_delta_frame(oldframe, &cl.frame, lastframe, FRAME_CUR,
+                          nullptr)) {
+        Com_DPrintf("Demo frame transaction failed\n");
+        cls.demo.frames_dropped++;
+        SZ_Clear(&msg_write);
+        return;
+    }
 
     if (msg_write.overflowed) {
         Com_WPrintf("%s: message buffer overflowed\n", __func__);
@@ -595,6 +759,29 @@ static void CL_Record_f(void)
         write_result = q2proto_server_write_gamestate(&cls.demo.q2proto_context, NULL, Q2PROTO_IOARG_DEMO_WRITE, &gamestate);;
         CL_WriteDemoMessage(&cls.demo.buffer);
     } while (write_result == Q2P_ERR_NOT_ENOUGH_PACKET_SPACE);
+
+    /* A recording may begin after live confirmation, so the original
+     * reliable confirmation packet is no longer available to copy.  Rebuild
+     * the authenticated connection tuple before writing cursor-bearing demo
+     * frames; otherwise playback would correctly remain on the legacy path. */
+    worr_net_capability_state_v1 capability_state{};
+    if (CL_NetCapabilityGetState(&capability_state) &&
+        capability_state.phase == WORR_NET_CAPABILITY_CONFIRMED &&
+        capability_state.negotiated != 0) {
+        if (!write_demo_setting(
+                WORR_NET_CAPABILITY_CONFIRM_EPOCH_SETTING,
+                static_cast<int32_t>(capability_state.connection_epoch)) ||
+            !write_demo_setting(
+                WORR_NET_CAPABILITY_CONFIRM_SUPPORTED_SETTING,
+                static_cast<int32_t>(capability_state.peer_supported)) ||
+            !write_demo_setting(
+                WORR_NET_CAPABILITY_CONFIRM_NEGOTIATED_SETTING,
+                static_cast<int32_t>(capability_state.negotiated))) {
+            Com_EPrintf("Couldn't encode WORR demo capability tuple.\n");
+            CL_Stop_f();
+            return;
+        }
+    }
 
     // write fog
     write_current_fog();
@@ -1026,6 +1213,19 @@ void CL_EmitDemoSnapshot(void)
 #endif
     q2proto_server_write_gamestate(&cls.demo.q2proto_context, deflate_args, Q2PROTO_IOARG_DEMO_WRITE, &gamestate);;
 
+    /* Stored seek snapshots must carry the rate that was active at their
+     * anchor.  Otherwise a rewind across an SVS_FPS change would reconstruct
+     * canonical frame time with the later rate and create a false clock
+     * discontinuity. */
+    const bool exact_clock_carrier = demo_clock_carrier_supported();
+    if (exact_clock_carrier &&
+        (cl.frametime.div <= 0 ||
+         !write_demo_setting(
+             SVS_FPS, cl.frametime.div * BASE_FRAMERATE))) {
+        SZ_Clear(&cls.demo.buffer);
+        return;
+    }
+
     // write all the backups, since we can't predict what frame the next
     // delta will come from
     lastframe = NULL;
@@ -1038,9 +1238,29 @@ void CL_EmitDemoSnapshot(void)
             continue;
         }
 
-        emit_delta_frame(lastframe, frame, lastnum, j);
+        worr_demo_clock_anchor_v1 clock_anchor{};
+        const worr_demo_clock_anchor_v1 *clock_anchor_ptr = nullptr;
+        if (exact_clock_carrier) {
+            if (!frame->canonical_server_time_valid ||
+                !Worr_DemoClockAnchorInitV1(
+                    &clock_anchor, frame->number,
+                    frame->canonical_server_time_us)) {
+                SZ_Clear(&cls.demo.buffer);
+                return;
+            }
+            clock_anchor_ptr = &clock_anchor;
+        }
+        if (!emit_delta_frame(lastframe, frame, lastnum, j,
+                              clock_anchor_ptr)) {
+            SZ_Clear(&cls.demo.buffer);
+            return;
+        }
         lastframe = frame;
         lastnum = frame->number;
+    }
+    if (!lastframe) {
+        SZ_Clear(&cls.demo.buffer);
+        return;
     }
 
     // write layout
@@ -1224,6 +1444,14 @@ static void CL_Seek_f(void)
     if (!back_seek && cls.demo.eof && cl_demowait->integer)
         return; // already at end
 
+    CL_EventShadowReset(WORR_CGAME_EVENT_SHADOW_RESET_DEMO_RESTART);
+    CL_ConsumedCursorReset();
+    CL_DemoClockReset();
+    (void)CL_SnapshotShadowNotifyResetEx(
+        WORR_CGAME_SNAPSHOT_RESET_DEMO_SEEK,
+        static_cast<uint64_t>(cls.realtime) * UINT64_C(1000),
+        0);
+
     // disable effects processing
     cls.demo.seeking = true;
 
@@ -1252,6 +1480,27 @@ static void CL_Seek_f(void)
 
             // clear end-of-file flag
             cls.demo.eof = false;
+
+            /* A stored packet replays a complete backup window which may
+             * begin behind the current frame even during a user-visible
+             * forward seek.  Treat selecting it as a canonical lineage
+             * replacement, then arm exact-time anchors only for protocols
+             * that can carry the private setting tuple. */
+            if (!CL_SnapshotShadowNotifyResetEx(
+                    WORR_CGAME_SNAPSHOT_RESET_DEMO_SEEK,
+                    static_cast<uint64_t>(cls.realtime) * UINT64_C(1000),
+                    CL_SNAPSHOT_SHADOW_RESET_PROJECTION_EPOCH)) {
+                Com_Error(ERR_DROP,
+                          "%s: failed to reset canonical seek lineage",
+                          __func__);
+            }
+            CL_DemoClockReset();
+            if (demo_clock_carrier_supported() &&
+                !CL_DemoClockArmSyntheticPacket()) {
+                Com_Error(ERR_DROP,
+                          "%s: failed to arm exact demo clock",
+                          __func__);
+            }
 
             // reset configstrings
             for (i = 0; i < cl.csr.end; i++) {

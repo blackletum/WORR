@@ -1,10 +1,13 @@
 {
   "schema": "worr.rmlui.parity_manifest.v1",
-  "description": "RmlUi parity evidence checklist for Gate G3/G4 route progression. This is status scaffolding only; it does not claim end-user parity.",
+  "description": "Accepted RmlUi Gate G3/G4 parity evidence for all tracked WORR menu routes.",
   "created": "2026-07-02",
+  "updated": "2026-07-14",
   "roadmap": "docs-dev/plans/rmlui-ui-migration-roadmap.md",
   "source_manifest": "tools/ui_smoke/rmlui_manifest.json",
   "tasks": [
+    "FR-09-T03",
+    "FR-09-T04",
     "FR-09-T09",
     "FR-09-T10",
     "DV-03-T07",
@@ -212,40 +215,40 @@
     },
     "parity_ready": {
       "document_load": {
-        "status": "pending",
-        "evidence": "parity_ready requires explicit route evidence"
+        "status": "complete",
+        "evidence": "check_rmlui_manifest and the 58-route installed runtime matrices validate every registered document"
       },
       "navigation": {
-        "status": "pending",
-        "evidence": "parity_ready requires explicit route evidence"
+        "status": "complete",
+        "evidence": "check_rmlui_navigation_graph plus runtime keyboard/gamepad navigation and focus services cover every route"
       },
       "controller_bindings": {
-        "status": "pending",
-        "evidence": "parity_ready requires explicit route evidence"
+        "status": "complete",
+        "evidence": "route contracts and command, cvar, data-model, condition, event, and live-provider checks cover all 58 routes"
       },
       "renderer_open_gl": {
-        "status": "pending",
-        "evidence": "parity_ready requires explicit route evidence"
+        "status": "complete",
+        "evidence": ".tmp/rmlui/runtime-capture/full-opengl-final-20260714/manifest.json records a passing 58-route native OpenGL sweep"
       },
       "renderer_vulkan": {
-        "status": "pending",
-        "evidence": "parity_ready requires explicit route evidence"
+        "status": "complete",
+        "evidence": ".tmp/rmlui/runtime-capture/full-vulkan-final-20260714/manifest.json records a passing 58-route native Vulkan sweep"
       },
       "renderer_rtx_vkpt": {
-        "status": "pending",
-        "evidence": "parity_ready requires explicit route evidence"
+        "status": "complete",
+        "evidence": ".tmp/rmlui/runtime-capture/full-rtx-final-20260714/manifest.json records a passing 58-route native RTX/vkpt sweep"
       },
       "screenshot_layout": {
-        "status": "pending",
-        "evidence": "parity_ready requires explicit route evidence"
+        "status": "complete",
+        "evidence": "renderer contact sheets under each final runtime-capture directory were visually audited against the UX/UI route specifications"
       },
       "input_escape_back": {
-        "status": "pending",
-        "evidence": "parity_ready requires explicit route evidence"
+        "status": "complete",
+        "evidence": "runtime UX service checks and guarded input capture prove Escape/Back, keyboard, and gamepad behavior"
       },
       "legacy_fallback": {
-        "status": "pending",
-        "evidence": "parity_ready requires explicit route evidence"
+        "status": "complete",
+        "evidence": "UI_Rml_OpenMenu and runtime eligibility checks preserve guarded legacy fallback when native RmlUi cannot open"
       }
     }
   },
@@ -255,6 +258,9 @@
     },
     {
       "id": "game"
+    },
+    {
+      "id": "play"
     },
     {
       "id": "options"

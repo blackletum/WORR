@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -20,10 +21,23 @@ import check_rmlui_vulkan_bridge_readiness as bridge_readiness
 DEFAULT_INSTALL_DIR = Path(".install")
 DEFAULT_ENGINE_EXE = DEFAULT_INSTALL_DIR / "worr_x86_64.exe"
 DEFAULT_BASE_GAME = "basew"
+DEFAULT_RENDERER = "opengl"
+RENDERER_FAMILIES = {
+    "opengl": "opengl",
+    "vulkan": "vulkan",
+    "rtx": "rtx_vkpt",
+}
+RENDERER_LABELS = {
+    "opengl": "OpenGL",
+    "vulkan": "Vulkan",
+    "rtx": "RTX/vkpt",
+}
 DEFAULT_EVIDENCE_DIR = Path(".tmp/rmlui/runtime-capture")
 DEFAULT_EVIDENCE_ID = "rmlui_runtime_smoke_round29"
 DEFAULT_STARTUP_WAIT = 120
-DEFAULT_CAPTURE_WAIT = 12
+# Leave enough frames for route providers, cvar-bound images, and renderer
+# uploads to settle before recording deterministic visual evidence.
+DEFAULT_CAPTURE_WAIT = 360
 DEFAULT_STATUS_WAIT = 12
 DEFAULT_SCREENSHOT_FORMAT = "tga"
 DEFAULT_VIEWPORT_MATRIX = (
@@ -31,6 +45,7 @@ DEFAULT_VIEWPORT_MATRIX = (
     ("large_1280x960", "1280x960"),
 )
 DEFAULT_ROUTE_MATRIX = ("main", "game", "download_status")
+MENU_ENTRYPOINT_ROUTES = frozenset(DEFAULT_ROUTE_MATRIX)
 DEFAULT_ROUTE_MATRIX_GEOMETRY = "960x720"
 DEFAULT_ROUTE_ID = "core.runtime_smoke"
 
@@ -39,7 +54,87 @@ ROUTE_DOCUMENTS = {
     "main": Path("shell/main.rml"),
     "game": Path("shell/game.rml"),
     "download_status": Path("shell/download_status.rml"),
+    "downloads": Path("shell/downloads.rml"),
+    "play": Path("shell/play.rml"),
+    "options": Path("shell/options.rml"),
+    "quit_confirm": Path("shell/quit_confirm.rml"),
+    "video": Path("settings/video.rml"),
+    "multimonitor": Path("settings/multimonitor.rml"),
+    "performance": Path("settings/performance.rml"),
+    "accessibility": Path("settings/accessibility.rml"),
+    "sound": Path("settings/sound.rml"),
+    "railtrail": Path("settings/railtrail.rml"),
+    "effects": Path("settings/effects.rml"),
+    "crosshair": Path("settings/crosshair.rml"),
+    "screen": Path("settings/screen.rml"),
+    "language": Path("settings/language.rml"),
+    "input": Path("settings/input.rml"),
+    "gameflags": Path("singleplayer/gameflags.rml"),
+    "startserver": Path("singleplayer/startserver.rml"),
+    "singleplayer": Path("singleplayer/singleplayer.rml"),
+    "skill_select": Path("singleplayer/skill_select.rml"),
+    "multiplayer": Path("multiplayer/multiplayer.rml"),
+    "loadgame": Path("singleplayer/loadgame.rml"),
+    "savegame": Path("singleplayer/savegame.rml"),
+    "demos": Path("utility/demos.rml"),
+    "servers": Path("utility/servers.rml"),
+    "ui_list": Path("utility/ui_list.rml"),
+    "players": Path("utility/players.rml"),
+    "addressbook": Path("utility/addressbook.rml"),
+    "keys": Path("utility/keys.rml"),
+    "legacykeys": Path("utility/legacykeys.rml"),
+    "weapons": Path("utility/weapons.rml"),
+    "dm_welcome": Path("session/dm_welcome.rml"),
+    "dm_join": Path("session/dm_join.rml"),
+    "join": Path("session/join.rml"),
+    "dm_hostinfo": Path("session/dm_hostinfo.rml"),
+    "dm_matchinfo": Path("session/dm_matchinfo.rml"),
+    "vote_menu": Path("session/vote_menu.rml"),
+    "callvote_main": Path("session/callvote_main.rml"),
+    "callvote_ruleset": Path("session/callvote_ruleset.rml"),
+    "callvote_timelimit": Path("session/callvote_timelimit.rml"),
+    "callvote_scorelimit": Path("session/callvote_scorelimit.rml"),
+    "callvote_unlagged": Path("session/callvote_unlagged.rml"),
+    "callvote_random": Path("session/callvote_random.rml"),
+    "callvote_map_flags": Path("session/callvote_map_flags.rml"),
+    "mymap_main": Path("session/mymap_main.rml"),
+    "mymap_flags": Path("session/mymap_flags.rml"),
+    "forfeit_confirm": Path("session/forfeit_confirm.rml"),
+    "leave_match_confirm": Path("session/leave_match_confirm.rml"),
+    "admin_menu": Path("session/admin_menu.rml"),
+    "admin_commands": Path("session/admin_commands.rml"),
+    "tourney_info": Path("session/tourney_info.rml"),
+    "tourney_mapchoices": Path("session/tourney_mapchoices.rml"),
+    "tourney_veto": Path("session/tourney_veto.rml"),
+    "tourney_replay_confirm": Path("session/tourney_replay_confirm.rml"),
+    "map_selector": Path("session/map_selector.rml"),
+    "match_stats": Path("session/match_stats.rml"),
 }
+
+# The migration manifest owns the 58 end-user routes. Keep the smoke-only
+# document out of the full route matrix while preserving registry order so
+# contact sheets and evidence manifests remain stable between runs.
+FULL_ROUTE_MATRIX = tuple(
+    route_id for route_id in ROUTE_DOCUMENTS if route_id != "core.runtime_smoke"
+)
+
+# Match-hub Back is intentionally disabled during the mandatory first-connect
+# team/spectator choice. Full-route parity evidence exercises the resumable
+# in-match state, where Escape and the Back plate must dismiss the hub.
+ROUTE_SEED_CVARS: dict[str, tuple[tuple[str, str], ...]] = {
+    "dm_welcome": (
+        ("ui_welcome_hostname", "Local Session"),
+        ("ui_welcome_motd", "Review the server message, then continue."),
+    ),
+    "dm_join": (("ui_dm_initial", "0"), ("ui_dm_show_resume", "1")),
+    "join": (("ui_dm_initial", "0"), ("ui_dm_show_resume", "1")),
+    "ui_list": (
+        ("ui_list_state", "empty"),
+        ("ui_list_status", "No entries are available for this session."),
+    ),
+}
+
+SEED_CVAR_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 TGA_HEADER_SIZE = 18
@@ -50,6 +145,7 @@ ROUTE_COUNTERS_MARKER = "RmlUi runtime route counters:"
 INPUT_MARKER = "RmlUi runtime input:"
 CAPTURE_MARKER = "RmlUi guarded capture route is active"
 MENU_CAPTURE_MARKER = "RmlUi guarded menu capture route"
+ROUTE_CAPTURE_MARKER = "RmlUi guarded route capture"
 SYNTHETIC_INPUT_MARKER = "RmlUi synthetic input smoke:"
 FONT_GEOMETRY_MARKER = "RmlUi TTF font engine generated text texture"
 FONT_Q2R_SOURCE_MARKER = "loaded from Quake II Rerelease font"
@@ -71,7 +167,10 @@ LAYOUT_MIN_COUNT_RULES = {
     "panel_background": (0.05, 2000),
     "panel_border": (0.002, 256),
     "button_fill": (0.01, 1000),
-    "body_text": (0.005, 512),
+    # The smoke document uses fixed-pixel text geometry, so its exact interior
+    # color count does not grow with the viewport. Presence and placement are
+    # additionally guarded by body_text_spans_summary_and_panel below.
+    "body_text": (0.0, 1024),
     "accent_text": (0.001, 128),
 }
 
@@ -89,6 +188,7 @@ class RuntimeCaptureReport:
     install_dir: Path
     engine_exe: Path
     base_game: str
+    renderer: str
     evidence_dir: Path
     evidence_id: str
     screenshot_format: str
@@ -472,14 +572,18 @@ def parse_counter_line(text: str, marker: str) -> dict[str, int]:
     return values
 
 
-def runtime_status_is_guarded_opengl(text: str, route_id: str) -> bool:
+def runtime_status_is_guarded_renderer(
+    text: str,
+    route_id: str,
+    renderer_family: str,
+) -> bool:
     for line in text.splitlines():
         if STATUS_MARKER not in line:
             continue
         if (
             "active=yes" in line
             and f"route='{route_id}'" in line
-            and "family='opengl'" in line
+            and f"family='{renderer_family}'" in line
         ):
             return True
     return False
@@ -492,10 +596,28 @@ def runtime_status_inactive_seen(text: str) -> bool:
     return False
 
 
+def parse_seed_cvar(value: str) -> tuple[str, str]:
+    if "=" not in value:
+        raise argparse.ArgumentTypeError("seed cvars must use NAME=VALUE")
+
+    name, cvar_value = value.split("=", 1)
+    if not SEED_CVAR_NAME_PATTERN.fullmatch(name):
+        raise argparse.ArgumentTypeError(
+            "seed cvar names must begin with a letter or underscore and contain "
+            "only letters, digits, or underscores"
+        )
+    if len(cvar_value) > 1024:
+        raise argparse.ArgumentTypeError("seed cvar values are limited to 1024 characters")
+    if any(character in cvar_value for character in ("\x00", "\r", "\n")):
+        raise argparse.ArgumentTypeError("seed cvar values cannot contain control newlines")
+    return name, cvar_value
+
+
 def build_engine_command(
     engine_exe: Path,
     install_dir: Path,
     base_game: str,
+    renderer: str,
     evidence_id: str,
     screenshot_format: str,
     route_id: str,
@@ -503,9 +625,13 @@ def build_engine_command(
     startup_wait: int,
     capture_wait: int,
     status_wait: int,
+    server_address: str | None = None,
+    seed_cvars: tuple[tuple[str, str], ...] = (),
 ) -> list[str]:
     command = [
         str(engine_exe),
+        "--bootstrap-skip-update-check",
+        "--bootstrap-quiet-status",
         "+set",
         "basedir",
         str(install_dir),
@@ -513,11 +639,17 @@ def build_engine_command(
         "game",
         base_game,
         "+set",
+        "s_enable",
+        "0",
+        "+set",
         "r_renderer",
-        "opengl",
+        renderer,
         "+set",
         "r_fullscreen",
         "0",
+        "+set",
+        "r_maxfps",
+        "60",
     ]
 
     if geometry:
@@ -535,8 +667,14 @@ def build_engine_command(
             "ui_rml_enable",
             "1",
             "+set",
+            "ui_rml_reduced_motion",
+            "1",
+            "+set",
             "r_screenshot_async",
             "0",
+            "+set",
+            "r_screenshot_message",
+            "1",
             "+set",
             "r_screenshot_dir",
             str(install_dir / base_game / "screenshots"),
@@ -551,14 +689,34 @@ def build_engine_command(
             evidence_id,
             "+wait",
             str(startup_wait),
+            # Config files may restore the archived cvar after command-line
+            # +set processing. Execute the cvar command here, immediately
+            # before opening the document, so reduced-motion capture is real.
+            "+ui_rml_reduced_motion",
+            "1",
         ]
     )
+    for name, value in seed_cvars:
+        command.extend(["+set", name, value])
+    if route_id == "servers":
+        # Keep guarded visual evidence deterministic and offline-capable even
+        # when a user's config persisted the public HTTP source.
+        if server_address:
+            command.extend(["+set", "adr0", server_address])
+        command.extend(["+set", "ui_server_source", "local"])
     if route_id == DEFAULT_ROUTE_ID:
         command.append("+ui_rml_runtime_capture")
-    else:
+    elif route_id in MENU_ENTRYPOINT_ROUTES:
         command.extend(
             [
                 "+ui_rml_runtime_capture_menu",
+                route_id,
+            ]
+        )
+    else:
+        command.extend(
+            [
+                "+ui_rml_runtime_capture_route",
                 route_id,
             ]
         )
@@ -569,12 +727,18 @@ def build_engine_command(
             str(capture_wait),
             screenshot_command(screenshot_format),
             evidence_id,
+        ]
+    )
+    command.extend(
+        [
             "+wait",
             str(status_wait),
             "+ui_rml_runtime_synthetic_input",
             "+wait",
             str(status_wait),
             "+ui_rml_runtime_status",
+            "+ui_rml_reduced_motion",
+            "0",
             "+quit",
         ]
     )
@@ -664,14 +828,28 @@ def validate_evidence(report: RuntimeCaptureReport, *, min_mtime: float | None =
             "geometry": report.geometry,
             "expected_dimensions": report.expected_dimensions,
             "screenshot_payload_nonzero": payload_nonzero,
-            "capture_marker_seen": CAPTURE_MARKER in combined_text
-            or MENU_CAPTURE_MARKER in combined_text,
+            "capture_marker_seen": (
+                CAPTURE_MARKER in combined_text
+                if report.route_id == DEFAULT_ROUTE_ID
+                else (
+                    f"{MENU_CAPTURE_MARKER} '{report.route_id}'" in combined_text
+                    if report.route_id in MENU_ENTRYPOINT_ROUTES
+                    else f"{ROUTE_CAPTURE_MARKER} '{report.route_id}'" in combined_text
+                )
+            ),
             "synthetic_input_marker_seen": SYNTHETIC_INPUT_MARKER in combined_text,
             "font_geometry_marker_seen": FONT_GEOMETRY_MARKER in combined_text,
             "font_q2r_source_marker_seen": FONT_Q2R_SOURCE_MARKER in combined_text,
-            "guarded_opengl_status_seen": runtime_status_is_guarded_opengl(
+            "renderer": report.renderer,
+            "guarded_renderer_status_seen": runtime_status_is_guarded_renderer(
                 combined_text,
                 report.route_id,
+                RENDERER_FAMILIES[report.renderer],
+            ),
+            "guarded_opengl_status_seen": runtime_status_is_guarded_renderer(
+                combined_text,
+                report.route_id,
+                RENDERER_FAMILIES["opengl"],
             ),
             "inactive_status_seen": runtime_status_inactive_seen(combined_text),
             "frames_marker_seen": FRAMES_MARKER in combined_text,
@@ -713,7 +891,10 @@ def validate_evidence(report: RuntimeCaptureReport, *, min_mtime: float | None =
         ("synthetic_input_marker_seen", "runtime synthetic input marker was not found"),
         ("font_geometry_marker_seen", "RmlUi TTF font texture marker was not found"),
         ("font_q2r_source_marker_seen", "RmlUi Quake II Rerelease font source marker was not found"),
-        ("guarded_opengl_status_seen", "guarded OpenGL active-route status was not found"),
+        (
+            "guarded_renderer_status_seen",
+            f"guarded {RENDERER_LABELS[report.renderer]} active-route status was not found",
+        ),
         ("inactive_status_seen", "runtime inactive status after synthetic back-close was not found"),
         ("frames_marker_seen", "runtime frame counter line was not found"),
         ("route_counters_marker_seen", "runtime route counter line was not found"),
@@ -1043,7 +1224,10 @@ def print_report(report: RuntimeCaptureReport) -> None:
     print(f"  Synthetic input marker: {yes_no(report.facts.get('synthetic_input_marker_seen'))}")
     print(f"  TTF font texture: {yes_no(report.facts.get('font_geometry_marker_seen'))}")
     print(f"  Q2R font source: {yes_no(report.facts.get('font_q2r_source_marker_seen'))}")
-    print(f"  Guarded OpenGL status: {yes_no(report.facts.get('guarded_opengl_status_seen'))}")
+    print(
+        f"  Guarded {report.renderer} status: "
+        f"{yes_no(report.facts.get('guarded_renderer_status_seen'))}"
+    )
     print(f"  Inactive close status: {yes_no(report.facts.get('inactive_status_seen'))}")
     print(f"  Frame counters: {yes_no(report.facts.get('frames_marker_seen'))}")
     print(f"  Route counters: {yes_no(report.facts.get('route_counters_marker_seen'))}")
@@ -1151,6 +1335,7 @@ def build_report(
     install_dir: Path,
     engine_exe: Path,
     base_game: str,
+    renderer: str,
     evidence_dir: Path,
     evidence_id: str,
     screenshot_format: str,
@@ -1162,11 +1347,14 @@ def build_report(
     capture_wait: int,
     status_wait: int,
     manifest_path: Path | None,
+    server_address: str | None = None,
+    seed_cvars: tuple[tuple[str, str], ...] = (),
 ) -> RuntimeCaptureReport:
     command = build_engine_command(
         engine_exe,
         install_dir,
         base_game,
+        renderer,
         evidence_id,
         screenshot_format,
         route_id,
@@ -1174,6 +1362,8 @@ def build_report(
         startup_wait,
         capture_wait,
         status_wait,
+        server_address,
+        seed_cvars,
     )
     base_dir = install_dir / base_game
     return RuntimeCaptureReport(
@@ -1181,6 +1371,7 @@ def build_report(
         install_dir=install_dir,
         engine_exe=engine_exe,
         base_game=base_game,
+        renderer=renderer,
         evidence_dir=evidence_dir,
         evidence_id=evidence_id,
         screenshot_format=screenshot_format,
@@ -1202,14 +1393,24 @@ def run_engine_for_report(report: RuntimeCaptureReport, timeout: float) -> float
         report.errors.append(f"engine executable missing: {report.engine_exe}")
         return None
 
+    if report.renderer in {"vulkan", "rtx"}:
+        report.screenshot_path.unlink(missing_ok=True)
+
     start_time = time.time()
-    completed = subprocess.run(
-        report.command,
-        cwd=report.engine_exe.parent,
-        env=build_run_environment(report.engine_exe),
-        timeout=timeout,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            report.command,
+            cwd=report.engine_exe.parent,
+            env=build_run_environment(report.engine_exe),
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        report.ran_engine = True
+        report.elapsed_seconds = time.time() - start_time
+        report.errors.append(f"engine timed out after {timeout:g} seconds")
+        return start_time
+
     report.ran_engine = True
     report.exit_code = completed.returncode
     report.elapsed_seconds = time.time() - start_time
@@ -1224,6 +1425,7 @@ def build_matrix_reports(
     install_dir: Path,
     engine_exe: Path,
     base_game: str,
+    renderer: str,
     evidence_dir: Path,
     evidence_id: str,
     screenshot_format: str,
@@ -1237,6 +1439,7 @@ def build_matrix_reports(
             install_dir,
             engine_exe,
             base_game,
+            renderer,
             evidence_dir,
             f"{evidence_id}_{name}",
             screenshot_format,
@@ -1258,12 +1461,14 @@ def build_route_reports(
     install_dir: Path,
     engine_exe: Path,
     base_game: str,
+    renderer: str,
     evidence_dir: Path,
     evidence_id: str,
     screenshot_format: str,
     startup_wait: int,
     capture_wait: int,
     status_wait: int,
+    route_ids: tuple[str, ...] = DEFAULT_ROUTE_MATRIX,
 ) -> list[RuntimeCaptureReport]:
     return [
         build_report(
@@ -1271,6 +1476,7 @@ def build_route_reports(
             install_dir,
             engine_exe,
             base_game,
+            renderer,
             evidence_dir,
             f"{evidence_id}_{route_id}",
             screenshot_format,
@@ -1282,8 +1488,10 @@ def build_route_reports(
             capture_wait,
             status_wait,
             None,
+            None,
+            ROUTE_SEED_CVARS.get(route_id, ()),
         )
-        for route_id in DEFAULT_ROUTE_MATRIX
+        for route_id in route_ids
     ]
 
 
@@ -1291,15 +1499,44 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--install-dir", type=Path, default=DEFAULT_INSTALL_DIR)
-    parser.add_argument("--engine-exe", type=Path, default=DEFAULT_ENGINE_EXE)
+    parser.add_argument(
+        "--engine-exe",
+        type=Path,
+        default=None,
+        help="Engine executable; defaults to worr_x86_64.exe inside --install-dir.",
+    )
     parser.add_argument("--base-game", default=DEFAULT_BASE_GAME)
+    parser.add_argument(
+        "--renderer",
+        choices=tuple(RENDERER_FAMILIES),
+        default=DEFAULT_RENDERER,
+        help="Native renderer lane used for the capture.",
+    )
     parser.add_argument("--evidence-dir", type=Path, default=DEFAULT_EVIDENCE_DIR)
     parser.add_argument("--evidence-id", default=DEFAULT_EVIDENCE_ID)
     parser.add_argument("--screenshot-format", choices=("tga", "png"), default=DEFAULT_SCREENSHOT_FORMAT)
     parser.add_argument("--route-id", default=DEFAULT_ROUTE_ID, choices=tuple(ROUTE_DOCUMENTS))
+    parser.add_argument(
+        "--server-address",
+        default=None,
+        help="Seed adr0 for a guarded servers-route capture (for example 127.0.0.1:27910).",
+    )
+    parser.add_argument(
+        "--seed-cvar",
+        action="append",
+        type=parse_seed_cvar,
+        default=[],
+        metavar="NAME=VALUE",
+        help="Seed a cvar immediately before opening a single guarded route; repeat as needed.",
+    )
     parser.add_argument("--geometry", default=None, help="Windowed capture geometry as WIDTHxHEIGHT.")
     parser.add_argument("--matrix", action="store_true", help="Run or validate the default viewport matrix.")
     parser.add_argument("--route-matrix", action="store_true", help="Run or validate the guarded menu route matrix.")
+    parser.add_argument(
+        "--full-route-matrix",
+        action="store_true",
+        help="Run or validate every end-user route in the migration manifest.",
+    )
     parser.add_argument(
         "--renderer-matrix",
         action="store_true",
@@ -1317,7 +1554,12 @@ def main(argv: list[str] | None = None) -> int:
 
     repo_root = args.repo_root.resolve()
     install_dir = resolve_path(args.install_dir, repo_root)
-    engine_exe = resolve_path(args.engine_exe, repo_root)
+    engine_exe_arg = (
+        args.engine_exe
+        if args.engine_exe is not None
+        else args.install_dir / DEFAULT_ENGINE_EXE.name
+    )
+    engine_exe = resolve_path(engine_exe_arg, repo_root)
     evidence_dir = resolve_path(args.evidence_dir, repo_root)
     manifest_path = resolve_path(args.write_manifest, repo_root) if args.write_manifest else None
 
@@ -1327,9 +1569,17 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             parser.error(str(exc))
 
-    matrix_modes = [args.matrix, args.route_matrix, args.renderer_matrix]
+    if args.server_address and args.route_id != "servers":
+        parser.error("--server-address is only valid with --route-id servers")
+
+    matrix_modes = [args.matrix, args.route_matrix, args.full_route_matrix, args.renderer_matrix]
     if sum(1 for enabled in matrix_modes if enabled) > 1:
-        parser.error("--matrix, --route-matrix, and --renderer-matrix cannot be combined")
+        parser.error(
+            "--matrix, --route-matrix, --full-route-matrix, and "
+            "--renderer-matrix cannot be combined"
+        )
+    if args.seed_cvar and any(matrix_modes):
+        parser.error("--seed-cvar is only valid for a single route capture")
 
     if args.matrix:
         reports = build_matrix_reports(
@@ -1337,6 +1587,7 @@ def main(argv: list[str] | None = None) -> int:
             install_dir,
             engine_exe,
             args.base_game,
+            args.renderer,
             evidence_dir,
             args.evidence_id,
             args.screenshot_format,
@@ -1353,11 +1604,17 @@ def main(argv: list[str] | None = None) -> int:
                     print(" ".join(report.command))
             return 0
 
-        for report in reports:
+        for index, report in enumerate(reports, start=1):
             start_time = run_engine_for_report(report, args.timeout) if args.run else None
             validate_evidence(report, min_mtime=start_time if args.run else None)
             if report.ok:
                 collect_evidence(report)
+            if args.run and args.format != "json":
+                state = "passed" if report.ok else "failed"
+                print(
+                    f"  [{index}/{len(reports)}] {report.route_id}: {state}",
+                    flush=True,
+                )
 
         write_matrix_manifest(reports, manifest_path, repo_root)
 
@@ -1368,18 +1625,20 @@ def main(argv: list[str] | None = None) -> int:
 
         return 0 if all(report.ok for report in reports) else 1
 
-    if args.route_matrix:
+    if args.route_matrix or args.full_route_matrix:
         reports = build_route_reports(
             repo_root,
             install_dir,
             engine_exe,
             args.base_game,
+            args.renderer,
             evidence_dir,
             args.evidence_id,
             args.screenshot_format,
             args.startup_wait,
             args.capture_wait,
             args.status_wait,
+            FULL_ROUTE_MATRIX if args.full_route_matrix else DEFAULT_ROUTE_MATRIX,
         )
 
         if args.dry_run:
@@ -1390,11 +1649,17 @@ def main(argv: list[str] | None = None) -> int:
                     print(" ".join(report.command))
             return 0
 
-        for report in reports:
+        for index, report in enumerate(reports, start=1):
             start_time = run_engine_for_report(report, args.timeout) if args.run else None
             validate_evidence(report, min_mtime=start_time if args.run else None)
             if report.ok:
                 collect_evidence(report)
+            if args.run and args.format != "json":
+                state = "passed" if report.ok else "failed"
+                print(
+                    f"  [{index}/{len(reports)}] {report.route_id}: {state}",
+                    flush=True,
+                )
 
         write_route_matrix_manifest(reports, manifest_path, repo_root)
 
@@ -1411,6 +1676,7 @@ def main(argv: list[str] | None = None) -> int:
             install_dir,
             engine_exe,
             args.base_game,
+            args.renderer,
             evidence_dir,
             args.evidence_id,
             args.screenshot_format,
@@ -1442,13 +1708,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(
                     "# Renderer guardrail lanes: "
                     "OpenGL=native_guarded, "
-                    "Vulkan=blocked_until_native, "
-                    "RTX/vkpt=blocked_until_native"
+                    "Vulkan=native_guarded, "
+                    "RTX/vkpt=native_guarded"
                 )
                 print(
                     "# Bridge readiness lanes: "
-                    "Vulkan=foundation_present_blocked, "
-                    "RTX/vkpt=foundation_present_blocked"
+                    "Vulkan=native_guarded, "
+                    "RTX/vkpt=native_guarded"
                 )
             return 0 if renderer_report.ok() and bridge_report.ok() else 1
 
@@ -1496,6 +1762,7 @@ def main(argv: list[str] | None = None) -> int:
         install_dir,
         engine_exe,
         args.base_game,
+        args.renderer,
         evidence_dir,
         args.evidence_id,
         args.screenshot_format,
@@ -1507,6 +1774,8 @@ def main(argv: list[str] | None = None) -> int:
         args.capture_wait,
         args.status_wait,
         manifest_path,
+        args.server_address,
+        tuple(args.seed_cvar),
     )
 
     if args.dry_run:

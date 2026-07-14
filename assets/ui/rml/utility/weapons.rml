@@ -5,37 +5,159 @@
     <link type="text/rcss" href="../common/theme/utility.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="utility-weapons" data-route-id="weapons" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="utility-weapons" data-route-id="weapons" data-route-group="utility" data-route-version="2" data-document-status="live-provider" data-controller="native-keybind-capture" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen" id="weapons-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="utility-weapons-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="utility-weapons-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="utility-weapons-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="page-header">
-        <h1>Weapon Bindings</h1>
-        <p id="weapons-summary">
-          Assign quick-select keys for each weapon and grenade slot.
+        <div class="worr-titlerow"><button id="utility-weapons-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_weapon_bindings">Weapon Bindings</h1></div>
+        <p id="weapons-summary" data-loc-key="worr_ui_assign_primary_and_alternate_weapon_keys_backsp">
+          Assign Primary and Alternate weapon keys. Backspace clears; Escape cancels.
         </p>
       </header>
 
-      <section class="content" id="weapons-content" data-model="utility.weapon_binds" data-controller="keybind.capture" data-action-type="capture">
+      <section class="content" id="weapons-content" data-model="utility.weapon_binds" data-controller="native-keybind-capture" data-action-type="capture">
         <div class="bind-group" id="weapons-primary" data-bind-group="weapons-primary">
-          <h2>Main Arsenal</h2>
-          <button id="weapons-blaster" type="button" data-bind-command="use Blaster" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Blaster</span><span class="bind-key"></span></button>
-          <button id="weapons-shotgun" type="button" data-bind-command="use Shotgun" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Shotgun</span><span class="bind-key"></span></button>
-          <button id="weapons-super-shotgun" type="button" data-bind-command="use Super Shotgun" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Super Shotgun</span><span class="bind-key"></span></button>
-          <button id="weapons-machinegun" type="button" data-bind-command="use Machinegun" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Machinegun</span><span class="bind-key"></span></button>
-          <button id="weapons-chaingun" type="button" data-bind-command="use Chaingun" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Chaingun</span><span class="bind-key"></span></button>
-          <button id="weapons-grenade-launcher" type="button" data-bind-command="use Grenade Launcher" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Grenade Launcher</span><span class="bind-key"></span></button>
+          <h2 data-loc-key="worr_ui_main_arsenal">Main Arsenal</h2>
+          <div class="bind-row" id="weapons-blaster-row">
+            <span class="bind-label" data-loc-key="m_blaster">Blaster</span>
+            <div class="bind-slots">
+              <button id="weapons-blaster" class="bind-slot" type="button" title="Primary binding" data-bind-command="use Blaster" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-blaster-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use Blaster" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="weapons-shotgun-row">
+            <span class="bind-label" data-loc-key="m_shotgun">Shotgun</span>
+            <div class="bind-slots">
+              <button id="weapons-shotgun" class="bind-slot" type="button" title="Primary binding" data-bind-command="use Shotgun" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-shotgun-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use Shotgun" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="weapons-super-shotgun-row">
+            <span class="bind-label" data-loc-key="m_super_shotgun">Super Shotgun</span>
+            <div class="bind-slots">
+              <button id="weapons-super-shotgun" class="bind-slot" type="button" title="Primary binding" data-bind-command="use Super Shotgun" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-super-shotgun-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use Super Shotgun" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="weapons-machinegun-row">
+            <span class="bind-label" data-loc-key="m_machinegun">Machinegun</span>
+            <div class="bind-slots">
+              <button id="weapons-machinegun" class="bind-slot" type="button" title="Primary binding" data-bind-command="use Machinegun" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-machinegun-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use Machinegun" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="weapons-chaingun-row">
+            <span class="bind-label" data-loc-key="m_chaingun">Chaingun</span>
+            <div class="bind-slots">
+              <button id="weapons-chaingun" class="bind-slot" type="button" title="Primary binding" data-bind-command="use Chaingun" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-chaingun-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use Chaingun" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="weapons-grenade-launcher-row">
+            <span class="bind-label" data-loc-key="m_grenade_launcher">Grenade Launcher</span>
+            <div class="bind-slots">
+              <button id="weapons-grenade-launcher" class="bind-slot" type="button" title="Primary binding" data-bind-command="use Grenade Launcher" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-grenade-launcher-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use Grenade Launcher" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
         </div>
         <div class="bind-group" id="weapons-heavy" data-bind-group="weapons-heavy">
-          <h2>Heavy Weapons</h2>
-          <button id="weapons-rocket-launcher" type="button" data-bind-command="use Rocket Launcher" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Rocket Launcher</span><span class="bind-key"></span></button>
-          <button id="weapons-hyperblaster" type="button" data-bind-command="use HyperBlaster" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">HyperBlaster</span><span class="bind-key"></span></button>
-          <button id="weapons-railgun" type="button" data-bind-command="use Railgun" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Railgun</span><span class="bind-key"></span></button>
-          <button id="weapons-bfg10k" type="button" data-bind-command="use BFG10K" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">BFG10K</span><span class="bind-key"></span></button>
-          <button id="weapons-grenades" type="button" data-bind-command="use Grenades" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Grenades</span><span class="bind-key"></span></button>
+          <h2 data-loc-key="worr_ui_heavy_weapons">Heavy Weapons</h2>
+          <div class="bind-row" id="weapons-rocket-launcher-row">
+            <span class="bind-label" data-loc-key="m_rocket_launcher">Rocket Launcher</span>
+            <div class="bind-slots">
+              <button id="weapons-rocket-launcher" class="bind-slot" type="button" title="Primary binding" data-bind-command="use Rocket Launcher" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-rocket-launcher-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use Rocket Launcher" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="weapons-hyperblaster-row">
+            <span class="bind-label" data-loc-key="m_hyperblaster">HyperBlaster</span>
+            <div class="bind-slots">
+              <button id="weapons-hyperblaster" class="bind-slot" type="button" title="Primary binding" data-bind-command="use HyperBlaster" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-hyperblaster-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use HyperBlaster" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="weapons-railgun-row">
+            <span class="bind-label" data-loc-key="m_railgun">Railgun</span>
+            <div class="bind-slots">
+              <button id="weapons-railgun" class="bind-slot" type="button" title="Primary binding" data-bind-command="use Railgun" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-railgun-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use Railgun" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="weapons-bfg10k-row">
+            <span class="bind-label" data-loc-key="m_bfg10k">BFG10K</span>
+            <div class="bind-slots">
+              <button id="weapons-bfg10k" class="bind-slot" type="button" title="Primary binding" data-bind-command="use BFG10K" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-bfg10k-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use BFG10K" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="weapons-grenades-row">
+            <span class="bind-label" data-loc-key="m_grenades">Grenades</span>
+            <div class="bind-slots">
+              <button id="weapons-grenades" class="bind-slot" type="button" title="Primary binding" data-bind-command="use Grenades" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="weapons-grenades-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="use Grenades" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <footer class="actions" id="weapons-actions">
-        <button id="weapons-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="utility-weapons-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

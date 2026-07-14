@@ -32,9 +32,10 @@ import argparse
 import pathlib
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_OUT_DIR = REPO_ROOT / "assets/ui/rml/common/skins/metal"
@@ -280,6 +281,175 @@ def inner_shadow(c: Canvas, width, strength=0.5):
 # ---------------------------------------------------------------------------
 # Sprite painters. Sizes are LOGICAL px; the painter gets physical px canvas.
 # ---------------------------------------------------------------------------
+
+def paint_cta(c, rng, kind="normal"):
+    """Topbar PLAY / card CTA slab: slime-green ramp with idle edge light."""
+    tones = {
+        "normal": PAL["green_deep"],
+        "hover": PAL["green_deep"],
+        "active": hex_rgb("#2c4028"),
+        "disabled": PAL["plate_lo"],
+    }
+    base_plate(c, rng, tones.get(kind, PAL["green_deep"]), mottle=0.5, brush=0.45)
+    if kind != "disabled":
+        grime_layer(c, rng, strength=0.22, edge_bias=1.4)
+        pitting(c, rng, 0.025, 0.28)
+        scratches(c, rng, 3, PAL["muted"], 0.08)
+    bevel(c, 2, 3, raised=(kind != "active"), strength=0.55)
+    frame(c, rng, 3, PAL["green_edge"] if kind != "disabled" else PAL["steel_darker"],
+          wear=0.5)
+    glows = {"normal": 0.22, "hover": 0.42, "active": 0.5}
+    if kind in glows:
+        edge_glow(c, PAL["green"], c.w * 0.14, glows[kind])
+    if kind == "active":
+        inner_shadow(c, c.w * 0.18, 0.3)
+    rivet(c, 7, 7, 2.6)
+    rivet(c, c.w - 8, 7, 2.6)
+    rivet(c, 7, c.h - 8, 2.6)
+    rivet(c, c.w - 8, c.h - 8, 2.6)
+    if kind == "disabled":
+        gray = c.rgb.mean(axis=2, keepdims=True)
+        c.rgb = c.rgb * 0.5 + gray * 0.5
+
+
+def paint_backplate(c, rng, kind="normal"):
+    """Square riveted back button with a baked left chevron."""
+    base_plate(c, rng, PAL["plate_hi"], mottle=0.5, brush=0.35)
+    grime_layer(c, rng, strength=0.3, edge_bias=1.2)
+    pitting(c, rng, 0.03, 0.3)
+    bevel(c, 2, 3, raised=(kind != "active"), strength=0.55)
+    frame(c, rng, 3, PAL["steel_dark"], wear=0.55)
+    if kind == "hover":
+        edge_glow(c, PAL["brass"], c.w * 0.16, 0.35)
+    elif kind == "active":
+        edge_glow(c, PAL["gold"], c.w * 0.16, 0.45)
+        inner_shadow(c, c.w * 0.2, 0.3)
+    rivet(c, 7, 7, 2.4)
+    rivet(c, c.w - 8, 7, 2.4)
+    rivet(c, 7, c.h - 8, 2.4)
+    rivet(c, c.w - 8, c.h - 8, 2.4)
+    # Left-pointing chevron.
+    color = PAL["gold"] if kind != "normal" else PAL["muted"]
+    cx, cy = c.w * 0.54, c.h * 0.5
+    arm = c.w * 0.16
+    for t in np.linspace(0, 1, int(c.w * 0.5)):
+        px = cx - arm * (1 - t)
+        draw_circle(c, cx - arm + arm * t, cy - arm * t, SCALE * 1.1, color, 0.95, soft=1.0)
+        draw_circle(c, cx - arm + arm * t, cy + arm * t, SCALE * 1.1, color, 0.95, soft=1.0)
+
+
+def paint_card_frame(c, rng, kind="rest"):
+    """Hollow frame for key-art cards: steel rest, brass hover, gold selected."""
+    base_plate(c, rng, PAL["plate"], mottle=0.5, brush=0.3)
+    grime_layer(c, rng, strength=0.3, edge_bias=1.4)
+    bevel(c, 1, 3, raised=True, strength=0.4)
+    colors = {"rest": PAL["steel_darker"], "hover": PAL["brass"], "selected": PAL["gold"]}
+    frame(c, rng, 4, colors.get(kind, PAL["steel_darker"]), wear=0.45)
+    if kind == "hover":
+        edge_glow(c, PAL["brass"], 8 * SCALE, 0.4)
+    elif kind == "selected":
+        edge_glow(c, PAL["gold"], 10 * SCALE, 0.55)
+    rivet(c, 8, 8, 2.6)
+    rivet(c, c.w - 9, 8, 2.6)
+    rivet(c, 8, c.h - 9, 2.6)
+    rivet(c, c.w - 9, c.h - 9, 2.6)
+    hollow_center(c, 14 * SCALE)
+
+
+CARD_THEMES = {
+    "campaign": {"wash": "green", "glyph": "chevrons"},
+    "load": {"wash": "teal", "glyph": "slots"},
+    "host": {"wash": "orange", "glyph": "mast"},
+    "servers": {"wash": "steel", "glyph": "rack"},
+}
+
+CARD_WASHES = {
+    "green": (hex_rgb("#1f271d"), hex_rgb("#83d18f")),
+    "teal": (hex_rgb("#16262a"), hex_rgb("#7ed4d8")),
+    "orange": (hex_rgb("#241811"), hex_rgb("#ed842e")),
+    "steel": (hex_rgb("#1d1a16"), hex_rgb("#c9beb0")),
+}
+
+
+def paint_card_art(c, rng, theme):
+    """Owned key-art tile for a play card: washed metal + thematic glyph +
+    baked bottom gradient band so titles always sit on darkened backing."""
+    spec = CARD_THEMES[theme]
+    deep, accent = CARD_WASHES[spec["wash"]]
+    base_plate(c, rng, deep, mottle=0.6, brush=0.4)
+    grime_layer(c, rng, strength=0.35, edge_bias=1.1)
+    pitting(c, rng, 0.03, 0.3)
+    scratches(c, rng, 6, PAL["muted"], 0.1)
+
+    # Diagonal hazard band across the upper third.
+    ys, xs = np.mgrid[0 : c.h, 0 : c.w].astype(np.float32)
+    diag = ((xs + ys) / (14.0 * SCALE)) % 2.0
+    band = ((ys > c.h * 0.16) & (ys < c.h * 0.22) & (diag < 1.0)).astype(np.float32)
+    c.blend(accent * 0.55, band * 0.28)
+
+    cx, cy = c.w / 2.0, c.h * 0.46
+    glyph = spec["glyph"]
+    if glyph == "chevrons":
+        for row in range(3):
+            oy = cy + (row - 1) * c.h * 0.13
+            for t in np.linspace(0, 1, int(c.w * 0.5)):
+                px = c.w * 0.28 + t * c.w * 0.22
+                draw_circle(c, px, oy + (1 - t) * c.h * 0.08, SCALE * 2.2, accent, 0.85, soft=1.4)
+                draw_circle(c, c.w - px, oy + (1 - t) * c.h * 0.08, SCALE * 2.2, accent, 0.85, soft=1.4)
+    elif glyph == "slots":
+        for row in range(3):
+            oy = cy + (row - 1) * c.h * 0.12
+            draw_rect(c, c.w * 0.28, oy - 4 * SCALE, c.w * 0.44, 8 * SCALE, deep * 0.5, 0.9)
+            draw_rect(c, c.w * 0.30, oy - 2 * SCALE, c.w * 0.40 * (0.4 + 0.3 * row), 4 * SCALE, accent, 0.8)
+    elif glyph == "mast":
+        draw_rect(c, cx - 2.5 * SCALE, cy - c.h * 0.18, 5 * SCALE, c.h * 0.3, accent, 0.85)
+        for r_mult in (0.10, 0.16, 0.22):
+            r = c.w * r_mult
+            ys2, xs2 = np.mgrid[0 : c.h, 0 : c.w].astype(np.float32)
+            d = np.sqrt((xs2 - cx) ** 2 + (ys2 - (cy - c.h * 0.18)) ** 2)
+            ring = (np.abs(d - r) < 1.6 * SCALE).astype(np.float32)
+            ring *= (ys2 < (cy - c.h * 0.18)).astype(np.float32)
+            c.blend(accent, ring * 0.7)
+        draw_circle(c, cx, cy - c.h * 0.18, 3.4 * SCALE, accent, 0.95)
+    elif glyph == "rack":
+        for row in range(4):
+            oy = cy - c.h * 0.17 + row * c.h * 0.095
+            draw_rect(c, c.w * 0.28, oy, c.w * 0.44, c.h * 0.07, deep * 0.45, 0.92)
+            draw_rect(c, c.w * 0.30, oy + 2 * SCALE, 4 * SCALE, 4 * SCALE, accent, 0.9)
+            draw_rect(c, c.w * 0.36, oy + 2 * SCALE, c.w * 0.3, 2 * SCALE, PAL["steel_dark"], 0.8)
+
+    # Bottom gradient band for title backing (baked, per design doc 6.8).
+    ys3 = (np.arange(c.h, dtype=np.float32) / c.h)[:, None]
+    fade = np.clip((ys3 - 0.55) / 0.45, 0, 1) ** 1.2 * 0.82
+    c.blend(np.zeros(3, dtype=np.float32), np.broadcast_to(fade, (c.h, c.w)))
+    inner_shadow(c, 10 * SCALE, 0.3)
+
+
+def paint_gauge_ring(c, rng, quartile):
+    """Sprite-ring gauge state: teal arc covering quartile/4 of the circle."""
+    c.fill(np.zeros(3, dtype=np.float32), alpha=0.0)
+    cx, cy = c.w / 2.0, c.h / 2.0
+    outer = c.w * 0.46
+    inner = c.w * 0.34
+    ys, xs = np.mgrid[0 : c.h, 0 : c.w].astype(np.float32)
+    d = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
+    ring = ((d < outer) & (d > inner)).astype(np.float32)
+    # Channel.
+    c.blend(PAL["well"], ring * 0.95)
+    c.a = np.maximum(c.a, ring * 255.0)
+    # Arc: angle from 12 o'clock, clockwise.
+    ang = (np.arctan2(xs - cx, -(ys - cy))) % (2 * np.pi)
+    frac = quartile / 4.0
+    arc = ring * (ang <= frac * 2 * np.pi + 1e-6).astype(np.float32)
+    if quartile > 0:
+        c.blend(PAL["teal_deep"], arc)
+        hot = ring * (np.abs(d - (outer + inner) / 2) < (outer - inner) * 0.25)
+        c.blend(PAL["teal"], hot * (ang <= frac * 2 * np.pi + 1e-6) * 0.8)
+    # Rim.
+    rim = ((np.abs(d - outer) < 1.2 * SCALE) | (np.abs(d - inner) < 1.2 * SCALE)).astype(np.float32)
+    c.blend(PAL["steel_darker"], rim * 0.8)
+    c.a = np.maximum(c.a, rim * 255.0)
+
 
 def paint_button(c, rng, kind="normal"):
     tones = {
@@ -613,6 +783,121 @@ class Sheet:
         return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Icon PNGs: render the flat-shape icon SVGs (single source of truth) into
+# supersampled, antialiased PNGs sized at 2x their on-screen display size and
+# never below the renderer's 64px standalone-texture threshold.
+# The runtime SVG rasterizer stays as the renderer-neutral fallback; shipped
+# documents reference the PNGs.
+# ---------------------------------------------------------------------------
+
+ICONS_ROOT = REPO_ROOT / "assets/ui/rml/common/icons"
+ICON_SUPERSAMPLE = 8
+
+# Output pixel size = viewBox * factor. The 64px floor prevents these UI
+# textures from entering the legacy scrap atlas, which RmlUi cannot address
+# as standalone texture handles.
+ICON_SCALE_OVERRIDES = {
+    "gear": 64 / 24,
+    "power": 64 / 24,
+    "worr-mark": 126 / 72,
+}
+ICON_DEFAULT_SCALE = 2.0  # 32px viewBox -> 64px standalone PNG
+
+
+def _icon_color(value):
+    value = (value or "").strip()
+    if not value or value == "none":
+        return None
+    if value.startswith("#") and len(value) == 7:
+        return (int(value[1:3], 16), int(value[3:5], 16), int(value[5:7], 16), 255)
+    if value.startswith("#") and len(value) == 4:
+        return (int(value[1] * 2, 16), int(value[2] * 2, 16), int(value[3] * 2, 16), 255)
+    raise SystemExit(f"unsupported SVG color: {value}")
+
+
+def _icon_points(value):
+    nums = [float(v) for v in re.split(r"[\s,]+", value.strip()) if v]
+    return list(zip(nums[0::2], nums[1::2]))
+
+
+def render_icon_png(svg_path, factor):
+    root = ET.parse(svg_path).getroot()
+    view = root.get("viewBox")
+    if view:
+        _, _, vw, vh = (float(v) for v in view.split())
+    else:
+        vw, vh = float(root.get("width")), float(root.get("height"))
+
+    s = factor * ICON_SUPERSAMPLE
+    img = Image.new("RGBA", (int(round(vw * s)), int(round(vh * s))), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    def stroke_of(el):
+        color = _icon_color(el.get("stroke"))
+        width = float(el.get("stroke-width", "1")) * s
+        return color, width
+
+    for el in root:
+        tag = el.tag.split("}")[-1]
+        fill = _icon_color(el.get("fill", "#000000" if tag not in ("line", "polyline") else "none"))
+        stroke, sw = stroke_of(el)
+
+        if tag == "rect":
+            x = float(el.get("x", "0")) * s
+            y = float(el.get("y", "0")) * s
+            w = float(el.get("width")) * s
+            h = float(el.get("height")) * s
+            if fill:
+                draw.rectangle([x, y, x + w, y + h], fill=fill)
+            if stroke:
+                draw.rectangle([x - sw / 2, y - sw / 2, x + w + sw / 2, y + h + sw / 2],
+                               outline=stroke, width=int(round(sw)))
+        elif tag == "circle":
+            cx = float(el.get("cx")) * s
+            cy = float(el.get("cy")) * s
+            r = float(el.get("r")) * s
+            if fill:
+                draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=fill)
+            if stroke:
+                draw.ellipse([cx - r - sw / 2, cy - r - sw / 2, cx + r + sw / 2, cy + r + sw / 2],
+                             outline=stroke, width=int(round(sw)))
+        elif tag == "line":
+            pts = [(float(el.get("x1")) * s, float(el.get("y1")) * s),
+                   (float(el.get("x2")) * s, float(el.get("y2")) * s)]
+            if stroke:
+                draw.line(pts, fill=stroke, width=int(round(sw)))
+        elif tag == "polyline":
+            pts = [(x * s, y * s) for x, y in _icon_points(el.get("points"))]
+            if stroke:
+                draw.line(pts, fill=stroke, width=int(round(sw)), joint="curve")
+        elif tag == "polygon":
+            pts = [(x * s, y * s) for x, y in _icon_points(el.get("points"))]
+            if fill:
+                draw.polygon(pts, fill=fill)
+            if stroke:
+                draw.line(pts + [pts[0]], fill=stroke, width=int(round(sw)), joint="curve")
+        else:
+            raise SystemExit(f"{svg_path.name}: unsupported SVG element <{tag}>")
+
+    out_size = (int(round(vw * factor)), int(round(vh * factor)))
+    img = img.resize(out_size, Image.LANCZOS)
+    out_path = svg_path.with_suffix(".png")
+    img.save(out_path)
+    return out_path, out_size
+
+
+def render_all_icon_pngs():
+    count = 0
+    for svg_path in sorted(ICONS_ROOT.rglob("*.svg")):
+        if svg_path.name == "README.md":
+            continue
+        factor = ICON_SCALE_OVERRIDES.get(svg_path.stem, ICON_DEFAULT_SCALE)
+        render_icon_png(svg_path, factor)
+        count += 1
+    print(f"Rendered {count} icon PNGs under {ICONS_ROOT}")
+
+
 def build(seed, out_dir):
     rng_root = np.random.default_rng(seed)
 
@@ -644,6 +929,32 @@ def build(seed, out_dir):
         c = canvas(48, 36)
         paint_input(c, np.random.default_rng(input_seed), kind)
         sheet.add_ninepatch(name, c, 10 * SCALE)
+
+    cta_seed = rng_root.integers(0, 2**63)
+    for name, kind in [("cta", "normal"), ("cta-hover", "hover"),
+                       ("cta-active", "active"), ("cta-disabled", "disabled")]:
+        c = canvas(64, 44)
+        paint_cta(c, np.random.default_rng(cta_seed), kind)
+        sheet.add_ninepatch(name, c, 12 * SCALE)
+
+    bp_seed = rng_root.integers(0, 2**63)
+    for name, kind in [("backplate", "normal"), ("backplate-hover", "hover"),
+                       ("backplate-active", "active")]:
+        c = canvas(40, 40)
+        paint_backplate(c, np.random.default_rng(bp_seed), kind)
+        sheet.add(name, c)
+
+    card_seed = rng_root.integers(0, 2**63)
+    for name, kind in [("card", "rest"), ("card-hover", "hover"),
+                       ("card-selected", "selected")]:
+        c = canvas(64, 64)
+        paint_card_frame(c, np.random.default_rng(card_seed), kind)
+        sheet.add_ninepatch(name, c, 16 * SCALE)
+
+    for q in range(5):
+        c = canvas(48, 48)
+        paint_gauge_ring(c, rng(), q)
+        sheet.add(f"gauge-q{q}", c)
 
     for name, hover in [("selectarrow", False), ("selectarrow-hover", True)]:
         c = canvas(15, 14)
@@ -736,6 +1047,14 @@ def build(seed, out_dir):
     paint_plate_tile(p, rng())
     plate_path = out_dir / "plate.png"
     p.to_image().convert("RGB").save(plate_path)
+
+    for theme in CARD_THEMES:
+        a = Canvas(200 * SCALE, 280 * SCALE)
+        paint_card_art(a, rng(), theme)
+        a.to_image().convert("RGB").save(out_dir / f"cardart-{theme}.png")
+    print(f"Wrote {len(CARD_THEMES)} card art tiles")
+
+    render_all_icon_pngs()
 
     if out_dir.resolve() != DEFAULT_OUT_DIR.resolve():
         print(f"NOTE: --out-dir {out_dir} differs from the theme's asset root;"

@@ -14,6 +14,8 @@ them from voting again.*/
 #include "../g_local.hpp"
 #include "menu_ui_helpers.hpp"
 
+#include <cmath>
+
 namespace {
 
 constexpr int kMapSelectorCandidates = 3;
@@ -66,9 +68,15 @@ void UpdateMapSelectorMenu(gentity_t *ent, bool openMenu) {
   float elapsed = (level.time - ms.voteStartTime).seconds();
   elapsed = std::clamp(elapsed, 0.0f, MAP_SELECTOR_DURATION.seconds());
 
-  const int filled = static_cast<int>(
-      (elapsed / MAP_SELECTOR_DURATION.seconds()) * kMapSelectorBarSegments);
+  const float secondsRemaining =
+      std::max(0.0f, MAP_SELECTOR_DURATION.seconds() - elapsed);
+  const int secondsDisplay = static_cast<int>(std::ceil(secondsRemaining));
+  const int filled = static_cast<int>(std::ceil(
+      (secondsRemaining / MAP_SELECTOR_DURATION.seconds()) *
+      kMapSelectorBarSegments));
   const int empty = std::max(0, kMapSelectorBarSegments - filled);
+  cmd.AppendCvar("ui_mapselector_time_left",
+                 fmt::format("{} s", secondsDisplay));
   cmd.AppendCvar("ui_mapselector_bar",
                  std::string(filled, '=') + std::string(empty, ' '));
 
@@ -88,6 +96,7 @@ void OpenMapSelectorMenu(gentity_t *ent) {
   if (!ent || !ent->client)
     return;
   ent->client->ui.mapSelectorActive = true;
+  ent->client->ui.mapSelectorDismissed = false;
   ent->client->ui.mapSelectorNextUpdate = level.time;
   UpdateMapSelectorMenu(ent, true);
 }

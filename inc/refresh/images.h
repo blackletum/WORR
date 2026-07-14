@@ -147,4 +147,10 @@ typedef struct screenshot_s {
 extern void (*IMG_ReadPixels)(screenshot_t *s);
 extern void (*IMG_ReadPixelsHDR)(screenshot_t *s);
 
+// The RTX renderer captures the composed swapchain image in R_EndFrame,
+// before presentation can discard its contents.
+screenshot_t *IMG_GetPendingScreenshot_RTX(void);
+void IMG_CompletePendingScreenshot_RTX(void);
+void IMG_FailPendingScreenshot_RTX(int status);
+
 /* vim: set ts=8 sw=4 tw=0 et : */

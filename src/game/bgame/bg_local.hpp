@@ -27,18 +27,15 @@
 //
 // p_move.c
 //
-struct pm_config_t {
-	int32_t		airAccel = 0;
-	bool		n64Physics = false;
-	bool		q3Overbounce = false;
-};
-
 extern pm_config_t pm_config;
 
 void Pmove(PMove* pmove);
 using pm_trace_func_t = trace_t(const Vector3& start, const Vector3& mins, const Vector3& maxs, const Vector3& end);
 using pm_trace_t = std::function<pm_trace_func_t>;
-void PM_StepSlideMove_Generic(Vector3& origin, Vector3& velocity, float frametime, const Vector3& mins, const Vector3& maxs, touch_list_t& touch, bool has_time, pm_trace_t trace);
+void PM_StepSlideMove_Generic(Vector3& origin, Vector3& velocity,
+	float frametime, const Vector3& mins, const Vector3& maxs,
+	touch_list_t& touch, bool has_time, const pm_config_t& config,
+	pm_trace_t trace);
 
 enum class StuckResult {
 	GoodPosition,

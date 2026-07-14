@@ -26,7 +26,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // game.h -- game dll information visible to server
 //
 
-#define GAME_API_VERSION    2024
+#define GAME_API_VERSION    2025
 
 #endif // !defined(GAME3_INCLUDE)
 
@@ -520,9 +520,6 @@ typedef struct {
     // [Paril-KEX] special flags to indicate something to the server
     int server_flags;
 
-    // [KEX]: Pmove as export
-    void (*Pmove)(pmove_t *pmove); // player movement code called by server & client
-
     // Fetch named extension from game DLL.
     void *(*GetExtension)(const char *name);
 
@@ -563,7 +560,7 @@ typedef struct {
 
 //===============================================================
 
-#define CGAME_API_VERSION   2027
+#define CGAME_API_VERSION   2028
 
 typedef enum
 {
@@ -749,9 +746,6 @@ typedef struct
 
     // [Paril-KEX] fetch how much damage was registered by these stats
     int16_t (*GetHitMarkerDamage)(const player_state_t *ps);
-
-    // [KEX]: Pmove as export
-    void (*Pmove)(pmove_t *pmove); // player movement code called by server & client
 
     // [Paril-KEX] allow cgame to react to configstring changes
     void (*ParseConfigString)(int32_t i, const char *s);

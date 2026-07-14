@@ -8,94 +8,111 @@
   </head>
   <body id="singleplayer-startserver" data-route-id="startserver" data-route-group="singleplayer" data-route-version="1" data-document-status="scaffolded-round3" data-banner="m_banner_start_server" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen singleplayer-screen" id="startserver-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="singleplayer-startserver-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="singleplayer-startserver-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="singleplayer-startserver-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Start Server</h1>
+        <div class="worr-titlerow"><button id="singleplayer-startserver-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_start_server">Start Server</h1></div>
       </header>
 
       <main class="settings-form form-compact cols-3" id="startserver-settings-form" data-component="common.components.cvar_controls">
         <div class="settings-columns" id="startserver-settings-columns">
+          <div class="settings-column" id="startserver-preview-column">
+            <div class="worr-editor-card" id="startserver-preview-card">
+              <img id="startserver-preview-shot" src="../common/skins/metal/cardart-host.png" data-src-cvar="_ui_nextserver" data-src-prefix="levelshots/" data-src-fallback="../common/skins/metal/cardart-host.png" />
+              <h2 id="startserver-preview-map" data-bind-cvar="_ui_nextserver">Arena</h2>
+              <p class="worr-card-desc" data-loc-key="worr_ui_selected_arena">Selected Arena</p>
+            </div>
+          </div>
           <div class="settings-column" id="startserver-server-column">
             <section class="settings-section" id="startserver-basic-section">
-              <h2>Server</h2>
+              <h2 data-loc-key="worr_ui_server">Server</h2>
               <div class="setting-row" data-control="combo" data-cvar="_ui_nextserver">
-                <span class="setting-widget-icon" data-widget="combo"><img src="../common/icons/widgets/combo.svg" /></span>
-                <label for="startserver-initial-map">Initial Map</label>
+                <span class="setting-widget-icon" data-widget="combo"><img src="../common/icons/widgets/combo.png" /></span>
+                <label for="startserver-initial-map" data-loc-key="worr_ui_initial_map">Initial Map</label>
                 <select id="startserver-initial-map" data-cvar="_ui_nextserver" data-source-list="$$com_maplist" data-width="20" data-menu-sound-change="change">
-                  <option value="q2dm1">q2dm1 - The Edge</option>
+                  <option value="q2dm1" data-loc-key="worr_ui_q2dm1_the_edge">q2dm1 - The Edge</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="coop">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="startserver-rules">Mode</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="startserver-rules" data-loc-key="worr_ui_mode">Mode</label>
                 <select id="startserver-rules" data-cvar="coop" data-source-menu-type="dropdown" data-menu-sound-change="change">
-                  <option value="0">Deathmatch</option>
-                  <option value="1">Cooperative</option>
+                  <option value="0" data-loc-key="m_deathmatch">Deathmatch</option>
+                  <option value="1" data-loc-key="m_coop">Cooperative</option>
                 </select>
               </div>
               <div class="setting-row" data-control="field" data-cvar="hostname">
-                <span class="setting-widget-icon" data-widget="field"><img src="../common/icons/widgets/field.svg" /></span>
-                <label for="startserver-hostname">Host Name</label>
+                <span class="setting-widget-icon" data-widget="field"><img src="../common/icons/widgets/field.png" /></span>
+                <label for="startserver-hostname" data-loc-key="worr_ui_host_name">Host Name</label>
                 <input id="startserver-hostname" type="text" maxlength="16" data-cvar="hostname" data-width="16" data-menu-sound-change="change" />
               </div>
             </section>
 
             <nav class="menu-actions" id="startserver-actions" data-component="common.components.command_button">
-              <button id="startserver-gameflags" type="button" data-command="pushmenu gameflags" data-route-target="gameflags" data-show-if="coop=0" data-menu-sound="open">Deathmatch Flags</button>
-              <button id="startserver-begin" class="ui-button-primary" type="button" data-command="forcemenuoff; if $coop == 1 then &quot;match_setup_active 0; deathmatch 0; coop 1&quot; else &quot;match_setup_active 1; deathmatch 1; coop 0; maxplayers $match_setup_maxplayers; maxclients $match_setup_maxplayers&quot;; map $_ui_nextserver force" data-menu-sound="confirm">Begin Game</button>
+              <button id="startserver-gameflags" type="button" data-command="pushmenu gameflags" data-route-target="gameflags" data-show-if="coop=0" data-menu-sound="open" data-loc-key="worr_ui_deathmatch_flags">Deathmatch Flags</button>
+              <button id="startserver-begin" class="ui-button-primary" type="button" data-command="forcemenuoff; if $coop == 1 then &quot;match_setup_active 0; deathmatch 0; coop 1&quot; else &quot;match_setup_active 1; deathmatch 1; coop 0; maxplayers $match_setup_maxplayers; maxclients $match_setup_maxplayers&quot;; map $_ui_nextserver force" data-menu-sound="confirm" data-loc-key="worr_ui_begin_game">Begin Game</button>
             </nav>
           </div>
 
           <div class="settings-column" id="startserver-match-column">
             <section class="settings-section" id="startserver-match-section" data-show-if="coop=0">
-              <h2>Match Setup</h2>
+              <h2 data-loc-key="worr_ui_match_setup">Match Setup</h2>
               <div class="setting-row" data-control="select" data-cvar="match_setup_format" data-show-if="coop=0">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="startserver-match-format">Match Format</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="startserver-match-format" data-loc-key="worr_ui_match_format">Match Format</label>
                 <select id="startserver-match-format" data-cvar="match_setup_format" data-source-menu-type="pairs" data-menu-sound-change="change">
-                  <option value="regular">Regular</option>
-                  <option value="practice">Practice</option>
-                  <option value="marathon">Marathon</option>
-                  <option value="tournament">Tournament</option>
+                  <option value="regular" data-loc-key="worr_ui_regular">Regular</option>
+                  <option value="practice" data-loc-key="worr_ui_practice">Practice</option>
+                  <option value="marathon" data-loc-key="worr_ui_marathon">Marathon</option>
+                  <option value="tournament" data-loc-key="worr_ui_tournament">Tournament</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="match_setup_gametype" data-show-if="coop=0">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="startserver-gametype">Gametype</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="startserver-gametype" data-loc-key="worr_ui_gametype">Gametype</label>
                 <select id="startserver-gametype" data-cvar="match_setup_gametype" data-source-menu-type="pairs" data-menu-sound-change="change">
-                  <option value="ffa">Free For All</option>
-                  <option value="duel">Duel</option>
-                  <option value="tdm">Team Deathmatch</option>
-                  <option value="dom">Domination</option>
-                  <option value="ctf">Capture The Flag</option>
-                  <option value="ca">Clan Arena</option>
-                  <option value="oneflag">One Flag</option>
-                  <option value="har">Harvester</option>
-                  <option value="overload">Overload</option>
-                  <option value="ft">Freeze Tag</option>
-                  <option value="strike">CaptureStrike</option>
-                  <option value="rr">Red Rover</option>
-                  <option value="lms">Last Man Standing</option>
-                  <option value="lts">Last Team Standing</option>
-                  <option value="horde">Horde Mode</option>
-                  <option value="hh">Head Hunters</option>
-                  <option value="ball">ProBall</option>
-                  <option value="gauntlet">Gauntlet</option>
+                  <option value="ffa" data-loc-key="worr_ui_free_for_all">Free For All</option>
+                  <option value="duel" data-loc-key="worr_ui_duel">Duel</option>
+                  <option value="tdm" data-loc-key="m_tdm">Team Deathmatch</option>
+                  <option value="dom" data-loc-key="worr_ui_domination">Domination</option>
+                  <option value="ctf" data-loc-key="worr_ui_capture_the_flag">Capture The Flag</option>
+                  <option value="ca" data-loc-key="worr_ui_clan_arena">Clan Arena</option>
+                  <option value="oneflag" data-loc-key="worr_ui_one_flag">One Flag</option>
+                  <option value="har" data-loc-key="worr_ui_harvester">Harvester</option>
+                  <option value="overload" data-loc-key="worr_ui_overload">Overload</option>
+                  <option value="ft" data-loc-key="worr_ui_freeze_tag">Freeze Tag</option>
+                  <option value="strike" data-loc-key="worr_ui_capturestrike">CaptureStrike</option>
+                  <option value="rr" data-loc-key="worr_ui_red_rover">Red Rover</option>
+                  <option value="lms" data-loc-key="worr_ui_last_man_standing">Last Man Standing</option>
+                  <option value="lts" data-loc-key="worr_ui_last_team_standing">Last Team Standing</option>
+                  <option value="horde" data-loc-key="worr_ui_horde_mode">Horde Mode</option>
+                  <option value="hh" data-loc-key="worr_ui_head_hunters">Head Hunters</option>
+                  <option value="ball" data-loc-key="worr_ui_proball">ProBall</option>
+                  <option value="gauntlet" data-loc-key="worr_ui_gauntlet">Gauntlet</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="match_setup_modifier" data-show-if="coop=0">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="startserver-modifier">Modifier</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="startserver-modifier" data-loc-key="worr_ui_modifier">Modifier</label>
                 <select id="startserver-modifier" data-cvar="match_setup_modifier" data-source-menu-type="pairs" data-menu-sound-change="change">
-                  <option value="standard">Standard</option>
-                  <option value="instagib">InstaGib</option>
-                  <option value="vampiric">Vampiric Damage</option>
-                  <option value="frenzy">Frenzy</option>
-                  <option value="gravity_lotto">Gravity Lotto</option>
+                  <option value="standard" data-loc-key="m_standard">Standard</option>
+                  <option value="instagib" data-loc-key="worr_ui_instagib">InstaGib</option>
+                  <option value="vampiric" data-loc-key="worr_ui_vampiric_damage">Vampiric Damage</option>
+                  <option value="frenzy" data-loc-key="worr_ui_frenzy">Frenzy</option>
+                  <option value="gravity_lotto" data-loc-key="worr_ui_gravity_lotto">Gravity Lotto</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="match_setup_maxplayers" data-show-if="coop=0">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="startserver-match-maxplayers">Max Players</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="startserver-match-maxplayers" data-loc-key="m_max_players">Max Players</label>
                 <select id="startserver-match-maxplayers" data-cvar="match_setup_maxplayers" data-source-menu-type="pairs" data-menu-sound-change="change">
                   <option value="2">2</option>
                   <option value="4">4</option>
@@ -109,34 +126,32 @@
                 </select>
               </div>
             </section>
-          </div>
 
-          <div class="settings-column" id="startserver-rules-column">
             <section class="settings-section" id="startserver-rules-section">
-              <h2>Rules</h2>
+              <h2 data-loc-key="worr_ui_rules">Rules</h2>
               <div class="setting-row" data-control="select" data-cvar="match_setup_length" data-show-if="coop=0">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="startserver-match-length">Match Length</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="startserver-match-length" data-loc-key="worr_ui_match_length">Match Length</label>
                 <select id="startserver-match-length" data-cvar="match_setup_length" data-source-menu-type="pairs" data-menu-sound-change="change">
-                  <option value="short">Short</option>
-                  <option value="standard">Standard</option>
-                  <option value="long">Long</option>
-                  <option value="endurance">Endurance</option>
+                  <option value="short" data-loc-key="worr_ui_short">Short</option>
+                  <option value="standard" data-loc-key="m_standard">Standard</option>
+                  <option value="long" data-loc-key="worr_ui_long">Long</option>
+                  <option value="endurance" data-loc-key="worr_ui_endurance">Endurance</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="match_setup_type" data-show-if="coop=0">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="startserver-match-type">Match Type</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="startserver-match-type" data-loc-key="worr_ui_match_type">Match Type</label>
                 <select id="startserver-match-type" data-cvar="match_setup_type" data-source-menu-type="pairs" data-menu-sound-change="change">
-                  <option value="casual">Casual</option>
-                  <option value="standard">Standard</option>
-                  <option value="competitive">Competitive</option>
-                  <option value="tournament">Tournament</option>
+                  <option value="casual" data-loc-key="worr_ui_casual">Casual</option>
+                  <option value="standard" data-loc-key="m_standard">Standard</option>
+                  <option value="competitive" data-loc-key="worr_ui_competitive">Competitive</option>
+                  <option value="tournament" data-loc-key="worr_ui_tournament">Tournament</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="match_setup_bestof" data-show-if="coop=0;match_setup_type=tournament">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="startserver-best-of">Best Of</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="startserver-best-of" data-loc-key="worr_ui_best_of">Best Of</label>
                 <select id="startserver-best-of" data-cvar="match_setup_bestof" data-source-menu-type="pairs" data-menu-sound-change="change">
                   <option value="bo1">BO1</option>
                   <option value="bo3">BO3</option>
@@ -146,14 +161,14 @@
                 </select>
               </div>
               <div class="setting-row" data-control="field" data-cvar="timelimit" data-show-if="coop=1">
-                <span class="setting-widget-icon" data-widget="number"><img src="../common/icons/widgets/number.svg" /></span>
-                <label for="startserver-time-limit">Time Limit</label>
+                <span class="setting-widget-icon" data-widget="number"><img src="../common/icons/widgets/number.png" /></span>
+                <label for="startserver-time-limit" data-loc-key="m_timelimit">Time Limit</label>
                 <input id="startserver-time-limit" type="number" step="1" data-cvar="timelimit" data-integer="true" data-width="3" data-menu-sound-change="change" />
-                <span class="setting-value">0 - no time limit</span>
+                <span class="setting-value" data-loc-key="worr_ui_0_no_time_limit">0 - no time limit</span>
               </div>
               <div class="setting-row" data-control="field" data-cvar="maxclients" data-show-if="coop=1">
-                <span class="setting-widget-icon" data-widget="number"><img src="../common/icons/widgets/number.svg" /></span>
-                <label for="startserver-maxclients">Coop Players</label>
+                <span class="setting-widget-icon" data-widget="number"><img src="../common/icons/widgets/number.png" /></span>
+                <label for="startserver-maxclients" data-loc-key="worr_ui_coop_players">Coop Players</label>
                 <input id="startserver-maxclients" type="number" step="1" data-cvar="maxclients" data-integer="true" data-width="3" data-menu-sound-change="change" />
               </div>
             </section>
@@ -162,8 +177,12 @@
       </main>
 
       <footer class="menu-footer" id="startserver-menu-footer">
-        <button id="startserver-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="startserver-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="startserver-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="singleplayer-startserver-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

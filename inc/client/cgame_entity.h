@@ -121,8 +121,6 @@ typedef struct cgame_entity_import_s {
                      const vec3_t mins, const vec3_t maxs,
                      const struct edict_s *passent, contents_t contentmask);
     contents_t (*CL_PointContents)(const vec3_t point);
-    void (*Pmove)(pmove_t *pmove);
-
     void *(*Z_Malloc)(size_t size);
     void (*Z_Freep)(void *ptr);
 

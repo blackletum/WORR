@@ -21,7 +21,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 renderer_import_t ri;
 extern uint32_t d_8to24table[256];
 
-#if USE_REF != REF_GL
+#if USE_REF != REF_GL && !defined(RENDERER_VULKAN_LEGACY) && \
+    !defined(RENDERER_VULKAN_RTX)
 static bool Renderer_RmlUiCanRender(void)
 {
     return false;
@@ -90,7 +91,8 @@ static const renderer_export_t renderer_exports = {
     .GetGLConfig            = R_GetGLConfig,
     .RmlUiRendererFamily    = R_RmlUiRendererFamily,
     .RmlUiRendererName      = R_RmlUiRendererName,
-#if USE_REF == REF_GL
+#if USE_REF == REF_GL || defined(RENDERER_VULKAN_LEGACY) || \
+    defined(RENDERER_VULKAN_RTX)
     .RmlUiCanRender         = R_RmlUiCanRender,
     .RmlUiNativeRenderInterface = R_RmlUiNativeRenderInterface,
 #else

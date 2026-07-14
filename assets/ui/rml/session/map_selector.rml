@@ -5,40 +5,35 @@
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="session-map-selector" data-route-id="map_selector" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="session-map-selector" data-route-id="map_selector" data-route-group="session" data-route-version="2" data-document-status="live-provider" data-controller="native-session-cvars" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="map-selector-screen" data-close-command="popmenu; worr_mapselector_close">
       <header class="page-header" id="map-selector-header" data-model="session.map_selector" data-owner-boundary="sgame-published-cvars">
-        <h1 data-bind="cvars.ui_mapselector_title" data-bind-cvar="ui_mapselector_title">Map Vote</h1>
-        <p id="map-selector-summary">
-          Choose one of the candidate maps for the next round.
-        </p>
+        <div class="worr-titlerow"><button id="session-map-selector-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_next_map_vote">Next Map Vote</h1></div>
+        <p id="map-selector-summary" data-bind="cvars.ui_mapselector_title" data-bind-cvar="ui_mapselector_title" data-visible-if="ui_mapselector_ack_show=0">Vote for the next arena:</p>
+        <p id="map-selector-summary-ack" data-visible-if="ui_mapselector_ack_show=1" data-loc-key="worr_ui_your_vote_is_recorded_the_next_map_will_load_wh">Your vote is recorded. The next map will load when voting closes.</p>
       </header>
 
       <main class="session-layout" id="map-selector-content">
-        <section class="session-main" id="map-selector-options" data-model="session.map_selector.options" data-controller="session.map_selector" data-list-provider="session.map_selector.options">
-          <p id="map-selector-empty" class="session-pending" data-show-if="!ui_mapselector_option_show_0">Waiting for map candidates.</p>
+        <section class="session-main" id="map-selector-options" data-model="session.map_selector.options" data-controller="native-session-cvars" data-list-provider="sgame-fixed-cvar-options" data-owner-boundary="sgame-published-cvars">
+          <p id="map-selector-empty" class="session-pending" data-show-if="!ui_mapselector_option_show_0;ui_mapselector_ack_show=0" data-loc-key="worr_ui_waiting_for_map_candidates">Waiting for map candidates.</p>
           <button id="map-selector-option-0" type="button" class="ui-map-name" data-command="worr_mapselector_vote 0" data-label-cvar="ui_mapselector_option_0" data-visible-if="ui_mapselector_option_show_0!=0" data-menu-sound="confirm">Map Option 1</button>
           <button id="map-selector-option-1" type="button" class="ui-map-name" data-command="worr_mapselector_vote 1" data-label-cvar="ui_mapselector_option_1" data-visible-if="ui_mapselector_option_show_1!=0" data-menu-sound="confirm">Map Option 2</button>
           <button id="map-selector-option-2" type="button" class="ui-map-name" data-command="worr_mapselector_vote 2" data-label-cvar="ui_mapselector_option_2" data-visible-if="ui_mapselector_option_show_2!=0" data-menu-sound="confirm">Map Option 3</button>
-        </section>
-
-        <aside class="session-side" id="map-selector-status">
           <section class="status-panel" id="map-selector-ack" data-visible-if="ui_mapselector_ack_show=1">
-            <h2>Acknowledged</h2>
+            <h2 data-loc-key="worr_ui_acknowledged">Acknowledged</h2>
             <p id="map-selector-ack-0" data-bind="cvars.ui_mapselector_ack_0" data-bind-cvar="ui_mapselector_ack_0">Vote cast:</p>
             <p id="map-selector-ack-1" class="ui-map-name" data-bind="cvars.ui_mapselector_ack_1" data-bind-cvar="ui_mapselector_ack_1">Selected map</p>
           </section>
+        </section>
 
-          <section class="status-panel" id="map-selector-countdown" data-visible-if="ui_mapselector_bar">
-            <h2>Countdown</h2>
+        <aside class="session-side" id="map-selector-status">
+          <section class="status-panel" id="map-selector-countdown" data-visible-if="ui_mapselector_time_left">
+            <h2 data-loc-key="worr_ui_countdown">Countdown</h2>
+            <p id="map-selector-time-left">Time left: <span data-bind="cvars.ui_mapselector_time_left" data-bind-cvar="ui_mapselector_time_left">5 s</span></p>
             <p id="map-selector-bar" class="ui-monospace-wrap" data-bind="cvars.ui_mapselector_bar" data-bind-cvar="ui_mapselector_bar">============================</p>
           </section>
         </aside>
       </main>
-
-      <footer class="actions" id="map-selector-actions">
-        <button id="map-selector-close" type="button" data-command="popmenu; worr_mapselector_close" data-menu-sound="cancel">Close</button>
-      </footer>
     </div>
   </body>
 </rml>

@@ -196,7 +196,9 @@ void OpenTournamentReplayConfirmMenu(gentity_t *ent, int gameNumber) {
 
   MenuUi::UiCommandBuilder cmd(ent);
   cmd.AppendCvar("ui_tourney_replay_prompt",
-                 fmt::format("Replay game {}?", gameNumber));
+                 fmt::format("Replay game {}? Results from game {} onward will "
+                             "be discarded.",
+                             gameNumber, gameNumber));
   cmd.AppendCvar("ui_tourney_replay_yes_cmd",
                  fmt::format("worr_tourney_replay {}", gameNumber));
   cmd.AppendCommand("pushmenu tourney_replay_confirm");

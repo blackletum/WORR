@@ -29,6 +29,7 @@ qhandle_t VK_UI_RegisterRawImage(const char *name, int width, int height, byte *
 void VK_UI_UnregisterImage(qhandle_t handle);
 bool VK_UI_GetPicSize(int *w, int *h, qhandle_t pic);
 bool VK_UI_IsImageTransparent(qhandle_t pic);
+imageflags_t VK_UI_GetImageFlags(qhandle_t pic);
 VkDescriptorSetLayout VK_UI_GetDescriptorSetLayout(void);
 VkDescriptorSet VK_UI_GetDescriptorSetForImage(qhandle_t pic);
 bool VK_UI_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic);
@@ -47,3 +48,10 @@ void VK_UI_TileClear(int x, int y, int w, int h, qhandle_t pic);
 void VK_UI_DrawFill32(int x, int y, int w, int h, color_t color);
 void VK_UI_DrawFill8(int x, int y, int w, int h, int c);
 void VK_UI_DrawScreenBlend(const refdef_t *fd, float vignette_frac);
+bool VK_UI_DrawRmlGeometry(const renderer_rmlui_vertex_t *vertices,
+                           size_t vertex_count,
+                           const uint32_t *indices,
+                           size_t index_count,
+                           float translation_x,
+                           float translation_y,
+                           qhandle_t texture);

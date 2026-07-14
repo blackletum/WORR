@@ -32,6 +32,49 @@
 	width: 36px;
 }
 
+#startserver-preview-card
+{
+	margin-right: 0px;
+}
+
+#startserver-settings-columns .setting-row
+{
+	padding-left: 5px;
+	padding-right: 5px;
+}
+
+#startserver-settings-columns .setting-widget-icon
+{
+	width: 12px;
+	height: 12px;
+	min-width: 12px;
+	min-height: 12px;
+	margin-right: 4px;
+}
+
+#startserver-settings-columns .setting-widget-icon img
+{
+	width: 12px;
+	height: 12px;
+	min-width: 12px;
+	min-height: 12px;
+}
+
+#startserver-settings-columns .setting-row label
+{
+	width: 92px;
+	margin-right: 4px;
+}
+
+#startserver-settings-columns .setting-row select,
+#startserver-settings-columns .setting-row[data-control="select"] select,
+#startserver-settings-columns .setting-row[data-control="combo"] select
+{
+	width: 150px;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
 #startserver-actions button
 {
 	width: 248px;
@@ -124,12 +167,22 @@
 	text-align: left;
 }
 
+#singleplayer-save-load-actions button
+{
+	transition: background-color border-color color padding-left 0.12s cubic-out;
+}
+
 #singleplayer-save-load-actions button:hover,
 #singleplayer-save-load-actions button:focus
 {
 	background-color: #30291f;
 	border-color: #b99b5b;
 	border-left-color: #ffd967;
+}
+
+#singleplayer-save-load-actions button:hover
+{
+	padding-left: 16px;
 }
 
 #skill-select-actions
@@ -191,6 +244,16 @@
 	text-align: left;
 	margin-right: 8px;
 	margin-bottom: 8px;
+}
+
+.save-slot[data-save-state="ready"]
+{
+	border-left-color: #5f8765;
+}
+
+.save-slot[data-save-state="empty"]
+{
+	color: #c9beb0;
 }
 
 .save-slot-autosave

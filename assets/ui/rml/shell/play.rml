@@ -1,0 +1,88 @@
+<rml>
+  <head>
+    <title>WORR Play</title>
+    <link type="text/rcss" href="../common/theme/base.rcss" />
+    <link type="text/rcss" href="../common/theme/shell.rcss" />
+    <link type="text/rcss" href="../common/theme/accessibility.rcss" />
+  </head>
+  <body id="shell-play" data-route-id="play" data-route-group="shell" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu" data-menu-sound-open="open">
+    <div class="screen shell-screen" id="play-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="shell-play-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="shell-play-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
+      <div class="menu-header">
+        <div class="worr-titlerow"><button id="shell-play-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="m_play">Play</h1></div>
+        <p data-loc-key="worr_ui_choose_how_you_want_to_fight">Choose how you want to fight.</p>
+      </div>
+
+      <div class="worr-cardrow" id="play-cards">
+        <div class="worr-card worr-card--campaign" data-visible-if="ui_play_card!=1">
+          <button id="shell-play-card-face1" class="worr-card-face" type="button" data-command="set ui_play_card 1" data-menu-sound="move">
+            <span class="worr-card-title" data-loc-key="worr_ui_campaign">Campaign</span>
+            <span class="worr-card-desc" data-loc-key="worr_ui_fight_the_war_alone">Fight the war alone</span>
+          </button>
+        </div>
+        <div class="worr-card is-open" data-visible-if="ui_play_card=1">
+          <div class="worr-card-open">
+            <span class="worr-card-title" data-loc-key="worr_ui_campaign">Campaign</span>
+            <p class="worr-card-copy" data-loc-key="worr_ui_take_the_war_to_them_choose_your_difficulty_and">Take the war to them. Choose your difficulty and start a new campaign, or continue where you left off.</p>
+            <button id="shell-play-cta1" class="ui-button-cta" type="button" data-command="pushmenu singleplayer" data-route-target="singleplayer" data-menu-sound="confirm" data-loc-key="worr_ui_begin">Begin</button>
+          </div>
+        </div>
+
+        <div class="worr-card worr-card--load" data-visible-if="ui_play_card!=2">
+          <button id="shell-play-card-face2" class="worr-card-face" type="button" data-command="set ui_play_card 2" data-menu-sound="move">
+            <span class="worr-card-title" data-loc-key="m_load_game">Load Game</span>
+            <span class="worr-card-desc" data-loc-key="worr_ui_resume_a_saved_war">Resume a saved war</span>
+          </button>
+        </div>
+        <div class="worr-card is-open" data-visible-if="ui_play_card=2">
+          <div class="worr-card-open">
+            <span class="worr-card-title" data-loc-key="m_load_game">Load Game</span>
+            <p class="worr-card-copy" data-loc-key="worr_ui_pick_up_from_any_of_your_saved_games">Pick up from any of your saved games.</p>
+            <button id="shell-play-cta2" class="ui-button-cta" type="button" data-command="pushmenu loadgame" data-route-target="loadgame" data-menu-sound="confirm" data-loc-key="worr_ui_load">Load</button>
+          </div>
+        </div>
+
+        <div class="worr-card worr-card--host" data-visible-if="ui_play_card!=3">
+          <button id="shell-play-card-face3" class="worr-card-face" type="button" data-command="set ui_play_card 3" data-menu-sound="move">
+            <span class="worr-card-title" data-loc-key="worr_ui_host_match">Host Match</span>
+            <span class="worr-card-desc" data-loc-key="worr_ui_run_your_own_server">Run your own server</span>
+          </button>
+        </div>
+        <div class="worr-card is-open" data-visible-if="ui_play_card=3">
+          <div class="worr-card-open">
+            <span class="worr-card-title" data-loc-key="worr_ui_host_match">Host Match</span>
+            <p class="worr-card-copy" data-loc-key="worr_ui_configure_the_arena_rules_and_bots_then_open_yo">Configure the arena, rules, and bots, then open your server to the world or keep it local.</p>
+            <button id="shell-play-cta3" class="ui-button-cta" type="button" data-command="pushmenu startserver" data-route-target="startserver" data-menu-sound="confirm" data-loc-key="worr_ui_set_up">Set Up</button>
+          </div>
+        </div>
+
+        <div class="worr-card worr-card--servers" data-visible-if="ui_play_card!=4">
+          <button id="shell-play-card-face4" class="worr-card-face" type="button" data-command="set ui_play_card 4" data-menu-sound="move">
+            <span class="worr-card-title" data-loc-key="worr_ui_servers">Servers</span>
+            <span class="worr-card-desc" data-loc-key="worr_ui_join_the_fight_online">Join the fight online</span>
+          </button>
+        </div>
+        <div class="worr-card is-open" data-visible-if="ui_play_card=4">
+          <div class="worr-card-open">
+            <span class="worr-card-title" data-loc-key="worr_ui_servers">Servers</span>
+            <p class="worr-card-copy" data-loc-key="worr_ui_browse_public_servers_and_join_a_match_in_progr">Browse public servers and join a match in progress.</p>
+            <button id="shell-play-cta4" class="ui-button-cta" type="button" data-command="pushmenu servers &quot;+https://q2servers.com/?raw=2&quot; &quot;https://q2servers.com/?raw=0&quot;" data-route-target="servers" data-menu-sound="confirm" data-loc-key="worr_ui_browse">Browse</button>
+          </div>
+        </div>
+      </div>
+
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="shell-play-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
+      </footer>
+    </div>
+  </body>
+</rml>

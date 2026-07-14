@@ -18,6 +18,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // sv_user.c -- server code for moving users
 
 #include "server.h"
+#include "server/command_context.h"
+#include "server/native_shadow.h"
+#include "server/snapshot_shadow.h"
+#include "common/net/usercmd_delta.h"
 
 #define MSG_GAMESTATE   (MSG_RELIABLE | MSG_CLEAR)
 
@@ -100,6 +104,39 @@ static void SV_CreateBaselines(void)
 static q2proto_svc_configstring_t configstrings[MAX_CONFIGSTRINGS];
 static q2proto_svc_spawnbaseline_t spawnbaselines[MAX_EDICTS];
 
+static void reset_snapshot_shadow(void)
+{
+    const cvar_t *enabled = Cvar_Get("sv_snapshot_shadow", "1", 0);
+    sv_snapshot_shadow_config_v1 config;
+
+    SV_SnapshotShadowDestroyV1(sv_client->worr_snapshot_shadow);
+    sv_client->worr_snapshot_shadow = NULL;
+    if (!enabled || !enabled->integer)
+        return;
+
+    memset(&config, 0, sizeof(config));
+    config.struct_size = sizeof(config);
+    config.schema_version = SV_SNAPSHOT_SHADOW_VERSION;
+    config.snapshot_epoch = sv.worr_snapshot_epoch;
+    config.max_entities = sv_client->csr->max_edicts;
+    config.max_models = sv_client->csr->max_models;
+    config.max_sounds = sv_client->csr->max_sounds;
+    config.slot_capacity = UPDATE_BACKUP;
+    config.entities_per_slot = sv_client->csr->extended
+        ? MAX_PACKET_ENTITIES : MAX_PACKET_ENTITIES_OLD;
+    config.area_bytes_per_slot = MAX_MAP_AREA_BYTES;
+    config.beam_renderfx_mask = RF_BEAM;
+    config.legacy_renderfx_allowed_mask = RF_SHELL_LITE_GREEN - 1u;
+    config.legacy_beam_clear_mask = RF_GLOW;
+    config.extended_entity_state = sv_client->csr->extended ? 1u : 0u;
+    sv_client->worr_snapshot_shadow =
+        SV_SnapshotShadowCreateV1(&config);
+    if (!sv_client->worr_snapshot_shadow) {
+        Com_DPrintf("Unable to allocate snapshot emission shadow for %s\n",
+                    sv_client->name);
+    }
+}
+
 static void write_gamestate(void)
 {
     msgEsFlags_t baseline_flags = sv_client->q2proto_ctx.features.has_beam_old_origin_fix ? MSG_ES_BEAMORIGIN : 0;
@@ -132,6 +169,9 @@ static void write_gamestate(void)
                 q2proto_svc_spawnbaseline_t *baseline = &spawnbaselines[gamestate.num_spawnbaselines++];
                 baseline->entnum = base->number;
                 Q2PROTO_MakeEntityDelta(&sv_client->q2proto_ctx, &baseline->delta_state, NULL, &base->e, baseline_flags);
+                (void)SV_SnapshotShadowSetBaselineV1(
+                    sv_client->worr_snapshot_shadow,
+                    baseline->entnum, &baseline->delta_state);
             }
             base++;
         }
@@ -210,6 +250,203 @@ Sends the first message from the server to a connected client.
 This will be sent on the initial connection and upon each server load.
 ================
 */
+static bool SV_WorrCapabilityCarrierSupported(const client_t *client)
+{
+    return client &&
+           (client->protocol == PROTOCOL_VERSION_Q2PRO ||
+            client->protocol == PROTOCOL_VERSION_R1Q2 ||
+            client->protocol == PROTOCOL_VERSION_RERELEASE);
+}
+
+static void SV_WriteWorrCapabilitySetting(int32_t index, uint32_t value)
+{
+    MSG_WriteByte(sv_client->protocol == PROTOCOL_VERSION_RERELEASE
+                      ? svc_rr_setting
+                      : svc_q2pro_setting);
+    MSG_WriteLong(index);
+    MSG_WriteLong((int32_t)value);
+}
+
+static bool SV_CanAppendNativeReadinessRecord(void)
+{
+    if (!sv_client || !sv_client->worr_native_shadow ||
+        sv_client->netchan.type != NETCHAN_NEW) {
+        return false;
+    }
+    return SV_NativeShadowCanAppendSvcReadinessV1(
+        &msg_write, &sv_client->netchan.message);
+}
+
+/* The adapter stages the complete record and performs one checked final copy.
+ * A failed preflight or encode leaves msg_write byte-identical, so callers can
+ * disable the unadvertised pilot and keep legacy. */
+static bool SV_AppendNativeReadinessRecord(
+    const worr_native_readiness_record_v1 *record)
+{
+    int opcode;
+
+    if (!sv_client || sv_client->netchan.type != NETCHAN_NEW)
+        return false;
+    opcode = sv_client->protocol == PROTOCOL_VERSION_RERELEASE
+                 ? svc_rr_setting
+                 : svc_q2pro_setting;
+    return SV_NativeShadowAppendSvcReadinessV1(
+        &msg_write, &sv_client->netchan.message, opcode, record);
+}
+
+bool SV_TryQueueNativeShadowChallenge(client_t *client)
+{
+    byte staging_data[SV_NATIVE_SHADOW_SVC_WIRE_BYTES];
+    sizebuf_t staging;
+    sv_native_shadow_peer_v1 *pilot;
+    worr_native_readiness_record_v1 challenge;
+    int opcode;
+
+    if (!client || !client->worr_native_shadow_challenge_pending)
+        return false;
+    pilot = client->worr_native_shadow;
+    if (!pilot) {
+        client->worr_native_shadow_challenge_pending = false;
+        client->worr_native_shadow_challenge_requested_at = 0;
+        return false;
+    }
+    if (!client->worr_capability_confirm_sent ||
+        client->worr_capability_epoch == 0 ||
+        client->worr_capabilities_supported !=
+            WORR_NET_CAP_LEGACY_STAGE_MASK ||
+        client->worr_capabilities_negotiated !=
+            WORR_NET_CAP_LEGACY_STAGE_MASK) {
+        client->worr_native_shadow_challenge_pending = false;
+        client->worr_native_shadow_challenge_requested_at = 0;
+        SV_NativeShadowPeerDisableV1(
+            pilot, SV_NATIVE_SHADOW_FAILURE_OFFICIAL_BINDING);
+        return false;
+    }
+    if (!SV_NativeShadowPeerEnabledV1(pilot)) {
+        client->worr_native_shadow_challenge_pending = false;
+        client->worr_native_shadow_challenge_requested_at = 0;
+        return false;
+    }
+    if ((uint32_t)(svs.realtime -
+                   client->worr_native_shadow_challenge_requested_at) >=
+        SV_NATIVE_SHADOW_CHALLENGE_QUEUE_TIMEOUT_MS) {
+        client->worr_native_shadow_challenge_pending = false;
+        client->worr_native_shadow_challenge_requested_at = 0;
+        SV_NativeShadowPeerDisableV1(
+            pilot, SV_NATIVE_SHADOW_FAILURE_QUEUE);
+        return false;
+    }
+    /* A busy channel is an expected deferral, not a readiness failure.  The
+     * 10-second protocol deadline does not exist until this becomes true. */
+    if (!SV_NativeShadowPostBootstrapQueueIdleV1(pilot))
+        return false;
+
+    SZ_Init(&staging, staging_data, sizeof(staging_data),
+            "native_readiness_challenge");
+    /* Preflight before advancing readiness: after this check, the validated
+     * fixed record has an exact 117-byte atomic append reservation. */
+    if (!SV_NativeShadowCanAppendSvcReadinessV1(
+            &staging, &client->netchan.message)) {
+        client->worr_native_shadow_challenge_pending = false;
+        client->worr_native_shadow_challenge_requested_at = 0;
+        SV_NativeShadowPeerDisableV1(
+            pilot, SV_NATIVE_SHADOW_FAILURE_QUEUE);
+        return false;
+    }
+    if (!SV_NativeShadowBeginEpochV1(
+            pilot, client->worr_capability_epoch,
+            client->worr_capabilities_supported,
+            client->worr_capabilities_negotiated,
+            svs.realtime, &challenge)) {
+        client->worr_native_shadow_challenge_pending = false;
+        client->worr_native_shadow_challenge_requested_at = 0;
+        return false;
+    }
+    opcode = client->protocol == PROTOCOL_VERSION_RERELEASE
+                 ? svc_rr_setting
+                 : svc_q2pro_setting;
+    if (!SV_NativeShadowAppendSvcReadinessV1(
+            &staging, &client->netchan.message, opcode,
+            &challenge)) {
+        client->worr_native_shadow_challenge_pending = false;
+        client->worr_native_shadow_challenge_requested_at = 0;
+        SV_NativeShadowPeerDisableV1(
+            pilot, SV_NATIVE_SHADOW_FAILURE_QUEUE);
+        return false;
+    }
+    SZ_Write(&client->netchan.message, staging.data, staging.cursize);
+    client->worr_native_shadow_challenge_pending = false;
+    client->worr_native_shadow_challenge_requested_at = 0;
+    return true;
+}
+
+static uint32_t SV_NextWorrSessionEpoch(void)
+{
+    if (svs.worr_next_session_epoch == UINT32_MAX)
+        return 0;
+    return ++svs.worr_next_session_epoch;
+}
+
+static void SV_ConfirmWorrCapabilities(void)
+{
+    worr_net_capability_confirm_v1 confirm;
+    const uint32_t supported = WORR_NET_CAP_LEGACY_STAGE_MASK;
+
+    sv_client->worr_capabilities_supported = 0;
+    sv_client->worr_capabilities_negotiated = 0;
+    sv_client->worr_capability_epoch = 0;
+    sv_client->worr_native_shadow_challenge_pending = false;
+    sv_client->worr_native_shadow_challenge_requested_at = 0;
+    if (sv_client->worr_capability_failed ||
+        !SV_WorrCapabilityCarrierSupported(sv_client) ||
+        sv_client->worr_capabilities_offered == 0 ||
+        sv_client->spawncount <= 0) {
+        return;
+    }
+    const uint32_t session_epoch = SV_NextWorrSessionEpoch();
+    if (Worr_NetCapabilitySelectV1(
+            session_epoch,
+            sv_client->worr_capabilities_offered, supported,
+            &confirm) != WORR_NET_CAPABILITY_OK ||
+        confirm.negotiated == 0) {
+        return;
+    }
+
+    sv_client->worr_capabilities_supported = confirm.supported;
+    sv_client->worr_capabilities_negotiated = confirm.negotiated;
+    sv_client->worr_capability_epoch = confirm.connection_epoch;
+    sv_client->worr_capability_confirm_sent = true;
+    if ((confirm.negotiated &
+         WORR_NET_CAP_LEGACY_COMMAND_SIDEBAND_V1) != 0) {
+        if (!Worr_LegacyCommandSidebandParserInitV1(
+                &sv_client->worr_command_parser)) {
+            sv_client->worr_capability_failed = true;
+            sv_client->worr_capabilities_negotiated = 0;
+            return;
+        }
+        sv_client->worr_command_parser_initialized = true;
+        sv_client->worr_command_sideband_started = false;
+        sv_client->worr_command_stream_initialized = false;
+        sv_client->worr_command_bootstrap_moves = 0;
+        sv_client->worr_command_bootstrap_commands = 0;
+        sv_client->worr_command_bootstrap_sample_time_us = 0;
+        sv_client->worr_command_fast_forward_attempts = 0;
+        sv_client->worr_command_fast_forwards = 0;
+        sv_client->worr_command_fast_forwarded_commands = 0;
+        sv_client->worr_command_fast_forward_rejections = 0;
+        sv_client->worr_command_gap_policy_rejections = 0;
+    }
+    SV_WriteWorrCapabilitySetting(
+        WORR_NET_CAPABILITY_CONFIRM_EPOCH_SETTING,
+        confirm.connection_epoch);
+    SV_WriteWorrCapabilitySetting(
+        WORR_NET_CAPABILITY_CONFIRM_SUPPORTED_SETTING,
+        confirm.supported);
+    SV_WriteWorrCapabilitySetting(
+        WORR_NET_CAPABILITY_CONFIRM_NEGOTIATED_SETTING,
+        confirm.negotiated);
+}
+
 void SV_New_f(void)
 {
     clstate_t oldstate;
@@ -245,6 +482,7 @@ void SV_New_f(void)
 
     // create baselines for this client
     SV_CreateBaselines();
+    reset_snapshot_shadow();
 
     q2proto_svc_message_t message = {.type = Q2P_SVC_SERVERDATA, .serverdata = {0}};
     q2proto_server_fill_serverdata(&sv_client->q2proto_ctx, &message.serverdata);
@@ -265,6 +503,8 @@ void SV_New_f(void)
     message.serverdata.q2repro.server_fps = SV_FRAMERATE;
 
     q2proto_server_write(&sv_client->q2proto_ctx, (uintptr_t)&sv_client->io_data, &message);
+
+    SV_ConfirmWorrCapabilities();
 
     SV_ClientAddMessage(sv_client, MSG_RELIABLE | MSG_CLEAR);
 
@@ -353,6 +593,16 @@ void SV_Begin_f(void)
     sv_client->cmd_msec_used = 0;
     sv_client->suppress_count = 0;
     sv_client->http_download = false;
+
+    /* Request private readiness only after the complete join/bootstrap stream
+     * and accepted begin.  The send scheduler must service this request after
+     * all begin/game callbacks have queued their reliable output, and only at
+     * a rate-admitted boundary that it will transmit immediately. */
+    if (sv_client->worr_native_shadow) {
+        sv_client->worr_native_shadow_challenge_pending = true;
+        sv_client->worr_native_shadow_challenge_requested_at =
+            svs.realtime;
+    }
 
     SV_AlignKeyFrames(sv_client);
 
@@ -968,15 +1218,27 @@ USER CMD EXECUTION
 
 static bool     moveIssued;
 static int      userinfoUpdateCount;
+static worr_legacy_command_range_v1 packetCommandRange;
+static bool packetCommandRangeValid;
+/* Packet execution is single-threaded.  Transaction scratch is shared rather
+ * than multiplying roughly half of the command-stream footprint per client. */
+static worr_command_stream_slot_v1
+    worrCommandStreamScratch[CMD_BACKUP];
+static worr_command_record_v1
+    worrCommandRecordScratch[WORR_LEGACY_COMMAND_BATCH_MAX_COUNT];
 
 /*
 ==================
 SV_ClientThink
 ==================
 */
-static inline void SV_ClientThink(usercmd_t *cmd)
+static inline void SV_ClientThink(usercmd_t *cmd,
+                                  bool canonical_context_active)
 {
     usercmd_t *old = &sv_client->lastcmd;
+
+    if (!canonical_context_active)
+        SV_CommandContextReset();
 
     // Bind the command to a server-owned simulation clock.  The client only
     // acknowledges a wire snapshot number; SV_SetLastFrame validates that
@@ -1005,6 +1267,9 @@ static inline void SV_ClientThink(usercmd_t *cmd)
     }
 
     ge->ClientThink(sv_player, cmd);
+
+    if (!canonical_context_active)
+        SV_CommandContextReset();
 }
 
 void SV_BotClientThink(client_t *client, usercmd_t *cmd)
@@ -1025,7 +1290,7 @@ void SV_BotClientThink(client_t *client, usercmd_t *cmd)
     if (client->command_msec < cmd->msec) {
         client->command_msec = cmd->msec;
     }
-    SV_ClientThink(cmd);
+    SV_ClientThink(cmd, false);
     client->lastcmd = *cmd;
 
     sv_client = saved_client;
@@ -1037,6 +1302,7 @@ static void SV_SetLastFrame(int lastframe)
     client_frame_t *frame;
     uint32_t acknowledged_server_frame = 0;
     uint32_t acknowledged_server_frame_delta = 0;
+    uint64_t acknowledged_server_time_us = 0;
 
     if (lastframe > 0) {
         if (lastframe >= sv_client->framenum) {
@@ -1045,6 +1311,7 @@ static void SV_SetLastFrame(int lastframe)
             // lag-compensation watermark closed.
             sv_client->last_acked_server_frame = 0;
             sv_client->last_acked_server_frame_delta = 0;
+            sv_client->last_acked_server_time_us = 0;
             return; // ignore invalid acks
         }
 
@@ -1064,6 +1331,7 @@ static void SV_SetLastFrame(int lastframe)
                 // from the client-supplied snapshot number itself.
                 acknowledged_server_frame = frame->server_frame;
                 acknowledged_server_frame_delta = frame->server_frame_delta;
+                acknowledged_server_time_us = frame->server_time_us;
             }
         }
 
@@ -1078,38 +1346,650 @@ static void SV_SetLastFrame(int lastframe)
     sv_client->last_acked_server_frame = acknowledged_server_frame;
     sv_client->last_acked_server_frame_delta =
         acknowledged_server_frame_delta;
+    sv_client->last_acked_server_time_us = acknowledged_server_time_us;
 }
 
-static void apply_usercmd_delta(const q2proto_clc_move_delta_t *move_delta, const usercmd_t *from, usercmd_t *to)
+static bool SV_WorrCommandSidebandActive(void)
 {
-    Q_assert(to);
+    return sv_client && !sv_client->worr_capability_failed &&
+           (sv_client->worr_capabilities_negotiated &
+            WORR_NET_CAP_LEGACY_COMMAND_SIDEBAND_V1) != 0 &&
+           sv_client->worr_command_parser_initialized;
+}
 
-    if (from) {
-        memcpy(to, from, sizeof(*to));
+#define WORR_CANONICAL_COMMAND_MAX_TRANSPORT_GAP 4096u
+
+static void SV_WorrSaturatingIncrement(uint64_t *value)
+{
+    if (*value != UINT64_MAX)
+        ++*value;
+}
+
+static void SV_WorrSaturatingAdd(uint64_t *value, uint64_t amount)
+{
+    *value = *value > UINT64_MAX - amount
+                 ? UINT64_MAX
+                 : *value + amount;
+}
+
+static bool SV_WorrRejectCommandGapPolicy(void)
+{
+    SV_WorrSaturatingIncrement(
+        &sv_client->worr_command_gap_policy_rejections);
+    return false;
+}
+
+static void SV_WorrLegacyCommandThink(usercmd_t *command)
+{
+    SV_ClientThink(command, false);
+    if (SV_WorrCommandSidebandActive() &&
+        !sv_client->worr_command_stream_initialized) {
+        const uint64_t duration_us =
+            (uint64_t)command->msec * UINT64_C(1000);
+        if (sv_client->worr_command_bootstrap_sample_time_us >
+            UINT64_MAX - duration_us) {
+            sv_client->worr_command_bootstrap_sample_time_us = UINT64_MAX;
+        } else {
+            sv_client->worr_command_bootstrap_sample_time_us += duration_us;
+        }
+        if (sv_client->worr_command_bootstrap_commands != UINT32_MAX)
+            ++sv_client->worr_command_bootstrap_commands;
+    }
+}
+
+static int SV_WorrCommandIdCompare(worr_command_id_v1 left,
+                                   worr_command_id_v1 right)
+{
+    if (left.epoch != right.epoch)
+        return left.epoch < right.epoch ? -1 : 1;
+    if (left.sequence != right.sequence)
+        return left.sequence < right.sequence ? -1 : 1;
+    return 0;
+}
+
+static bool SV_WorrCommandRangeId(
+    const worr_legacy_command_range_v1 *range, uint32_t index,
+    worr_command_id_v1 *id_out)
+{
+    worr_command_id_v1 id;
+    uint32_t i;
+    if (!range || !id_out || index >= range->command_count)
+        return false;
+    id = range->first_command_id;
+    for (i = 0; i < index; ++i) {
+        if (!Worr_CommandIdNextV1(id, &id))
+            return false;
+    }
+    *id_out = id;
+    return true;
+}
+
+static worr_command_render_watermark_v1 SV_WorrCommandWatermark(
+    uint32_t provenance)
+{
+    worr_command_render_watermark_v1 watermark;
+    memset(&watermark, 0, sizeof(watermark));
+    watermark.struct_size = sizeof(watermark);
+    watermark.schema_version = WORR_COMMAND_ABI_VERSION;
+    watermark.provenance = provenance;
+    watermark.source_server_tick = sv_client->last_acked_server_frame;
+    watermark.tick_interval_us = (uint32_t)SV_FRAMETIME * 1000u;
+    watermark.source_server_time_us =
+        sv_client->last_acked_server_time_us;
+    watermark.rendered_server_time_us =
+        sv_client->last_acked_server_time_us;
+    return watermark;
+}
+
+static bool SV_WorrBuildCommandContext(
+    const worr_command_record_v1 *record,
+    worr_authoritative_command_context_v1 *context_out)
+{
+    uint64_t current_time_us;
+    uint64_t later_command_us;
+    uint64_t interpolation_bias_us;
+    uint64_t correction_us;
+    uint64_t error_bound_us;
+    uint64_t source_interval_us;
+    uint32_t current_tick;
+    uint32_t source_delta;
+    const uint32_t tick_interval_us =
+        (uint32_t)SV_FRAMETIME * 1000u;
+    const worr_command_render_watermark_v1 *watermark;
+
+    if (!record || !context_out || sv.framenum < 0 ||
+        sv.worr_snapshot_epoch == 0 || tick_interval_us == 0 ||
+        !Worr_CommandRecordValidateV1(
+            record, WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS)) {
+        return false;
+    }
+    /* Commands are consumed between game frames. sv.framenum names the next
+     * frame to run, while the accumulated clock and authoritative world still
+     * describe the preceding completed frame. */
+    current_tick = sv.framenum > 0 ? (uint32_t)sv.framenum - 1u : 0u;
+    current_time_us = sv.worr_server_time_us;
+    watermark = &record->render_watermark;
+    if (watermark->provenance ==
+            WORR_COMMAND_RENDER_PROVENANCE_NONE ||
+        watermark->source_server_tick == 0 ||
+        watermark->source_server_tick > current_tick ||
+        watermark->source_server_tick == UINT32_MAX ||
+        current_tick == UINT32_MAX ||
+        watermark->source_server_tick !=
+            sv_client->last_acked_server_frame ||
+        watermark->source_server_time_us !=
+            sv_client->last_acked_server_time_us ||
+        watermark->source_server_time_us > current_time_us ||
+        watermark->tick_interval_us != tick_interval_us) {
+        return false;
+    }
+    if (sv_client->worr_command_stream.last_received_sample_time_us <
+        record->sample_time_us) {
+        return false;
+    }
+    later_command_us =
+        sv_client->worr_command_stream.last_received_sample_time_us -
+        record->sample_time_us;
+    /*
+     * Bind interpolation uncertainty to the exact validated acknowledgement
+     * captured by SV_SetLastFrame.  Looking this up by simulation tick alone
+     * is ambiguous after a map reset because old ring slots can reuse ticks.
+     */
+    source_delta = sv_client->last_acked_server_frame_delta;
+    if (source_delta > watermark->source_server_tick)
+        return false;
+    source_interval_us = (uint64_t)source_delta * tick_interval_us;
+    interpolation_bias_us = source_interval_us / 2u;
+    if (later_command_us > UINT64_MAX - interpolation_bias_us)
+        return false;
+    correction_us = later_command_us + interpolation_bias_us;
+    error_bound_us =
+        (uint64_t)record->command.duration_ms * UINT64_C(1000);
+    if (error_bound_us > UINT64_MAX - tick_interval_us)
+        return false;
+    error_bound_us += tick_interval_us;
+    if (error_bound_us > UINT64_MAX - interpolation_bias_us)
+        return false;
+    error_bound_us += interpolation_bias_us;
+
+    memset(context_out, 0, sizeof(*context_out));
+    context_out->struct_size = sizeof(*context_out);
+    context_out->schema_version = WORR_COMMAND_CONTEXT_API_VERSION;
+    context_out->client_index = (uint32_t)sv_client->number;
+    context_out->command = *record;
+
+    context_out->current_snapshot.struct_size =
+        sizeof(context_out->current_snapshot);
+    context_out->current_snapshot.schema_version =
+        WORR_REWIND_ABI_VERSION;
+    if (current_tick <= 1u)
+        context_out->current_snapshot.flags |=
+            WORR_REWIND_SNAPSHOT_MAP_RESET;
+    context_out->current_snapshot.tick_interval_us = tick_interval_us;
+    context_out->current_snapshot.snapshot_id.epoch =
+        sv.worr_snapshot_epoch;
+    context_out->current_snapshot.snapshot_id.sequence = current_tick + 1u;
+    context_out->current_snapshot.server_tick = current_tick;
+    context_out->current_snapshot.server_time_us = current_time_us;
+    context_out->current_snapshot.consumed_command.cursor.epoch =
+        record->command_id.epoch;
+    context_out->current_snapshot.consumed_command.cursor
+        .contiguous_sequence = record->command_id.sequence;
+    context_out->current_snapshot.consumed_command.provenance =
+        WORR_SNAPSHOT_CONSUMED_COMMAND_SERVER_CONSUMED;
+
+    context_out->mapping_proof.struct_size =
+        sizeof(context_out->mapping_proof);
+    context_out->mapping_proof.schema_version =
+        WORR_REWIND_ABI_VERSION;
+    context_out->mapping_proof.flags =
+        WORR_REWIND_MAPPING_AUTHENTICATED_TIMELINE;
+    context_out->mapping_proof.command_id = record->command_id;
+    context_out->mapping_proof.source_snapshot_id.epoch =
+        sv.worr_snapshot_epoch;
+    context_out->mapping_proof.source_snapshot_id.sequence =
+        watermark->source_server_tick + 1u;
+    context_out->mapping_proof.source_server_tick =
+        watermark->source_server_tick;
+    context_out->mapping_proof.tick_interval_us = tick_interval_us;
+    context_out->mapping_proof.watermark_provenance =
+        watermark->provenance;
+    context_out->mapping_proof.watermark_flags = watermark->flags;
+    context_out->mapping_proof.source_server_time_us =
+        watermark->source_server_time_us;
+    context_out->mapping_proof.rendered_server_time_us =
+        watermark->rendered_server_time_us;
+    if (watermark->provenance ==
+        WORR_COMMAND_RENDER_PROVENANCE_LEGACY_PACKET_SHARED) {
+        context_out->mapping_proof.mapped_server_time_us =
+            watermark->rendered_server_time_us >= correction_us
+                ? watermark->rendered_server_time_us - correction_us
+                : 0;
+        context_out->mapping_proof.mapping_error_bound_us =
+            max(error_bound_us, UINT64_C(1));
     } else {
-        memset(to, 0, sizeof(*to));
+        context_out->mapping_proof.mapped_server_time_us =
+            watermark->rendered_server_time_us;
+        context_out->mapping_proof.mapping_error_bound_us = 0;
+    }
+    return Worr_RewindMappingProofValidateV1(
+        &context_out->mapping_proof);
+}
+
+static bool SV_WorrCommandStreamInit(
+    const worr_legacy_command_range_v1 *range,
+    uint32_t already_executed_prefix,
+    uint32_t maximum_initial_gap)
+{
+    worr_command_cursor_v1 baseline;
+    worr_command_id_v1 boundary;
+    uint64_t maximum_prior_sequence;
+    if (sv_client->worr_command_stream_initialized)
+        return true;
+    if (!range || !Worr_LegacyCommandRangeValidateV1(range) ||
+        already_executed_prefix > range->command_count ||
+        range->first_command_id.epoch !=
+            sv_client->worr_capability_epoch ||
+        sv_client->worr_command_bootstrap_commands == UINT32_MAX)
+        return false;
+    maximum_prior_sequence =
+        (uint64_t)sv_client->worr_command_bootstrap_commands +
+        maximum_initial_gap;
+    if ((uint64_t)range->first_command_id.sequence - 1u >
+        maximum_prior_sequence) {
+        return false;
+    }
+    baseline.epoch = sv_client->worr_capability_epoch;
+    baseline.contiguous_sequence =
+        sv_client->worr_command_bootstrap_commands;
+    if (already_executed_prefix != 0) {
+        if (!SV_WorrCommandRangeId(range,
+                                   already_executed_prefix - 1u,
+                                   &boundary) ||
+            SV_WorrCommandIdCompare(
+                boundary,
+                (worr_command_id_v1){baseline.epoch,
+                                     baseline.contiguous_sequence}) > 0) {
+            return false;
+        }
+    }
+    if (already_executed_prefix < range->command_count) {
+        if (!SV_WorrCommandRangeId(range, already_executed_prefix,
+                                   &boundary) ||
+            SV_WorrCommandIdCompare(
+                boundary,
+                (worr_command_id_v1){baseline.epoch,
+                                     baseline.contiguous_sequence}) <= 0) {
+            return false;
+        }
+    }
+    if (!Worr_CommandStreamInitV1(
+            &sv_client->worr_command_stream,
+            sv_client->worr_command_slots, CMD_BACKUP,
+            WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS,
+            baseline,
+            sv_client->worr_command_bootstrap_sample_time_us)) {
+        return false;
+    }
+    sv_client->worr_command_stream_initialized = true;
+    return true;
+}
+
+static bool SV_WorrConsumeCommand(worr_command_id_v1 command_id,
+                                  usercmd_t *command,
+                                  bool simulate)
+{
+    worr_command_id_v1 next;
+    worr_command_record_v1 retained;
+    worr_command_stream_result_v1 result;
+    if (!Worr_CommandStreamCopyRecordV1(
+            &sv_client->worr_command_stream, command_id, &retained)) {
+        /* An already reclaimed command is an idempotent retry. */
+        return SV_WorrCommandIdCompare(
+                   command_id,
+                   (worr_command_id_v1){
+                       sv_client->worr_command_stream.consumed_cursor.epoch,
+                       sv_client->worr_command_stream.consumed_cursor
+                           .contiguous_sequence}) <= 0;
+    }
+    if (!Worr_CommandCursorNextIdV1(
+            sv_client->worr_command_stream.consumed_cursor, &next)) {
+        return false;
+    }
+    if (SV_WorrCommandIdCompare(command_id, next) < 0)
+        return true;
+    if (SV_WorrCommandIdCompare(command_id, next) != 0)
+        return false;
+    if (simulate) {
+        worr_authoritative_command_context_v1 context;
+        bool context_started;
+
+        /*
+         * A game callback can terminate through the engine's non-local error
+         * path.  Clear any abandoned callback scope before exposing authority
+         * for this command so one client can never inherit another's context.
+         */
+        SV_CommandContextReset();
+        context_started = false;
+        if (retained.render_watermark.provenance !=
+                WORR_COMMAND_RENDER_PROVENANCE_SERVER_SYNTHESIZED &&
+            SV_WorrBuildCommandContext(&retained, &context)) {
+            context_started = SV_CommandContextBegin(&context);
+        }
+        if (!context_started)
+            context_started = SV_CommandContextBeginRejected();
+        if (!context_started)
+            return false;
+        SV_ClientThink(command, true);
+        SV_CommandContextEnd();
+    }
+    result = Worr_CommandStreamConsumeV1(
+        &sv_client->worr_command_stream, command_id, NULL);
+    return result == WORR_COMMAND_STREAM_CONSUMED ||
+           result == WORR_COMMAND_STREAM_ALREADY_CONSUMED;
+}
+
+static bool SV_WorrFillCommandGap(
+    const worr_legacy_command_range_v1 *range,
+    uint32_t maximum_gap,
+    uint32_t simulation_budget)
+{
+    worr_command_id_v1 next;
+    uint32_t gap_count = 0;
+    uint32_t synthesized = 0;
+    uint32_t synthesis_count;
+    uint64_t duration_us;
+    uint64_t gap_time_us;
+
+    if (!Worr_CommandCursorNextIdV1(
+            sv_client->worr_command_stream.received_cursor, &next)) {
+        return SV_WorrRejectCommandGapPolicy();
+    }
+    if (SV_WorrCommandIdCompare(next, range->first_command_id) >= 0)
+        return true;
+
+    /* Packet history authenticates maximum_gap.  Identity distance is then
+     * computed in constant time and cannot borrow retention capacity as a
+     * protocol limit. */
+    if (maximum_gap > WORR_CANONICAL_COMMAND_MAX_TRANSPORT_GAP ||
+        !Worr_CommandCursorGapBeforeV1(
+            sv_client->worr_command_stream.received_cursor,
+            range->first_command_id, maximum_gap, &gap_count)) {
+        return SV_WorrRejectCommandGapPolicy();
     }
 
-    // current angles
-    if (move_delta->delta_bits & Q2P_CMD_ANGLE0)
-        to->angles[0] = q2proto_var_angles_get_float_comp(&move_delta->angles, 0);
-    if (move_delta->delta_bits & Q2P_CMD_ANGLE1)
-        to->angles[1] = q2proto_var_angles_get_float_comp(&move_delta->angles, 1);
-    if (move_delta->delta_bits & Q2P_CMD_ANGLE2)
-        to->angles[2] = q2proto_var_angles_get_float_comp(&move_delta->angles, 2);
+    /* Preflight every fallible property before any synthetic command reaches
+     * the game module.  A later fast-forward can therefore never discover a
+     * predictable overflow after a partially simulated prefix. */
+    duration_us =
+        (uint64_t)sv_client->lastcmd.msec * UINT64_C(1000);
+    if (!Worr_CommandStreamValidateV1(
+            &sv_client->worr_command_stream) ||
+        sv_client->worr_command_stream.received_cursor.epoch !=
+            sv_client->worr_command_stream.consumed_cursor.epoch ||
+        sv_client->worr_command_stream.received_cursor
+                .contiguous_sequence !=
+            sv_client->worr_command_stream.consumed_cursor
+                .contiguous_sequence ||
+        sv_client->lastcmd.msec >
+            sv_client->worr_command_stream.max_duration_ms ||
+        (duration_us != 0 && gap_count > UINT64_MAX / duration_us)) {
+        return SV_WorrRejectCommandGapPolicy();
+    }
+    gap_time_us = duration_us * gap_count;
+    if (sv_client->worr_command_stream.last_received_sample_time_us >
+        UINT64_MAX - gap_time_us) {
+        return SV_WorrRejectCommandGapPolicy();
+    }
 
-    // read movement
-    if (move_delta->delta_bits & Q2P_CMD_MOVE_FORWARD)
-        to->forwardmove = q2proto_var_coords_get_float_comp(&move_delta->move, 0);
-    if (move_delta->delta_bits & Q2P_CMD_MOVE_SIDE)
-        to->sidemove = q2proto_var_coords_get_float_comp(&move_delta->move, 1);
+    /* Small gaps retain the complete synthetic audit trail.  A legitimate
+     * transport gap can exceed the fixed retention ring, though.  In that
+     * case simulate only the policy budget and fast-forward the remaining
+     * already-missed commands in O(capacity), rather than treating retention
+     * size as a protocol-validity limit. */
+    synthesis_count = gap_count <= (uint32_t)CMD_BACKUP - 1u
+                          ? gap_count
+                          : min(gap_count, simulation_budget);
 
-    // buttons
-    if (move_delta->delta_bits & Q2P_CMD_BUTTONS)
-        to->buttons = move_delta->buttons;
+    while (synthesized < synthesis_count) {
+        worr_command_record_v1 record;
+        memset(&record, 0, sizeof(record));
+        record.struct_size = sizeof(record);
+        record.schema_version = WORR_COMMAND_ABI_VERSION;
+        record.command_id = next;
+        record.movement_model_revision =
+            WORR_PREDICTION_MODEL_REVISION;
+        if (!NetUsercmd_ToPredictionCommandV1(
+                &sv_client->lastcmd, &record.command)) {
+            return false;
+        }
+        record.render_watermark = SV_WorrCommandWatermark(
+            WORR_COMMAND_RENDER_PROVENANCE_SERVER_SYNTHESIZED);
+        if (sv_client->worr_command_stream.last_received_sample_time_us >
+            UINT64_MAX - duration_us) {
+            return false;
+        }
+        record.sample_time_us =
+            sv_client->worr_command_stream.last_received_sample_time_us +
+            duration_us;
+        if (!Worr_CommandRecordCanonicalizeV1(
+                &record, WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS) ||
+            Worr_CommandStreamInsertV1(
+                &sv_client->worr_command_stream, &record) !=
+                WORR_COMMAND_STREAM_INSERTED ||
+            !SV_WorrConsumeCommand(
+                next, &sv_client->lastcmd,
+                synthesized < simulation_budget) ||
+            !Worr_CommandIdNextV1(next, &next)) {
+            return false;
+        }
+        ++synthesized;
+    }
 
-    // time to run command
-    to->msec = move_delta->msec;
+    if (synthesized < gap_count) {
+        const worr_command_cursor_v1 before =
+            sv_client->worr_command_stream.received_cursor;
+        const uint32_t remaining = gap_count - synthesized;
+        worr_command_stream_result_v1 result;
+
+        SV_WorrSaturatingIncrement(
+            &sv_client->worr_command_fast_forward_attempts);
+        result = Worr_CommandStreamFastForwardV1(
+            &sv_client->worr_command_stream, remaining,
+            sv_client->lastcmd.msec);
+        if (result != WORR_COMMAND_STREAM_FAST_FORWARDED) {
+            SV_WorrSaturatingIncrement(
+                &sv_client->worr_command_fast_forward_rejections);
+            return false;
+        }
+        SV_WorrSaturatingIncrement(
+            &sv_client->worr_command_fast_forwards);
+        SV_WorrSaturatingAdd(
+            &sv_client->worr_command_fast_forwarded_commands,
+            remaining);
+        Com_DPrintf(
+            "canonical command fast-forward: client=%s from=%u:%u "
+            "to=%u:%u gap=%u synthesized=%u skipped=%u allowance=%u "
+            "totals=%llu/%llu/%llu/%llu policy_rejections=%llu\n",
+            sv_client->name, before.epoch,
+            before.contiguous_sequence,
+            sv_client->worr_command_stream.received_cursor.epoch,
+            sv_client->worr_command_stream.received_cursor
+                .contiguous_sequence,
+            gap_count, synthesized, remaining, maximum_gap,
+            (unsigned long long)
+                sv_client->worr_command_fast_forward_attempts,
+            (unsigned long long)
+                sv_client->worr_command_fast_forwards,
+            (unsigned long long)
+                sv_client->worr_command_fast_forwarded_commands,
+            (unsigned long long)
+                sv_client->worr_command_fast_forward_rejections,
+            (unsigned long long)
+                sv_client->worr_command_gap_policy_rejections);
+        next = range->first_command_id;
+    }
+    return SV_WorrCommandIdCompare(next,
+                                   range->first_command_id) == 0;
+}
+
+static void SV_WorrReportCommandStreamReject(
+    const char *stage,
+    const worr_legacy_command_range_v1 *range,
+    uint32_t command_count,
+    uint32_t already_executed_prefix,
+    uint32_t maximum_gap,
+    uint32_t simulation_budget,
+    uint32_t adapter_result,
+    uint32_t stream_result,
+    uint32_t failed_index)
+{
+    const worr_command_stream_v1 *stream =
+        &sv_client->worr_command_stream;
+    const worr_command_stream_telemetry_v1 *telemetry =
+        &stream->telemetry;
+    const uint32_t first_epoch = range ? range->first_command_id.epoch : 0;
+    const uint32_t first_sequence =
+        range ? range->first_command_id.sequence : 0;
+    const uint32_t range_count = range ? range->command_count : 0;
+
+    Com_WPrintf(
+        "canonical command reject: stage=%s range=%u:%u/%u decoded=%u "
+        "prefix=%u allowance=%u simulate=%u failed_index=%u adapter=%u "
+        "stream_result=%u initialized=%u stream_count=%u head=%u "
+        "received=%u:%u consumed=%u:%u future_gaps=%llu conflicts=%llu "
+        "capacity=%llu sample_rejections=%llu invalid_records=%llu "
+        "invalid_state=%llu fast_forward=%llu/%llu/%llu/%llu "
+        "gap_policy_rejections=%llu\n",
+        stage ? stage : "unknown", first_epoch, first_sequence,
+        range_count, command_count, already_executed_prefix, maximum_gap,
+        simulation_budget, failed_index, adapter_result, stream_result,
+        sv_client->worr_command_stream_initialized ? 1u : 0u,
+        stream->count, stream->head,
+        stream->received_cursor.epoch,
+        stream->received_cursor.contiguous_sequence,
+        stream->consumed_cursor.epoch,
+        stream->consumed_cursor.contiguous_sequence,
+        (unsigned long long)telemetry->future_gaps,
+        (unsigned long long)telemetry->conflicts,
+        (unsigned long long)telemetry->capacity_stalls,
+        (unsigned long long)telemetry->sample_time_rejections,
+        (unsigned long long)telemetry->invalid_records,
+        (unsigned long long)telemetry->invalid_state,
+        (unsigned long long)
+            sv_client->worr_command_fast_forward_attempts,
+        (unsigned long long)
+            sv_client->worr_command_fast_forwards,
+        (unsigned long long)
+            sv_client->worr_command_fast_forwarded_commands,
+        (unsigned long long)
+            sv_client->worr_command_fast_forward_rejections,
+        (unsigned long long)
+            sv_client->worr_command_gap_policy_rejections);
+}
+
+static bool SV_WorrProcessDecodedCommands(
+    const worr_legacy_command_range_v1 *range,
+    usercmd_t *commands, uint32_t command_count,
+    uint32_t already_executed_prefix,
+    uint32_t maximum_gap,
+    uint32_t simulation_budget)
+{
+    worr_prediction_command_v1 canonical[
+        WORR_LEGACY_COMMAND_BATCH_MAX_COUNT];
+    worr_command_render_watermark_v1 watermark;
+    worr_legacy_command_adapter_report_v1 report;
+    worr_legacy_command_adapter_result_v1 result;
+    uint32_t index;
+
+    if (!range || !commands || command_count == 0 ||
+        command_count != range->command_count ||
+        command_count > WORR_LEGACY_COMMAND_BATCH_MAX_COUNT) {
+        SV_WorrReportCommandStreamReject(
+            "arguments", range, command_count, already_executed_prefix,
+            maximum_gap, simulation_budget,
+            WORR_LEGACY_COMMAND_ADAPTER_INVALID_ARGUMENT,
+            WORR_LEGACY_COMMAND_NO_STREAM_RESULT, UINT32_MAX);
+        return false;
+    }
+    if (!SV_WorrCommandStreamInit(
+            range, already_executed_prefix, maximum_gap)) {
+        SV_WorrReportCommandStreamReject(
+            "initialize", range, command_count, already_executed_prefix,
+            maximum_gap, simulation_budget,
+            WORR_LEGACY_COMMAND_ADAPTER_INVALID_STREAM,
+            WORR_LEGACY_COMMAND_NO_STREAM_RESULT, UINT32_MAX);
+        return false;
+    }
+    for (index = 0; index < command_count; ++index) {
+        if (!NetUsercmd_ToPredictionCommandV1(
+                &commands[index], &canonical[index]) ||
+            canonical[index].duration_ms >
+            WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS) {
+            SV_WorrReportCommandStreamReject(
+                "duration", range, command_count,
+                already_executed_prefix, maximum_gap,
+                simulation_budget,
+                WORR_LEGACY_COMMAND_ADAPTER_INVALID_COMMAND,
+                WORR_LEGACY_COMMAND_NO_STREAM_RESULT, index);
+            return false;
+        }
+    }
+    if (!SV_WorrFillCommandGap(
+            range, maximum_gap, simulation_budget)) {
+        SV_WorrReportCommandStreamReject(
+            "gap", range, command_count, already_executed_prefix,
+            maximum_gap, simulation_budget,
+            WORR_LEGACY_COMMAND_ADAPTER_FUTURE_GAP,
+            WORR_COMMAND_STREAM_FUTURE_GAP, UINT32_MAX);
+        return false;
+    }
+    watermark = SV_WorrCommandWatermark(
+        WORR_COMMAND_RENDER_PROVENANCE_LEGACY_PACKET_SHARED);
+    result = Worr_LegacyCommandAdapterApplyV1(
+        &sv_client->worr_command_stream, range, canonical,
+        command_count, WORR_PREDICTION_MODEL_REVISION, &watermark,
+        worrCommandRecordScratch,
+        WORR_LEGACY_COMMAND_BATCH_MAX_COUNT,
+        worrCommandStreamScratch, CMD_BACKUP, &report);
+    if (result != WORR_LEGACY_COMMAND_ADAPTER_APPLIED &&
+        result != WORR_LEGACY_COMMAND_ADAPTER_IDEMPOTENT) {
+        SV_WorrReportCommandStreamReject(
+            "adapter", range, command_count, already_executed_prefix,
+            maximum_gap, simulation_budget, (uint32_t)result,
+            report.stream_result, UINT32_MAX);
+        return false;
+    }
+    for (index = 0; index < command_count; ++index) {
+        worr_command_id_v1 id;
+        worr_command_record_v1 retained;
+        if (!SV_WorrCommandRangeId(range, index, &id)) {
+            SV_WorrReportCommandStreamReject(
+                "range-id", range, command_count,
+                already_executed_prefix, maximum_gap,
+                simulation_budget, (uint32_t)result,
+                report.stream_result, index);
+            return false;
+        }
+        if (sv_client->worr_native_shadow &&
+            Worr_CommandStreamCopyRecordV1(
+                &sv_client->worr_command_stream, id, &retained)) {
+            /* Observational only: native mismatch/failure can never alter
+             * legacy MOVE/BATCH_MOVE simulation authority. */
+            (void)SV_NativeShadowObserveLegacyCommandV1(
+                sv_client->worr_native_shadow, &retained,
+                svs.realtime);
+        }
+        if (!SV_WorrConsumeCommand(id, &commands[index], true)) {
+            SV_WorrReportCommandStreamReject(
+                "consume", range, command_count,
+                already_executed_prefix, maximum_gap,
+                simulation_budget, (uint32_t)result,
+                report.stream_result, index);
+            return false;
+        }
+    }
+    return true;
 }
 
 /*
@@ -1129,9 +2009,16 @@ static void SV_OldClientExecuteMove(const q2proto_clc_move_t *move)
 
     moveIssued = true;
 
-    apply_usercmd_delta(&move->moves[0], NULL, &oldest);
-    apply_usercmd_delta(&move->moves[1], &oldest, &oldcmd);
-    apply_usercmd_delta(&move->moves[2], &oldcmd, &newcmd);
+    const bool has_upmove = svs.game_api != Q2PROTO_GAME_RERELEASE;
+    if (!NetUsercmd_ApplyDelta(&move->moves[0], NULL, &oldest,
+                               has_upmove) ||
+        !NetUsercmd_ApplyDelta(&move->moves[1], &oldest, &oldcmd,
+                               has_upmove) ||
+        !NetUsercmd_ApplyDelta(&move->moves[2], &oldcmd, &newcmd,
+                               has_upmove)) {
+        SV_DropClient(sv_client, "invalid user command delta");
+        return;
+    }
 
     if (sv_client->state != cs_spawned) {
         SV_SetLastFrame(-1);
@@ -1145,22 +2032,49 @@ static void SV_OldClientExecuteMove(const q2proto_clc_move_t *move)
         sv_client->frameflags |= FF_CLIENTPRED;
     }
 
+    if (SV_WorrCommandSidebandActive() && packetCommandRangeValid) {
+        usercmd_t commands[WORR_LEGACY_COMMAND_MOVE_COUNT];
+        const uint32_t missing_packets =
+            net_drop > 2 ? (uint32_t)(net_drop - 2) : 0u;
+        const uint32_t maximum_gap =
+            min(missing_packets,
+                (uint32_t)WORR_CANONICAL_COMMAND_MAX_TRANSPORT_GAP);
+        const uint32_t simulation_budget =
+            net_drop < 20 ? maximum_gap : 0u;
+        const uint32_t already_executed_prefix =
+            2u - (uint32_t)min(net_drop, 2);
+        commands[0] = oldest;
+        commands[1] = oldcmd;
+        commands[2] = newcmd;
+        if (!SV_WorrProcessDecodedCommands(
+                &packetCommandRange, commands,
+                WORR_LEGACY_COMMAND_MOVE_COUNT,
+                already_executed_prefix, maximum_gap,
+                simulation_budget)) {
+            SV_DropClient(sv_client,
+                          "invalid canonical command stream");
+            return;
+        }
+        sv_client->lastcmd = newcmd;
+        return;
+    }
+
     if (net_drop < 20) {
         // run lastcmd multiple times if no backups available
         while (net_drop > 2) {
-            SV_ClientThink(&sv_client->lastcmd);
+            SV_WorrLegacyCommandThink(&sv_client->lastcmd);
             net_drop--;
         }
 
         // run backup cmds
         if (net_drop > 1)
-            SV_ClientThink(&oldest);
+            SV_WorrLegacyCommandThink(&oldest);
         if (net_drop > 0)
-            SV_ClientThink(&oldcmd);
+            SV_WorrLegacyCommandThink(&oldcmd);
     }
 
     // run new cmd
-    SV_ClientThink(&newcmd);
+    SV_WorrLegacyCommandThink(&newcmd);
 
     sv_client->lastcmd = newcmd;
 }
@@ -1173,11 +2087,13 @@ SV_NewClientExecuteMove
 static void SV_NewClientExecuteMove(const q2proto_clc_batch_move_t *batch_move)
 {
     usercmd_t   cmds[MAX_PACKET_FRAMES][MAX_PACKET_USERCMDS];
+    usercmd_t   flattened[WORR_LEGACY_COMMAND_BATCH_MAX_COUNT];
     usercmd_t   *lastcmd, *cmd;
     int         lastframe;
     int         numCmds[MAX_PACKET_FRAMES], numDups;
     int         i, j;
     int         net_drop;
+    uint32_t    flattened_count = 0;
 
     if (moveIssued) {
         SV_DropClient(sv_client, "multiple clc_move commands in packet");
@@ -1206,8 +2122,20 @@ static void SV_NewClientExecuteMove(const q2proto_clc_batch_move_t *batch_move)
         }
         for (j = 0; j < numCmds[i]; j++) {
             cmd = &cmds[i][j];
-            apply_usercmd_delta(&move_frame->moves[j], lastcmd, cmd);
+            if (!NetUsercmd_ApplyDelta(
+                    &move_frame->moves[j], lastcmd, cmd,
+                    svs.game_api != Q2PROTO_GAME_RERELEASE)) {
+                SV_DropClient(sv_client, "invalid batched user command delta");
+                return;
+            }
             lastcmd = cmd;
+            if (flattened_count >=
+                WORR_LEGACY_COMMAND_BATCH_MAX_COUNT) {
+                SV_DropClient(sv_client,
+                              "too many canonical user commands");
+                return;
+            }
+            flattened[flattened_count++] = *cmd;
         }
     }
 
@@ -1227,10 +2155,43 @@ static void SV_NewClientExecuteMove(const q2proto_clc_batch_move_t *batch_move)
         sv_client->frameflags |= FF_CLIENTPRED;
     }
 
+    if (SV_WorrCommandSidebandActive() && packetCommandRangeValid) {
+        uint32_t already_executed_prefix = 0;
+        uint32_t maximum_gap;
+        uint32_t simulation_budget;
+        const uint32_t missing_packets =
+            net_drop > numDups
+                ? (uint32_t)(net_drop - numDups)
+                : 0u;
+        const uint64_t maximum_gap_wide =
+            (uint64_t)missing_packets *
+            (MAX_PACKET_USERCMDS - 1u);
+        maximum_gap = (uint32_t)min(
+            maximum_gap_wide,
+            (uint64_t)WORR_CANONICAL_COMMAND_MAX_TRANSPORT_GAP);
+        simulation_budget =
+            net_drop < 20 ? min(missing_packets, maximum_gap) : 0u;
+        if (net_drop <= numDups) {
+            const int first_replayed_frame = numDups - net_drop;
+            for (i = 0; i < first_replayed_frame; ++i)
+                already_executed_prefix += (uint32_t)numCmds[i];
+        }
+        if (!SV_WorrProcessDecodedCommands(
+                &packetCommandRange, flattened, flattened_count,
+                already_executed_prefix, maximum_gap,
+                simulation_budget)) {
+            SV_DropClient(sv_client,
+                          "invalid canonical command stream");
+            return;
+        }
+        sv_client->lastcmd = *lastcmd;
+        return;
+    }
+
     if (net_drop < 20) {
         // run lastcmd multiple times if no backups available
         while (net_drop > numDups) {
-            SV_ClientThink(&sv_client->lastcmd);
+            SV_WorrLegacyCommandThink(&sv_client->lastcmd);
             net_drop--;
         }
 
@@ -1238,7 +2199,7 @@ static void SV_NewClientExecuteMove(const q2proto_clc_batch_move_t *batch_move)
         while (net_drop > 0) {
             i = numDups - net_drop;
             for (j = 0; j < numCmds[i]; j++) {
-                SV_ClientThink(&cmds[i][j]);
+                SV_WorrLegacyCommandThink(&cmds[i][j]);
             }
             net_drop--;
         }
@@ -1247,7 +2208,7 @@ static void SV_NewClientExecuteMove(const q2proto_clc_batch_move_t *batch_move)
 
     // run new cmds
     for (j = 0; j < numCmds[numDups]; j++) {
-        SV_ClientThink(&cmds[numDups][j]);
+        SV_WorrLegacyCommandThink(&cmds[numDups][j]);
     }
 
     sv_client->lastcmd = *lastcmd;
@@ -1480,6 +2441,70 @@ static void SV_ParseClientCommand(const q2proto_clc_stringcmd_t *stringcmd)
     stringCmdCount++;
 }
 
+static uint32_t SV_WorrDecodedCommandCount(
+    const q2proto_clc_message_t *message)
+{
+    uint32_t count = 0;
+    int i;
+    if (message->type == Q2P_CLC_MOVE)
+        return WORR_LEGACY_COMMAND_MOVE_COUNT;
+    if (message->type != Q2P_CLC_BATCH_MOVE ||
+        message->batch_move.num_dups < 0 ||
+        message->batch_move.num_dups >= MAX_PACKET_FRAMES) {
+        return 0;
+    }
+    for (i = 0; i <= message->batch_move.num_dups; ++i) {
+        const int commands =
+            message->batch_move.batch_frames[i].num_cmds;
+        if (commands < 0 || commands >= MAX_PACKET_USERCMDS ||
+            count > WORR_LEGACY_COMMAND_BATCH_MAX_COUNT -
+                        (uint32_t)commands) {
+            return 0;
+        }
+        count += (uint32_t)commands;
+    }
+    return count;
+}
+
+static bool SV_WorrPrepareCommandMove(
+    const q2proto_clc_message_t *message)
+{
+    worr_legacy_command_sideband_result_v1 result;
+    uint32_t carrier;
+    const uint32_t count = SV_WorrDecodedCommandCount(message);
+
+    packetCommandRangeValid = false;
+    if (!SV_WorrCommandSidebandActive())
+        return true;
+    if (message->type == Q2P_CLC_BATCH_MOVE && count == 0) {
+        result = Worr_LegacyCommandSidebandObserveInterveningServiceV1(
+            &sv_client->worr_command_parser);
+        if (result == WORR_LEGACY_COMMAND_SIDEBAND_NOT_SIDEBAND)
+            return true;
+        SV_DropClient(sv_client,
+                      "command sideband header has an empty carrier");
+        return false;
+    }
+    carrier = message->type == Q2P_CLC_MOVE
+                  ? WORR_LEGACY_COMMAND_CARRIER_MOVE
+                  : WORR_LEGACY_COMMAND_CARRIER_BATCH_MOVE;
+    result = Worr_LegacyCommandSidebandConsumeMoveV1(
+        &sv_client->worr_command_parser, carrier, count,
+        &packetCommandRange);
+    if (result == WORR_LEGACY_COMMAND_SIDEBAND_MOVE_MATCHED) {
+        packetCommandRangeValid = true;
+        sv_client->worr_command_sideband_started = true;
+        return true;
+    }
+    if (result == WORR_LEGACY_COMMAND_SIDEBAND_MISSING_HEADER &&
+        !sv_client->worr_command_sideband_started &&
+        ++sv_client->worr_command_bootstrap_moves <= 8u) {
+        return true;
+    }
+    SV_DropClient(sv_client, "malformed command identity sideband");
+    return false;
+}
+
 /*
 ===================
 SV_ExecuteClientMessage
@@ -1489,14 +2514,44 @@ The current net_message is parsed for the given client
 */
 void SV_ExecuteClientMessage(client_t *client)
 {
+    bool command_sideband_packet = false;
+    bool readiness_sideband_packet = false;
     sv_client = client;
     sv_player = sv_client->edict;
+
+    if (client->worr_native_shadow) {
+        /* Netchan has already admitted and stripped any WTC1 trailer.  Check
+         * the authoritative retained stream before parsing this packet so a
+         * native retry can join a MOVE consumed on an earlier packet. */
+        (void)SV_NativeShadowReconcileCommandStreamV1(
+            client->worr_native_shadow,
+            client->worr_command_stream_initialized
+                ? &client->worr_command_stream : NULL,
+            svs.realtime);
+    }
 
     // only allow one move command
     moveIssued = false;
     stringCmdCount = 0;
     userinfoUpdateCount = 0;
     int prevUserinfoUpdateCount = 0;
+    packetCommandRangeValid = false;
+    memset(&packetCommandRange, 0, sizeof(packetCommandRange));
+    if (SV_WorrCommandSidebandActive()) {
+        if (Worr_LegacyCommandSidebandPacketBeginV1(
+                &client->worr_command_parser) !=
+            WORR_LEGACY_COMMAND_SIDEBAND_PACKET_STARTED) {
+            SV_DropClient(client,
+                          "invalid command sideband packet state");
+            goto finish;
+        }
+        command_sideband_packet = true;
+    }
+    if (client->worr_native_shadow &&
+        SV_NativeShadowPacketBeginV1(
+            client->worr_native_shadow, svs.realtime)) {
+        readiness_sideband_packet = true;
+    }
 
     while (1) {
         if (msg_read.readcount > msg_read.cursize) {
@@ -1508,6 +2563,100 @@ void SV_ExecuteClientMessage(client_t *client)
         q2proto_error_t err = q2proto_server_read(&client->q2proto_ctx, Q2PROTO_IOARG_SERVER_READ, &message);
         if (err == Q2P_ERR_NO_MORE_INPUT)
             break;
+        if (err != Q2P_ERR_SUCCESS) {
+            Com_DPrintf("Malformed client message from %s: %s\n",
+                        client->name, q2proto_error_string(err));
+            SV_DropClient(client, "malformed client message");
+            break;
+        }
+
+        bool sideband_setting = false;
+        if (readiness_sideband_packet && client->worr_native_shadow) {
+            if (message.type == Q2P_CLC_SETTING) {
+                const bool readiness_setting =
+                    SV_NativeShadowSettingIndexV1(
+                        message.setting.index);
+                sv_native_shadow_observe_result_v1 result;
+                worr_native_readiness_record_v1 server_active;
+
+                /* A valid COMMIT transitions the readiness core immediately;
+                 * reserve the exact response tuple first so queue pressure can
+                 * only disable the hidden pilot, never strand ACTIVE state. */
+                if (readiness_setting &&
+                    message.setting.index ==
+                        WORR_NATIVE_READINESS_SETTING_COMMIT &&
+                    !SV_CanAppendNativeReadinessRecord()) {
+                    SV_NativeShadowPeerDisableV1(
+                        client->worr_native_shadow,
+                        SV_NATIVE_SHADOW_FAILURE_QUEUE);
+                    result = SV_NATIVE_SHADOW_OBSERVE_PILOT_DISABLED;
+                } else {
+                    result = SV_NativeShadowObserveSettingV1(
+                        client->worr_native_shadow,
+                        message.setting.index, message.setting.value,
+                        &server_active);
+                }
+                if (readiness_setting)
+                    sideband_setting = true;
+                if (result ==
+                    SV_NATIVE_SHADOW_OBSERVE_SERVER_ACTIVE_READY) {
+                    if (SV_AppendNativeReadinessRecord(&server_active)) {
+                        SV_ClientAddMessage(
+                            client, MSG_RELIABLE | MSG_CLEAR);
+                        if (!SV_NativeShadowServerActiveQueuedV1(
+                                client->worr_native_shadow)) {
+                            result =
+                                SV_NATIVE_SHADOW_OBSERVE_PILOT_DISABLED;
+                        }
+                    } else {
+                        SV_NativeShadowPeerDisableV1(
+                            client->worr_native_shadow,
+                            SV_NATIVE_SHADOW_FAILURE_QUEUE);
+                        result =
+                            SV_NATIVE_SHADOW_OBSERVE_PILOT_DISABLED;
+                    }
+                }
+                if (result ==
+                    SV_NATIVE_SHADOW_OBSERVE_PILOT_DISABLED) {
+                    readiness_sideband_packet = false;
+                }
+            } else if (!SV_NativeShadowObserveInterveningServiceV1(
+                           client->worr_native_shadow)) {
+                /* A private readiness failure is a silent fallback while all
+                 * legacy services in this packet continue normally. */
+                readiness_sideband_packet = false;
+            }
+        }
+        if (command_sideband_packet) {
+            if (message.type == Q2P_CLC_SETTING) {
+                const worr_legacy_command_sideband_result_v1 result =
+                    Worr_LegacyCommandSidebandObserveSettingV1(
+                        &client->worr_command_parser,
+                        message.setting.index, message.setting.value);
+                if (result ==
+                        WORR_LEGACY_COMMAND_SIDEBAND_FIELD_ACCEPTED ||
+                    result ==
+                        WORR_LEGACY_COMMAND_SIDEBAND_HEADER_COMMITTED) {
+                    sideband_setting = true;
+                } else if (result !=
+                           WORR_LEGACY_COMMAND_SIDEBAND_NOT_SIDEBAND) {
+                    SV_DropClient(client,
+                                  "malformed command sideband header");
+                    break;
+                }
+            } else if (message.type != Q2P_CLC_MOVE &&
+                       message.type != Q2P_CLC_BATCH_MOVE) {
+                const worr_legacy_command_sideband_result_v1 result =
+                    Worr_LegacyCommandSidebandObserveInterveningServiceV1(
+                        &client->worr_command_parser);
+                if (result ==
+                    WORR_LEGACY_COMMAND_SIDEBAND_RESET_INTERVENING_SERVICE) {
+                    SV_DropClient(client,
+                                  "interleaved command sideband header");
+                    break;
+                }
+            }
+        }
 
         // Handle batched userinfo deltas
         if (message.type != Q2P_CLC_USERINFO_DELTA && prevUserinfoUpdateCount != userinfoUpdateCount) {
@@ -1529,11 +2678,13 @@ void SV_ExecuteClientMessage(client_t *client)
             break;
 
         case Q2P_CLC_MOVE:
-            SV_OldClientExecuteMove(&message.move);
+            if (SV_WorrPrepareCommandMove(&message))
+                SV_OldClientExecuteMove(&message.move);
             break;
 
         case Q2P_CLC_BATCH_MOVE:
-            SV_NewClientExecuteMove(&message.batch_move);
+            if (SV_WorrPrepareCommandMove(&message))
+                SV_NewClientExecuteMove(&message.batch_move);
             break;
 
         case Q2P_CLC_STRINGCMD:
@@ -1541,7 +2692,8 @@ void SV_ExecuteClientMessage(client_t *client)
             break;
 
         case Q2P_CLC_SETTING:
-            SV_ParseClientSetting(&message.setting);
+            if (!sideband_setting)
+                SV_ParseClientSetting(&message.setting);
             break;
 
         case Q2P_CLC_USERINFO_DELTA:
@@ -1550,8 +2702,27 @@ void SV_ExecuteClientMessage(client_t *client)
 
         }
 
+        if (readiness_sideband_packet &&
+            (!client->worr_native_shadow ||
+             !SV_NativeShadowPeerEnabledV1(
+                 client->worr_native_shadow))) {
+            readiness_sideband_packet = false;
+        }
+
         if (client->state <= cs_zombie)
             break;    // disconnect command
+    }
+
+finish:
+    if (readiness_sideband_packet && client->worr_native_shadow)
+        (void)SV_NativeShadowPacketEndV1(
+            client->worr_native_shadow);
+    if (command_sideband_packet &&
+        Worr_LegacyCommandSidebandPacketEndV1(
+            &client->worr_command_parser) !=
+            WORR_LEGACY_COMMAND_SIDEBAND_PACKET_ENDED &&
+        client->state > cs_zombie) {
+        SV_DropClient(client, "dangling command sideband header");
     }
 
     // Handle batched userinfo deltas

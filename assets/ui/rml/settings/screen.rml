@@ -7,90 +7,110 @@
   </head>
   <body id="settings-screen" data-route-id="screen" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="screen-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="settings-screen-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="settings-screen-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="settings-screen-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Screen Setup</h1>
+        <div class="worr-titlerow"><button id="settings-screen-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_screen_setup">Screen Setup</h1></div>
       </header>
 
+      <nav class="worr-tabstrip">
+        <button id="settings-screen-tab-video" class="worr-tab" type="button" data-command="popmenu; pushmenu video" data-route-target="video" data-menu-sound="move" data-loc-key="worr_ui_video">Video</button>
+        <span class="worr-tab is-active" data-loc-key="worr_ui_screen">Screen</span>
+        <button id="settings-screen-tab-sound" class="worr-tab" type="button" data-command="popmenu; pushmenu sound" data-route-target="sound" data-menu-sound="move" data-loc-key="m_sound">Sound</button>
+        <button id="settings-screen-tab-input" class="worr-tab" type="button" data-command="popmenu; pushmenu input" data-route-target="input" data-menu-sound="move" data-loc-key="m_input">Input</button>
+        <button id="settings-screen-tab-effects" class="worr-tab" type="button" data-command="popmenu; pushmenu effects" data-route-target="effects" data-menu-sound="move" data-loc-key="worr_ui_effects">Effects</button>
+        <button id="settings-screen-tab-performance" class="worr-tab" type="button" data-command="popmenu; pushmenu performance" data-route-target="performance" data-menu-sound="move" data-loc-key="worr_ui_performance">Performance</button>
+        <button id="settings-screen-tab-accessibility" class="worr-tab" type="button" data-command="popmenu; pushmenu accessibility" data-route-target="accessibility" data-menu-sound="move" data-loc-key="worr_ui_access">Access</button>
+        <button id="settings-screen-tab-language" class="worr-tab" type="button" data-command="popmenu; pushmenu language" data-route-target="language" data-menu-sound="move" data-loc-key="m_language">Language</button>
+      </nav>
       <main class="settings-form form-compact cols-2" id="screen-settings-form" data-component="common.components.cvar_controls">
         <div class="settings-columns" id="screen-settings-columns">
           <div class="settings-column" id="screen-hud-column">
             <section class="settings-section" id="screen-hud-section">
-              <h2>HUD</h2>
+              <h2 data-loc-key="worr_ui_hud">HUD</h2>
               <div class="setting-row" data-control="range" data-cvar="viewsize">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="screen-size">Screen Size</label>
-                <input id="screen-size" type="range" min="40" max="100" step="10" data-cvar="viewsize" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="viewsize" data-meter-min="40" data-meter-max="100"></span><span class="setting-meter-text" data-bind-cvar="viewsize"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="screen-size" data-loc-key="worr_ui_screen_size">Screen Size</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="viewsize" data-meter-min="40" data-meter-max="100"></span><span class="setting-meter-text" data-bind-cvar="viewsize"></span></span><input id="screen-size" type="range" min="40" max="100" step="10" data-cvar="viewsize" />
+
               </div>
               <div class="setting-row" data-control="toggle" data-cvar="cg_lagometer">
-                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-                <label for="screen-lagometer">Lagometer</label>
+                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+                <label for="screen-lagometer" data-loc-key="worr_ui_lagometer">Lagometer</label>
                 <input id="screen-lagometer" type="checkbox" data-cvar="cg_lagometer" />
               </div>
               <div class="setting-row" data-control="select" data-cvar="cl_demobar">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="screen-demobar">Demo Bar</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="screen-demobar" data-loc-key="worr_ui_demo_bar">Demo Bar</label>
                 <select id="screen-demobar" data-cvar="cl_demobar">
-                  <option value="0">No</option>
-                  <option value="1">Yes</option>
-                  <option value="2">Verbose</option>
+                  <option value="0" data-loc-key="m_no">No</option>
+                  <option value="1" data-loc-key="m_yes">Yes</option>
+                  <option value="2" data-loc-key="worr_ui_verbose">Verbose</option>
                 </select>
               </div>
               <div class="setting-row" data-control="range" data-cvar="cl_alpha">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="screen-hud-opacity">HUD Opacity</label>
-                <input id="screen-hud-opacity" type="range" min="0" max="1" step="0.01" data-cvar="cl_alpha" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_alpha" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="cl_alpha"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="screen-hud-opacity" data-loc-key="worr_ui_hud_opacity">HUD Opacity</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_alpha" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="cl_alpha"></span></span><input id="screen-hud-opacity" type="range" min="0" max="1" step="0.01" data-cvar="cl_alpha" />
+
               </div>
               <div class="setting-row" data-control="action">
-                <span class="setting-widget-icon" data-widget="action"><img src="../common/icons/widgets/action.svg" /></span>
-                <label for="screen-crosshair">Crosshair</label>
-                <button id="screen-crosshair" type="button" data-command="pushmenu crosshair" data-route-target="crosshair" data-menu-sound="open">Open</button>
+                <span class="setting-widget-icon" data-widget="action"><img src="../common/icons/widgets/action.png" /></span>
+                <label for="screen-crosshair" data-loc-key="m_crosshair">Crosshair</label>
+                <button id="screen-crosshair" type="button" data-command="pushmenu crosshair" data-route-target="crosshair" data-menu-sound="open" data-loc-key="worr_ui_open">Open</button>
               </div>
             </section>
           </div>
 
           <div class="settings-column" id="screen-scale-column">
             <section class="settings-section" id="screen-console-section">
-              <h2>Console</h2>
+              <h2 data-loc-key="worr_ui_console">Console</h2>
               <div class="setting-row" data-control="range" data-cvar="con_alpha">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="screen-console-opacity">Console Opacity</label>
-                <input id="screen-console-opacity" type="range" min="0" max="1" step="0.01" data-cvar="con_alpha" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="con_alpha" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="con_alpha"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="screen-console-opacity" data-loc-key="worr_ui_console_opacity">Console Opacity</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="con_alpha" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="con_alpha"></span></span><input id="screen-console-opacity" type="range" min="0" max="1" step="0.01" data-cvar="con_alpha" />
+
               </div>
             </section>
 
             <section class="settings-section" id="screen-scale-section">
-              <h2>Scale</h2>
+              <h2 data-loc-key="m_scale">Scale</h2>
               <div class="setting-row" data-control="select" data-cvar="cl_scale">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="screen-hud-scale">HUD Scale</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="screen-hud-scale" data-loc-key="worr_ui_hud_scale">HUD Scale</label>
                 <select id="screen-hud-scale" data-cvar="cl_scale">
-                  <option value="0">Auto</option>
-                  <option value="1">1x</option>
-                  <option value="2">2x</option>
-                  <option value="4">4x</option>
+                  <option value="0" data-loc-key="m_auto">Auto</option>
+                  <option value="1" data-loc-key="worr_ui_1x">1x</option>
+                  <option value="2" data-loc-key="worr_ui_2x">2x</option>
+                  <option value="4" data-loc-key="worr_ui_4x">4x</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="con_scale">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="screen-console-scale">Console Scale</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="screen-console-scale" data-loc-key="worr_ui_console_scale">Console Scale</label>
                 <select id="screen-console-scale" data-cvar="con_scale">
-                  <option value="0">Auto</option>
-                  <option value="1">1x</option>
-                  <option value="2">2x</option>
-                  <option value="4">4x</option>
+                  <option value="0" data-loc-key="m_auto">Auto</option>
+                  <option value="1" data-loc-key="worr_ui_1x">1x</option>
+                  <option value="2" data-loc-key="worr_ui_2x">2x</option>
+                  <option value="4" data-loc-key="worr_ui_4x">4x</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="ui_scale">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="screen-menu-scale">Menu Scale</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="screen-menu-scale" data-loc-key="worr_ui_menu_scale">Menu Scale</label>
                 <select id="screen-menu-scale" data-cvar="ui_scale">
-                  <option value="0">Auto</option>
-                  <option value="1">1x</option>
-                  <option value="2">2x</option>
-                  <option value="4">4x</option>
+                  <option value="0" data-loc-key="m_auto">Auto</option>
+                  <option value="1" data-loc-key="worr_ui_1x">1x</option>
+                  <option value="2" data-loc-key="worr_ui_2x">2x</option>
+                  <option value="4" data-loc-key="worr_ui_4x">4x</option>
                 </select>
               </div>
               <div class="setting-hint">Magnifies the menus; Auto fits the screen.</div>
@@ -100,8 +120,12 @@
       </main>
 
       <footer class="menu-footer" id="screen-menu-footer">
-        <button id="screen-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="screen-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="screen-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="settings-screen-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

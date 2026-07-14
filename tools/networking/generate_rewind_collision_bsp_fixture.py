@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""Generate the deterministic FR-10-T10 real-BSP collision fixture.
+
+The output is a collision-only Quake II IBSP v38 with one empty world hull and
+two independent inline brush-model hulls.  It deliberately contains no render
+geometry: the production server collision loader does not require it, and the
+fixture only exists to exercise the immutable rewind collision boundary.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import struct
+from pathlib import Path
+
+
+IBSP_IDENT = int.from_bytes(b"IBSP", "little")
+BSP_VERSION = 38
+HEADER_LUMPS = 19
+
+LUMP_ENTITIES = 0
+LUMP_PLANES = 1
+LUMP_NODES = 4
+LUMP_TEXINFO = 5
+LUMP_LEAFS = 8
+LUMP_LEAFBRUSHES = 10
+LUMP_MODELS = 13
+LUMP_BRUSHES = 14
+LUMP_BRUSHSIDES = 15
+LUMP_AREAS = 17
+
+CONTENTS_SOLID = 1 << 0
+CONTENTS_WATER = 1 << 5
+SURF_SLICK = 1 << 1
+SURF_WARP = 1 << 3
+
+SOLID_MINS = (-16.0, -24.0, -8.0)
+SOLID_MAXS = (16.0, 24.0, 8.0)
+WATER_MINS = (-20.0, -12.0, -10.0)
+WATER_MAXS = (20.0, 12.0, 10.0)
+
+
+def _plane(normal: tuple[float, float, float], distance: float) -> bytes:
+    # The on-disk plane type is ignored and recalculated by BSP_Load.
+    return struct.pack("<4fi", *normal, distance, 0)
+
+
+def _box_planes(
+    mins: tuple[float, float, float], maxs: tuple[float, float, float]
+) -> list[bytes]:
+    return [
+        _plane((1.0, 0.0, 0.0), maxs[0]),
+        _plane((-1.0, 0.0, 0.0), -mins[0]),
+        _plane((0.0, 1.0, 0.0), maxs[1]),
+        _plane((0.0, -1.0, 0.0), -mins[1]),
+        _plane((0.0, 0.0, 1.0), maxs[2]),
+        _plane((0.0, 0.0, -1.0), -mins[2]),
+    ]
+
+
+def _texinfo(name: str, flags: int, value: int) -> bytes:
+    encoded = name.encode("ascii")
+    if len(encoded) >= 32:
+        raise ValueError(f"texture name is too long: {name}")
+    axes = (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+    return struct.pack(
+        "<8fii32si", *axes, flags, value, encoded.ljust(32, b"\0"), -1
+    )
+
+
+def _leaf(
+    contents: int,
+    first_leaf_brush: int,
+    num_leaf_brushes: int,
+    mins: tuple[int, int, int],
+    maxs: tuple[int, int, int],
+) -> bytes:
+    # cluster -1 is valid without a visibility lump; area zero is the single
+    # area in this collision-only fixture.  There are no render leaf faces.
+    return struct.pack(
+        "<ihh3h3h4H",
+        contents,
+        -1,
+        0,
+        *mins,
+        *maxs,
+        0,
+        0,
+        first_leaf_brush,
+        num_leaf_brushes,
+    )
+
+
+def _node(plane: int, front_leaf: int, back_leaf: int) -> bytes:
+    def child_for_leaf(leaf: int) -> int:
+        return -1 - leaf
+
+    return struct.pack(
+        "<iii3h3h2H",
+        plane,
+        child_for_leaf(front_leaf),
+        child_for_leaf(back_leaf),
+        -512,
+        -512,
+        -512,
+        512,
+        512,
+        512,
+        0,
+        0,
+    )
+
+
+def _model(
+    mins: tuple[float, float, float],
+    maxs: tuple[float, float, float],
+    headnode: int,
+) -> bytes:
+    return struct.pack(
+        "<9fiii", *mins, *maxs, 0.0, 0.0, 0.0, headnode, 0, 0
+    )
+
+
+def build_fixture() -> bytes:
+    entities = (
+        '{\n"classname" "worldspawn"\n'
+        '"message" "WORR rewind collision real-BSP parity fixture"\n}\n'
+        '{\n"classname" "func_wall"\n"model" "*1"\n}\n'
+        '{\n"classname" "func_water"\n"model" "*2"\n}\n\0'
+    ).encode("ascii")
+
+    planes = [
+        _plane((1.0, 0.0, 0.0), 0.0),
+        *_box_planes(SOLID_MINS, SOLID_MAXS),
+        *_box_planes(WATER_MINS, WATER_MAXS),
+    ]
+
+    # Each model owns a disjoint node/leaf tree so BSP_ValidateTree can prove
+    # there are no cycles or cross-model parent aliases.  The two leaves of an
+    # inline model both reference its convex brush; CM's per-trace checkcount
+    # suppresses duplicate brush work when a sweep crosses the split plane.
+    leafs = [
+        _leaf(CONTENTS_SOLID, 0, 0, (-512, -512, -512), (0, 512, 512)),
+        _leaf(0, 0, 0, (0, -512, -512), (512, 512, 512)),
+        _leaf(CONTENTS_SOLID, 0, 1, (-17, -25, -9), (17, 25, 9)),
+        _leaf(CONTENTS_SOLID, 1, 1, (-17, -25, -9), (17, 25, 9)),
+        _leaf(CONTENTS_WATER, 2, 1, (-21, -13, -11), (21, 13, 11)),
+        _leaf(CONTENTS_WATER, 3, 1, (-21, -13, -11), (21, 13, 11)),
+    ]
+
+    lumps: list[bytes] = [b"" for _ in range(HEADER_LUMPS)]
+    lumps[LUMP_ENTITIES] = entities
+    lumps[LUMP_PLANES] = b"".join(planes)
+    lumps[LUMP_NODES] = b"".join(
+        (
+            _node(0, 1, 0),
+            _node(1, 2, 3),
+            _node(7, 4, 5),
+        )
+    )
+    lumps[LUMP_TEXINFO] = b"".join(
+        (
+            _texinfo("fixture/solid", SURF_SLICK, 101),
+            _texinfo("fixture/water", SURF_WARP, 202),
+        )
+    )
+    lumps[LUMP_LEAFS] = b"".join(leafs)
+    lumps[LUMP_LEAFBRUSHES] = struct.pack("<4H", 0, 0, 1, 1)
+    lumps[LUMP_MODELS] = b"".join(
+        (
+            _model((-512.0, -512.0, -512.0), (512.0, 512.0, 512.0), 0),
+            _model(SOLID_MINS, SOLID_MAXS, 1),
+            _model(WATER_MINS, WATER_MAXS, 2),
+        )
+    )
+    lumps[LUMP_BRUSHES] = b"".join(
+        (
+            struct.pack("<iii", 0, 6, CONTENTS_SOLID),
+            struct.pack("<iii", 6, 6, CONTENTS_WATER),
+        )
+    )
+    lumps[LUMP_BRUSHSIDES] = b"".join(
+        struct.pack("<HH", plane_index, texinfo)
+        for plane_index, texinfo in [
+            *((index, 0) for index in range(1, 7)),
+            *((index, 1) for index in range(7, 13)),
+        ]
+    )
+    lumps[LUMP_AREAS] = struct.pack("<ii", 0, 0)
+
+    header_size = 8 + HEADER_LUMPS * 8
+    cursor = header_size
+    body = bytearray()
+    descriptors: list[tuple[int, int]] = []
+    for lump in lumps:
+        padding = (-cursor) & 3
+        if padding:
+            body.extend(b"\0" * padding)
+            cursor += padding
+        descriptors.append((cursor, len(lump)))
+        body.extend(lump)
+        cursor += len(lump)
+
+    header = bytearray(struct.pack("<II", IBSP_IDENT, BSP_VERSION))
+    for offset, length in descriptors:
+        header.extend(struct.pack("<II", offset, length))
+    assert len(header) == header_size
+    return bytes(header + body)
+
+
+def write_fixture(path: Path) -> dict[str, object]:
+    data = build_fixture()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return {
+        "schema": "worr.rewind-collision-real-bsp-fixture.v1",
+        "path": str(path),
+        "bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "inline_models": 2,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    report = write_fixture(args.output)
+    if args.json:
+        print(json.dumps(report, sort_keys=True))
+    else:
+        print(
+            f"generated {report['path']} ({report['bytes']} bytes, "
+            f"sha256={report['sha256']})"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

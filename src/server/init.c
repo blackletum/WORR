@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "server.h"
+#include "server/command_context.h"
 #include "server/nav.h"
 
 server_static_t svs;                // persistent server info
@@ -36,11 +37,34 @@ void SV_ClientReset(client_t *client)
     client->lastframe = -1;
     client->last_acked_server_frame = 0;
     client->last_acked_server_frame_delta = 0;
+    client->last_acked_server_time_us = 0;
     client->frames_nodelta = 0;
     client->send_delta = 0;
     client->suppress_count = 0;
+    memset(client->async_message_size, 0,
+           sizeof(client->async_message_size));
+    memset(client->async_message_frame, 0,
+           sizeof(client->async_message_frame));
+    memset(client->async_message_valid, 0,
+           sizeof(client->async_message_valid));
     client->next_entity = 0;
     memset(&client->lastcmd, 0, sizeof(client->lastcmd));
+    client->worr_capabilities_supported = 0;
+    client->worr_capabilities_negotiated = 0;
+    client->worr_capability_epoch = 0;
+    client->worr_capability_confirm_sent = false;
+    client->worr_native_shadow_challenge_pending = false;
+    client->worr_native_shadow_challenge_requested_at = 0;
+    client->worr_command_parser_initialized = false;
+    client->worr_command_sideband_started = false;
+    client->worr_command_stream_initialized = false;
+    client->worr_command_bootstrap_moves = 0;
+    client->worr_command_bootstrap_commands = 0;
+    client->worr_command_bootstrap_sample_time_us = 0;
+    memset(&client->worr_command_parser, 0,
+           sizeof(client->worr_command_parser));
+    memset(&client->worr_command_stream, 0,
+           sizeof(client->worr_command_stream));
 }
 
 static void set_frame_time(int rate, bool override)
@@ -111,6 +135,9 @@ void SV_SpawnServer(const mapcmd_t *cmd)
     R_ClearDebugLines();
 
     Com_Printf("------- Server Initialization -------\n");
+
+    /* A map boundary invalidates every callback-scoped command context. */
+    SV_CommandContextReset();
     Com_Printf("SpawnServer: %s\n", cmd->server);
 
     Q_assert(cmd->state >= ss_game);
@@ -131,6 +158,9 @@ void SV_SpawnServer(const mapcmd_t *cmd)
     // wipe the entire per-level structure
     memset(&sv, 0, sizeof(sv));
     sv.spawncount = Q_rand() & INT_MAX;
+    if (svs.worr_next_snapshot_epoch == UINT32_MAX)
+        Com_Error(ERR_FATAL, "canonical snapshot epoch exhausted");
+    sv.worr_snapshot_epoch = ++svs.worr_next_snapshot_epoch;
 
     // set legacy spawncounts
     FOR_EACH_CLIENT(client) {
@@ -204,11 +234,14 @@ void SV_SpawnServer(const mapcmd_t *cmd)
     SV_SetState(ss_loading);
 
     // load and spawn all other entities
+    SV_EventShadowResetMap();
     ge->SpawnEntities(sv.name, sv.cm.entitystring, cmd->spawnpoint);
 
     // run two frames to allow everything to settle
-    for (i = 0; i < 2; i++, sv.framenum++)
+    for (i = 0; i < 2; i++) {
         ge->RunFrame(false);
+        SV_AdvanceSimulationClock();
+    }
 
     // make sure maxclients string is correct
     Q_snprintf(sv.configstrings[svs.csr.maxclients], CS_MAX_STRING_LENGTH,

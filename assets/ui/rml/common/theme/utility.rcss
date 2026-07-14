@@ -23,14 +23,14 @@
 
 #ui-list-extra-actions
 {
-	width: 560px;
+	width: 720px;
 	max-width: 100%;
 }
 
 #ui-list-content
 {
 	flex: 1 1 auto;
-	width: 560px;
+	width: 720px;
 	height: auto;
 	min-height: 0px;
 	max-width: 100%;
@@ -39,15 +39,17 @@
 
 #ui-list-content button
 {
-	width: 492px;
-	min-height: 34px;
-	padding: 5px 10px;
+	width: 100%;
+	min-height: 36px;
+	padding: 6px 10px;
 	font-size: 15px;
 	line-height: 1.1;
 	margin-bottom: 4px;
 	border-left-width: 4px;
 	border-left-color: #4b4235;
 	text-align: left;
+	white-space: normal;
+	word-break: break-word;
 }
 
 #ui-list-content button:hover,
@@ -60,7 +62,7 @@
 
 #ui-list-actions
 {
-	width: 560px;
+	width: 720px;
 	max-width: 100%;
 }
 
@@ -71,11 +73,43 @@
 	padding: 6px 10px;
 	color: #c9beb0;
 	background-color: #1b1916;
+	font-family: "WORR Mono";
 	border-width: 1px;
 	border-color: #5f5548;
 	border-radius: 3px;
 	margin-right: 8px;
 	margin-bottom: 8px;
+}
+
+.utility-page-label
+{
+	display: block;
+	min-height: 30px;
+	padding: 6px 10px;
+	color: #c9beb0;
+	background-color: #14120f;
+	border-width: 1px;
+	border-color: #5f5548;
+	border-radius: 3px;
+	margin-right: 6px;
+	margin-bottom: 6px;
+}
+
+#demos-source
+{
+	min-width: 140px;
+}
+
+#servers-source
+{
+	min-width: 164px;
+}
+
+#servers-connect
+{
+	min-width: 128px;
+	padding: 8px 12px;
+	white-space: nowrap;
 }
 
 .page-header
@@ -303,6 +337,8 @@
 	width: 204px;
 	height: 32px;
 	min-height: 32px;
+	font-family: "WORR Mono";
+	font-size: 13px;
 }
 
 #players-content
@@ -323,11 +359,45 @@
 {
 	height: auto;
 	max-height: 100%;
+	/* Vulkan and RTX submit the 3D no-world preview before their deferred UI
+	   queues. Keep the preview panel transparent so its native model frame is
+	   not covered when RmlUi composites later in R_EndFrame. */
+	background-color: transparent;
 }
 
 #players-preview-surface
 {
 	min-height: 320px;
+	background-color: transparent;
+}
+
+#players-appearance-thumbnails
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	width: 280px;
+	height: 40px;
+	min-height: 40px;
+	padding: 3px 6px;
+	margin-bottom: 8px;
+	background-color: #090909;
+	border-width: 1px;
+	border-color: #5f5548;
+	border-radius: 3px;
+}
+
+#players-skin-thumbnail
+{
+	width: 36px;
+	height: 36px;
+}
+
+#players-dogtag-thumbnail
+{
+	width: 216px;
+	height: 36px;
 }
 
 .preview-surface,
@@ -376,7 +446,7 @@
 	display: flex;
 	flex-direction: column;
 	flex: 0 0 auto;
-	max-width: 520px;
+	max-width: 100%;
 	margin-bottom: 12px;
 	overflow: visible;
 }
@@ -412,7 +482,7 @@
 
 #weapons-content
 {
-	width: 640px;
+	width: 860px;
 	max-width: 100%;
 	min-width: 0px;
 	overflow: auto;
@@ -422,8 +492,8 @@
 #weapons-content .bind-group,
 #legacykeys-content .bind-group
 {
-	width: 260px;
-	max-width: 260px;
+	width: 520px;
+	max-width: 520px;
 	margin-right: 12px;
 	margin-bottom: 10px;
 }
@@ -431,10 +501,10 @@
 #keys-content .bind-group
 {
 	position: static;
-	width: 242px;
-	max-width: 242px;
+	width: 284px;
+	max-width: 284px;
 	margin-right: 0px;
-	margin-bottom: 8px;
+	margin-bottom: 5px;
 }
 
 .bind-column
@@ -442,9 +512,9 @@
 	display: flex;
 	flex-direction: column;
 	flex: 0 0 auto;
-	width: 242px;
-	min-width: 242px;
-	margin-right: 50px;
+	width: 284px;
+	min-width: 284px;
+	margin-right: 18px;
 	min-height: 0px;
 }
 
@@ -456,8 +526,8 @@
 #weapons-content .bind-group
 {
 	position: static;
-	width: 300px;
-	max-width: 300px;
+	width: 410px;
+	max-width: 410px;
 	margin-right: 20px;
 }
 
@@ -467,20 +537,34 @@
 	font-size: 18px;
 }
 
-.bind-group button,
-.bind-group .ui-button
+.bind-row
 {
 	display: flex;
 	flex-direction: row;
-	justify-content: space-between;
+	flex-wrap: wrap;
 	align-items: center;
-	width: 236px;
-	min-height: 32px;
-	padding: 5px 10px;
-	font-size: 15px;
-	text-align: left;
-	margin-bottom: 4px;
-	transition: background-color border-color color 0.12s cubic-out;
+	box-sizing: border-box;
+	width: 510px;
+	min-height: 37px;
+	padding: 3px 5px 3px 9px;
+	background-color: #1b1916;
+	border-width: 2px;
+	border-left-width: 4px;
+	border-color: #5f5548;
+	border-left-color: #756a5d;
+	border-radius: 3px;
+	margin-bottom: 3px;
+	transition: background-color border-color 0.12s cubic-out;
+}
+
+#keys-content .bind-row
+{
+	width: 284px;
+}
+
+#weapons-content .bind-row
+{
+	width: 410px;
 }
 
 .bind-label
@@ -488,50 +572,197 @@
 	display: block;
 	flex: 1 1 auto;
 	min-width: 0px;
+	padding-right: 5px;
+	color: #f3eee4;
+	font-family: "WORR Display";
+	font-size: 14px;
+	line-height: 1.05;
 	white-space: normal;
 	word-break: break-word;
+}
+
+.bind-slots
+{
+	display: flex;
+	flex-direction: row;
+	flex: 0 0 auto;
+	width: 148px;
+	justify-content: flex-end;
+}
+
+.bind-slot
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	box-sizing: border-box;
+	width: 71px;
+	min-width: 71px;
+	max-width: 71px;
+	min-height: 27px;
+	height: 27px;
+	padding: 2px 3px;
+	margin-left: 3px;
+	background-color: #27231d;
+	border-width: 2px;
+	border-color: #756a5d;
+	border-radius: 3px;
+	color: #ffd967;
+	decorator: ninepatch(btn, btn-inner);
+	transition: background-color border-color color 0.12s cubic-out;
+}
+
+.bind-slot:hover
+{
+	background-color: #332d23;
+	border-color: #b99b5b;
+	color: #ffd967;
+	decorator: ninepatch(btn-hover, btn-hover-inner);
+}
+
+.bind-slot:focus
+{
+	background-color: #332d23;
+	border-color: #ffd967;
+	color: #ffd967;
+	decorator: ninepatch(btn-focus, btn-focus-inner);
+}
+
+.bind-slot-label
+{
+	display: block;
+	flex: 0 0 auto;
+	width: 8px;
+	color: #9f9384;
+	font-family: "WORR Mono";
+	font-size: 8px;
+	text-align: left;
+}
+
+.bind-icon
+{
+	display: block;
+	flex: 0 0 auto;
+	width: 17px;
+	height: 17px;
+	margin: 0px 2px;
 }
 
 .bind-key
 {
 	display: block;
-	flex: 0 0 auto;
-	max-width: 96px;
-	margin-left: 8px;
+	flex: 1 1 auto;
+	min-width: 0px;
+	max-width: 34px;
 	color: #ffd967;
 	font-family: "WORR Mono";
-	font-size: 13px;
-	text-align: right;
+	font-size: 9px;
+	line-height: 1;
+	text-align: center;
 	white-space: normal;
 	word-break: break-word;
 }
 
-.bind-group button.is-capturing
+@keyframes bind-capture-pulse
 {
-	background-color: #14262a;
-	border-color: #7ed4d8;
-	color: #7ed4d8;
+	from
+	{
+		border-color: #b99b5b;
+		background-color: #332d23;
+	}
+
+	to
+	{
+		border-color: #ffd967;
+		background-color: #4b3d22;
+	}
 }
 
-.bind-group button.is-capturing .bind-key
+.bind-slot.is-capturing
 {
-	color: #7ed4d8;
+	background-color: #4b3d22;
+	border-color: #ffd967;
+	color: #fff0a6;
+	animation: 0.65s cubic-in-out infinite alternate bind-capture-pulse;
 }
 
-#keys-content .bind-group button,
-#keys-content .bind-group .ui-button
+.bind-slot.is-capturing .bind-slot-label,
+.bind-slot.is-capturing .bind-icon
 {
-	width: 220px;
-	min-height: 29px;
-	padding: 4px 10px;
-	font-size: 14px;
-	margin-bottom: 3px;
+	display: none;
 }
 
-#weapons-content .bind-group button,
-#weapons-content .bind-group .ui-button
+.bind-slot.is-capturing .bind-key
 {
-	width: 260px;
+	max-width: 64px;
+	color: #fff0a6;
+	font-size: 8px;
+}
+
+.bind-slot.has-conflict,
+.bind-row.has-bind-conflict
+{
+	border-color: #ee6758;
+	border-left-color: #ee6758;
+}
+
+.bind-conflict
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	box-sizing: border-box;
+	width: 100%;
+	margin-top: 5px;
+	padding: 5px 6px;
+	background-color: #281b18;
+	border-width: 1px;
+	border-color: #ee6758;
+	border-radius: 2px;
+}
+
+.bind-conflict-title
+{
+	display: block;
+	flex: 0 0 auto;
+	margin-right: 6px;
+	color: #ff9285;
+	font-family: "WORR Display";
+	font-size: 11px;
+	text-transform: uppercase;
+}
+
+.bind-conflict-detail
+{
+	display: block;
+	flex: 1 1 auto;
+	min-width: 120px;
+	color: #f3eee4;
+	font-family: "WORR Mono";
+	font-size: 9px;
+	line-height: 1.1;
+}
+
+.bind-conflict-actions
+{
+	display: flex;
+	flex-direction: row;
+	flex: 0 0 auto;
+	margin-left: 6px;
+}
+
+.bind-conflict-actions button
+{
+	width: 58px;
+	min-width: 58px;
+	min-height: 24px;
+	height: 24px;
+	padding: 2px 5px;
+	margin-left: 4px;
+	font-size: 10px;
 }
 
 .data-table,
@@ -592,47 +823,148 @@
 #servers-table th:nth-child(1),
 #servers-table td:nth-child(1)
 {
-	width: 38%;
+	width: 34%;
 }
 
 #servers-table th:nth-child(2),
 #servers-table td:nth-child(2)
 {
-	width: 26%;
+	width: 14%;
 }
 
 #servers-table th:nth-child(3),
-#servers-table td:nth-child(3),
-#servers-table th:nth-child(4),
-#servers-table td:nth-child(4)
+#servers-table td:nth-child(3)
 {
-	width: 13%;
+	width: 20%;
+}
+
+#servers-table th:nth-child(4),
+#servers-table td:nth-child(4),
+#servers-table th:nth-child(5),
+#servers-table td:nth-child(5)
+{
+	width: 12%;
 	text-align: right;
 }
 
 #demos-table th:nth-child(1),
 #demos-table td:nth-child(1)
 {
-	width: 42%;
+	width: 34%;
 }
 
 #demos-table th:nth-child(2),
 #demos-table td:nth-child(2)
 {
-	width: 14%;
+	width: 19%;
 }
 
 #demos-table th:nth-child(3),
 #demos-table td:nth-child(3)
 {
-	width: 22%;
+	width: 10%;
+	text-align: right;
 }
 
 #demos-table th:nth-child(4),
 #demos-table td:nth-child(4)
 {
+	width: 17%;
+}
+
+#demos-table th:nth-child(5),
+#demos-table td:nth-child(5)
+{
 	width: 12%;
-	text-align: right;
+}
+
+/* With 7px vertical padding, a 20px content box produces the authored
+ * 35-36px row slab instead of adding padding around a 36px content minimum. */
+#servers-table td,
+#demos-table td
+{
+	min-height: 20px;
+	padding: 7px 8px;
+	white-space: nowrap;
+}
+
+#servers-table tr.is-pending td
+{
+	color: #9f978c;
+}
+
+#servers-table tr.is-error td
+{
+	color: #d58a7b;
+}
+
+#servers-table tr.is-restricted td:first-child
+{
+	border-left-width: 3px;
+	border-left-color: #9b8154;
+}
+
+.data-table .table-sort-button,
+.utility-table .table-sort-button
+{
+	display: block;
+	width: 100%;
+	min-width: 0px;
+	min-height: 24px;
+	padding: 0px;
+	margin: 0px;
+	background-color: transparent;
+	border-width: 0px;
+	border-radius: 0px;
+	decorator: none;
+	color: #c9beb0;
+	font-family: "WORR Display";
+	font-size: 12px;
+	font-weight: bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	text-align: left;
+}
+
+.data-table .table-sort-button:hover,
+.data-table .table-sort-button:focus,
+.utility-table .table-sort-button:hover,
+.utility-table .table-sort-button:focus
+{
+	background-color: transparent;
+	border-width: 0px;
+	color: #ffd967;
+	decorator: none;
+}
+
+.data-table .data-table-row-action,
+.utility-table .data-table-row-action
+{
+	display: block;
+	width: 100%;
+	min-width: 0px;
+	min-height: 20px;
+	padding: 0px;
+	margin: 0px;
+	background-color: transparent;
+	border-width: 0px;
+	border-radius: 0px;
+	decorator: none;
+	color: #f3eee4;
+	font-family: "WORR UI";
+	font-size: 14px;
+	text-align: left;
+}
+
+.data-table .data-table-row-action:hover,
+.data-table .data-table-row-action:focus,
+.utility-table .data-table-row-action:hover,
+.utility-table .data-table-row-action:focus
+{
+	background-color: transparent;
+	border-width: 0px;
+	color: #ffd967;
+	decorator: none;
 }
 
 .data-table tr:hover td,
@@ -753,4 +1085,51 @@
 {
 	background-color: #202000;
 	color: #ffff00;
+}
+
+
+/* Table dress per design language (8.9): microlabel headers, slab rows. */
+.data-table th,
+.utility-table th
+{
+	font-family: "WORR Display";
+	font-size: 12px;
+	font-weight: bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	color: #c9beb0;
+}
+
+.data-table td,
+.utility-table td
+{
+	min-height: 36px;
+	background-color: #171511;
+}
+
+.data-table tbody tr:hover td,
+.utility-table tbody tr:hover td
+{
+	background-color: #211e19;
+}
+
+.data-table tbody tr:hover td:first-child,
+.utility-table tbody tr:hover td:first-child
+{
+	border-left-width: 3px;
+	border-left-color: #b99b5b;
+}
+
+.data-table tr.is-selected td,
+.utility-table tr.is-selected td
+{
+	background-color: #1c241d;
+	color: #f3eee4;
+}
+
+.data-table tr.is-selected td:first-child,
+.utility-table tr.is-selected td:first-child
+{
+	border-left-width: 3px;
+	border-left-color: #83d18f;
 }

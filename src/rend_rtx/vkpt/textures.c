@@ -2010,6 +2010,12 @@ void vkpt_textures_update_descriptor_set(void)
 				sampler = qvk.tex_sampler_nearest;
 		} else if (q_img->flags & IF_NEAREST) {
 			sampler = qvk.tex_sampler_nearest;
+		} else if (q_img->flags & IF_REPEAT) {
+			// RmlUi registers decorator and image sources as repeatable sprite
+			// textures. Honor that contract before the generic IT_SPRITE clamp
+			// rule; otherwise repeated menu backdrops collapse to stretched
+			// edge texels across the entire RTX viewport.
+			sampler = qvk.tex_sampler;
 		} else if (q_img->flags & IF_BILERP) {
 			sampler = qvk.tex_sampler_linear_clamp;
 		} else if (q_img->type == IT_SPRITE) {

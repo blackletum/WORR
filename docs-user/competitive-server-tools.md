@@ -117,6 +117,14 @@ The relevant controls are:
 `callvote nextmap` consumes a queued MyMap entry first. If the queue is empty,
 the server selects the next map from the configured cycle.
 
+When `g_maps_selector` is enabled, eligible players receive a three-candidate
+**Next Map Vote** during intermission. The menu shows the remaining seconds and
+a shrinking countdown bar. Casting a ballot replaces the candidates with an
+acknowledgement; using Back dismisses the current ballot without making it
+reappear. A strict majority finalizes early, otherwise the leading candidate
+is selected when the short vote window expires. Bots cannot cast selector
+ballots.
+
 MyMap requires a connected client identity. Bots are not useful MyMap voters on
 public servers and are kept from inflating human map choice during the validated
 bot scenarios.
@@ -152,11 +160,19 @@ tourney_ban <mapname>
 
 The menu-backed commands `worr_tourney_info`, `worr_tourney_maps`,
 `worr_tourney_veto`, `worr_tourney_pick`, and `worr_tourney_ban` are used by
-the client UI. Admin replay controls are available through the UI and through:
+the client UI. The Veto menu opens the shared remaining-map picker for Pick or
+Ban and disables Ban when another ban would leave too few required picks.
+
+Admin replay controls are available through **Admin > Replay Game** and
+through:
 
 ```text
 replay <game#> confirm
 ```
+
+Replay is destructive. Replaying game N discards recorded results from game N
+onward, rebuilds the earlier series score, and loads game N's map. The menu
+warns about this result truncation and selects **No** first.
 
 Tournament veto choices are limited to the active side. Bots are rejected from
 the tournament veto identity path even if a smoke test assigns one a matching
@@ -184,6 +200,23 @@ replay <game#> confirm
 
 Admin commands require admin privileges. Bot clients are blocked from crossing
 the admin boundary, including the validated `lock_team` audit path.
+
+In a live match, open **Admin** from the session menu and choose **Admin
+Commands** for the complete in-game reference. The reference shows all
+registered admin commands and their usage, but commands with arguments are
+still entered in the console. **Replay Game** appears in the Admin menu only
+while the server reports an active tournament.
+
+## In-Game Player Stats
+
+Set `g_matchstats 1` to make **Stats** available in the multiplayer session
+menu. Each player sees their own live Combat, Damage, and Accuracy summary.
+The page refreshes once per second while open and reports unavailable K/D,
+damage, or accuracy ratios as `N/A` until the required counters exist.
+
+This in-game page is separate from the completed-match files described below:
+it is a current per-player view, while match logging writes durable server
+artifacts for later review.
 
 ## Match Logs
 

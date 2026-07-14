@@ -7,7 +7,16 @@ If you want deep engine internals, design notes, or migration writeups, see `doc
 ## Start Here
 
 - [Getting Started](getting-started.md): install basics, launch flow, and first-run checks.
+- [In-Game Console](console.md): completion, smooth scrolling, mouse controls,
+  selection, appearance, and chat behavior.
+- [Menu Navigation and Accessibility](menu-navigation-and-accessibility.md):
+  keyboard/gamepad controls, visual intent, large text, high contrast, reduced
+  motion, and language behavior.
 - [Server Quickstart](server-quickstart.md): host a dedicated server with sane defaults.
+- [Progressive Networking Controls](progressive-networking-controls.md): safe
+  defaults, compatibility fallbacks, lag-compensation evaluation, snapshot
+  timeline audits, adaptive input evaluation, and developer-only network fault
+  testing.
 - [Bots](bots.md): enable bots, add/remove them, choose practical cvars, and
   understand map/AAS limitations.
 - [Bot Cvars](bot-cvars.md): supported public bot cvars, defaults, and common

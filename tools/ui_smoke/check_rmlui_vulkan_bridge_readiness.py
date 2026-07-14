@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit Vulkan/RTX readiness for future native RmlUi renderer bridges."""
+"""Audit the native Vulkan and RTX/vkpt RmlUi renderer bridges."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ DEFAULT_INPUTS = {
     "rtx_textures_source": Path("src/rend_rtx/vkpt/textures.c"),
     "rtx_stretch_pic_vertex_shader": Path("src/rend_rtx/vkpt/shader/stretch_pic.vert"),
     "rtx_stretch_pic_fragment_shader": Path("src/rend_rtx/vkpt/shader/stretch_pic.frag"),
+    "rtx_rmlui_vertex_shader": Path("src/rend_rtx/vkpt/shader/rmlui.vert"),
 }
 
 LANE_LABELS = {
@@ -264,12 +265,13 @@ def record_activation_requirement(
 
 
 def build_non_gl_api_facts(renderer_api_text: str) -> tuple[bool, bool]:
-    non_gl_api_block = find_if_block(renderer_api_text, "USE_REF != REF_GL")
+    fallback_guard = "#if USE_REF != REF_GL && !defined(RENDERER_VULKAN_LEGACY)"
     non_gl_unavailable = (
-        "Renderer_RmlUiCanRender" in non_gl_api_block
-        and has_return(non_gl_api_block, "false")
-        and "Renderer_RmlUiNativeRenderInterface" in non_gl_api_block
-        and has_return(non_gl_api_block, "NULL")
+        fallback_guard in renderer_api_text
+        and "static bool Renderer_RmlUiCanRender" in renderer_api_text
+        and has_return(renderer_api_text, "false")
+        and "static void *Renderer_RmlUiNativeRenderInterface" in renderer_api_text
+        and has_return(renderer_api_text, "NULL")
     )
     fallback_exports = all(
         has_export_assignment(renderer_api_text, field_name, function_name)
@@ -281,6 +283,37 @@ def build_non_gl_api_facts(renderer_api_text: str) -> tuple[bool, bool]:
         )
     )
     return non_gl_unavailable, fallback_exports
+
+
+def native_vulkan_interface_exported(
+    renderer_api_text: str,
+    renderer_bridge_text: str,
+    lane_id: str,
+) -> bool:
+    renderer_define = (
+        "RENDERER_VULKAN_LEGACY"
+        if lane_id == "vulkan"
+        else "RENDERER_VULKAN_RTX"
+    )
+    return (
+        renderer_define in renderer_api_text
+        and has_export_assignment(
+            renderer_api_text,
+            "RmlUiCanRender",
+            "R_RmlUiCanRender",
+        )
+        and has_export_assignment(
+            renderer_api_text,
+            "RmlUiNativeRenderInterface",
+            "R_RmlUiNativeRenderInterface",
+        )
+        and renderer_define in renderer_bridge_text
+        and "class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface"
+        in renderer_bridge_text
+        and "static R_RmlUiVulkanRenderInterface r_rmlui_vulkan_render_interface;"
+        in renderer_bridge_text
+        and "return &r_rmlui_vulkan_render_interface;" in renderer_bridge_text
+    )
 
 
 def meson_runtime_dependency_disabled_for_lane(meson_build_text: str, lane_id: str) -> bool:
@@ -342,14 +375,16 @@ def meson_bridge_source_compiled_for_lane(meson_build_text: str, lane_id: str) -
 
 
 def renderer_bridge_class_missing(renderer_bridge_text: str, lane_id: str) -> bool:
+    shared_vulkan_bridge_present = (
+        "R_RmlUiVulkanRenderInterface" in renderer_bridge_text
+        or "R_RmlUiVkRenderInterface" in renderer_bridge_text
+    )
     if lane_id == "vulkan":
-        return (
-            "R_RmlUiVulkanRenderInterface" not in renderer_bridge_text
-            and "R_RmlUiVkRenderInterface" not in renderer_bridge_text
-        )
-    return (
-        "R_RmlUiRtxVkptRenderInterface" not in renderer_bridge_text
-        and "R_RmlUiVkptRenderInterface" not in renderer_bridge_text
+        return not shared_vulkan_bridge_present
+    return not (
+        shared_vulkan_bridge_present
+        or "R_RmlUiRtxVkptRenderInterface" in renderer_bridge_text
+        or "R_RmlUiVkptRenderInterface" in renderer_bridge_text
     )
 
 
@@ -369,8 +404,6 @@ def native_family_claim_missing(
 def validate_vulkan_lane(
     lane: BridgeReadinessLane,
     texts: dict[str, str],
-    non_gl_unavailable: bool,
-    fallback_exports: bool,
     no_opengl_redirect: bool,
 ) -> None:
     renderer_header_text = texts["renderer_header"]
@@ -447,39 +480,15 @@ def validate_vulkan_lane(
     source_missing = not meson_bridge_source_compiled_for_lane(meson_build_text, lane.lane_id)
     family_missing = native_family_claim_missing(renderer_api_text, renderer_bridge_text, lane.lane_id)
     runtime_enabled = meson_runtime_enabled_for_lane(meson_build_text, lane.lane_id)
-    runtime_dependency_disabled = meson_runtime_dependency_disabled_for_lane(meson_build_text, lane.lane_id)
     native_interface_exported = (
         not class_missing
         and not source_missing
         and not family_missing
         and runtime_enabled
-        and not (non_gl_unavailable and fallback_exports)
-    )
-    class_inactive = (
-        class_missing
-        or (
-            not native_interface_exported
-            and non_gl_unavailable
-            and fallback_exports
-        )
-    )
-    family_inactive = (
-        family_missing
-        or (
-            not class_missing
-            and not source_missing
-            and not native_interface_exported
-            and non_gl_unavailable
-            and fallback_exports
-        )
-    )
-    runtime_dependency_inactive = (
-        runtime_dependency_disabled
-        or (
-            runtime_enabled
-            and not native_interface_exported
-            and non_gl_unavailable
-            and fallback_exports
+        and native_vulkan_interface_exported(
+            renderer_api_text,
+            renderer_bridge_text,
+            lane.lane_id,
         )
     )
     record_activation_requirement(
@@ -534,30 +543,35 @@ def validate_vulkan_lane(
     add_fact(
         lane,
         "guardrails",
-        "renderer_api_non_gl_unavailable",
-        non_gl_unavailable and fallback_exports,
-        "non-OpenGL renderer exports must identify the lane while keeping CanRender=false and the native interface NULL",
+        "renderer_api_exports_native_interface",
+        native_interface_exported,
+        "legacy Vulkan must export CanRender=true and its non-null native RmlUi interface",
     )
     add_fact(
         lane,
         "guardrails",
-        "runtime_dependency_inactive",
-        runtime_dependency_inactive,
-        "Vulkan RmlUi runtime dependency must stay inactive until a native interface export exists",
+        "runtime_dependency_active",
+        runtime_enabled,
+        "Vulkan RmlUi runtime dependency must be enabled for the native bridge",
     )
     add_fact(
         lane,
         "guardrails",
-        "native_bridge_class_inactive",
-        class_inactive,
-        "Vulkan RmlUi bridge class must stay inactive until family, runtime, and interface exports are wired",
+        "native_geometry_surface_present",
+        has_all_tokens(
+            renderer_header_text + "\n" + vk_ui_header_text + "\n" + vk_ui_source_text + "\n" + vk_main_text,
+            ("renderer_rmlui_vertex_t", "R_RmlUiDrawGeometry", "VK_UI_DrawRmlGeometry"),
+        ),
+        "Vulkan RmlUi must submit arbitrary indexed geometry through the native Vulkan UI queue",
     )
     add_fact(
         lane,
         "guardrails",
-        "native_family_export_inactive",
-        family_inactive,
-        "Vulkan RmlUi family export must stay inactive until bridge source, runtime, and interface exports are wired",
+        "native_bridge_class_active",
+        not class_missing
+        and "static R_RmlUiVulkanRenderInterface r_rmlui_vulkan_render_interface;"
+        in renderer_bridge_text,
+        "Vulkan RmlUi bridge class and instance must remain active",
     )
     add_fact(
         lane,
@@ -571,8 +585,6 @@ def validate_vulkan_lane(
 def validate_rtx_lane(
     lane: BridgeReadinessLane,
     texts: dict[str, str],
-    non_gl_unavailable: bool,
-    fallback_exports: bool,
     no_opengl_redirect: bool,
 ) -> None:
     renderer_header_text = texts["renderer_header"]
@@ -587,6 +599,7 @@ def validate_rtx_lane(
     rtx_textures_text = texts["rtx_textures_source"]
     rtx_vert_text = texts["rtx_stretch_pic_vertex_shader"]
     rtx_frag_text = texts["rtx_stretch_pic_fragment_shader"]
+    rtx_rmlui_vert_text = texts["rtx_rmlui_vertex_shader"]
 
     add_fact(
         lane,
@@ -644,44 +657,31 @@ def validate_rtx_lane(
         and has_all_tokens(rtx_frag_text, ("global_textureLod", "outColor")),
         "native RTX/vkpt stretch-pic shaders must remain available",
     )
+    add_fact(
+        lane,
+        "foundations",
+        "rmlui_shader_present",
+        has_all_tokens(
+            rtx_rmlui_vert_text,
+            ("RmlUiVertex", "vertices", "packed_color", "texture_id"),
+        )
+        and "src/rend_rtx/vkpt/shader/rmlui.vert" in meson_build_text,
+        "native RTX/vkpt RmlUi vertex shader must remain compiled into the renderer",
+    )
 
     class_missing = renderer_bridge_class_missing(renderer_bridge_text, lane.lane_id)
     source_missing = not meson_bridge_source_compiled_for_lane(meson_build_text, lane.lane_id)
     family_missing = native_family_claim_missing(renderer_api_text, renderer_bridge_text, lane.lane_id)
     runtime_enabled = meson_runtime_enabled_for_lane(meson_build_text, lane.lane_id)
-    runtime_dependency_disabled = meson_runtime_dependency_disabled_for_lane(meson_build_text, lane.lane_id)
     native_interface_exported = (
         not class_missing
         and not source_missing
         and not family_missing
         and runtime_enabled
-        and not (non_gl_unavailable and fallback_exports)
-    )
-    class_inactive = (
-        class_missing
-        or (
-            not native_interface_exported
-            and non_gl_unavailable
-            and fallback_exports
-        )
-    )
-    family_inactive = (
-        family_missing
-        or (
-            not class_missing
-            and not source_missing
-            and not native_interface_exported
-            and non_gl_unavailable
-            and fallback_exports
-        )
-    )
-    runtime_dependency_inactive = (
-        runtime_dependency_disabled
-        or (
-            runtime_enabled
-            and not native_interface_exported
-            and non_gl_unavailable
-            and fallback_exports
+        and native_vulkan_interface_exported(
+            renderer_api_text,
+            renderer_bridge_text,
+            lane.lane_id,
         )
     )
     record_activation_requirement(
@@ -736,30 +736,59 @@ def validate_rtx_lane(
     add_fact(
         lane,
         "guardrails",
-        "renderer_api_non_gl_unavailable",
-        non_gl_unavailable and fallback_exports,
-        "non-OpenGL renderer exports must identify the lane while keeping CanRender=false and the native interface NULL",
+        "renderer_api_exports_native_interface",
+        native_interface_exported,
+        "RTX/vkpt must export CanRender=true and its non-null native RmlUi interface",
     )
     add_fact(
         lane,
         "guardrails",
-        "runtime_dependency_inactive",
-        runtime_dependency_inactive,
-        "RTX/vkpt RmlUi runtime dependency must stay inactive until a native interface export exists",
+        "runtime_dependency_active",
+        runtime_enabled,
+        "RTX/vkpt RmlUi runtime dependency must be enabled for the native bridge",
     )
     add_fact(
         lane,
         "guardrails",
-        "native_bridge_class_inactive",
-        class_inactive,
-        "RTX/vkpt RmlUi bridge class must stay inactive until family, runtime, and interface exports are wired",
+        "native_bridge_class_active",
+        not class_missing
+        and "static R_RmlUiVulkanRenderInterface r_rmlui_vulkan_render_interface;"
+        in renderer_bridge_text,
+        "RTX/vkpt RmlUi bridge class and shared Vulkan instance must remain active",
     )
     add_fact(
         lane,
         "guardrails",
-        "native_family_export_inactive",
-        family_inactive,
-        "RTX/vkpt RmlUi family export must stay inactive until bridge source, runtime, and interface exports are wired",
+        "native_indexed_geometry_present",
+        has_all_tokens(
+            renderer_header_text + "\n" + rtx_header_text + "\n" + rtx_draw_text,
+            (
+                "renderer_rmlui_vertex_t",
+                "R_RmlUiDrawGeometry",
+                "RmlUiVertex_t",
+                "rmlui_vertex_queue",
+                "rmlui_index_queue",
+                "pipeline_rmlui",
+                "vkCmdDrawIndexed",
+                "VK_INDEX_TYPE_UINT32",
+                "rmlui_stretch_pic_split",
+            ),
+        ),
+        "RTX/vkpt RmlUi must preserve native indexed geometry, ordering, and submission",
+    )
+    add_fact(
+        lane,
+        "guardrails",
+        "native_screenshot_readback_present",
+        has_all_tokens(
+            rtx_main_text + "\n" + rtx_images_text,
+            (
+                "IMG_GetPendingScreenshot_RTX",
+                "IMG_CompletePendingScreenshot_RTX",
+                "vkCmdCopyImageToBuffer",
+            ),
+        ),
+        "RTX/vkpt must preserve native screenshot readback for visual evidence",
     )
     add_fact(
         lane,
@@ -798,7 +827,6 @@ def validate_bridge_readiness(repo_root: Path, paths: dict[str, Path]) -> Bridge
     renderer_api_text = texts["renderer_api_source"]
     renderer_bridge_text = texts["renderer_bridge_source"]
     client_renderer_text = texts["client_renderer_source"]
-    non_gl_unavailable, fallback_exports = build_non_gl_api_facts(renderer_api_text)
     no_opengl_redirect = not suspicious_opengl_redirects(
         "\n".join((renderer_api_text, renderer_bridge_text, client_renderer_text))
     )
@@ -822,36 +850,48 @@ def validate_bridge_readiness(repo_root: Path, paths: dict[str, Path]) -> Bridge
             "UI_RML_RENDERER_FAMILY_RTX_VKPT",
         )
     )
-    report.contract_facts["renderer_api_non_gl_unavailable"] = (
-        non_gl_unavailable and fallback_exports
+    report.contract_facts["renderer_api_family_availability_correct"] = (
+        native_vulkan_interface_exported(
+            renderer_api_text, renderer_bridge_text, "vulkan"
+        )
+        and native_vulkan_interface_exported(
+            renderer_api_text, renderer_bridge_text, "rtx_vkpt"
+        )
     )
     report.contract_facts["no_vulkan_or_rtx_to_opengl_redirect"] = no_opengl_redirect
 
     for fact_name, error in (
         ("renderer_non_gl_families_declared", "renderer header must declare distinct Vulkan and RTX/vkpt RmlUi families"),
         ("client_non_gl_families_are_distinct", "client renderer must keep Vulkan and RTX/vkpt UI families distinct"),
-        ("renderer_api_non_gl_unavailable", "non-OpenGL renderer exports must remain unavailable until native bridges exist"),
+        (
+            "renderer_api_family_availability_correct",
+            "renderer API must activate the native Vulkan and RTX/vkpt interfaces",
+        ),
         ("no_vulkan_or_rtx_to_opengl_redirect", "Vulkan/RTX RmlUi lanes must not map to OpenGL"),
     ):
         if not report.contract_facts[fact_name]:
             report.errors.append(error)
 
-    vulkan_lane = BridgeReadinessLane("vulkan", LANE_LABELS["vulkan"])
+    vulkan_lane = BridgeReadinessLane(
+        "vulkan",
+        LANE_LABELS["vulkan"],
+        expected_status="native_guarded",
+    )
     validate_vulkan_lane(
         vulkan_lane,
         texts,
-        non_gl_unavailable,
-        fallback_exports,
         no_opengl_redirect,
     )
     report.lanes[vulkan_lane.lane_id] = vulkan_lane
 
-    rtx_lane = BridgeReadinessLane("rtx_vkpt", LANE_LABELS["rtx_vkpt"])
+    rtx_lane = BridgeReadinessLane(
+        "rtx_vkpt",
+        LANE_LABELS["rtx_vkpt"],
+        expected_status="native_guarded",
+    )
     validate_rtx_lane(
         rtx_lane,
         texts,
-        non_gl_unavailable,
-        fallback_exports,
         no_opengl_redirect,
     )
     report.lanes[rtx_lane.lane_id] = rtx_lane

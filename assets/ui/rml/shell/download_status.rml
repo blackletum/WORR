@@ -8,18 +8,29 @@
   </head>
   <body id="shell-download-status" data-route-id="download_status" data-route-group="shell" data-route-version="1" data-document-status="scaffolded-round2" data-close-command="popmenu; download_cancel" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen shell-screen settings-screen" id="download-status-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="shell-download-status-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="shell-download-status-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="shell-download-status-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <div class="menu-header">
-        <h1>Downloading Content</h1>
+        <div class="worr-titlerow"><button id="shell-download-status-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_downloading_content">Downloading Content</h1></div>
       </div>
 
       <div class="menu-stack" id="download-status-stack" data-component="common.components.menu_frame">
         <div class="settings-section" id="download-status-details" data-model="shell.download_status">
-          <p id="download-status-idle" class="status-message" data-show-if="ui_download_active=0">No active download.</p>
+          <p id="download-status-idle" class="status-message" data-show-if="ui_download_active=0" data-loc-key="worr_ui_no_active_download">No active download.</p>
           <p id="download-status-file" data-label-cvar="ui_download_file" data-show-if="ui_download_file"></p>
           <p id="download-status-message" data-label-cvar="ui_download_status" data-show-if="ui_download_status"></p>
+          <div class="worr-gauge" id="download-status-gauge" data-gauge-cvar="ui_download_percent" data-gauge-min="0" data-gauge-max="100" data-show-if="ui_download_active"><span data-bind-cvar="ui_download_percent">0</span></div>
           <div class="setting-row" data-control="progress" data-cvar="ui_download_percent" data-show-if="ui_download_active">
-            <span class="setting-widget-icon" data-widget="progress"><img src="../common/icons/widgets/progress.svg" /></span>
-            <label for="download-status-progress">Progress</label>
+            <span class="setting-widget-icon" data-widget="progress"><img src="../common/icons/widgets/progress.png" /></span>
+            <label for="download-status-progress" data-loc-key="worr_ui_progress">Progress</label>
             <progress id="download-status-progress" value="0" max="100" data-cvar="ui_download_percent"></progress>
             <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="ui_download_percent" data-meter-min="0" data-meter-max="100"></span><span class="setting-meter-text"><span data-bind-cvar="ui_download_percent">0</span>%</span></span>
           </div>
@@ -28,9 +39,13 @@
       </div>
 
       <div class="menu-footer" id="download-status-menu-footer">
-        <button id="download-status-cancel" class="ui-button-danger" type="button" data-command="download_cancel" data-show-if="ui_download_active" data-menu-sound="alert">Cancel</button>
-        <button id="download-status-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
+        <button id="download-status-cancel" class="ui-button-danger" type="button" data-command="download_cancel" data-show-if="ui_download_active" data-menu-sound="alert" data-loc-key="worr_ui_cancel">Cancel</button>
       </div>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="shell-download-status-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
+      </footer>
     </div>
   </body>
 </rml>

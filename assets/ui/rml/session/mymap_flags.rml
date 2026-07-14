@@ -5,16 +5,16 @@
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="session-mymap-flags" data-route-id="mymap_flags" data-route-group="session" data-route-version="1" data-document-status="round2-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="session-mymap-flags" data-route-id="mymap_flags" data-route-group="session" data-route-version="2" data-document-status="live-provider" data-controller="native-session-cvars" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="mymap-flags-screen">
       <header class="page-header">
-        <h1>MyMap Flags</h1>
-        <p id="mymap-flags-summary">
+        <div class="worr-titlerow"><button id="session-mymap-flags-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_mymap_flags">MyMap Flags</h1></div>
+        <p id="mymap-flags-summary" data-loc-key="worr_ui_toggle_which_item_and_damage_rules_apply_to_you">
           Toggle which item and damage rules apply to your map request.
         </p>
       </header>
 
-      <section class="content" id="mymap-flags-content" data-model="session.mymap.flags" data-owner-boundary="sgame-published-cvars">
+      <nav class="menu-list session-vote-option-grid" id="mymap-flags-content" data-model="session.mymap.flags" data-controller="native-session-cvars" data-owner-boundary="sgame-published-cvars">
         <button id="mymap-flag-pu" type="button" data-label-cvar="ui_mymap_flag_pu" data-command="worr_mymap_flag pu" data-menu-sound="change">Powerups</button>
         <button id="mymap-flag-pa" type="button" data-label-cvar="ui_mymap_flag_pa" data-command="worr_mymap_flag pa" data-menu-sound="change">Power Armor</button>
         <button id="mymap-flag-ar" type="button" data-label-cvar="ui_mymap_flag_ar" data-command="worr_mymap_flag ar" data-menu-sound="change">Armor</button>
@@ -25,11 +25,7 @@
         <button id="mymap-flag-fd" type="button" data-label-cvar="ui_mymap_flag_fd" data-command="worr_mymap_flag fd" data-menu-sound="change">Falling Damage</button>
         <button id="mymap-flag-sd" type="button" data-label-cvar="ui_mymap_flag_sd" data-command="worr_mymap_flag sd" data-menu-sound="change">Self Damage</button>
         <button id="mymap-flag-ws" type="button" data-label-cvar="ui_mymap_flag_ws" data-command="worr_mymap_flag ws" data-menu-sound="change">Weapons Stay</button>
-      </section>
-
-      <footer class="actions" id="mymap-flags-actions">
-        <button id="mymap-flags-back" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
-      </footer>
+      </nav>
     </div>
   </body>
 </rml>

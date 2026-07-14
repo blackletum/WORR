@@ -25,21 +25,22 @@ Detects and resolves a stuck hull by probing each axial side,
 measuring clearance, and choosing the least-movement fix.
 ===============
 */
-StuckResult G_FixStuckObject_Generic(
+template<typename Trace>
+static StuckResult G_FixStuckObject_Impl(
 	Vector3& origin,
 	const Vector3& ownMins,
 	const Vector3& ownMaxs,
-	std::function<stuck_object_trace_fn_t> trace) {
+	Trace&& trace) {
 	if (!trace(origin, ownMins, ownMaxs, origin).startSolid)
 		return StuckResult::GoodPosition;
 
 	struct GoodPos {
 		float  dist2 = 0.0f;
 		Vector3 pos{};
+		size_t side = 0;
 	};
-	// We consider exactly six axial directions (pairs), so six slots is enough.
-	std::array<GoodPos, 6> good{};
-	size_t numGood = 0;
+	GoodPos best{};
+	bool haveBest = false;
 
 	// Axial side probes (paired so sn ^ 1 is opposite).
 	struct Side {
@@ -152,24 +153,39 @@ StuckResult G_FixStuckObject_Generic(
 		if (tr.startSolid)
 			continue;
 
-		// Record candidate; prefer the least movement.
-		if (numGood < good.size()) {
-			good[numGood].pos = fix;
-			good[numGood].dist2 = delta.lengthSquared();
-			++numGood;
+		// Choose deterministically: least movement, then axial side order, then
+		// lexicographic position.  The complete ordering avoids implementation-
+		// dependent results when two probes have equal clearance.
+		const GoodPos candidate{delta.lengthSquared(), fix, sn};
+		const bool lexicographicallyEarlier =
+			candidate.pos[0] < best.pos[0] ||
+			(candidate.pos[0] == best.pos[0] &&
+			 (candidate.pos[1] < best.pos[1] ||
+			  (candidate.pos[1] == best.pos[1] &&
+			   candidate.pos[2] < best.pos[2])));
+		if (!haveBest || candidate.dist2 < best.dist2 ||
+			(candidate.dist2 == best.dist2 &&
+			 (candidate.side < best.side ||
+			  (candidate.side == best.side && lexicographicallyEarlier)))) {
+			best = candidate;
+			haveBest = true;
 		}
 	}
 
-	if (numGood) {
-		// NOTE: original code sorted with the wrong end iterator. Fixed below.
-		std::sort(good.begin(), good.begin() + static_cast<std::ptrdiff_t>(numGood),
-			[](const GoodPos& a, const GoodPos& b) { return a.dist2 < b.dist2; });
-
-		origin = good[0].pos;
+	if (haveBest) {
+		origin = best.pos;
 		return StuckResult::Fixed;
 	}
 
 	return StuckResult::NoGoodPosition;
+}
+
+StuckResult G_FixStuckObject_Generic(
+	Vector3& origin,
+	const Vector3& ownMins,
+	const Vector3& ownMaxs,
+	std::function<stuck_object_trace_fn_t> trace) {
+	return G_FixStuckObject_Impl(origin, ownMins, ownMaxs, trace);
 }
 
 // all of the locals will be zeroed before each
@@ -192,24 +208,48 @@ struct PMoveLocal {
 
 pm_config_t	pm_config;
 
-PMove* pm;
-PMoveLocal	pml;
+thread_local PMove* pm;
+thread_local PMoveLocal pml;
+
+// Movement callbacks may invoke tooling or shadow simulation recursively.
+// Preserve the outer invocation rather than leaving thread-local scratch as a
+// hidden, non-reentrant singleton.
+class PMoveInvocationScope {
+public:
+	explicit PMoveInvocationScope(PMove* next)
+		: previousPm(pm), previousLocal(pml) {
+		pm = next;
+		pml = {};
+	}
+
+	~PMoveInvocationScope() {
+		pml = previousLocal;
+		pm = previousPm;
+	}
+
+	PMoveInvocationScope(const PMoveInvocationScope&) = delete;
+	PMoveInvocationScope& operator=(const PMoveInvocationScope&) = delete;
+
+private:
+	PMove* previousPm;
+	PMoveLocal previousLocal;
+};
 
 // movement parameters
-float pm_stopSpeed = 100;
-float pm_maxSpeed = 300;
-float pm_duckSpeed = 100;
-float pm_accelerate = 10;
-float pm_waterAccelerate = 10;
-float pm_friction = 6;
-float pm_waterFriction = 1;
-float pm_waterSpeed = 400;
-float pm_ladderScale = 0.5f;
+constexpr float pm_stopSpeed = 100;
+constexpr float pm_maxSpeed = 300;
+constexpr float pm_duckSpeed = 100;
+constexpr float pm_accelerate = 10;
+constexpr float pm_waterAccelerate = 10;
+constexpr float pm_friction = 6;
+constexpr float pm_waterFriction = 1;
+constexpr float pm_waterSpeed = 400;
+constexpr float pm_ladderScale = 0.5f;
 constexpr float kOverbounceDefault = 1.01f;
 constexpr float kOverbounceQ3 = 1.001f;
 
-static inline float PM_GetOverbounceFactor() {
-	return pm_config.q3Overbounce ? kOverbounceQ3 : kOverbounceDefault;
+static inline float PM_GetOverbounceFactor(const pm_config_t& config) {
+	return config.q3Overbounce ? kOverbounceQ3 : kOverbounceDefault;
 }
 
 /*
@@ -218,7 +258,7 @@ MaxSpeed
 ==================
 */
 static float MaxSpeed(pmove_state_t* ps) {
-	return ps->haste ? pm_maxSpeed * 1.25 : pm_maxSpeed;
+	return (ps->pmFlags & PMF_HASTE) ? pm_maxSpeed * 1.25f : pm_maxSpeed;
 }
 
 /*
@@ -236,12 +276,13 @@ out:       clipped velocity result
 overBounce:1.0f for pure slide; >1.0f adds a small bounce (e.g., 1.01f)
 ===============
 */
-static inline void PM_ClipVelocity(const Vector3& in, const Vector3& normal, Vector3& out, float overBounce) {
+static inline void PM_ClipVelocity(const Vector3& in, const Vector3& normal,
+	Vector3& out, float overBounce, bool q3Overbounce) {
 	// Project the incoming velocity onto the plane normal and remove that component.
 	float backOff = in.dot(normal);
 
 	// Quake 3 overbounce bug applies asymmetric scaling to the backoff term.
-	if (pm_config.q3Overbounce) {
+	if (q3Overbounce) {
 		if (backOff < 0.0f) {
 			backOff *= overBounce;
 		}
@@ -342,7 +383,8 @@ Iterative step/slide resolver for generic hulls.
 - If has_time is true, velocity is restored to its primal value at the end.
 ===============
 */
-void PM_StepSlideMove_Generic(
+template<typename Trace>
+static void PM_StepSlideMoveGenericImpl(
 	Vector3& origin,
 	Vector3& velocity,
 	float frameTime,
@@ -350,12 +392,13 @@ void PM_StepSlideMove_Generic(
 	const Vector3& maxs,
 	touch_list_t& touch,
 	bool has_time,
-	pm_trace_t traceFunc
+	const pm_config_t& config,
+	Trace&& traceFunc
 ) {
 	static constexpr int   MAX_BUMPS = 4;
 	static constexpr float PARALLEL_DOT = 0.99f;   // consider planes effectively parallel
 	static constexpr float NUDGE_DIST = 0.01f;   // small push along plane normal
-	const float overBounce = PM_GetOverbounceFactor();
+	const float overBounce = PM_GetOverbounceFactor(config);
 
 	// Early out: nothing to do.
 	if (velocity[_X] == 0.0f && velocity[_Y] == 0.0f && velocity[_Z] == 0.0f) {
@@ -385,8 +428,10 @@ void PM_StepSlideMove_Generic(
 		// pick the plane that produces the "smaller" post-clip velocity.
 		if (tr.surface2) {
 			Vector3 clip_a, clip_b;
-			PM_ClipVelocity(velocity, tr.plane.normal, clip_a, overBounce);
-			PM_ClipVelocity(velocity, tr.plane2.normal, clip_b, overBounce);
+			PM_ClipVelocity(velocity, tr.plane.normal, clip_a, overBounce,
+				config.q3Overbounce);
+			PM_ClipVelocity(velocity, tr.plane2.normal, clip_b, overBounce,
+				config.q3Overbounce);
 
 			float sum_a = std::fabs(clip_a[0]) + std::fabs(clip_a[1]) + std::fabs(clip_a[2]);
 			float sum_b = std::fabs(clip_b[0]) + std::fabs(clip_b[1]) + std::fabs(clip_b[2]);
@@ -438,7 +483,7 @@ void PM_StepSlideMove_Generic(
 				origin[_X] += tr.plane.normal[0] * NUDGE_DIST;
 				origin[_Y] += tr.plane.normal[1] * NUDGE_DIST;
 				origin[_Z] += tr.plane.normal[2] * NUDGE_DIST * 0.0f; // do not nudge Z here
-				G_FixStuckObject_Generic(origin, mins, maxs, traceFunc);
+				G_FixStuckObject_Impl(origin, mins, maxs, traceFunc);
 				break;
 			}
 		}
@@ -452,7 +497,8 @@ void PM_StepSlideMove_Generic(
 
 		// Reclip velocity so it is parallel to all planes hit so far.
 		for (i = 0; i < numPlanes; ++i) {
-			PM_ClipVelocity(velocity, planes[i], velocity, overBounce);
+			PM_ClipVelocity(velocity, planes[i], velocity, overBounce,
+				config.q3Overbounce);
 
 			// Ensure we are not moving into any other plane.
 			int j = 0;
@@ -491,8 +537,24 @@ void PM_StepSlideMove_Generic(
 	}
 }
 
+void PM_StepSlideMove_Generic(
+	Vector3& origin,
+	Vector3& velocity,
+	float frameTime,
+	const Vector3& mins,
+	const Vector3& maxs,
+	touch_list_t& touch,
+	bool has_time,
+	const pm_config_t& config,
+	pm_trace_t traceFunc) {
+	PM_StepSlideMoveGenericImpl(origin, velocity, frameTime, mins, maxs,
+		touch, has_time, config, traceFunc);
+}
+
 static inline void PM_StepSlideMove_() {
-	PM_StepSlideMove_Generic(pml.origin, pml.velocity, pml.frameTime, pm->mins, pm->maxs, pm->touch, pm->s.pmTime, PM_Trace_Auto);
+	PM_StepSlideMoveGenericImpl(pml.origin, pml.velocity, pml.frameTime,
+		pm->mins, pm->maxs, pm->touch, pm->s.pmTime, pm->config,
+		PM_Trace_Auto);
 }
 
 /*
@@ -927,8 +989,8 @@ static void PM_AirMove() {
 	// If the knockback timer is active, DO NOT apply air acceleration.
 	// This prevents player input from cancelling the knockback impulse.
 	if (!pm->s.pmTime) {
-		if (pm_config.airAccel) {
-			PM_AirAccelerate(wishDir, wishSpeed, pm_config.airAccel);
+		if (pm->config.airAccel) {
+			PM_AirAccelerate(wishDir, wishSpeed, pm->config.airAccel);
 		}
 		else {
 			PM_Accelerate(wishDir, wishSpeed, 1.0f);
@@ -1041,7 +1103,7 @@ static void PM_CatagorizePosition() {
 			// Just landed
 
 			// Trick flag (Paril-KEX: N64 physics skip this)
-			if (!pm_config.n64Physics &&
+			if (!pm->config.n64Physics &&
 				pml.velocity[_Z] >= 100.0f &&
 				pm->groundPlane.normal[2] >= 0.9f &&
 				!(pm->s.pmFlags & PMF_DUCKED)) {
@@ -1051,13 +1113,15 @@ static void PM_CatagorizePosition() {
 
 			// Compute impact delta for fall/land handling
 			Vector3 clippedVelocity;
-			PM_ClipVelocity(pml.velocity, pm->groundPlane.normal, clippedVelocity, PM_GetOverbounceFactor());
+			PM_ClipVelocity(pml.velocity, pm->groundPlane.normal,
+				clippedVelocity, PM_GetOverbounceFactor(pm->config),
+				pm->config.q3Overbounce);
 			pm->impactDelta = pml.startVelocity[2] - clippedVelocity[2];
 
 			pm->s.pmFlags |= PMF_ON_GROUND;
 
 			// Land lag when ducked or in N64 physics mode
-			if (pm_config.n64Physics || (pm->s.pmFlags & PMF_DUCKED)) {
+			if (pm->config.n64Physics || (pm->s.pmFlags & PMF_DUCKED)) {
 				pm->s.pmFlags |= PMF_TIME_LAND;
 				pm->s.pmTime = 128;
 			}
@@ -1196,8 +1260,9 @@ static void PM_CheckSpecialMovement() {
 		if (waterjumpVel[2] < 0.0f) {
 			hasTime = false;
 		}
-		PM_StepSlideMove_Generic(waterjumpOrigin, waterjumpVel, stepTime,
-			pm->mins, pm->maxs, touches, hasTime, PM_Trace_Auto);
+		PM_StepSlideMoveGenericImpl(waterjumpOrigin, waterjumpVel, stepTime,
+			pm->mins, pm->maxs, touches, hasTime, pm->config,
+			PM_Trace_Auto);
 	}
 
 	// Snap down to test if we can stand at the end of the jump
@@ -1388,7 +1453,7 @@ static bool PM_CheckDuck() {
 	else if ((pm->cmd.buttons & BUTTON_CROUCH) &&
 		(pm->groundEntity || (pm->waterLevel <= WATER_FEET && !PM_AboveWater())) &&
 		!(pm->s.pmFlags & PMF_ON_LADDER) &&
-		!pm_config.n64Physics) {
+		!pm->config.n64Physics) {
 		if (!(pm->s.pmFlags & PMF_DUCKED)) {
 			// Check head clearance for duck bbox
 			Vector3 checkMaxs = { pm->maxs[0], pm->maxs[1], 4.0f };
@@ -1472,7 +1537,7 @@ static void PM_SnapPosition() {
 		return;
 	}
 
-	if (G_FixStuckObject_Generic(pm->s.origin, pm->mins, pm->maxs, PM_Trace_Auto) ==
+	if (G_FixStuckObject_Impl(pm->s.origin, pm->mins, pm->maxs, PM_Trace_Auto) ==
 		StuckResult::NoGoodPosition) {
 		pm->s.origin = pml.previousOrigin;
 	}
@@ -1556,7 +1621,12 @@ static void PM_ScreenEffects() {
 	// Sample position at view origin
 	const Vector3 viewOrg = pml.origin + pm->viewOffset +
 		Vector3{ 0.0f, 0.0f, static_cast<float>(pm->s.viewHeight) };
-	const contents_t contents = pm->pointContents(viewOrg);
+	const auto presentationContents = pm->presentationPointContents
+		? pm->presentationPointContents
+		: pm->pointContents;
+	const contents_t contents = presentationContents
+		? presentationContents(viewOrg)
+		: CONTENTS_NONE;
 
 	// Set underwater render flag
 	if (contents & (CONTENTS_LAVA | CONTENTS_SLIME | CONTENTS_WATER)) {
@@ -1586,7 +1656,9 @@ Can be called by either the server or the client.
 ===============
 */
 void Pmove(PMove* pmove) {
-	pm = pmove;
+	if (!pmove)
+		return;
+	PMoveInvocationScope invocation(pmove);
 
 	// --- Clear results ---
 	pm->touch.num = 0;
@@ -1602,7 +1674,6 @@ void Pmove(PMove* pmove) {
 	pm->impactDelta = 0;
 
 	// --- Reset local move state ---
-	pml = {};
 	pml.origin = pm->s.origin;
 	pml.velocity = pm->s.velocity;
 	pml.startVelocity = pml.velocity;

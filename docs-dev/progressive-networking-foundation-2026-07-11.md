@@ -9,6 +9,25 @@ Strategic project:
 Living plan:
 `docs-dev/plans/progressive-networking-events-snapshots-roadmap.md`.
 
+Update (2026-07-12): this document remains the implementation record for the
+initial foundation. Its provisional mirrored-PMove boundary was subsequently
+removed and `FR-10-T02` completed. The authoritative replacement and validation
+record is `docs-dev/networking-deterministic-prediction-core-2026-07-12.md`.
+
+Subsequent integration update (2026-07-12): several limitations recorded below
+describe this foundation revision, not the current runtime. Negotiated legacy
+command/cursor sidebands now carry canonical command identity and the
+authoritative server-consumed cursor without changing `q2proto/`; the live
+client snapshot shadow attaches that cursor, maintains a stateful canonical
+server clock across FPS changes and demo seeks, and feeds parity-qualified
+immutable views to external cgame. Cgame replays retained local input from the
+exact consumed cursor and fails closed on ambiguous history. Sgame now consumes
+an API-v2 tri-state command context and traces one common sealed, immutable
+player-bounds rewind scene per command. The current implementation records are
+the T06 through T11 documents linked by the living plan. The native WORR packet
+envelope, canonical presentation cutover, mover history, fairness/load gates,
+and full demo/MVD matrix remain open.
+
 ## Outcome
 
 WORR now has the first wire-compatible foundation of the progressive network
@@ -33,13 +52,20 @@ architecture:
   health, knockback, death, piercing, effects, and radius damage always execute
   against current authoritative entities.
 
-`q2proto/` and all wire message formats remain unchanged. Existing legacy
-server/demo parsing remains the compatibility adapter.
+At this foundation revision, `q2proto/` and all wire message formats were
+unchanged. Existing legacy server/demo parsing remained the compatibility
+adapter. Later work kept `q2proto/` unchanged while adding negotiated
+engine-owned setting sidebands around the legacy command and snapshot paths.
 
-This is a foundation, not the completed FR-10 system. Authoritative typed event
-sequences, full immutable snapshot payloads, explicit processed-input and
-render-time watermarks, prediction state hashing, deterministic impairment
-tests, movers, and the extended gameplay compensation matrix remain open.
+This is a foundation, not the completed FR-10 system. At this revision,
+authoritative typed event sequences, full immutable snapshot payloads, explicit
+processed-input and render-time watermarks, prediction state hashing,
+deterministic impairment tests, movers, and the extended gameplay compensation
+matrix remained open. Typed event/shadow ranges, canonical snapshot storage and
+live client projection, authoritative consumed-input identity, prediction
+hashing/replay, deterministic impairment tests, and the common rewind scene
+have since landed in progressive default-off slices; the remaining promotion
+and coverage work is tracked in the living plan.
 
 ## Architecture Decision
 
@@ -112,42 +138,44 @@ When a move packet acknowledges a snapshot, `SV_SetLastFrame`:
 Immediately before `ClientThink`, the engine overwrites
 `usercmd_t.server_frame` and the internal `server_frame_delta` with those
 validated values. The decoded client command cannot author either value used by
-sgame. The interval is an engine/game ABI field, not a wire field. Because this
-tail field changes both public module layouts, `GAME_API_VERSION` was advanced
-from `2023` to `2024` and `CGAME_API_VERSION` from `2026` to `2027`; mixed stale
-engine/module binaries now fail closed at load. Bots receive the current server
-frame and remain uncompensated by policy.
+sgame. The interval is an engine/game ABI field, not a wire field. The
+foundation first advanced `GAME_API_VERSION` from `2023` to `2024` and
+`CGAME_API_VERSION` from `2026` to `2027`. The completed `FR-10-T02` work then
+removed the unsafe mirrored PMove export and advanced the APIs again to
+`2025`/`2028`. Mixed stale engine/module binaries fail closed at load. Bots
+receive the current server frame and remain uncompensated by policy.
 
-### Current timing limitation
+### Foundation timing limitation
 
-The legacy move packet has one packet-level snapshot acknowledgement, so backup
+At this foundation revision, the legacy move packet had one packet-level
+snapshot acknowledgement, so backup
 and new commands decoded from the same packet share that clock/interval. It is
 not an authoritative per-command consumption or exact render-time watermark.
-`FR-10-T09` must add explicit command sequences, processed-input
-acknowledgements, and sample/render time.
+`FR-10-T09` subsequently added explicit command identity, validated sample-time
+provenance, and a negotiated server-consumed cursor. Native exact render
+watermarks remain open; packet acknowledgement is no longer used as the replay
+watermark after canonical cursor authority is established.
 
 ## Shared Movement and Prediction Foundation
 
-The cgame entity movement callback now calls the loaded cgame module's C++
-`Pmove` export instead of legacy engine `Pmove`. This makes predicted and
-authoritative movement execute the same `p_move.cpp` implementation.
+The foundation initially routed the cgame movement callback into the same
+`p_move.cpp` source as sgame and guarded a provisional C/C++ mirrored layout.
+That intermediate callback no longer exists. `FR-10-T02` now builds one
+strict-FP, position-independent C++20 prediction core and links it whole into
+cgame and sgame. Cross-DLL calls use the versioned, pointer-free records in
+`inc/shared/prediction_abi.h`, with validated callback thunks and atomic failure.
 
-Two associated divergence bugs were corrected:
+The completed path retains the two original divergence fixes:
 
 - `CONFIG_Q3_OVERBOUNCE` is read during cgame initialization and on later
   configstring changes;
 - rotated brush-model point-contents prediction uses the entity's actual angles
   instead of an uninitialized vector.
 
-The current C `pmove_t` and C++ `PMove` mirrors have matching layouts on the
-supported 32-bit and 64-bit Windows ABIs. A shared versioned layout description
-and assertions now fail the engine or cgame build if size, alignment, or key
-offsets drift. The callback types are still mirrored rather than one exactly
-typed canonical POD interface; replacing them with explicit thunks/adapters is
-part of `FR-10-T02` and is required before that task completes.
-
-Prediction telemetry remains observational. It does not alter movement or
-correction decisions in this slice.
+Canonical command, state, configuration, collision-transcript, and replay-chain
+hashes now have checked deterministic evidence. Prediction telemetry remains
+observational; only presentation position error is smoothed, while collision
+state accepts authority immediately.
 
 ## Cgame Snapshot Timeline
 
@@ -171,9 +199,11 @@ Continuity is classified as initial, contiguous, sequence gap, baseline jump,
 full snapshot, duplicate, or rewind. A backwards snapshot starts a new epoch;
 an equal snapshot preserves the epoch so duplicate events remain suppressible.
 
-The inferred input acknowledgement is explicitly named and documented as
-transport telemetry. It must not drive future canonical reconciliation until
-the server reports an authoritative consumed-input sequence.
+The inferred input acknowledgement was explicitly named and documented as
+transport telemetry in this foundation. It did not drive canonical
+reconciliation. The live client now imports an authoritative consumed-command
+cursor and cgame replays only verified canonical successors, with an explicitly
+tagged packet-ACK fallback limited to negotiated bootstrap and legacy peers.
 
 ## Event Journal Foundation
 
@@ -229,12 +259,20 @@ sentinel, so they never manufacture a half-gap rewind. Exact history-time
 subtraction also covers `g_frames_per_frame` without assuming engine-frame age
 equals sgame time.
 
-The default interpolation estimate is half the observed interval between
+The foundation's default interpolation estimate was half the observed interval between
 validated contiguous snapshots and is zero when no predecessor exists. It
-remains a render-time approximation and is replaced by an explicit per-command
-render timestamp in `FR-10-T09`.
+was a render-time approximation. Current live snapshot projection instead
+maintains a stateful canonical server clock across FPS changes and carries the
+server-consumed command cursor into prediction and rewind context. A native
+exact render watermark is still not claimed and remains `FR-10-T09` work.
 
 ## Non-mutating Historical Collision Scene
+
+Current-status note: this section records the initial private-proxy scene. It
+has since been superseded on the canonical path by the common 512-pose history
+and one sealed immutable player-bounds scene per accepted command, with
+generation-checked live revalidation and per-ray ignore sets. Rejected or
+synthesized-gap canonical contexts cannot fall back to the legacy estimate.
 
 The initial relink/restore prototype was rejected during review because damage
 inside a rewind could overwrite knockback/death state and even a pure relink can
@@ -261,10 +299,12 @@ cannot be resolved, the whole query falls back to current authoritative tracing.
 A currently dead or non-damageable player is never resurrected from history;
 its current body still participates when the native content mask includes it.
 
-The default maximum rewind is 200 ms, with a hard policy ceiling of 500 ms:
+The configured maximum rewind defaults to 200 ms, with a hard policy ceiling
+of 250 ms:
 
-- existing `g_lag_compensation` remains the compatibility master switch;
-- `sg_lag_compensation_max_ms` defaults to `200` and clamps to `0..500`;
+- existing `g_lag_compensation` remains the compatibility master switch and is
+  default-off until the `FR-10-R4` fairness, abuse, and performance gates pass;
+- `sg_lag_compensation_max_ms` defaults to `200` and clamps to `0..250`;
 - `sg_lag_compensation_interp_ms` defaults to `-1` for the interval-derived
   estimate, or accepts an explicit bounded millisecond bias;
 - `sg_lag_compensation_debug` enables one aggregate diagnostic line per second.
@@ -304,9 +344,11 @@ under `FR-10-T12` rather than inferred from hitscan behavior.
 ## Compatibility and Security
 
 - No file under `q2proto/` changed.
-- No legacy message, demo, configstring, snapshot, or usercmd wire field changed.
-- The internal game and cgame ABIs advanced to `2024` and `2027` respectively,
-  so binaries compiled against the former command/PMove layout are rejected.
+- At the foundation revision, no legacy message, demo, configstring, snapshot,
+  or usercmd wire field changed. Later negotiated setting sidebands preserve the
+  legacy payload formats and still do not modify `q2proto/`.
+- The internal game and cgame ABIs are now `2025` and `2028` respectively, so
+  binaries compiled against the removed mirrored PMove layout are rejected.
 - Legacy snapshot delta selection remains intact.
 - The server, not the client, maps acknowledgements to simulation authority.
 - Future or stale-unverifiable acknowledgement mappings fail closed.
@@ -344,29 +386,32 @@ Staged runtime acceptance also passed:
 - `worr_ded_x86_64.exe +set game basew +map mm-rage +wait 10 +quit`
   loaded the staged `sgame_x86_64.dll`, initialized `mm-rage`, and exited `0`;
 - the staged OpenGL client loaded both `cgame_x86_64.dll` and
-  `sgame_x86_64.dll`, reported game API `2024`, connected over loopback, and
+  `sgame_x86_64.dll`, reported game API `2024` at the original foundation
+  revision, connected over loopback, and
   transitioned `cs_primed -> cs_spawned` before exiting `0`;
 - final dedicated and client stdout/stderr evidence is under
   `.tmp/networking/dedicated_smoke_final_abi.*.log` and
   `.tmp/networking/client_cgame_smoke_final_abi2.*.log`.
 
-The build currently reports no registered Meson tests. Enabling the existing
-top-level dangerous in-engine test option is not an acceptable substitute.
-`FR-10-T03` must add deterministic, non-interactive latency/loss/jitter/reorder
-and weapon-fairness tests before `FR-10-T10` or `FR-10-T11` can be completed.
+That historical smoke was superseded during the 2026-07-12 T02/T03 closeout.
+The current staged modules report API 2025; the safe ordinary `networking`
+suite is registered independently of the dangerous in-engine test option and
+passed 33/33 across three repetitions. The refreshed staged control and
+impaired loopback profiles reached `cs_spawned` with empty stderr and zero queue
+overflow. Exact current evidence is recorded in the T02 and T03 implementation
+documents.
 
-## Required Next Work
+## Current Required Next Work
 
-1. `FR-10-T03`: deterministic network impairment and state/event/weapon
-   regression harness with machine-readable `.tmp/networking/` evidence.
-2. `FR-10-T02`: canonical exactly typed PMove ABI, deterministic predicted-state
-   schema, state hashing, and client/server replay parity.
-3. `FR-10-T09`: explicit command sequence, consumed-input acknowledgement,
-   sample time, render time, pacing, batching, and redundancy.
-4. `FR-10-T05/T06/T07`: authoritative typed events and immutable canonical
-   snapshot/input/event range APIs that remove cgame's mutable engine pointers.
-5. `FR-10-T11`: zero/low/high-latency weapon scenarios, discontinuity/death/
-   spawn/mover fairness cases, security abuse cases, and declared 32-client
-   shotgun/chaingun p95/p99 CPU/query/allocation load gates.
-6. `FR-10-T12`: explicit projectile, melee, radius, mover, deployable, trigger,
-   and cooperative interaction policies.
+1. `FR-10-T04/T06/T07`: implement the native WORR envelope and server peer
+   snapshot shadow, accumulate the required live parity/load evidence, and
+   promote immutable cgame rendering/event presentation behind rollback gates.
+2. `FR-10-T05/T08/T09`: complete authoritative event ordering/prediction
+   correlation, predictable weapon/gameplay state, side-effect suppression,
+   native exact render watermarks, pacing, batching, and redundancy.
+3. `FR-10-T10/T11`: add mover/brush collision history and zero/low/high-latency
+   weapon, discontinuity, death/spawn, abuse, and declared 32-client CPU/query/
+   allocation acceptance gates before default enablement.
+4. `FR-10-T12/T13`: complete explicit projectile, melee, radius, mover,
+   deployable, trigger, and coop policies plus MVD/GTV/spectator/native-demo and
+   full record/play/seek/relay matrices.

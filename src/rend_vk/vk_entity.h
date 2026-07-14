@@ -35,4 +35,6 @@ bool VK_Entity_EmitShadowCaster(const entity_t *ent, const refdef_t *fd,
                                 void *userdata);
 
 void VK_Entity_RenderFrame(const refdef_t *fd);
+bool VK_Entity_IsNoWorldSubview(void);
+void VK_Entity_ResetFlareQueries(VkCommandBuffer cmd);
 void VK_Entity_Record(VkCommandBuffer cmd, const VkExtent2D *extent);

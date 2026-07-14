@@ -7,28 +7,37 @@
   </head>
   <body id="shell-main" data-route-id="main" data-route-group="shell" data-route-version="1" data-document-status="first-round-scaffold" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen shell-screen" id="main-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="shell-main-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="shell-main-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <div class="menu-header">
         <h1>WORR</h1>
       </div>
 
-      <div class="menu-stack" id="main-menu-stack" data-component="common.components.menu_frame">
+      <div class="menu-stack hero-menu" id="main-menu-stack" data-component="common.components.menu_frame">
         <img id="main-logo" src="../common/brand/logo-menu.png" />
         <div class="menu-actions" id="main-menu-actions">
-          <button id="main-singleplayer" type="button" data-command="pushmenu singleplayer" data-route-target="singleplayer" data-menu-sound="open">Single Player</button>
-          <button id="main-multiplayer" type="button" data-command="pushmenu multiplayer" data-route-target="multiplayer" data-menu-sound="open">Multiplayer</button>
-          <button id="main-options" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open">Options</button>
-          <button id="main-quit" class="ui-button-danger" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert">Quit</button>
+          <button id="main-singleplayer" type="button" data-command="pushmenu singleplayer" data-route-target="singleplayer" data-menu-sound="open" data-loc-key="m_single_player">Single Player</button>
+          <button id="main-multiplayer" type="button" data-command="pushmenu multiplayer" data-route-target="multiplayer" data-menu-sound="open" data-loc-key="m_multiplayer">Multiplayer</button>
+          <button id="main-options" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open" data-loc-key="m_options">Options</button>
+          <button id="main-quit" class="ui-button-danger" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert" data-loc-key="m_quit">Quit</button>
         </div>
-        <p id="main-player-name"><span class="label">Player:</span> <span class="value" data-bind-cvar="name">Player</span></p>
+        <p id="main-player-name"><span class="label" data-loc-key="worr_ui_player">Player:</span> <span class="value" data-bind-cvar="name">Player</span></p>
       </div>
 
       <div class="menu-footer" id="main-menu-footer">
-        <button id="main-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
-        <div id="main-version">
-          <p id="main-version-title">Version</p>
-          <p id="main-version-value" data-bind-cvar="version">WORR</p>
-        </div>
+        <button id="main-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
       </div>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="shell-main-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
+      </footer>
     </div>
   </body>
 </rml>

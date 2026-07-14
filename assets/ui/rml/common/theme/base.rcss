@@ -25,37 +25,52 @@
 	field-hover: 104px 80px 96px 72px;
 	field-focus: 204px 80px 96px 72px;
 	field-disabled: 304px 80px 96px 72px;
-	selectarrow: 404px 80px 30px 28px;
-	selectarrow-hover: 438px 80px 30px 28px;
-	check-off: 472px 80px 64px 56px;
-	check-off-hover: 540px 80px 64px 56px;
-	check-off-focus: 608px 80px 64px 56px;
-	check-on: 676px 80px 64px 56px;
-	check-on-hover: 744px 80px 64px 56px;
-	check-on-focus: 812px 80px 64px 56px;
-	check-disabled: 880px 80px 64px 56px;
-	check-on-disabled: 948px 80px 64px 56px;
-	track: 4px 156px 96px 24px;
-	track-hover: 104px 156px 96px 24px;
-	track-focus: 204px 156px 96px 24px;
-	track-disabled: 304px 156px 96px 24px;
-	thumb: 404px 156px 48px 56px;
-	thumb-hover: 456px 156px 48px 56px;
-	thumb-disabled: 508px 156px 48px 56px;
-	ptrack: 560px 156px 96px 56px;
-	ptrack-hover: 660px 156px 96px 56px;
-	ptrack-disabled: 760px 156px 96px 56px;
-	pfill: 860px 156px 80px 40px;
-	pfill-disabled: 4px 216px 80px 40px;
-	sthumb: 88px 216px 24px 64px;
-	sthumb-hover: 116px 216px 24px 64px;
-	sthumb-disabled: 144px 216px 24px 64px;
-	strack: 172px 216px 24px 96px;
-	rail: 200px 216px 192px 12px;
-	panel: 396px 216px 144px 144px;
-	popup: 544px 216px 192px 192px;
-	drop: 740px 216px 96px 96px;
-	grime: 4px 412px 256px 256px;
+	cta: 404px 80px 128px 88px;
+	cta-hover: 536px 80px 128px 88px;
+	cta-active: 668px 80px 128px 88px;
+	cta-disabled: 800px 80px 128px 88px;
+	backplate: 932px 80px 80px 80px;
+	backplate-hover: 4px 172px 80px 80px;
+	backplate-active: 88px 172px 80px 80px;
+	card: 172px 172px 128px 128px;
+	card-hover: 304px 172px 128px 128px;
+	card-selected: 436px 172px 128px 128px;
+	gauge-q0: 568px 172px 96px 96px;
+	gauge-q1: 668px 172px 96px 96px;
+	gauge-q2: 768px 172px 96px 96px;
+	gauge-q3: 868px 172px 96px 96px;
+	gauge-q4: 4px 304px 96px 96px;
+	selectarrow: 104px 304px 30px 28px;
+	selectarrow-hover: 138px 304px 30px 28px;
+	check-off: 172px 304px 64px 56px;
+	check-off-hover: 240px 304px 64px 56px;
+	check-off-focus: 308px 304px 64px 56px;
+	check-on: 376px 304px 64px 56px;
+	check-on-hover: 444px 304px 64px 56px;
+	check-on-focus: 512px 304px 64px 56px;
+	check-disabled: 580px 304px 64px 56px;
+	check-on-disabled: 648px 304px 64px 56px;
+	track: 716px 304px 96px 24px;
+	track-hover: 816px 304px 96px 24px;
+	track-focus: 916px 304px 96px 24px;
+	track-disabled: 4px 404px 96px 24px;
+	thumb: 104px 404px 48px 56px;
+	thumb-hover: 156px 404px 48px 56px;
+	thumb-disabled: 208px 404px 48px 56px;
+	ptrack: 260px 404px 96px 56px;
+	ptrack-hover: 360px 404px 96px 56px;
+	ptrack-disabled: 460px 404px 96px 56px;
+	pfill: 560px 404px 80px 40px;
+	pfill-disabled: 644px 404px 80px 40px;
+	sthumb: 728px 404px 24px 64px;
+	sthumb-hover: 756px 404px 24px 64px;
+	sthumb-disabled: 784px 404px 24px 64px;
+	strack: 812px 404px 24px 96px;
+	rail: 4px 504px 192px 12px;
+	panel: 200px 504px 144px 144px;
+	popup: 348px 504px 192px 192px;
+	drop: 544px 504px 96px 96px;
+	grime: 644px 504px 256px 256px;
 	btn-inner: 28px 28px 48px 24px;
 	btn-hover-inner: 128px 28px 48px 24px;
 	btn-focus-inner: 228px 28px 48px 24px;
@@ -70,24 +85,31 @@
 	field-hover-inner: 124px 100px 56px 32px;
 	field-focus-inner: 224px 100px 56px 32px;
 	field-disabled-inner: 324px 100px 56px 32px;
-	track-inner: 14px 166px 76px 4px;
-	track-hover-inner: 114px 166px 76px 4px;
-	track-focus-inner: 214px 166px 76px 4px;
-	track-disabled-inner: 314px 166px 76px 4px;
-	ptrack-inner: 576px 172px 64px 24px;
-	ptrack-hover-inner: 676px 172px 64px 24px;
-	ptrack-disabled-inner: 776px 172px 64px 24px;
-	pfill-inner: 872px 168px 56px 16px;
-	pfill-disabled-inner: 16px 228px 56px 16px;
-	sthumb-inner: 98px 226px 4px 44px;
-	sthumb-hover-inner: 126px 226px 4px 44px;
-	sthumb-disabled-inner: 154px 226px 4px 44px;
-	strack-inner: 182px 226px 4px 76px;
-	rail-inner: 204px 220px 184px 4px;
-	panel-inner: 420px 240px 96px 96px;
-	popup-inner: 584px 256px 112px 112px;
-	drop-inner: 756px 232px 64px 64px;
-	grime-inner: 84px 492px 96px 96px;
+	cta-inner: 428px 104px 80px 40px;
+	cta-hover-inner: 560px 104px 80px 40px;
+	cta-active-inner: 692px 104px 80px 40px;
+	cta-disabled-inner: 824px 104px 80px 40px;
+	card-inner: 204px 204px 64px 64px;
+	card-hover-inner: 336px 204px 64px 64px;
+	card-selected-inner: 468px 204px 64px 64px;
+	track-inner: 726px 314px 76px 4px;
+	track-hover-inner: 826px 314px 76px 4px;
+	track-focus-inner: 926px 314px 76px 4px;
+	track-disabled-inner: 14px 414px 76px 4px;
+	ptrack-inner: 276px 420px 64px 24px;
+	ptrack-hover-inner: 376px 420px 64px 24px;
+	ptrack-disabled-inner: 476px 420px 64px 24px;
+	pfill-inner: 572px 416px 56px 16px;
+	pfill-disabled-inner: 656px 416px 56px 16px;
+	sthumb-inner: 738px 414px 4px 44px;
+	sthumb-hover-inner: 766px 414px 4px 44px;
+	sthumb-disabled-inner: 794px 414px 4px 44px;
+	strack-inner: 822px 414px 4px 76px;
+	rail-inner: 8px 508px 184px 4px;
+	panel-inner: 224px 528px 96px 96px;
+	popup-inner: 388px 544px 112px 112px;
+	drop-inner: 560px 520px 64px 64px;
+	grime-inner: 724px 584px 96px 96px;
 }
 /* END GENERATED worr-metal spritesheet */
 
@@ -219,10 +241,86 @@ li
 	from
 	{
 		opacity: 0;
+		margin-top: 14px;
 	}
 	to
 	{
 		opacity: 1;
+		margin-top: 0px;
+	}
+}
+
+@keyframes header-enter
+{
+	from
+	{
+		opacity: 0;
+		margin-top: -8px;
+	}
+	to
+	{
+		opacity: 1;
+		margin-top: 0px;
+	}
+}
+
+/* Percentage holds fake stagger delays: content and footer land after the
+   header without needing per-element animation delays. */
+@keyframes content-enter
+{
+	0%
+	{
+		opacity: 0;
+	}
+	30%
+	{
+		opacity: 0;
+	}
+	100%
+	{
+		opacity: 1;
+	}
+}
+
+@keyframes footer-enter
+{
+	0%
+	{
+		opacity: 0;
+	}
+	55%
+	{
+		opacity: 0;
+	}
+	100%
+	{
+		opacity: 1;
+	}
+}
+
+/* image-color tints decorator quads and animates: warm focus pulse without
+   extra textures. */
+@keyframes focus-pulse
+{
+	from
+	{
+		image-color: #ffffff;
+	}
+	to
+	{
+		image-color: #ffd9a8;
+	}
+}
+
+@keyframes fill-breathe
+{
+	from
+	{
+		image-color: #ffffff;
+	}
+	to
+	{
+		image-color: #d8f2f4;
 	}
 }
 
@@ -244,7 +342,6 @@ li
 	flex-direction: column;
 	overflow: hidden;
 	decorator: ninepatch(grime, grime-inner) border-box, image(../skins/metal/backdrop.png repeat) border-box;
-	animation: 0.18s cubic-out route-enter;
 }
 
 .ui-reduced-motion .ui-route,
@@ -406,7 +503,6 @@ body[data-menu-presentation="popup"]
 	border-radius: 6px;
 	decorator: ninepatch(popup, popup-inner), image(../skins/metal/plate.png repeat);
 	transition: background-color border-color color 0.12s cubic-out;
-	animation: 0.14s cubic-out popup-enter;
 }
 
 .ui-reduced-motion .popup-dialog,
@@ -651,6 +747,7 @@ button:focus,
 .ui-button:focus
 {
 	decorator: ninepatch(btn-focus, btn-focus-inner);
+	animation: 1.1s cubic-in-out infinite alternate focus-pulse;
 }
 
 button[data-command="ui.back"],
@@ -923,7 +1020,9 @@ select selectbox option
 	padding: 4px 8px;
 	background-color: #16130f;
 	color: #f3eee4;
-	transition: background-color color 0.12s cubic-out;
+	border-left-width: 2px;
+	border-left-color: #16130f00;
+	transition: background-color color padding-left border-left-color 0.12s cubic-out;
 }
 
 select selectbox option:hover,
@@ -931,6 +1030,8 @@ select selectbox option:checked
 {
 	background-color: #332d23;
 	color: #ffd967;
+	padding-left: 12px;
+	border-left-color: #ffd967;
 }
 
 select selectbox option:active
@@ -1076,6 +1177,7 @@ progress fill,
 {
 	background-color: #426f72;
 	decorator: ninepatch(pfill, pfill-inner);
+	animation: 1.8s cubic-in-out infinite alternate fill-breathe;
 }
 
 progress:hover,
@@ -1478,4 +1580,686 @@ body.ui-high-visibility .screen
 {
 	background-color: #ffffff;
 	decorator: none;
+}
+
+/*
+ * Global chrome per docs-dev/worr-ux-ui-design-language-2026-07-12.md:
+ * topbar (brand / PLAY CTA / system cluster), statusbar, back plate,
+ * title row, CTA variant, card archetype, dialog underglow, data states.
+ */
+
+@keyframes panel-fade
+{
+	from
+	{
+		opacity: 0;
+	}
+	to
+	{
+		opacity: 1;
+	}
+}
+
+button.ui-button-cta,
+.ui-button.ui-button-cta
+{
+	min-height: 46px;
+	min-width: 180px;
+	padding: 8px 26px;
+	background-color: #1f271d;
+	border-color: #5f8765;
+	color: #d9f3dd;
+	font-family: "WORR Display";
+	font-size: 19px;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+	decorator: ninepatch(cta, cta-inner);
+}
+
+button.ui-button-cta:hover,
+.ui-button.ui-button-cta:hover
+{
+	background-color: #263322;
+	border-color: #83d18f;
+	color: #ffffff;
+	decorator: ninepatch(cta-hover, cta-hover-inner);
+}
+
+button.ui-button-cta:focus,
+.ui-button.ui-button-cta:focus
+{
+	border-color: #ffd967;
+	color: #ffffff;
+	decorator: ninepatch(cta-hover, cta-hover-inner);
+}
+
+button.ui-button-cta:active,
+.ui-button.ui-button-cta:active
+{
+	background-color: #2c4028;
+	border-color: #a6e3ad;
+	color: #ffffff;
+	decorator: ninepatch(cta-active, cta-active-inner);
+}
+
+button.ui-button-cta:disabled,
+button.ui-button-cta[disabled]
+{
+	color: #8d8375;
+	decorator: ninepatch(cta-disabled, cta-disabled-inner);
+}
+
+.worr-topbar
+{
+	position: relative;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	flex: 0 0 auto;
+	min-height: 48px;
+	margin-bottom: 8px;
+	padding: 4px 8px;
+	background-color: #100e0c;
+	border-width: 1px;
+	border-color: #332d23;
+	border-bottom-width: 2px;
+	border-bottom-color: #4b4235;
+	border-radius: 4px;
+	decorator: ninepatch(drop, drop-inner);
+}
+
+.worr-brandplate
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 40px;
+	height: 40px;
+	padding: 4px;
+	background-color: #1b1916;
+	border-width: 1px;
+	border-color: #4b4235;
+	border-radius: 3px;
+}
+
+.worr-brandplate img
+{
+	display: block;
+	width: 30px;
+	height: 30px;
+}
+
+.worr-topbar-spacer
+{
+	flex: 1 1 auto;
+	min-width: 8px;
+}
+
+.worr-topbar .ui-button-cta
+{
+	position: absolute;
+	top: 4px;
+	left: 50%;
+	flex: 0 0 auto;
+	width: 180px;
+	margin: 0px 0px 0px -90px;
+}
+
+.worr-topbar-cluster
+{
+	position: absolute;
+	top: 4px;
+	right: 8px;
+	width: 92px;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	flex: 0 0 auto;
+}
+
+button.worr-iconbtn
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 40px;
+	height: 40px;
+	min-width: 40px;
+	min-height: 40px;
+	margin-left: 6px;
+	padding: 6px;
+	background-color: #1b1916;
+	border-width: 2px;
+	border-color: #5f5548;
+	color: #c9beb0;
+	border-radius: 3px;
+	decorator: ninepatch(btn-quiet, btn-quiet-inner);
+	transition: background-color border-color color 0.12s cubic-out;
+}
+
+button.worr-iconbtn img
+{
+	display: block;
+	width: 20px;
+	height: 20px;
+}
+
+button.worr-iconbtn:hover
+{
+	background-color: #27231d;
+	border-color: #b99b5b;
+	decorator: ninepatch(btn-hover, btn-hover-inner);
+}
+
+button.worr-iconbtn:focus
+{
+	border-color: #ffd967;
+	decorator: ninepatch(btn-focus, btn-focus-inner);
+}
+
+button.worr-iconbtn:active
+{
+	border-color: #ffd967;
+	decorator: ninepatch(btn-active, btn-active-inner);
+}
+
+.worr-statusbar
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	flex: 0 0 auto;
+	min-height: 24px;
+	margin-top: 8px;
+	padding: 3px 10px;
+	background-color: #0d0c0a;
+	border-width: 1px;
+	border-color: #26211a;
+	border-radius: 3px;
+	color: #8d8375;
+	font-family: "WORR Mono";
+	font-size: 11px;
+}
+
+.worr-statusbar-id
+{
+	flex: 0 0 auto;
+	margin-right: 12px;
+}
+
+.worr-statusbar-version
+{
+	flex: 1 1 auto;
+	min-width: 0px;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+button.worr-statusbar-chip
+{
+	display: block;
+	flex: 0 0 auto;
+	min-height: 18px;
+	min-width: 0px;
+	margin-left: 12px;
+	padding: 1px 8px;
+	background-color: #14262a;
+	border-width: 1px;
+	border-color: #426f72;
+	border-left-width: 3px;
+	border-left-color: #7ed4d8;
+	border-radius: 2px;
+	color: #7ed4d8;
+	font-family: "WORR Mono";
+	font-size: 11px;
+	decorator: none;
+}
+
+button.worr-statusbar-chip:hover
+{
+	border-color: #7ed4d8;
+	color: #d8f2f4;
+	decorator: none;
+}
+
+.worr-titlerow
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	margin-bottom: 6px;
+}
+
+.worr-titlerow h1
+{
+	margin-bottom: 0px;
+}
+
+button.worr-backplate
+{
+	display: block;
+	box-sizing: border-box;
+	flex: 0 0 auto;
+	width: 40px;
+	height: 40px;
+	min-width: 40px;
+	min-height: 40px;
+	margin-right: 12px;
+	padding: 0px;
+	background-color: #24211c;
+	border-width: 0px;
+	border-radius: 3px;
+	decorator: image(backplate);
+	transition: color 0.12s cubic-out;
+}
+
+button.worr-backplate:hover
+{
+	decorator: image(backplate-hover);
+}
+
+button.worr-backplate:focus
+{
+	decorator: image(backplate-hover);
+	animation: 1.1s cubic-in-out infinite alternate focus-pulse;
+}
+
+button.worr-backplate:active
+{
+	decorator: image(backplate-active);
+}
+
+/* Card select archetype (worr-card). */
+
+.worr-cardrow
+{
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+	justify-content: center;
+	flex: 1 1 auto;
+	min-height: 0px;
+	overflow: auto;
+}
+
+.worr-card
+{
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: 216px;
+	min-width: 200px;
+	max-width: 240px;
+	margin: 0px 8px;
+	background-color: #1b1916;
+	border-width: 0px;
+	border-radius: 4px;
+	decorator: ninepatch(card, card-inner) border-box, image(../skins/metal/plate.png repeat) border-box;
+	overflow: hidden;
+}
+
+button.worr-card-face
+{
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-end;
+	flex: 1 1 auto;
+	width: auto;
+	min-width: 0px;
+	min-height: 320px;
+	padding: 16px 14px;
+	background-color: transparent;
+	border-width: 0px;
+	color: #f3eee4;
+	text-align: center;
+	decorator: none;
+	transition: background-color color 0.12s cubic-out;
+}
+
+button.worr-card-face:hover
+{
+	background-color: #b99b5b14;
+	color: #ffd967;
+	decorator: none;
+}
+
+button.worr-card-face:focus
+{
+	background-color: #b99b5b14;
+	color: #ffd967;
+	decorator: none;
+	animation: 1.1s cubic-in-out infinite alternate focus-pulse;
+}
+
+button.worr-card-face:active
+{
+	background-color: #b99b5b22;
+	decorator: none;
+}
+
+.worr-card.is-open
+{
+	decorator: ninepatch(card-selected, card-selected-inner) border-box, image(../skins/metal/plate.png repeat) border-box;
+}
+
+.worr-card-art
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1 1 auto;
+	width: 100%;
+	min-height: 140px;
+}
+
+.worr-card-art img
+{
+	display: block;
+	width: 96px;
+	height: 96px;
+	opacity: 0.85;
+}
+
+.worr-card-title
+{
+	display: block;
+	margin: 8px 0px 2px 0px;
+	font-family: "WORR Display";
+	font-size: 20px;
+	font-weight: bold;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+}
+
+.worr-card-desc
+{
+	display: block;
+	margin: 0px;
+	color: #c9beb0;
+	font-family: "WORR Display";
+	font-size: 12px;
+	font-weight: bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+}
+
+.worr-card-open
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0px;
+	padding: 14px;
+}
+
+.worr-card-open .worr-card-copy
+{
+	flex: 1 1 auto;
+	margin-bottom: 12px;
+	color: #c9beb0;
+	font-size: 14px;
+}
+
+.worr-card-open .ui-button-cta
+{
+	width: 100%;
+	min-width: 0px;
+}
+
+/* Dialog intent underglow (QC bottom-edge band, WORR semantics). */
+
+.popup-dialog
+{
+	border-bottom-width: 3px;
+	border-bottom-color: #b99b5b;
+}
+
+.popup-dialog[data-confirm-kind="destructive"],
+main.popup-dialog[data-confirm-kind="destructive"]
+{
+	border-bottom-color: #ee6758;
+}
+
+.popup-dialog[data-confirm-kind="primary"]
+{
+	border-bottom-color: #83d18f;
+}
+
+/* Data-surface states (every provider surface ships all three). */
+
+.ui-empty-state
+{
+	padding: 12px;
+	color: #c9beb0;
+}
+
+.ui-loading-state
+{
+	padding: 8px 10px;
+	color: #7ed4d8;
+	border-left-width: 3px;
+	border-left-color: #426f72;
+}
+
+.ui-error-state
+{
+	padding: 8px 10px;
+	background-color: #281b18;
+	color: #ee6758;
+	border-width: 1px;
+	border-color: #895047;
+	border-left-width: 4px;
+	border-left-color: #ee6758;
+	border-radius: 3px;
+}
+
+/* Card key art (generated tiles) + frame inset. */
+
+.worr-card
+{
+	padding: 6px;
+}
+
+.worr-card--campaign button.worr-card-face
+{
+	decorator: image(../skins/metal/cardart-campaign.png cover);
+}
+
+.worr-card--load button.worr-card-face
+{
+	decorator: image(../skins/metal/cardart-load.png cover);
+}
+
+.worr-card--host button.worr-card-face
+{
+	decorator: image(../skins/metal/cardart-host.png cover);
+}
+
+.worr-card--servers button.worr-card-face
+{
+	decorator: image(../skins/metal/cardart-servers.png cover);
+}
+
+.worr-card--campaign button.worr-card-face:hover,
+.worr-card--campaign button.worr-card-face:focus
+{
+	decorator: image(../skins/metal/cardart-campaign.png cover);
+	image-color: #ffe9c8;
+}
+
+.worr-card--load button.worr-card-face:hover,
+.worr-card--load button.worr-card-face:focus
+{
+	decorator: image(../skins/metal/cardart-load.png cover);
+	image-color: #ffe9c8;
+}
+
+.worr-card--host button.worr-card-face:hover,
+.worr-card--host button.worr-card-face:focus
+{
+	decorator: image(../skins/metal/cardart-host.png cover);
+	image-color: #ffe9c8;
+}
+
+.worr-card--servers button.worr-card-face:hover,
+.worr-card--servers button.worr-card-face:focus
+{
+	decorator: image(../skins/metal/cardart-servers.png cover);
+	image-color: #ffe9c8;
+}
+
+/* Tab strip (settings surface): flat plates, green underline active. */
+
+.worr-tabstrip
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: stretch;
+	flex: 0 0 auto;
+	margin-bottom: 10px;
+	padding: 0px 2px;
+	border-bottom-width: 1px;
+	border-bottom-color: #332d23;
+}
+
+button.worr-tab,
+span.worr-tab
+{
+	display: block;
+	box-sizing: border-box;
+	min-width: 84px;
+	min-height: 32px;
+	margin: 0px 2px 0px 0px;
+	padding: 8px 12px 5px 12px;
+	background-color: #17151199;
+	color: #c9beb0;
+	border-width: 0px;
+	border-bottom-width: 3px;
+	border-bottom-color: #26211a;
+	border-radius: 0px;
+	decorator: none;
+	font-family: "WORR Display";
+	font-size: 12px;
+	font-weight: bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	transition: background-color color border-bottom-color 0.12s cubic-out;
+}
+
+button.worr-tab:hover
+{
+	background-color: #211e19;
+	color: #f3eee4;
+	border-bottom-color: #b99b5b;
+	decorator: none;
+}
+
+button.worr-tab:focus
+{
+	background-color: #211e19;
+	color: #ffd967;
+	border-bottom-color: #ffd967;
+	decorator: none;
+}
+
+button.worr-tab:active
+{
+	background-color: #27231d;
+	color: #ffd967;
+	decorator: none;
+}
+
+span.worr-tab.is-active
+{
+	background-color: #221f19;
+	color: #f3eee4;
+	border-bottom-color: #83d18f;
+}
+
+/* Editor preview column (startserver / map-driven editors). */
+
+.worr-editor-card
+{
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: 232px;
+	min-width: 232px;
+	padding: 10px;
+	margin-right: 14px;
+	margin-bottom: 10px;
+	background-color: #1b1916;
+	border-width: 1px;
+	border-color: #332d23;
+	border-radius: 5px;
+	decorator: ninepatch(panel, panel-inner) border-box, image(../skins/metal/plate.png repeat) border-box;
+}
+
+.worr-editor-card img
+{
+	display: block;
+	width: 210px;
+	height: 156px;
+	margin-bottom: 8px;
+}
+
+.worr-editor-card h2
+{
+	margin-bottom: 2px;
+	font-size: 18px;
+	color: #f3eee4;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.worr-editor-card .worr-card-desc
+{
+	color: #c9beb0;
+}
+
+/* Sprite-ring gauge primitive (runtime maps cvar to is-q0..is-q4). */
+
+.worr-gauge
+{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 48px;
+	height: 48px;
+	min-width: 48px;
+	min-height: 48px;
+	decorator: image(gauge-q0);
+	color: #f3eee4;
+	font-family: "WORR Mono";
+	font-size: 12px;
+	text-align: center;
+}
+
+.worr-gauge.is-q1
+{
+	decorator: image(gauge-q1);
+}
+
+.worr-gauge.is-q2
+{
+	decorator: image(gauge-q2);
+}
+
+.worr-gauge.is-q3
+{
+	decorator: image(gauge-q3);
+}
+
+.worr-gauge.is-q4
+{
+	decorator: image(gauge-q4);
 }

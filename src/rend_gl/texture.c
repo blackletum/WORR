@@ -985,7 +985,7 @@ void IMG_Load(image_t *image, byte *pic)
     height = image->upload_height;
 
     // load small pics onto the scrap
-    if (image->type == IT_PIC && !(image->flags & IF_SPECIAL) && width < 64 && height < 64 &&
+    if (image->type == IT_PIC && !(image->flags & (IF_SPECIAL | IF_NOSCRAP)) && width < 64 && height < 64 &&
         gl_noscrap->integer == 0 && Scrap_AllocBlock(width, height, &s, &t)) {
         src = pic;
         dst = &scrap_data[(t * SCRAP_BLOCK_WIDTH + s) * 4];

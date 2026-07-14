@@ -5,16 +5,16 @@
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="session-callvote-random" data-route-id="callvote_random" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="session-callvote-random" data-route-id="callvote_random" data-route-group="session" data-route-version="2" data-document-status="live-provider" data-controller="native-session-cvars" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="callvote-random-screen">
       <header class="page-header">
-        <h1>Vote: Random</h1>
-        <p id="callvote-random-summary">
-          Propose a randomized map or setting.
+        <div class="worr-titlerow"><button id="session-callvote-random-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_vote_random">Vote: Random</h1></div>
+        <p id="callvote-random-summary" data-loc-key="worr_ui_choose_the_highest_number_in_the_proposed_rando">
+          Choose the highest number in the proposed random range.
         </p>
       </header>
 
-      <nav class="menu-list" id="callvote-random-menu" data-model="session.callvote.random" data-owner-boundary="sgame-published-cvars">
+      <nav class="menu-list session-vote-option-grid" id="callvote-random-menu" data-model="session.callvote.random" data-controller="native-session-cvars" data-owner-boundary="sgame-published-cvars">
         <button id="callvote-random-2" type="button" data-command="worr_callvote_random 2" data-menu-sound="confirm">1-2</button>
         <button id="callvote-random-7" type="button" data-command="worr_callvote_random 7" data-menu-sound="confirm">1-7</button>
         <button id="callvote-random-12" type="button" data-command="worr_callvote_random 12" data-menu-sound="confirm">1-12</button>
@@ -36,10 +36,6 @@
         <button id="callvote-random-92" type="button" data-command="worr_callvote_random 92" data-menu-sound="confirm">1-92</button>
         <button id="callvote-random-97" type="button" data-command="worr_callvote_random 97" data-menu-sound="confirm">1-97</button>
       </nav>
-
-      <footer class="actions" id="callvote-random-actions">
-        <button id="callvote-random-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
-      </footer>
     </div>
   </body>
 </rml>

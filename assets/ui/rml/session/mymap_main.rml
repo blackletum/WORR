@@ -5,16 +5,16 @@
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="session-mymap-main" data-route-id="mymap_main" data-route-group="session" data-route-version="1" data-document-status="round2-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="session-mymap-main" data-route-id="mymap_main" data-route-group="session" data-route-version="2" data-document-status="live-provider" data-controller="native-session-cvars" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="mymap-main-screen">
       <header class="page-header">
-        <h1>MyMap</h1>
-        <p id="mymap-main-summary">
+        <div class="worr-titlerow"><button id="session-mymap-main-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_mymap">MyMap</h1></div>
+        <p id="mymap-main-summary" data-loc-key="worr_ui_pick_a_preferred_map_and_adjust_any_map_request">
           Pick a preferred map and adjust any map request flags.
         </p>
       </header>
 
-      <section class="content" id="mymap-main-content" data-model="session.mymap" data-owner-boundary="sgame-published-cvars">
+      <section class="content session-panel" id="mymap-main-content" data-model="session.mymap" data-controller="native-session-cvars" data-owner-boundary="sgame-published-cvars">
         <p id="mymap-status" class="status-message" data-bind="cvars.ui_mymap_status" data-bind-cvar="ui_mymap_status" data-visible-if="ui_mymap_status">
           No MyMap request is active.
         </p>
@@ -24,10 +24,9 @@
       </section>
 
       <footer class="actions" id="mymap-main-actions">
-        <button id="mymap-select" type="button" data-command="worr_mymap_select" data-enable-if="ui_mymap_can_select=1" data-menu-sound="confirm">Select Map</button>
-        <button id="mymap-flags" type="button" data-command="worr_mymap_flags" data-enable-if="ui_mymap_can_flags=1" data-menu-sound="open">Flags</button>
-        <button id="mymap-clear" type="button" data-command="worr_mymap_clear" data-enable-if="ui_mymap_has_flags=1" data-menu-sound="change">Clear Flags</button>
-        <button id="mymap-back" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
+        <button id="mymap-select" class="is-primary" type="button" data-command="worr_mymap_select" data-enable-if="ui_mymap_can_select=1" data-menu-sound="confirm" data-loc-key="worr_ui_select_map">Select Map</button>
+        <button id="mymap-flags" type="button" data-command="worr_mymap_flags" data-enable-if="ui_mymap_can_flags=1" data-menu-sound="open" data-loc-key="worr_ui_flags">Flags</button>
+        <button id="mymap-clear" type="button" data-command="worr_mymap_clear" data-enable-if="ui_mymap_has_flags=1" data-menu-sound="change" data-loc-key="worr_ui_clear_flags">Clear Flags</button>
       </footer>
     </div>
   </body>

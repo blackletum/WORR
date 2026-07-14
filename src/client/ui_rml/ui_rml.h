@@ -56,9 +56,13 @@ typedef struct {
     bool (*ProbeRoute)(const char *route_id, const char *document_path);
     const char *(*RuntimeName)(void);
     bool (*CanOpenRoutes)(void);
-    // Optional: consume an Escape/Mouse2 back request (keybind capture,
-    // document data-close-command). Returns true when handled.
+    // Optional: consume an Escape/Mouse2 back request (keybind capture or
+    // conflict, document data-close-command). Returns true when handled.
     bool (*HandleBackKey)(int key);
+    // Optional live-provider callbacks. Returning true consumes the event and
+    // prevents the inactive legacy menu stack from receiving it.
+    bool (*StatusEvent)(const serverStatus_t *status);
+    bool (*ErrorEvent)(const netadr_t *from);
 } ui_rml_runtime_interface_t;
 
 typedef enum {
@@ -97,6 +101,7 @@ float UI_Rml_CanvasScale(void);
 float UI_Rml_DrawScale(void);
 bool UI_Rml_ProbeRoute(const char *route_id);
 bool UI_Rml_OpenRoute(const char *route_id);
+bool UI_Rml_OpenRouteWithArguments(const char *route_id, const char *arguments);
 bool UI_Rml_OpenPopupRoute(const char *route_id);
 bool UI_Rml_OpenMenu(uiMenu_t menu);
 bool UI_Rml_IsRouteActive(void);
@@ -105,6 +110,9 @@ bool UI_Rml_Draw(unsigned realtime);
 bool UI_Rml_KeyEvent(int key, bool down);
 bool UI_Rml_CharEvent(int key);
 bool UI_Rml_MouseEvent(int x, int y);
+bool UI_Rml_StatusEvent(const serverStatus_t *status);
+bool UI_Rml_ErrorEvent(const netadr_t *from);
+const char *UI_Rml_RouteArguments(void);
 void UI_Rml_CloseActiveRoute(void);
 
 #if UI_RML_HAS_RUNTIME

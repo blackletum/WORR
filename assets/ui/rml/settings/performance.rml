@@ -7,16 +7,36 @@
   </head>
   <body id="settings-performance" data-route-id="performance" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="performance-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="settings-performance-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="settings-performance-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="settings-performance-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Performance</h1>
+        <div class="worr-titlerow"><button id="settings-performance-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_performance">Performance</h1></div>
       </header>
 
+      <nav class="worr-tabstrip">
+        <button id="settings-performance-tab-video" class="worr-tab" type="button" data-command="popmenu; pushmenu video" data-route-target="video" data-menu-sound="move" data-loc-key="worr_ui_video">Video</button>
+        <button id="settings-performance-tab-screen" class="worr-tab" type="button" data-command="popmenu; pushmenu screen" data-route-target="screen" data-menu-sound="move" data-loc-key="worr_ui_screen">Screen</button>
+        <button id="settings-performance-tab-sound" class="worr-tab" type="button" data-command="popmenu; pushmenu sound" data-route-target="sound" data-menu-sound="move" data-loc-key="m_sound">Sound</button>
+        <button id="settings-performance-tab-input" class="worr-tab" type="button" data-command="popmenu; pushmenu input" data-route-target="input" data-menu-sound="move" data-loc-key="m_input">Input</button>
+        <button id="settings-performance-tab-effects" class="worr-tab" type="button" data-command="popmenu; pushmenu effects" data-route-target="effects" data-menu-sound="move" data-loc-key="worr_ui_effects">Effects</button>
+        <span class="worr-tab is-active" data-loc-key="worr_ui_performance">Performance</span>
+        <button id="settings-performance-tab-accessibility" class="worr-tab" type="button" data-command="popmenu; pushmenu accessibility" data-route-target="accessibility" data-menu-sound="move" data-loc-key="worr_ui_access">Access</button>
+        <button id="settings-performance-tab-language" class="worr-tab" type="button" data-command="popmenu; pushmenu language" data-route-target="language" data-menu-sound="move" data-loc-key="m_language">Language</button>
+      </nav>
       <main class="settings-form" id="performance-settings-form" data-component="common.components.cvar_controls">
         <section class="settings-section" id="performance-framecap-section">
-          <h2>Frame Caps</h2>
+          <h2 data-loc-key="worr_ui_frame_caps">Frame Caps</h2>
           <div class="setting-row" data-control="combo" data-cvar="cl_maxfps">
-            <span class="setting-widget-icon" data-widget="combo"><img src="../common/icons/widgets/combo.svg" /></span>
-            <label for="performance-client-fps">Client FPS Cap</label>
+            <span class="setting-widget-icon" data-widget="combo"><img src="../common/icons/widgets/combo.png" /></span>
+            <label for="performance-client-fps" data-loc-key="worr_ui_client_fps_cap">Client FPS Cap</label>
             <select id="performance-client-fps" data-cvar="cl_maxfps" data-numeric="true" data-integer="true">
               <option value="0">0</option>
               <option value="60">60</option>
@@ -27,11 +47,11 @@
               <option value="240">240</option>
               <option value="300">300</option>
             </select>
-            <span class="setting-value">0 - uncapped</span>
+            <span class="setting-value" data-loc-key="worr_ui_0_uncapped">0 - uncapped</span>
           </div>
           <div class="setting-row" data-control="combo" data-cvar="r_maxfps">
-            <span class="setting-widget-icon" data-widget="combo"><img src="../common/icons/widgets/combo.svg" /></span>
-            <label for="performance-renderer-fps">Renderer FPS Cap</label>
+            <span class="setting-widget-icon" data-widget="combo"><img src="../common/icons/widgets/combo.png" /></span>
+            <label for="performance-renderer-fps" data-loc-key="worr_ui_renderer_fps_cap">Renderer FPS Cap</label>
             <select id="performance-renderer-fps" data-cvar="r_maxfps" data-numeric="true" data-integer="true">
               <option value="0">0</option>
               <option value="60">60</option>
@@ -42,38 +62,42 @@
               <option value="240">240</option>
               <option value="300">300</option>
             </select>
-            <span class="setting-value">0 - uncapped</span>
+            <span class="setting-value" data-loc-key="worr_ui_0_uncapped">0 - uncapped</span>
           </div>
         </section>
 
         <section class="settings-section" id="performance-client-section">
-          <h2>Client Behavior</h2>
+          <h2 data-loc-key="worr_ui_client_behavior">Client Behavior</h2>
           <div class="setting-row" data-control="toggle" data-cvar="cl_predict">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="performance-client-prediction">Client Prediction</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="performance-client-prediction" data-loc-key="worr_ui_client_prediction">Client Prediction</label>
             <input id="performance-client-prediction" type="checkbox" data-cvar="cl_predict" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="cl_footsteps">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="performance-footsteps">Footsteps</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="performance-footsteps" data-loc-key="worr_ui_footsteps">Footsteps</label>
             <input id="performance-footsteps" type="checkbox" data-cvar="cl_footsteps" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="cl_warn_on_fps_rounding">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="performance-fps-warning">Warn on FPS Rounding</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="performance-fps-warning" data-loc-key="worr_ui_warn_on_fps_rounding">Warn on FPS Rounding</label>
             <input id="performance-fps-warning" type="checkbox" data-cvar="cl_warn_on_fps_rounding" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="cl_async">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="performance-async">Async Frame Processing</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="performance-async" data-loc-key="worr_ui_async_frame_processing">Async Frame Processing</label>
             <input id="performance-async" type="checkbox" data-cvar="cl_async" />
           </div>
         </section>
       </main>
 
       <footer class="menu-footer" id="performance-menu-footer">
-        <button id="performance-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="performance-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="performance-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="settings-performance-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

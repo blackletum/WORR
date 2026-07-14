@@ -1976,6 +1976,7 @@ Toggles the eyecam view when following other players.
 		if (!ent || !ent->client)
 			return;
 		ent->client->ui.mapSelectorActive = false;
+		ent->client->ui.mapSelectorDismissed = true;
 	}
 
 	void WorrMatchStatsMenu(gentity_t* ent, const CommandArgs& args) {

@@ -112,6 +112,7 @@ static inline void vkpt_freep(void **ptr)
 /* see main.c to override default file path. By default it will strip away
  * QVK_MOD_, fix the file ending, and convert to lower case */
 #define LIST_SHADER_MODULES \
+	SHADER_MODULE_DO(QVK_MOD_RMLUI_VERT)                            \
 	SHADER_MODULE_DO(QVK_MOD_STRETCH_PIC_VERT)                       \
 	SHADER_MODULE_DO(QVK_MOD_STRETCH_PIC_FRAG)                       \
 	SHADER_MODULE_DO(QVK_MOD_FINAL_BLIT_FRAG)                        \
@@ -656,6 +657,9 @@ VkResult vkpt_draw_destroy_pipelines(void);
 VkResult vkpt_draw_create_pipelines(void);
 VkResult vkpt_draw_submit_stretch_pics(VkCommandBuffer cmd_buf);
 VkResult vkpt_final_blit(VkCommandBuffer cmd_buf, unsigned int image_index, VkExtent2D extent, bool filtered, bool warped);
+VkResult vkpt_final_blit_rect(VkCommandBuffer cmd_buf, unsigned int image_index,
+                              VkExtent2D extent, bool filtered, bool warped,
+                              const VkRect2D *scissor);
 VkResult vkpt_draw_clear_stretch_pics(void);
 
 VkResult vkpt_uniform_buffer_create(void);

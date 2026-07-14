@@ -6,7 +6,11 @@
 
 namespace {
 
-constexpr int kUiListPageSize = 12;
+// Eight 36px rows fit the 960x720 reference layout without creating a nested
+// scroll region. Keep clearing the original twelve cvar slots so stale values
+// from older menu revisions can never become visible.
+constexpr int kUiListPageSize = 8;
+constexpr int kUiListPublishedSlots = 12;
 
 struct UiListEntry {
   std::string label;
@@ -163,6 +167,8 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
   UiListEntry extras[2]{};
   bool extraShow[2] = { false, false };
   std::vector<UiListEntry> entries;
+  std::string status = "No entries available.";
+  bool errorState = false;
 
   switch (listState.kind) {
   case UiListKind::CallvoteMap: {
@@ -180,7 +186,7 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
       LoadMapPool(ent);
 
     if (game.mapSystem.mapPool.empty()) {
-      entries.push_back({ "No maps available", "" });
+      status = "No maps are available for voting.";
       break;
     }
 
@@ -214,7 +220,7 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
       ++optionsAdded;
     }
     if (optionsAdded == 0)
-      entries.push_back({ "No other arenas available", "" });
+      status = "No other arenas are available.";
     break;
   }
   case UiListKind::MyMap: {
@@ -231,7 +237,7 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
       LoadMapPool(ent);
 
     if (game.mapSystem.mapPool.empty()) {
-      entries.push_back({ "No maps available", "" });
+      status = "No maps are available for MyMap.";
       break;
     }
 
@@ -248,7 +254,8 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
     title = (listState.kind == UiListKind::TournamentPick) ? "*Pick a Map*"
                                                            : "*Ban a Map*";
     if (!Tournament_IsActive() || game.tournament.vetoComplete) {
-      entries.push_back({ "Veto is not active.", "" });
+      status = "Tournament veto is not active.";
+      errorState = true;
       break;
     }
 
@@ -275,7 +282,7 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
     }
 
     if (maps.empty()) {
-      entries.push_back({ "No maps remain to pick or ban.", "" });
+      status = "No maps remain to pick or ban.";
       break;
     }
 
@@ -292,8 +299,7 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
   case UiListKind::TournamentReplay: {
     title = "*Replay Tournament Game*";
     if (!Tournament_IsActive() || game.tournament.mapOrder.empty()) {
-      subtitle = "Replay is available once";
-      header = "the map order is locked.";
+      status = "Replay is available once the map order is locked.";
       break;
     }
 
@@ -319,6 +325,9 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
   cmd.AppendCvar("ui_list_title", title);
   cmd.AppendCvar("ui_list_subtitle", subtitle);
   cmd.AppendCvar("ui_list_header", header);
+  cmd.AppendCvar("ui_list_state",
+                 errorState ? "error" : (entries.empty() ? "empty" : "ready"));
+  cmd.AppendCvar("ui_list_status", status);
   cmd.AppendCvar("ui_list_extra_label_0", extras[0].label);
   cmd.AppendCvar("ui_list_extra_cmd_0", extras[0].command);
   cmd.AppendCvar("ui_list_extra_show_0", extraShow[0] ? "1" : "0");
@@ -326,9 +335,10 @@ void UiList_Refresh(gentity_t *ent, bool openMenu)
   cmd.AppendCvar("ui_list_extra_cmd_1", extras[1].command);
   cmd.AppendCvar("ui_list_extra_show_1", extraShow[1] ? "1" : "0");
 
-  for (int i = 0; i < kUiListPageSize; ++i) {
+  for (int i = 0; i < kUiListPublishedSlots; ++i) {
     const int entryIndex = startIndex + i;
-    const bool hasEntry = entryIndex >= 0 && entryIndex < totalEntries;
+    const bool hasEntry = i < kUiListPageSize &&
+                          entryIndex >= 0 && entryIndex < totalEntries;
     const UiListEntry entry = hasEntry ? entries[entryIndex] : UiListEntry{};
 
     cmd.AppendCvar(fmt::format("ui_list_item_label_{}", i).c_str(), entry.label);

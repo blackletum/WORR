@@ -25,6 +25,8 @@ extern "C" {
 #include "shared/shared.h"
 #include "shared/list.h"
 #include "shared/game.h"
+#include "shared/prediction_abi.h"
+#include "shared/snapshot_abi.h"
 
 #include "common/bsp.h"
 #include "common/cmodel.h"
@@ -112,6 +114,9 @@ typedef struct {
 
     player_state_t  ps;
     int             clientNum;
+    worr_snapshot_consumed_command_v2 consumed_command;
+    uint64_t        canonical_server_time_us;
+    bool            canonical_server_time_valid;
 
     int             numEntities;
     unsigned        firstEntity;
@@ -166,6 +171,12 @@ typedef struct {
     usercmd_t    cmds[CMD_BACKUP];    // each message will send several old cmds
     unsigned     cmdNumber;
     vec3_t       predicted_origins[CMD_BACKUP];    // for debug comparing against server
+    uint32_t     predicted_sequences[CMD_BACKUP];
+    worr_prediction_state_v1 predicted_states[CMD_BACKUP];
+    uint64_t     predicted_state_hashes[CMD_BACKUP];
+    uint64_t     predicted_collision_hashes[CMD_BACKUP];
+    uint64_t     predicted_config_hashes[CMD_BACKUP];
+    uint64_t     predicted_replay_chain_hashes[CMD_BACKUP];
     client_history_t    history[CMD_BACKUP];
     unsigned    initialSeq;
 

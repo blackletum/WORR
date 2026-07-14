@@ -72,6 +72,7 @@ typedef struct vk_context_s {
     uint32_t graphics_queue_family;
     VkSurfaceKHR surface;
     VkRenderPass render_pass;
+    VkRenderPass overlay_render_pass;
     VkCommandPool command_pool;
     VkSemaphore image_available;
     VkSemaphore render_finished;

@@ -30,6 +30,27 @@ For the default Quake 2 protocol and R1Q2 protocol a hacky solution exists,
 which exploits dropped packet recovery mechanism for the purpose of packet
 rate reduction. This hack is disabled by default.
 
+For the default-safe behavior and the current limits of the staged snapshot,
+prediction, event, and lag-compensation work, see
+link:progressive-networking-controls.md[Progressive Networking Controls].
+
+cg_snapshot_timeline_render::
+    Selects the client snapshot timeline comparison mode. This is a
+    non-persistent testing control and defaults to 0.
+      - 0 — keep established rendering authoritative
+      - 1 — audit canonical remote-entity transforms without displaying them
+      - 2 — display only parity-proven canonical remote transforms, with an
+        independent established-render fallback for every rejected entity
+
+    Mode 2 is intended for controlled playtests. It does not switch the
+    predicted local player, enable extrapolation, or promote canonical effects
+    and audio.
+
+cg_snapshot_timeline_render_epsilon::
+    Maximum per-axis origin, beam-end, or angular difference accepted by the
+    snapshot promotion parity gate. Default value is 0.125 and the usable range
+    is 0.0001 to 8.0. This is a non-persistent testing control.
+
 cl_protocol::
     Specifies preferred network protocol version to use when connecting to
     servers.  If the server doesn't support the specified protocol, client will
@@ -55,6 +76,50 @@ cl_packetdup::
     Number of backup movement commands client includes in each new packet,
     directly impacts upload rate. Unless connected using Q2PRO protocol,
     hardcoded value of 2 backups per packet is used. Default value is 1.
+
+cl_adaptive_input::
+    Enables the experimental adaptive pacing and selective backup policy for
+    the existing batched-command path. It uses bounded loss, RTT-change, queue,
+    acknowledgement, and rate observations while preserving `cl_maxpackets 0`
+    as unlimited. The non-batched compatibility path is unchanged. Default
+    value is 0 (disabled).
+
+cl_adaptive_input_status::
+    Prints the current adaptive input decision and its telemetry. This command
+    is useful for controlled network-impairment tests; it does not enable the
+    feature.
+
+cl_worr_native_shadow::
+    Enables the client half of a developer-only native command-shadow
+    diagnostic. Default value is 0 (disabled). The server must also enable
+    `sv_worr_native_shadow`, and the connection must support the compatible
+    NEW-netchan path. The diagnostic observes at most one input command per map
+    or native transport epoch; the established movement command remains in
+    charge of gameplay. It is not a performance option and does not enable full
+    native netcode. Set it before connecting and reconnect after changing it.
+    An unsupported peer or diagnostic failure silently falls back to the normal
+    path. When disabled, normal networking and demo behavior are unchanged.
+
+cl_snapshot_recovery::
+    Enables an experimental recovery policy that can request a full snapshot
+    when repeated canonical snapshot checks fail. It uses the existing network
+    protocol and leaves the normal automatic recovery from an unreadable frame
+    untouched. Default value is 0 (disabled).
+
+cl_snapshot_recovery_debug::
+    Prints a message when the experimental recovery policy arms or applies a
+    full-snapshot request. Default value is 0 (disabled).
+
+cl_snapshot_recovery_status::
+    Prints the current recovery reason, retry/cooldown state, failure streaks,
+    and request counters. This is useful for controlled playtests and does not
+    enable the feature.
+
+cl_snapshot_shadow_status::
+    Prints canonical snapshot projection, publication, and legacy-parity
+    counters. A healthy connected session should report an active shadow and
+    zero parity mismatches. This command is diagnostic only and does not enable
+    canonical rendering or snapshot recovery.
 
 cl_instantpacket::
     Specifies if important events such as pressing ‘+attack’ or ‘+use’ are sent
@@ -784,6 +849,10 @@ gl_flarespeed::
     Specifies flare fading effect speed. Default value is 8. Set this to 0
     for instant fading.
 
+vk_flare_fade_speed::
+    Specifies flare fading effect speed for the Vulkan renderer. Default value
+    is 8. Set this to 0 for instant fading.
+
 gl_fontshadow::
     Specifies font shadow width, in pixels, ranging from 0 to 2. Default value
     is 0 (no shadow).
@@ -796,6 +865,16 @@ gl_partstyle::
       - 0 — blend colors
       - 1 — saturate colors
 
+vk_partscale::
+    Specifies the minimum size of particles when using the Vulkan renderer.
+    Default value is 2.
+
+vk_particle_style::
+    Specifies the drawing style of particles when using the Vulkan renderer.
+    Default value is 0.
+      - 0 — blend colors
+      - 1 — saturate colors
+
 gl_partshape::
     Specifies shape of particles. Default value is 0.
       - 0 — faded circle
@@ -804,6 +883,12 @@ gl_partshape::
 
 gl_beamstyle::
     Specifies drawing style of laser beams. Default value is 0.
+      - 0 — textured billboard-type beam (WORR style, very fast to draw)
+      - 1 — flat color polygonal beam (original Quake 2 style)
+
+vk_beam_style::
+    Specifies the drawing style of laser beams when using the Vulkan renderer.
+    Default value is 0.
       - 0 — textured billboard-type beam (WORR style, very fast to draw)
       - 1 — flat color polygonal beam (original Quake 2 style)
 

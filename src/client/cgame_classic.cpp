@@ -1002,11 +1002,6 @@ static int16_t CGC_GetHitMarkerDamage(const player_state_t *ps)
     return 0;
 }
 
-static void CGC_Pmove(pmove_t *pmove)
-{
-    Pmove(pmove, cgix.GetPmoveParams());
-}
-
 static void CGC_ParseConfigString(int32_t i, const char *s) {}
 
 static void CGC_ParseCenterPrint(const char *str, int isplit, bool instant)
@@ -1063,8 +1058,6 @@ cgame_export_t cgame_classic = {
 
     .GetOwnedWeaponWheelWeapons = CGC_GetOwnedWeaponWheelWeapons,
     .GetHitMarkerDamage = CGC_GetHitMarkerDamage,
-
-    .Pmove = CGC_Pmove,
 
     .ParseConfigString = CGC_ParseConfigString,
 

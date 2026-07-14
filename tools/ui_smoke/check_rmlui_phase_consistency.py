@@ -21,7 +21,12 @@ MIGRATION_PHASES = (
     "parity_ready",
 )
 METADATA_BACKED_PHASES = ("controller_stub", "runtime_stub")
-CONTROLLER_BINDING_PHASES = ("controller_stub", "runtime_stub")
+CONTROLLER_BINDING_PHASES = (
+    "controller_stub",
+    "runtime_stub",
+    "parity_pending",
+    "parity_ready",
+)
 DEFAULT_MANIFEST_PATH = Path("tools/ui_smoke/rmlui_manifest.json")
 DEFAULT_ROUTE_METADATA_ROOT = Path("assets/ui/rml")
 DEFAULT_PARITY_MANIFEST_PATH = Path("tools/ui_smoke/rmlui_parity_manifest.json")

@@ -17,6 +17,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "server.h"
+#include "common/net/consumed_cursor_sideband.h"
+#include "server/snapshot_shadow.h"
+#include "shared/game3_shared.h"
 
 /*
 =============================================================================
@@ -29,6 +32,104 @@ Encode a client frame onto the network channel
 // some protocol optimizations are disabled when recording a demo
 #define Q2PRO_OPTIMIZE(c) \
     (!(c)->settings[CLS_RECORDING])
+
+/* Five setting opcodes, each followed by a signed 32-bit index and value. */
+#define WORR_CONSUMED_CURSOR_WIRE_BYTES \
+    (WORR_CONSUMED_CURSOR_SIDEBAND_PAIR_COUNT * (1u + 4u + 4u))
+
+/*
+ * q2proto exposes the server-setting data model and decoder, but its legacy
+ * server writers intentionally leave game/private setting emission to the
+ * engine.  Encode this negotiated carrier with the same established raw
+ * service representation used by SV_WriteWorrCapabilitySetting().
+ *
+ * Stage the complete cursor tuple and the following frame header together so
+ * a short packet or encoder failure cannot leave a committed cursor detached
+ * from its frame.  Entity deltas remain covered by the caller's existing
+ * whole-datagram failure path.
+ */
+static bool SV_WriteFrameHeaderWithConsumedCursor(
+    client_t *client, unsigned maxsize,
+    const q2proto_svc_message_t *frame_message)
+{
+    const bool cursor_active =
+        (client->worr_capabilities_negotiated &
+         WORR_NET_CAP_CONSUMED_COMMAND_CURSOR_V1) != 0;
+    q2proto_error_t error;
+
+    if (!cursor_active) {
+        error = q2proto_server_write(
+            &client->q2proto_ctx, (uintptr_t)&client->io_data,
+            frame_message);
+        return error == Q2P_ERR_SUCCESS && !msg_write.overflowed &&
+               msg_write.cursize <= maxsize;
+    }
+
+    worr_command_cursor_v1 cursor = {0, 0};
+    worr_consumed_cursor_sideband_v1 sideband;
+    worr_consumed_cursor_setting_pair_v1 pairs[
+        WORR_CONSUMED_CURSOR_SIDEBAND_PAIR_COUNT];
+    q2protoio_ioarg_t staging_io;
+    sizebuf_t staging;
+    byte staging_data[MAX_MSGLEN];
+    unsigned available;
+    uint8_t setting_opcode;
+    uint32_t index;
+
+    if (client->worr_command_stream_initialized)
+        cursor = client->worr_command_stream.consumed_cursor;
+
+    if (!Worr_ConsumedCursorSidebandInitV1(&sideband, cursor) ||
+        !Worr_ConsumedCursorSidebandEncodeV1(
+            &sideband, pairs,
+            WORR_CONSUMED_CURSOR_SIDEBAND_PAIR_COUNT)) {
+        return false;
+    }
+
+    if (client->protocol == PROTOCOL_VERSION_RERELEASE) {
+        setting_opcode = svc_rr_setting;
+    } else if (client->protocol == PROTOCOL_VERSION_Q2PRO ||
+               client->protocol == PROTOCOL_VERSION_R1Q2) {
+        setting_opcode = svc_q2pro_setting;
+    } else {
+        return false;
+    }
+
+    if (msg_write.overflowed || msg_write.cursize > maxsize ||
+        msg_write.cursize > msg_write.maxsize) {
+        return false;
+    }
+    available = min(maxsize - msg_write.cursize,
+                    msg_write.maxsize - msg_write.cursize);
+    if (available <= WORR_CONSUMED_CURSOR_WIRE_BYTES)
+        return false;
+
+    SZ_InitWrite(&staging, staging_data, available);
+    for (index = 0;
+         index < WORR_CONSUMED_CURSOR_SIDEBAND_PAIR_COUNT; ++index) {
+        SZ_WriteByte(&staging, setting_opcode);
+        SZ_WriteLong(&staging, pairs[index].index);
+        SZ_WriteLong(&staging, pairs[index].value);
+    }
+    if (staging.overflowed ||
+        staging.cursize != WORR_CONSUMED_CURSOR_WIRE_BYTES) {
+        return false;
+    }
+
+    staging_io = client->io_data;
+    staging_io.sz_write = &staging;
+    staging_io.max_msg_len = available;
+    error = q2proto_server_write(
+        &client->q2proto_ctx, (uintptr_t)&staging_io, frame_message);
+    if (error != Q2P_ERR_SUCCESS || staging.overflowed ||
+        staging.cursize <= WORR_CONSUMED_CURSOR_WIRE_BYTES ||
+        staging.cursize > available) {
+        return false;
+    }
+
+    SZ_Write(&msg_write, staging.data, staging.cursize);
+    return !msg_write.overflowed && msg_write.cursize <= maxsize;
+}
 
 /*
 =============
@@ -48,6 +149,9 @@ static bool SV_TruncPacketEntities(client_t *client, const client_frame_t *from,
 
     if (!sv_trunc_packet_entities->integer || client->netchan.type == NETCHAN_NEW)
         return false;
+
+    SV_SnapshotShadowMarkTransportTruncatedV1(
+        client->worr_snapshot_shadow);
 
     SV_DPrintf(1, "Truncating frame %d at %u bytes for %s\n",
                client->framenum, msg_write.cursize, client->name);
@@ -244,9 +348,10 @@ static void make_playerstate_delta(client_t *client, const q2proto_packed_player
     }
 }
 
-static void write_entity_delta(client_t *client, const server_entity_packed_t *from, const server_entity_packed_t *to, msgEsFlags_t flags)
+static bool write_entity_delta(client_t *client, const server_entity_packed_t *from, const server_entity_packed_t *to, msgEsFlags_t flags)
 {
     q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
+    q2proto_error_t error;
 
     if (!to) {
         Q_assert(from);
@@ -254,9 +359,14 @@ static void write_entity_delta(client_t *client, const server_entity_packed_t *f
 
         message.frame_entity_delta.remove = true;
         message.frame_entity_delta.newnum = from->number;
-        q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
-
-        return; // remove entity
+        error = q2proto_server_write(
+            &client->q2proto_ctx, (uintptr_t)&client->io_data,
+            &message);
+        if (error != Q2P_ERR_SUCCESS || msg_write.overflowed)
+            return false;
+        (void)SV_SnapshotShadowCaptureEntityDeltaV1(
+            client->worr_snapshot_shadow, &message.frame_entity_delta);
+        return true;
     }
 
     Q_assert(to->number > 0 && to->number < MAX_EDICTS);
@@ -266,8 +376,14 @@ static void write_entity_delta(client_t *client, const server_entity_packed_t *f
         flags |= MSG_ES_BEAMORIGIN;
     bool entity_differs = Q2PROTO_MakeEntityDelta(&client->q2proto_ctx, &message.frame_entity_delta.entity_delta, from ? &from->e : NULL, &to->e, flags);
     if (!(flags & MSG_ES_FORCE) && !entity_differs)
-        return;
-    q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
+        return true;
+    error = q2proto_server_write(
+        &client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
+    if (error != Q2P_ERR_SUCCESS || msg_write.overflowed)
+        return false;
+    (void)SV_SnapshotShadowCaptureEntityDeltaV1(
+        client->worr_snapshot_shadow, &message.frame_entity_delta);
+    return true;
 }
 
 static bool emit_packet_entities(client_t               *client,
@@ -329,7 +445,8 @@ static bool emit_packet_entities(client_t               *client,
                 VectorCopy(oldent->e.origin, newent->e.origin);
                 VectorCopy(oldent->e.angles, newent->e.angles);
             }
-            write_entity_delta(client, oldent, newent, flags);
+            if (!write_entity_delta(client, oldent, newent, flags))
+                return false;
             oldindex++;
             newindex++;
             continue;
@@ -341,14 +458,19 @@ static bool emit_packet_entities(client_t               *client,
             if (oldent) {
                 oldent += (newnum & SV_BASELINES_MASK);
             }
-            write_entity_delta(client, oldent, newent, MSG_ES_NEWENTITY | MSG_ES_FORCE);
+            if (!write_entity_delta(
+                    client, oldent, newent,
+                    MSG_ES_NEWENTITY | MSG_ES_FORCE)) {
+                return false;
+            }
             newindex++;
             continue;
         }
 
         if (newnum > oldnum) {
             // the old entity isn't present in the new message
-            write_entity_delta(client, oldent, NULL, 0);
+            if (!write_entity_delta(client, oldent, NULL, 0))
+                return false;
             oldindex++;
             continue;
         }
@@ -356,8 +478,67 @@ static bool emit_packet_entities(client_t               *client,
 
     // end of packetentities
     q2proto_svc_message_t message = {.type = Q2P_SVC_FRAME_ENTITY_DELTA, .frame_entity_delta = {0}};
-    q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
-    return ret;
+    const q2proto_error_t error = q2proto_server_write(
+        &client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
+    if (error == Q2P_ERR_SUCCESS && !msg_write.overflowed &&
+        msg_write.cursize <= maxsize) {
+        (void)SV_SnapshotShadowCaptureEntityDeltaV1(
+            client->worr_snapshot_shadow, &message.frame_entity_delta);
+    }
+    return ret && error == Q2P_ERR_SUCCESS && !msg_write.overflowed &&
+           msg_write.cursize <= maxsize;
+}
+
+static void begin_snapshot_emission_shadow(
+    client_t *client, const client_frame_t *frame,
+    const q2proto_svc_frame_t *wire_frame)
+{
+    sv_snapshot_shadow_frame_v1 input;
+    worr_snapshot_consumed_command_v2 consumed = {0};
+    uint32_t controlled_entity_index;
+    int32_t movement_type;
+    uint16_t movement_flags;
+
+    if (!client->worr_snapshot_shadow || frame->clientNum < 0 ||
+        frame->clientNum >= client->csr->max_edicts - 1) {
+        return;
+    }
+    controlled_entity_index = (uint32_t)frame->clientNum + 1u;
+
+    if (client->protocol == PROTOCOL_VERSION_RERELEASE) {
+        movement_type = frame->ps.pm_type;
+        movement_flags = frame->ps.pm_flags;
+    } else {
+        movement_type = pmtype_from_game3(
+            (game3_pmtype_t)frame->ps.pm_type);
+        movement_flags = pmflags_from_game3(
+            frame->ps.pm_flags,
+            svs.game_api != Q2PROTO_GAME_VANILLA);
+    }
+
+    if ((client->worr_capabilities_negotiated &
+         WORR_NET_CAP_CONSUMED_COMMAND_CURSOR_V1) != 0 &&
+        client->worr_command_stream_initialized &&
+        client->worr_command_stream.consumed_cursor.epoch != 0) {
+        consumed.cursor = client->worr_command_stream.consumed_cursor;
+        consumed.provenance =
+            WORR_SNAPSHOT_CONSUMED_COMMAND_SERVER_CONSUMED;
+    }
+
+    memset(&input, 0, sizeof(input));
+    input.struct_size = sizeof(input);
+    input.schema_version = SV_SNAPSHOT_SHADOW_VERSION;
+    input.wire_frame = wire_frame;
+    input.authoritative_server_tick = frame->server_frame;
+    input.authoritative_tick_delta = frame->server_frame_delta;
+    input.authoritative_server_time_us = frame->server_time_us;
+    input.controlled_entity_index = controlled_entity_index;
+    input.canonical_movement_type = movement_type;
+    input.canonical_movement_flags = movement_flags;
+    input.team_id = 0;
+    input.consumed_command = consumed;
+    (void)SV_SnapshotShadowBeginFrameV1(
+        client->worr_snapshot_shadow, &input);
 }
 
 
@@ -372,6 +553,9 @@ bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize)
     q2proto_packed_player_state_t *oldstate;
     msgPsFlags_t    psFlags;
     int             clientEntityNum;
+
+    /* A prior failed packet must never leak partial carriers into this send. */
+    SV_SnapshotShadowAbortFrameV1(client->worr_snapshot_shadow);
 
     // this is the frame we are creating
     frame = &client->frames[client->framenum & UPDATE_MASK];
@@ -436,13 +620,31 @@ bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize)
         message.frame.playerstate.delta_bits |= Q2P_PSD_CLIENTNUM;
     }
 
-    client->suppress_count = 0;
-    client->frameflags = 0;
+    if (!SV_WriteFrameHeaderWithConsumedCursor(
+            client, maxsize, &message)) {
+        return false;
+    }
 
-    q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
+    /* Start only after the complete frame header (and negotiated cursor
+     * sideband) has reached the datagram.  Every later capture therefore
+     * describes bytes accepted by the real packet writer. */
+    begin_snapshot_emission_shadow(client, frame, &message.frame);
 
     // delta encode the entities
-    return emit_packet_entities(client, oldframe, frame, clientEntityNum, maxsize);
+    if (!emit_packet_entities(
+            client, oldframe, frame, clientEntityNum, maxsize)) {
+        SV_SnapshotShadowAbortFrameV1(client->worr_snapshot_shadow);
+        return false;
+    }
+
+    /* Projection failure is observational only.  A successfully encoded
+     * packet must retain legacy authority and continue to the network. */
+    (void)SV_SnapshotShadowCommitFrameV1(
+        client->worr_snapshot_shadow, NULL);
+
+    client->suppress_count = 0;
+    client->frameflags = 0;
+    return true;
 }
 
 /*
@@ -602,6 +804,7 @@ void SV_BuildClientFrame(client_t *client)
     frame = &client->frames[client->framenum & UPDATE_MASK];
     frame->number = client->framenum;
     frame->server_frame = sv.framenum;
+    frame->server_time_us = sv.worr_server_time_us;
     frame->server_frame_delta = 0;
     // Only contiguous per-client wire frames are interpolation neighbours.
     // A reduced snapshot rate retains consecutive client frame numbers while

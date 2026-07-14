@@ -8,43 +8,96 @@
   </head>
   <body id="multiplayer-root" data-route-id="multiplayer" data-route-group="multiplayer" data-route-version="1" data-document-status="starter" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen shell-screen" id="multiplayer-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="multiplayer-root-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="multiplayer-root-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="multiplayer-root-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Multiplayer</h1>
-        <p id="multiplayer-summary">
+        <div class="worr-titlerow"><button id="multiplayer-root-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="m_multiplayer">Multiplayer</h1></div>
+        <p id="multiplayer-summary" data-loc-key="worr_ui_find_a_public_server_browse_saved_addresses_wat">
           Find a public server, browse saved addresses, watch demos, host a match, or tune your player.
         </p>
       </header>
 
       <main class="menu-stack" id="multiplayer-menu-stack" data-component="common.components.menu_frame">
-        <nav class="menu-actions hub-actions" id="multiplayer-menu-actions">
-          <section class="hub-section" id="multiplayer-find-section">
-            <h2>Find</h2>
-            <button id="multiplayer-servers-q2servers" type="button" data-command="pushmenu servers &quot;+https://q2servers.com/?raw=2&quot; &quot;https://q2servers.com/?raw=0&quot;" data-route-target="servers" data-menu-sound="open">Browse q2servers.com</button>
-            <button id="multiplayer-servers-addressbook" type="button" data-command="pushmenu servers &quot;favorites://&quot; &quot;file:///servers.lst&quot; &quot;broadcast://&quot;" data-route-target="servers" data-menu-sound="open">Browse Address Book</button>
-            <button id="multiplayer-demos" type="button" data-command="pushmenu demos" data-route-target="demos" data-menu-sound="open">Browse Demos</button>
-          </section>
+        <div class="worr-cardrow" id="multiplayer-cards">
+          <div class="worr-card worr-card--servers" data-visible-if="ui_mp_card!=1">
+            <button id="multiplayer-card-servers" class="worr-card-face" type="button" data-command="set ui_mp_card 1" data-menu-sound="move">
+              <span class="worr-card-title" data-loc-key="worr_ui_servers">Servers</span>
+              <span class="worr-card-desc" data-loc-key="worr_ui_join_the_fight_online">Join the fight online</span>
+            </button>
+          </div>
+          <div class="worr-card is-open" data-visible-if="ui_mp_card=1">
+            <div class="worr-card-open">
+              <span class="worr-card-title" data-loc-key="worr_ui_servers">Servers</span>
+              <p class="worr-card-copy" data-loc-key="worr_ui_browse_the_public_server_directory_or_your_save">Browse the public server directory or your saved address book and join a match in progress.</p>
+              <button id="multiplayer-servers-q2servers" class="ui-button-cta" type="button" data-command="pushmenu servers &quot;+https://q2servers.com/?raw=2&quot; &quot;https://q2servers.com/?raw=0&quot;" data-route-target="servers" data-menu-sound="confirm" data-loc-key="worr_ui_browse_public">Browse Public</button>
+              <button id="multiplayer-servers-addressbook" type="button" data-command="pushmenu servers &quot;favorites://&quot; &quot;file:///servers.lst&quot; &quot;broadcast://&quot;" data-route-target="servers" data-menu-sound="open" data-loc-key="worr_ui_address_book">Address Book</button>
+            </div>
+          </div>
 
-          <section class="hub-section" id="multiplayer-host-section">
-            <h2>Host</h2>
-            <button id="multiplayer-startserver" class="ui-button-primary" type="button" data-command="if x$match_setup_format == x then match_setup_format regular; if x$match_setup_gametype == x then match_setup_gametype ffa; if x$match_setup_modifier == x then match_setup_modifier standard; if x$match_setup_length == x then match_setup_length standard; if x$match_setup_type == x then match_setup_type standard; if x$match_setup_bestof == x then match_setup_bestof bo1; if x$match_setup_maxplayers == x then match_setup_maxplayers 8; pushmenu startserver" data-route-target="startserver" data-menu-sound="open">Start Server</button>
-          </section>
+          <div class="worr-card worr-card--host" data-visible-if="ui_mp_card!=2">
+            <button id="multiplayer-card-host" class="worr-card-face" type="button" data-command="set ui_mp_card 2" data-menu-sound="move">
+              <span class="worr-card-title" data-loc-key="worr_ui_host_match">Host Match</span>
+              <span class="worr-card-desc" data-loc-key="worr_ui_run_your_own_server">Run your own server</span>
+            </button>
+          </div>
+          <div class="worr-card is-open" data-visible-if="ui_mp_card=2">
+            <div class="worr-card-open">
+              <span class="worr-card-title" data-loc-key="worr_ui_host_match">Host Match</span>
+              <p class="worr-card-copy" data-loc-key="worr_ui_configure_the_arena_rules_and_bots_then_open_yo">Configure the arena, rules, and bots, then open your server to the world or keep it local.</p>
+              <button id="multiplayer-startserver" class="ui-button-cta" type="button" data-command="if x$match_setup_format == x then match_setup_format regular; if x$match_setup_gametype == x then match_setup_gametype ffa; if x$match_setup_modifier == x then match_setup_modifier standard; if x$match_setup_length == x then match_setup_length standard; if x$match_setup_type == x then match_setup_type standard; if x$match_setup_bestof == x then match_setup_bestof bo1; if x$match_setup_maxplayers == x then match_setup_maxplayers 8; pushmenu startserver" data-route-target="startserver" data-menu-sound="confirm" data-loc-key="worr_ui_set_up">Set Up</button>
+            </div>
+          </div>
 
-          <section class="hub-section" id="multiplayer-player-section">
-            <h2>Profile</h2>
-            <button id="multiplayer-player" type="button" data-command="pushmenu players" data-route-target="players" data-menu-sound="open">Player Setup</button>
-            <button id="multiplayer-options" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open">Options</button>
-          </section>
-        </nav>
+          <div class="worr-card worr-card--load" data-visible-if="ui_mp_card!=3">
+            <button id="multiplayer-card-demos" class="worr-card-face" type="button" data-command="set ui_mp_card 3" data-menu-sound="move">
+              <span class="worr-card-title" data-loc-key="worr_ui_demos">Demos</span>
+              <span class="worr-card-desc" data-loc-key="worr_ui_watch_recorded_matches">Watch recorded matches</span>
+            </button>
+          </div>
+          <div class="worr-card is-open" data-visible-if="ui_mp_card=3">
+            <div class="worr-card-open">
+              <span class="worr-card-title" data-loc-key="worr_ui_demos">Demos</span>
+              <p class="worr-card-copy" data-loc-key="worr_ui_browse_and_play_back_recorded_demos">Browse and play back recorded demos.</p>
+              <button id="multiplayer-demos" class="ui-button-cta" type="button" data-command="pushmenu demos" data-route-target="demos" data-menu-sound="confirm" data-loc-key="worr_ui_browse">Browse</button>
+            </div>
+          </div>
+
+          <div class="worr-card worr-card--campaign" data-visible-if="ui_mp_card!=4">
+            <button id="multiplayer-card-profile" class="worr-card-face" type="button" data-command="set ui_mp_card 4" data-menu-sound="move">
+              <span class="worr-card-title" data-loc-key="worr_ui_profile">Profile</span>
+              <span class="worr-card-desc" data-loc-key="worr_ui_tune_your_player">Tune your player</span>
+            </button>
+          </div>
+          <div class="worr-card is-open" data-visible-if="ui_mp_card=4">
+            <div class="worr-card-open">
+              <span class="worr-card-title" data-loc-key="worr_ui_profile">Profile</span>
+              <p class="worr-card-copy" data-loc-key="worr_ui_set_your_name_model_and_identity_before_you_dro">Set your name, model, and identity before you drop in.</p>
+              <button id="multiplayer-player" class="ui-button-cta" type="button" data-command="pushmenu players" data-route-target="players" data-menu-sound="confirm" data-loc-key="worr_ui_player_setup">Player Setup</button>
+            </div>
+          </div>
+        </div>
 
         <section class="status-panel" id="multiplayer-session-status" data-show-if="!ingame">
-          <h2>Session Status</h2>
-          <p>Not connected to a server.</p>
+          <h2 data-loc-key="worr_ui_session_status">Session Status</h2>
+          <p data-loc-key="worr_ui_not_connected_to_a_server">Not connected to a server.</p>
         </section>
       </main>
 
       <footer class="menu-footer" id="multiplayer-menu-footer">
-        <button id="multiplayer-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="multiplayer-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="multiplayer-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="multiplayer-root-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

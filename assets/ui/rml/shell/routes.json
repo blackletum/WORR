@@ -46,7 +46,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu main",
       "current_surface": "RmlUi shell main menu",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "runtime_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -89,7 +89,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu game",
       "current_surface": "RmlUi shell in-game menu",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "runtime_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -130,6 +130,50 @@
       "notes": "Guarded engine menu-open document probe through UI_Rml_OpenMenu; UI_Rml_OpenMenu falls back to the legacy UI, so this is not a real RmlUi render/parity claim. Existing mock navigation, command, and condition controller contracts remain preserved; Agent 5 utility route handoff attributes remain static."
     },
     {
+      "id": "play",
+      "wave": "A",
+      "group": "shell",
+      "document": "shell/play.rml",
+      "document_id": "shell-play",
+      "status": "scaffolded_round2",
+      "source_menu": "docs-dev/worr-ux-ui-design-language-2026-07-12.md:play-card-flow",
+      "legacy_surface": "none (new design-language surface)",
+      "current_surface": "RmlUi play card-select screen",
+      "source_owner": "cgame_ui_json",
+      "migration_phase": "parity_ready",
+      "task_ids": [
+        "FR-09-T01",
+        "FR-09-T06",
+        "FR-03-T08"
+      ],
+      "controller_scope": "shell.play",
+      "entry_points": [
+        "pushmenu play"
+      ],
+      "data_models": [
+        "shell.play"
+      ],
+      "controller_contracts": [
+        {
+          "category": "navigation",
+          "contract": "worr.rml.controller.navigation.mock",
+          "fixture": "navigation.mock.json",
+          "model": "ui.navigation",
+          "status": "mock_fixture",
+          "notes": "Options hub buttons provide static route-target navigation evidence only."
+        },
+        {
+          "category": "command_action",
+          "contract": "worr.rml.controller.command_action.mock",
+          "fixture": "command-action.mock.json",
+          "model": "ui.commands",
+          "status": "mock_fixture",
+          "notes": "Options hub buttons expose data-command hooks for later command dispatch wiring."
+        }
+      ],
+      "notes": "Card-select play flow per the UX/UI design language; cards expand via ui_play_card cvar conditions."
+    },
+    {
       "id": "options",
       "wave": "A",
       "group": "shell",
@@ -140,7 +184,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu options",
       "current_surface": "RmlUi shell options hub",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -182,7 +226,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu video",
       "current_surface": "RmlUi settings video",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -233,7 +277,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu multimonitor",
       "current_surface": "RmlUi settings multi-monitor",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -293,7 +337,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu performance",
       "current_surface": "RmlUi settings performance",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -345,7 +389,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu accessibility",
       "current_surface": "RmlUi settings accessibility",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -397,7 +441,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu sound",
       "current_surface": "RmlUi settings sound",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -450,7 +494,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu railtrail",
       "current_surface": "RmlUi settings railgun trail",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -502,7 +546,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu effects",
       "current_surface": "RmlUi settings effects",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -554,7 +598,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu crosshair",
       "current_surface": "RmlUi settings crosshair",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -605,7 +649,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu screen",
       "current_surface": "RmlUi settings screen",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -657,7 +701,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu language",
       "current_surface": "RmlUi settings language",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -709,7 +753,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu downloads",
       "current_surface": "RmlUi shell download options",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -762,7 +806,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu download_status plus client download auto-open",
       "current_surface": "RmlUi shell download status",
       "source_owner": "client_download_state",
-      "migration_phase": "runtime_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -815,7 +859,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu input",
       "current_surface": "RmlUi settings input",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -867,7 +911,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu quit_confirm",
       "current_surface": "RmlUi shell quit confirmation",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -910,7 +954,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu gameflags",
       "current_surface": "RmlUi single-player deathmatch flags",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -963,7 +1007,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu startserver",
       "current_surface": "RmlUi single-player start server",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -1024,7 +1068,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu singleplayer",
       "current_surface": "RmlUi single-player campaign hub",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -1093,7 +1137,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu skill_select",
       "current_surface": "RmlUi single-player skill select",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -1129,7 +1173,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu loadgame",
       "current_surface": "RmlUi single-player load game",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",
@@ -1175,7 +1219,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu savegame",
       "current_surface": "RmlUi single-player save game",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T01",
         "FR-09-T06",

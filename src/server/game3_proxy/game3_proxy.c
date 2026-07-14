@@ -1220,7 +1220,6 @@ game_export_t *GetGame3Proxy(game_import_t *import, void *game3_entry, void *gam
     game_export.RunFrame = wrap_RunFrame;
     game_export.PrepFrame = wrap_PrepFrame;
     game_export.ServerCommand = wrap_ServerCommand;
-    game_export.Pmove = NULL; // the engine doesn't actually use the game exported Pmove, so don't bother providing it...
     game_export.GetExtension = wrap_GetExtension_export;
     game_export.Bot_SetWeapon = wrap_Bot_SetWeapon;
     game_export.Bot_TriggerEdict = wrap_Bot_TriggerEdict;

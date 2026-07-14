@@ -59,7 +59,9 @@ vec2 positions[4] = vec2[](
 void
 main()
 {
-	StretchPic sp = stretch_pics[gl_InstanceIndex];
+	// The host-visible UI geometry buffer stores the larger RmlUi vertex arena
+	// first. Its 6 MiB size is exactly 131072 StretchPic records.
+	StretchPic sp = stretch_pics[131072 + gl_InstanceIndex];
 	vec2 uv       = positions[gl_VertexIndex];
 	vec2 pos      = vec2(sp.base_x, sp.base_y)
 		+ uv.x * vec2(sp.axis_x_x, sp.axis_x_y)

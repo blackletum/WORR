@@ -7,43 +7,53 @@
   </head>
   <body id="settings-crosshair" data-route-id="crosshair" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round3" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="crosshair-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="settings-crosshair-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="settings-crosshair-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="settings-crosshair-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Crosshair Setup</h1>
+        <div class="worr-titlerow"><button id="settings-crosshair-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_crosshair_setup">Crosshair Setup</h1></div>
       </header>
 
       <main class="settings-form form-compact cols-2" id="crosshair-settings-form">
         <div class="settings-columns" id="crosshair-settings-columns">
           <div class="settings-column" id="crosshair-primary-column">
             <section class="settings-section" id="crosshair-picker-section" data-component="common.components.image_grid">
-              <h2>Crosshair</h2>
+              <h2 data-loc-key="m_crosshair">Crosshair</h2>
               <div class="setting-row image-grid-anchor" id="crosshair-type-control" data-control="imagevalues" data-cvar="crosshair" data-path="pics" data-filter="ch*" data-numeric="true" data-value-prefix="ch" data-image-width="16" data-image-height="16">
-                <span class="setting-widget-icon" data-widget="imagevalues"><img src="../common/icons/widgets/imagevalues.svg" /></span>
-                <label for="crosshair-type">Crosshair Type</label>
+                <span class="setting-widget-icon" data-widget="imagevalues"><img src="../common/icons/widgets/imagevalues.png" /></span>
+                <label for="crosshair-type" data-loc-key="worr_ui_crosshair_type">Crosshair Type</label>
                 <select id="crosshair-type" data-cvar="crosshair" data-source-menu-type="imagevalues">
-                  <option value="0">Default</option>
+                  <option value="0" data-loc-key="worr_ui_default">Default</option>
                 </select>
               </div>
               <div class="setting-row" data-control="range" data-cvar="cl_crosshair_size">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="crosshair-size">Crosshair Size</label>
-                <input id="crosshair-size" type="range" min="4" max="64" step="1" data-cvar="cl_crosshair_size" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_size" data-meter-min="4" data-meter-max="64"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_size"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="crosshair-size" data-loc-key="worr_ui_crosshair_size">Crosshair Size</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_size" data-meter-min="4" data-meter-max="64"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_size"></span></span><input id="crosshair-size" type="range" min="4" max="64" step="1" data-cvar="cl_crosshair_size" />
+
               </div>
               <div class="setting-row" data-control="range" data-cvar="cl_crosshair_brightness">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="crosshair-brightness">Crosshair Brightness</label>
-                <input id="crosshair-brightness" type="range" min="0" max="1" step="0.05" data-cvar="cl_crosshair_brightness" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_brightness" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_brightness"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="crosshair-brightness" data-loc-key="worr_ui_crosshair_brightness">Crosshair Brightness</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_brightness" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_brightness"></span></span><input id="crosshair-brightness" type="range" min="0" max="1" step="0.05" data-cvar="cl_crosshair_brightness" />
+
               </div>
               <div class="setting-row" data-control="range" data-cvar="cl_crosshair_color">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="crosshair-color">Crosshair Color</label>
-                <input id="crosshair-color" type="range" min="1" max="26" step="1" data-cvar="cl_crosshair_color" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_color" data-meter-min="1" data-meter-max="26"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_color"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="crosshair-color" data-loc-key="worr_ui_crosshair_color">Crosshair Color</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_color" data-meter-min="1" data-meter-max="26"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_color"></span></span><input id="crosshair-color" type="range" min="1" max="26" step="1" data-cvar="cl_crosshair_color" />
+
               </div>
               <div class="setting-row" data-control="toggle" data-cvar="cl_crosshair_health">
-                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-                <label for="crosshair-health-color">Color by Health</label>
+                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+                <label for="crosshair-health-color" data-loc-key="worr_ui_color_by_health">Color by Health</label>
                 <input id="crosshair-health-color" type="checkbox" data-cvar="cl_crosshair_health" />
               </div>
             </section>
@@ -51,37 +61,37 @@
 
           <div class="settings-column" id="crosshair-hit-column">
             <section class="settings-section" id="crosshair-hit-section" data-component="common.components.cvar_controls">
-              <h2>Hit Feedback</h2>
+              <h2 data-loc-key="worr_ui_hit_feedback">Hit Feedback</h2>
               <div class="setting-row" data-control="select" data-cvar="cl_crosshair_hit_style">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="crosshair-hit-style">Hit Style</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="crosshair-hit-style" data-loc-key="worr_ui_hit_style">Hit Style</label>
                 <select id="crosshair-hit-style" data-cvar="cl_crosshair_hit_style" data-source-menu-type="values">
-                  <option value="0">Off</option>
-                  <option value="1">Damage Color</option>
-                  <option value="2">Hit Color</option>
-                  <option value="3">Pulse (Large)</option>
-                  <option value="4">Damage + Pulse</option>
-                  <option value="5">Hit Color + Pulse</option>
-                  <option value="6">Pulse (Small)</option>
-                  <option value="7">Damage + Small Pulse</option>
-                  <option value="8">Hit Color + Small Pulse</option>
+                  <option value="0" data-loc-key="m_off">Off</option>
+                  <option value="1" data-loc-key="worr_ui_damage_color">Damage Color</option>
+                  <option value="2" data-loc-key="worr_ui_hit_color">Hit Color</option>
+                  <option value="3" data-loc-key="worr_ui_pulse_large">Pulse (Large)</option>
+                  <option value="4" data-loc-key="worr_ui_damage_pulse">Damage + Pulse</option>
+                  <option value="5" data-loc-key="worr_ui_hit_color_pulse">Hit Color + Pulse</option>
+                  <option value="6" data-loc-key="worr_ui_pulse_small">Pulse (Small)</option>
+                  <option value="7" data-loc-key="worr_ui_damage_small_pulse">Damage + Small Pulse</option>
+                  <option value="8" data-loc-key="worr_ui_hit_color_small_pulse">Hit Color + Small Pulse</option>
                 </select>
               </div>
               <div class="setting-row" data-control="range" data-cvar="cl_crosshair_hit_color">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="crosshair-hit-color">Hit Color</label>
-                <input id="crosshair-hit-color" type="range" min="1" max="26" step="1" data-cvar="cl_crosshair_hit_color" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_hit_color" data-meter-min="1" data-meter-max="26"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_hit_color"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="crosshair-hit-color" data-loc-key="worr_ui_hit_color">Hit Color</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_hit_color" data-meter-min="1" data-meter-max="26"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_hit_color"></span></span><input id="crosshair-hit-color" type="range" min="1" max="26" step="1" data-cvar="cl_crosshair_hit_color" />
+
               </div>
               <div class="setting-row" data-control="range" data-cvar="cl_crosshair_hit_time">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="crosshair-hit-time">Hit Time (ms)</label>
-                <input id="crosshair-hit-time" type="range" min="0" max="1000" step="10" data-cvar="cl_crosshair_hit_time" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_hit_time" data-meter-min="0" data-meter-max="1000"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_hit_time"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="crosshair-hit-time" data-loc-key="worr_ui_hit_time_ms">Hit Time (ms)</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="cl_crosshair_hit_time" data-meter-min="0" data-meter-max="1000"></span><span class="setting-meter-text" data-bind-cvar="cl_crosshair_hit_time"></span></span><input id="crosshair-hit-time" type="range" min="0" max="1000" step="10" data-cvar="cl_crosshair_hit_time" />
+
               </div>
               <div class="setting-row" data-control="toggle" data-cvar="cl_crosshair_pulse">
-                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-                <label for="crosshair-pickup-pulse">Pickup Pulse</label>
+                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+                <label for="crosshair-pickup-pulse" data-loc-key="worr_ui_pickup_pulse">Pickup Pulse</label>
                 <input id="crosshair-pickup-pulse" type="checkbox" data-cvar="cl_crosshair_pulse" />
               </div>
             </section>
@@ -90,8 +100,12 @@
       </main>
 
       <footer class="menu-footer" id="crosshair-menu-footer">
-        <button id="crosshair-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="crosshair-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="crosshair-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="settings-crosshair-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

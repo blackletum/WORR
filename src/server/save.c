@@ -670,8 +670,10 @@ void SV_CheckForSavegame(const mapcmd_t *cmd)
         frames = 10 * SV_FRAMERATE;
     }
 
-    for (int i = 0; i < frames; i++, sv.framenum++)
+    for (int i = 0; i < frames; i++) {
         ge->RunFrame(false);
+        SV_AdvanceSimulationClock();
+    }
 }
 
 static bool have_enhanced_savegames(void)

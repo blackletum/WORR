@@ -278,6 +278,7 @@ typedef enum {
     IF_SRC_BASE         = BIT(20),  // source is basegame
     IF_SRC_GAME         = BIT(21),  // source is mod
     IF_NO_COLOR_ADJUST  = BIT(22),  // skip gamma/saturation adjustments
+    IF_NOSCRAP          = BIT(23),  // never place in the scrap atlas
     IF_SRC_MASK         = (BIT(20) | BIT(21)),
 } imageflags_t;
 
@@ -391,10 +392,23 @@ typedef enum {
     R_RENDERER_RMLUI_FAMILY_RTX_VKPT
 } renderer_rmlui_family_t;
 
+typedef struct renderer_rmlui_vertex_s {
+    float position[2];
+    float tex_coord[2];
+    uint32_t color;
+} renderer_rmlui_vertex_t;
+
 renderer_rmlui_family_t R_RmlUiRendererFamily(void);
 const char *R_RmlUiRendererName(void);
 bool R_RmlUiCanRender(void);
 void *R_RmlUiNativeRenderInterface(void);
+bool R_RmlUiDrawGeometry(const renderer_rmlui_vertex_t *vertices,
+                         size_t vertex_count,
+                         const uint32_t *indices,
+                         size_t index_count,
+                         float translation_x,
+                         float translation_y,
+                         qhandle_t texture);
 
 typedef struct renderer_export_s {
     bool (*Init)(bool total);

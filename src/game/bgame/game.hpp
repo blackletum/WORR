@@ -122,8 +122,8 @@ constexpr bit_t<n> bit_v = 1ull << n;
 
 // game.h -- game dll information visible to server
 // PARIL_NEW_API - value likely not used by any other Q2-esque engine in the wild
-constexpr int32_t GAME_API_VERSION = 2024;
-constexpr int32_t CGAME_API_VERSION = 2027;
+constexpr int32_t GAME_API_VERSION = 2025;
+constexpr int32_t CGAME_API_VERSION = 2028;
 
 // forward declarations
 struct gentity_t;
@@ -390,6 +390,7 @@ enum pmflags_t : uint16_t {
 	PMF_TIME_TRICK = bit_v<10>, // pmTime is trick jump time
 	PMF_HASTE = bit_v<11>, // haste powerup active
 	PMF_TIME_SPAWN_LOCK = bit_v<12>, // pmTime is spawn-angle lock (preserve mapper angles, freeze movement)
+	PMF_LEGACY_TELEPORT_BIT = bit_v<15>, // legacy Q2PRO discontinuity marker
 };
 
 MAKE_ENUM_BITFLAGS(pmflags_t);
@@ -410,10 +411,6 @@ struct pmove_state_t {
 	gvec3_t				deltaAngles = vec3_origin; // add to command angles to get view direction
 	// changed by spawns, rotating objects, and teleporters
 	int8_t				viewHeight = DEFAULT_VIEWHEIGHT; // view height, added to origin[_Z] + viewOffset[2], for crouching
-
-//muffmode
-	bool				haste = false;
-//-muffmode
 };
 
 //
@@ -465,12 +462,22 @@ struct touch_list_t {
 	std::array<trace_t, MAXTOUCH> traces;
 };
 
+// Immutable inputs that select the movement rules for one simulation step.
+// The module-level pm_config is policy storage only; callers copy it here so
+// the shared movement core has no hidden configuration dependency.
+struct pm_config_t {
+	int32_t		airAccel = 0;
+	bool		n64Physics = false;
+	bool		q3Overbounce = false;
+};
+
 struct PMove {
 	// state (in / out)
 	pmove_state_t	s = {};
 
 	// command (in)
 	usercmd_t		cmd = {};
+	pm_config_t		config = {};
 	bool			snapInitial = false; // if s has been changed outside pmove
 
 	// results (out)
@@ -493,6 +500,10 @@ struct PMove {
 	trace_t(*clip)(gvec3_cref_t start, gvec3_cptr_t mins, gvec3_cptr_t maxs, gvec3_cref_t end, contents_t contentMask) {};
 
 	contents_t(*pointContents)(gvec3_cref_t point) {};
+	// Presentation-only contents sampling (screen blend/rdflags).  Keeping this
+	// callback distinct lets deterministic collision transcripts exclude data
+	// that cannot affect authoritative movement state.
+	contents_t(*presentationPointContents)(gvec3_cref_t point) {};
 
 	// [KEX] variables (in)
 	Vector3			viewOffset = vec3_origin; // last viewOffset (for accurate calculation of blending)
@@ -2107,9 +2118,6 @@ struct game_export_t {
 	// [Paril-KEX] special flags to indicate something to the server
 	server_flags_t  serverFlags;
 
-	// [KEX]: Pmove as export
-	void		(*Pmove)(PMove *pmove); // player movement code called by server & client
-
 	// Fetch named extension from game DLL.
 	void		*(*GetExtension)(const char *name);
 
@@ -2309,9 +2317,6 @@ struct cgame_export_t {
 
 	// [Paril-KEX] fetch how much damage was registered by these stats
 	int16_t			(*GetHitMarkerDamage)(const player_state_t *ps);
-
-	// [KEX]: Pmove as export
-	void			(*Pmove)(PMove *pmove); // player movement code called by server & client
 
 	// [Paril-KEX] allow cgame to react to configstring changes
 	void			(*ParseConfigString)(int32_t i, const char *s);

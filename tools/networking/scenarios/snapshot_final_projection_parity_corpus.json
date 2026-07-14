@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "name": "fr-10-t06-final-emission-projector-parity",
+  "classification": "offline_deterministic_parity_corpus",
+  "snapshot_count": 100000,
+  "seed": 1511504355,
+  "retention_slots": 64,
+  "wire_sequence_boundary_cases": 8,
+  "repeat": 2,
+  "required_coverage": {
+    "keyframes": 100,
+    "zero_base_keyframes": 1,
+    "acknowledged_branches": 1000,
+    "invalid_base_rejections": 10,
+    "invalid_base_keyframe_recoveries": 10,
+    "entity_adds": 1000,
+    "entity_updates": 1000,
+    "entity_removes": 1000,
+    "entity_reuses": 100,
+    "visibility_gap_snapshots": 1000,
+    "visibility_gap_reentries": 100,
+    "truncations": 100,
+    "fragment_stalls": 100,
+    "rate_suppressions": 1000,
+    "event_snapshots": 1000,
+    "unchanged_old_origin_matches": 1000,
+    "authoritative_tick_wraps": 1,
+    "stale_ref_rejections": 1000
+  },
+  "required_exact_counts": {
+    "endpoint_hash_matches": 100000,
+    "legacy_hash_matches": 100000,
+    "component_hash_matches": 100000,
+    "exact_chronology_matches": 100000,
+    "wire_sequence_boundary_cases": 8,
+    "wire_sequence_wrap_cases": 0
+  },
+  "wire_sequence_domain": {
+    "minimum_serverframe": 0,
+    "maximum_serverframe": 2147483647,
+    "maximum_snapshot_sequence": 2147483648,
+    "wrap_supported": false,
+    "rationale": "The public q2proto frame identifier is a nonnegative signed int32; Snapshot V2 maps it to serverframe + 1 and rejects rollback or wrap."
+  }
+}

@@ -18,11 +18,19 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl.input.c  -- builds an intended movement command to send to the server
 
 #include "client.h"
+#include "client/command_identity.h"
+#include "client/native_readiness_pilot.h"
+#include "client/net_capability.h"
+#include "client/snapshot_recovery.h"
+#include "client/snapshot_shadow.h"
 #include "common/crc.h"
+#include "common/net/adaptive_input.h"
+#include "common/net/usercmd_delta.h"
 
 static cvar_t    *cl_nodelta;
 static cvar_t    *cl_maxpackets;
 static cvar_t    *cl_packetdup;
+static cvar_t    *cl_adaptive_input;
 static cvar_t    *cl_fuzzhack;
 #if USE_DEBUG
 static cvar_t    *cl_showpackets;
@@ -62,6 +70,27 @@ static cvar_t    *in_gamepad_look_sensitivity;
 static cvar_t    *in_gamepad_invert_y;
 static cvar_t    *in_gamepad_wheel_speed;
 
+typedef struct adaptive_input_runtime_s {
+    worr_adaptive_input_config_v1 config;
+    worr_adaptive_input_state_v1 state;
+    worr_adaptive_input_output_v1 output;
+    bool active;
+    bool decision_valid;
+    uint64_t integration_fallbacks;
+} adaptive_input_runtime_t;
+
+static adaptive_input_runtime_t adaptive_input;
+
+void CL_AdaptiveInputReset(void)
+{
+    memset(&adaptive_input, 0, sizeof(adaptive_input));
+    Worr_AdaptiveInputDefaultConfigV1(&adaptive_input.config);
+    Worr_AdaptiveInputResetV1(&adaptive_input.state);
+}
+
+static void CL_AdaptiveInputStatus_f(void);
+static void CL_NativeReadinessPilotStatus_f(void);
+
 /*
 ===============================================================================
 
@@ -72,6 +101,7 @@ INPUT SUBSYSTEM
 
 typedef struct {
     bool        modified;
+    bool        grabbed;
     int         old_dx;
     int         old_dy;
 } in_state_t;
@@ -93,11 +123,14 @@ static bool IN_GetCurrentGrab(void)
     if (cls.active != ACT_ACTIVATED)
         return false;   // main window doesn't have focus
 
+    if (cls.key_dest & KEY_MENU)
+        return false;   // menus own an absolute system pointer
+
+    if (cls.key_dest & KEY_CONSOLE)
+        return true;    // console owns a captured, renderer-drawn pointer
+
     if (r_config.flags & QVF_FULLSCREEN)
         return true;    // full screen
-
-    if (cls.key_dest & (KEY_MENU | KEY_CONSOLE))
-        return false;   // menu or console is up
 
     if (sv_paused->integer)
         return false;   // game paused
@@ -127,8 +160,14 @@ IN_Activate
 void IN_Activate(void)
 {
     if (vid && vid->grab_mouse) {
-        vid->grab_mouse(IN_GetCurrentGrab());
+        input.grabbed = IN_GetCurrentGrab();
+        vid->grab_mouse(input.grabbed);
     }
+}
+
+bool IN_MouseGrabbed(void)
+{
+    return input.grabbed;
 }
 
 /*
@@ -151,6 +190,12 @@ void IN_Frame(void)
 {
     if (input.modified) {
         IN_Restart_f();
+    }
+    if ((cls.key_dest & KEY_CONSOLE) && input.grabbed && vid &&
+        vid->get_mouse_motion) {
+        int dx, dy;
+        if (vid->get_mouse_motion(&dx, &dy) && (dx || dy))
+            Con_MouseMove(dx, dy);
     }
 }
 
@@ -692,7 +737,13 @@ static void CL_MouseMove(void)
     if (!vid || !vid->get_mouse_motion) {
         return;
     }
-    if (cls.key_dest & (KEY_MENU | KEY_CONSOLE | KEY_MESSAGE)) {
+    if (cls.key_dest & KEY_CONSOLE) {
+        if (vid->get_mouse_motion(&dx, &dy) && (dx || dy))
+            Con_MouseMove(dx, dy);
+        input.old_dx = input.old_dy = 0;
+        return;
+    }
+    if (cls.key_dest & (KEY_MENU | KEY_MESSAGE)) {
         return;
     }
     if (!vid->get_mouse_motion(&dx, &dy)) {
@@ -936,6 +987,10 @@ static const cmdreg_t c_input[] = {
     { "-wheel2", IN_Wheel2Up },
     { "cl_weapnext", IN_WeapNext },
     { "cl_weapprev", IN_WeapPrev },
+    { "cl_adaptive_input_status", CL_AdaptiveInputStatus_f },
+    { "cl_snapshot_shadow_status", CL_SnapshotShadowStatus_f },
+    { "cl_snapshot_recovery_status", CL_SnapshotRecoveryStatus_f },
+    { "cl_worr_native_shadow_status", CL_NativeReadinessPilotStatus_f },
     { NULL }
 };
 
@@ -952,11 +1007,16 @@ void CL_RegisterInput(void)
     cl_maxpackets = Cvar_Get("cl_maxpackets", "60", 0);
     cl_fuzzhack = Cvar_Get("cl_fuzzhack", "0", 0);
     cl_packetdup = Cvar_Get("cl_packetdup", "1", 0);
+    cl_adaptive_input =
+        Cvar_Get("cl_adaptive_input", "0", CVAR_ARCHIVE);
 #if USE_DEBUG
     cl_showpackets = Cvar_Get("cl_showpackets", "0", 0);
 #endif
     cl_instantpacket = Cvar_Get("cl_instantpacket", "1", 0);
     cl_batchcmds = Cvar_Get("cl_batchcmds", "1", 0);
+    CL_SnapshotRecoveryInit();
+
+    CL_AdaptiveInputReset();
 
     cl_upspeed = Cvar_Get("cl_upspeed", "200", 0);
     cl_forwardspeed = Cvar_Get("cl_forwardspeed", "200", 0);
@@ -1070,9 +1130,38 @@ void CL_FinalizeCmd(void)
     if (cgame && cgame->WeaponBar_Input)
         cgame->WeaponBar_Input(&cl.frame.ps, &cl.cmd.buttons);
 
-    // save this command off for prediction
-    cl.cmdNumber++;
-    cl.cmds[cl.cmdNumber & CMD_MASK] = cl.cmd;
+    /* Store exactly the command representation prediction and wire share. */
+    if (!NetUsercmd_CanonicalizeForTransport(
+            &cl.cmd, cls.q2proto_ctx.features.has_upmove)) {
+        Com_WPrintf("%s: rejected non-canonical user command\n", __func__);
+        goto clear;
+    }
+
+    {
+        // save this command off for prediction
+        cl.cmdNumber++;
+        cl.cmds[cl.cmdNumber & CMD_MASK] = cl.cmd;
+        const bool identity_finalized =
+            CL_CommandIdentityFinalize(cl.cmdNumber);
+        if (!identity_finalized && CL_NetCapabilityHas(
+                WORR_NET_CAP_LEGACY_COMMAND_SIDEBAND_V1)) {
+            Com_Error(ERR_DROP, "%s: canonical command identity exhausted",
+                      __func__);
+        }
+        if (identity_finalized) {
+            worr_command_id_v1 command_id = {};
+            worr_prediction_command_v1 prediction_command = {};
+            if (CL_CommandIdentityForNumber(cl.cmdNumber, &command_id) &&
+                NetUsercmd_ToPredictionCommandV1(
+                    &cl.cmd, &prediction_command)) {
+                CL_NativeReadinessPilotObserveFinalizedCommand(
+                    cl.cmdNumber, &command_id, &prediction_command);
+            } else {
+                CL_NativeReadinessPilotObserveFinalizedCommand(
+                    cl.cmdNumber, nullptr, nullptr);
+            }
+        }
+    }
 
 clear:
     // clear pending cmd
@@ -1106,9 +1195,243 @@ clear:
     in_impulse = 0;
 }
 
-static inline bool ready_to_send(void)
+static bool CL_AdaptiveInputEvaluate(bool transport_supported)
+{
+    worr_adaptive_input_observation_v1 observation = {};
+    uint32_t queued_commands;
+    uint32_t unacknowledged_packets;
+    uint32_t result;
+
+    Cvar_ClampInteger(cl_adaptive_input, 0, 1);
+    if (!cl_adaptive_input->integer || !transport_supported) {
+        if (adaptive_input.active) {
+            Worr_AdaptiveInputResetV1(&adaptive_input.state);
+            memset(&adaptive_input.output, 0,
+                   sizeof(adaptive_input.output));
+        }
+        adaptive_input.active = false;
+        adaptive_input.decision_valid = false;
+        return false;
+    }
+
+    if (!adaptive_input.active) {
+        Worr_AdaptiveInputDefaultConfigV1(&adaptive_input.config);
+        Worr_AdaptiveInputResetV1(&adaptive_input.state);
+        memset(&adaptive_input.output, 0,
+               sizeof(adaptive_input.output));
+        adaptive_input.active = true;
+        adaptive_input.decision_valid = false;
+    }
+
+    if (cl_maxpackets->integer != 0 && cl_maxpackets->integer < 10)
+        Cvar_Set("cl_maxpackets", "10");
+    Cvar_ClampInteger(cl_packetdup, 0, MAX_PACKET_FRAMES - 1);
+
+    queued_commands = cl.cmdNumber - cl.lastTransmitCmdNumberReal;
+    if (queued_commands > CMD_BACKUP)
+        queued_commands = CMD_BACKUP;
+    if (cls.netchan.outgoing_sequence >=
+        cls.netchan.incoming_acknowledged) {
+        unacknowledged_packets = cls.netchan.outgoing_sequence -
+                                 cls.netchan.incoming_acknowledged;
+        /* outgoing_sequence names the next packet, so the acknowledged
+         * distance includes one packet that has not been sent yet. */
+        if (unacknowledged_packets != 0 &&
+            !cls.netchan.fragment_pending)
+            --unacknowledged_packets;
+    } else {
+        unacknowledged_packets = 0;
+    }
+    if (unacknowledged_packets > CMD_BACKUP)
+        unacknowledged_packets = CMD_BACKUP;
+
+    observation.struct_size = sizeof(observation);
+    observation.schema_version = WORR_ADAPTIVE_INPUT_VERSION;
+    observation.sample_time_ms = cls.realtime;
+    /* netchan.total_received includes inferred drops.  The policy core takes
+     * successful and dropped counters separately; unsigned subtraction also
+     * preserves the successful counter across ordinary 32-bit wrap. */
+    observation.total_received_packets =
+        cls.netchan.total_received - cls.netchan.total_dropped;
+    observation.total_dropped_packets = cls.netchan.total_dropped;
+    observation.smoothed_rtt_ms =
+        (uint32_t)Q_clip(cls.measure.ping, 0, 60000);
+    observation.queued_commands = queued_commands;
+    observation.unacknowledged_packets = unacknowledged_packets;
+    observation.rate_bytes_per_second =
+        info_rate
+            ? (uint32_t)Q_clip(info_rate->integer, 0, 1073741824)
+            : 0;
+    observation.configured_packets_per_second =
+        (uint32_t)max(cl_maxpackets->integer, 0);
+    observation.configured_redundancy_frames =
+        (uint32_t)cl_packetdup->integer;
+    observation.maximum_redundancy_frames = MAX_PACKET_FRAMES - 1;
+    if (cls.q2proto_ctx.features.batch_move && cl_batchcmds->integer) {
+        observation.flags |=
+            WORR_ADAPTIVE_INPUT_OBSERVATION_BATCH_REDUNDANCY;
+    }
+
+    result = Worr_AdaptiveInputEvaluateV1(
+        &adaptive_input.state, &adaptive_input.config, &observation,
+        &adaptive_input.output);
+    switch (result) {
+    case WORR_ADAPTIVE_INPUT_OK:
+    case WORR_ADAPTIVE_INPUT_HELD:
+    case WORR_ADAPTIVE_INPUT_COUNTER_RESET:
+    case WORR_ADAPTIVE_INPUT_CLOCK_RESET:
+        adaptive_input.decision_valid =
+            (adaptive_input.output.flags &
+             WORR_ADAPTIVE_INPUT_OUTPUT_VALID) != 0;
+        return adaptive_input.decision_valid;
+    default:
+        adaptive_input.decision_valid = false;
+        if (adaptive_input.integration_fallbacks != UINT64_MAX)
+            ++adaptive_input.integration_fallbacks;
+        return false;
+    }
+}
+
+static void CL_NativeReadinessPilotStatus_f(void)
+{
+    cl_native_readiness_pilot_status_v1 status = {};
+    if (!CL_NativeReadinessPilotGetStatusV1(&status)) {
+        Com_Printf("WORR_NATIVE_CLIENT_STATUS_V1 schema=1 failures=1 "
+                   "last_failure=4294967295\n");
+        return;
+    }
+
+    Com_Printf(
+        "WORR_NATIVE_CLIENT_STATUS_V1 schema=%u enabled=%u mode=%u "
+        "hooks=%u capability_confirmed=%u readiness_phase=%u "
+        "official_epoch=%u transport_epoch=%u protocol=%u "
+        "public_mask=0x%02x private_mask=0x%02x probe_hold=%u "
+        "challenges=%llu client_ready_queued=%llu server_active=%llu "
+        "proof_enqueued=%llu retained=%llu retained_highwater=%llu "
+        "retained_releases=%llu tx_first_sends=%llu tx_retries=%llu "
+        "tx_handoffs=%llu ack_carriers=%llu "
+        "acknowledged_reliable=%llu drains=%llu failures=%llu "
+        "last_failure=%u\n",
+        (unsigned)status.schema_version, (unsigned)status.enabled,
+        (unsigned)status.mode, (unsigned)status.hooks,
+        (unsigned)status.capability_confirmed,
+        (unsigned)status.readiness_phase, (unsigned)status.official_epoch,
+        (unsigned)status.transport_epoch, (unsigned)status.protocol,
+        (unsigned)status.public_mask, (unsigned)status.private_mask,
+        (unsigned)status.probe_hold,
+        (unsigned long long)status.challenges,
+        (unsigned long long)status.client_ready_queued,
+        (unsigned long long)status.server_active,
+        (unsigned long long)status.proof_enqueued,
+        (unsigned long long)status.retained,
+        (unsigned long long)status.retained_highwater,
+        (unsigned long long)status.retained_releases,
+        (unsigned long long)status.tx_first_sends,
+        (unsigned long long)status.tx_retries,
+        (unsigned long long)status.tx_handoffs,
+        (unsigned long long)status.ack_carriers,
+        (unsigned long long)status.acknowledged_reliable,
+        (unsigned long long)status.drains,
+        (unsigned long long)status.failures,
+        (unsigned)status.last_failure);
+}
+
+static void CL_AdaptiveInputStatus_f(void)
+{
+    static const struct {
+        uint32_t bit;
+        const char *name;
+    } reason_names[] = {
+        { WORR_ADAPTIVE_INPUT_REASON_COLD_START, "cold_start" },
+        { WORR_ADAPTIVE_INPUT_REASON_LOSS_ELEVATED, "loss_elevated" },
+        { WORR_ADAPTIVE_INPUT_REASON_LOSS_SEVERE, "loss_severe" },
+        { WORR_ADAPTIVE_INPUT_REASON_RTT_HIGH, "rtt_high" },
+        { WORR_ADAPTIVE_INPUT_REASON_JITTER_HIGH, "jitter_high" },
+        { WORR_ADAPTIVE_INPUT_REASON_COMMAND_QUEUE, "command_queue" },
+        { WORR_ADAPTIVE_INPUT_REASON_COMMAND_QUEUE_CRITICAL,
+          "command_queue_critical" },
+        { WORR_ADAPTIVE_INPUT_REASON_ACK_BACKLOG, "ack_backlog" },
+        { WORR_ADAPTIVE_INPUT_REASON_ACK_BACKLOG_CRITICAL,
+          "ack_backlog_critical" },
+        { WORR_ADAPTIVE_INPUT_REASON_RATE_CONSTRAINED,
+          "rate_constrained" },
+        { WORR_ADAPTIVE_INPUT_REASON_RATE_CRITICAL, "rate_critical" },
+        { WORR_ADAPTIVE_INPUT_REASON_RECOVERY_HOLD, "recovery_hold" },
+        { WORR_ADAPTIVE_INPUT_REASON_COUNTER_RESET, "counter_reset" },
+        { WORR_ADAPTIVE_INPUT_REASON_CLOCK_RESET, "clock_reset" },
+        { WORR_ADAPTIVE_INPUT_REASON_PACING_CLAMPED, "pacing_clamped" },
+        { WORR_ADAPTIVE_INPUT_REASON_REDUNDANCY_CLAMPED,
+          "redundancy_clamped" },
+        { WORR_ADAPTIVE_INPUT_REASON_NO_BATCH_REDUNDANCY,
+          "no_batch_redundancy" },
+        { WORR_ADAPTIVE_INPUT_REASON_NO_PACING_LIMIT,
+          "no_pacing_limit" },
+        { WORR_ADAPTIVE_INPUT_REASON_INSUFFICIENT_LOSS_SAMPLE,
+          "insufficient_loss_sample" },
+    };
+    worr_adaptive_input_telemetry_v1 telemetry = {};
+    size_t i;
+
+    Com_Printf(
+        "adaptive input: enabled=%d active=%d decision_valid=%d "
+        "fallbacks=%llu\n",
+        cl_adaptive_input ? cl_adaptive_input->integer : 0,
+        adaptive_input.active ? 1 : 0,
+        adaptive_input.decision_valid ? 1 : 0,
+        (unsigned long long)adaptive_input.integration_fallbacks);
+    if (!adaptive_input.active || !adaptive_input.decision_valid) {
+        Com_Printf("  legacy policy: cl_maxpackets=%d cl_packetdup=%d\n",
+                   cl_maxpackets ? cl_maxpackets->integer : 0,
+                   cl_packetdup ? cl_packetdup->integer : 0);
+        return;
+    }
+    if (Worr_AdaptiveInputGetTelemetryV1(
+            &adaptive_input.state, &telemetry) != WORR_ADAPTIVE_INPUT_OK) {
+        Com_Printf("  telemetry unavailable\n");
+        return;
+    }
+    Com_Printf(
+        "  decision=%llu pps=%u interval=%ums redundancy=%u "
+        "loss=%u.%02u%% rtt=%ums jitter=%ums queue=%u ack_backlog=%u "
+        "rate=%u result=%u\n",
+        (unsigned long long)adaptive_input.output.decision_serial,
+        adaptive_input.output.packets_per_second,
+        adaptive_input.output.send_interval_ms,
+        adaptive_input.output.redundancy_frames,
+        adaptive_input.output.smoothed_loss_basis_points / 100,
+        adaptive_input.output.smoothed_loss_basis_points % 100,
+        adaptive_input.output.smoothed_rtt_ms,
+        adaptive_input.output.smoothed_jitter_ms,
+        adaptive_input.output.queued_commands,
+        adaptive_input.output.unacknowledged_packets,
+        adaptive_input.output.rate_bytes_per_second,
+        adaptive_input.output.result);
+    Com_Printf(
+        "  evaluations=%llu windows=%llu held=%llu recovery_holds=%llu "
+        "counter_resets=%llu clock_resets=%llu received=%llu dropped=%llu\n",
+        (unsigned long long)telemetry.evaluate_calls,
+        (unsigned long long)telemetry.window_evaluations,
+        (unsigned long long)telemetry.held_evaluations,
+        (unsigned long long)telemetry.recovery_holds,
+        (unsigned long long)telemetry.counter_resets,
+        (unsigned long long)telemetry.clock_resets,
+        (unsigned long long)telemetry.cumulative_window_received,
+        (unsigned long long)telemetry.cumulative_window_dropped);
+    Com_Printf("  reasons:");
+    if (!adaptive_input.output.reason_mask)
+        Com_Printf(" stable");
+    for (i = 0; i < q_countof(reason_names); ++i) {
+        if (adaptive_input.output.reason_mask & reason_names[i].bit)
+            Com_Printf(" %s", reason_names[i].name);
+    }
+    Com_Printf(" (0x%08x)\n", adaptive_input.output.reason_mask);
+}
+
+static inline bool ready_to_send(bool apply_adaptive_policy)
 {
     unsigned msec;
+    const bool adaptive =
+        CL_AdaptiveInputEvaluate(apply_adaptive_policy);
 
     if (cl.sendPacketNow) {
         return true;
@@ -1116,17 +1439,25 @@ static inline bool ready_to_send(void)
     if (cls.netchan.message.cursize || cls.netchan.reliable_ack_pending) {
         return true;
     }
+    /* Zero is an immediate operator request for unlimited pacing, including
+     * while the 100 ms adaptive decision window is being held. */
     if (!cl_maxpackets->integer) {
         return true;
     }
-
-    if (cl_maxpackets->integer < 10) {
-        Cvar_Set("cl_maxpackets", "10");
+    if (adaptive && adaptive_input.output.packets_per_second == 0) {
+        return true;
     }
 
-    msec = 1000 / cl_maxpackets->integer;
-    if (msec) {
-        msec = 100 / (100 / msec);
+    if (adaptive) {
+        msec = adaptive_input.output.send_interval_ms;
+    } else {
+        if (cl_maxpackets->integer < 10) {
+            Cvar_Set("cl_maxpackets", "10");
+        }
+        msec = 1000 / cl_maxpackets->integer;
+        if (msec) {
+            msec = 100 / (100 / msec);
+        }
     }
     if (cls.realtime - cl.lastTransmitTime < msec) {
         return false;
@@ -1138,6 +1469,10 @@ static inline bool ready_to_send(void)
 static inline bool ready_to_send_hacked(void)
 {
     if (!cl_fuzzhack->integer) {
+        /* The non-batched fake-drop path deliberately never carries an
+         * adaptive decision. Suspend state from a prior batch connection even
+         * when its historical limiter exits early. */
+        CL_AdaptiveInputEvaluate(false);
         return true; // packet drop hack disabled
     }
 
@@ -1145,76 +1480,42 @@ static inline bool ready_to_send_hacked(void)
         return true; // can't drop more than 2 cmds
     }
 
-    return ready_to_send();
+    return ready_to_send(false);
 }
 
-static void compute_buttons_upmove(int *buttons, short *upmove)
+/* Stage the identity tuple and its carrier away from msg_write.  q2proto's
+ * byte writer may otherwise clear an overflowing sizebuf after the tuple has
+ * been emitted, leaving either a partial header or a header without a move. */
+static bool CL_WriteCommandCarrier(
+    const q2proto_clc_message_t *move_message,
+    bool include_identity, uint32_t first_command,
+    uint32_t command_count)
 {
-    int prev_buttons = *buttons;
-    *buttons = prev_buttons & ~(BUTTON_CROUCH | BUTTON_JUMP);
-    *upmove = 0;
-    if (prev_buttons & BUTTON_JUMP)
-        *upmove += 200; /* cl_upspeed */
-    if (prev_buttons & BUTTON_CROUCH)
-        *upmove -= 200; /* cl_upspeed */
-}
+    byte staging_data[MAX_PACKETLEN_WRITABLE];
+    sizebuf_t staging;
+    q2protoio_ioarg_t staging_io = {};
+    uintptr_t staging_arg;
 
-static void build_delta_move(q2proto_clc_move_delta_t* delta_move, const usercmd_t *from, const usercmd_t *cmd, uint8_t lightlevel)
-{
-    Q_assert(cmd);
-
-    if (!from) {
-        from = &nullUserCmd;
+    if (!move_message)
+        return false;
+    SZ_InitWrite(&staging, staging_data, sizeof(staging_data));
+    staging_io.sz_write = &staging;
+    staging_io.max_msg_len = sizeof(staging_data);
+    staging_arg = reinterpret_cast<uintptr_t>(&staging_io);
+    if (include_identity &&
+        !CL_CommandIdentityWriteSideband(
+            staging_arg, first_command, command_count)) {
+        return false;
     }
-
-    bool needs_upmove = cls.q2proto_ctx.features.has_upmove;
-
-    int from_buttons = from->buttons;
-    short from_upmove = 0;
-    int new_buttons = cmd->buttons;
-    short new_upmove = 0;
-    if (needs_upmove) {
-        from_buttons &= ~BUTTON_HOLSTER;
-        new_buttons &= ~BUTTON_HOLSTER;
-        compute_buttons_upmove(&from_buttons, &from_upmove);
-        compute_buttons_upmove(&new_buttons, &new_upmove);
+    if (q2proto_client_write(&cls.q2proto_ctx, staging_arg,
+                             move_message) != Q2P_ERR_SUCCESS ||
+        staging.overflowed ||
+        staging.cursize >
+            q2protoio_write_available(Q2PROTO_IOARG_CLIENT_WRITE)) {
+        return false;
     }
-
-//
-// send the movement message
-//
-    if (cmd->angles[0] != from->angles[0]) {
-        q2proto_var_angles_set_float_comp(&delta_move->angles, 0, cmd->angles[0]);
-        delta_move->delta_bits |= Q2P_CMD_ANGLE0;
-    }
-    if (cmd->angles[1] != from->angles[1]) {
-        q2proto_var_angles_set_float_comp(&delta_move->angles, 1, cmd->angles[1]);
-        delta_move->delta_bits |= Q2P_CMD_ANGLE1;
-    }
-    if (cmd->angles[2] != from->angles[2]) {
-        q2proto_var_angles_set_float_comp(&delta_move->angles, 2, cmd->angles[2]);
-        delta_move->delta_bits |= Q2P_CMD_ANGLE2;
-    }
-    if (cmd->forwardmove != from->forwardmove) {
-        q2proto_var_coords_set_float_comp(&delta_move->move, 0, cmd->forwardmove);
-        delta_move->delta_bits |= Q2P_CMD_MOVE_FORWARD;
-    }
-    if (cmd->sidemove != from->sidemove) {
-        q2proto_var_coords_set_float_comp(&delta_move->move, 1, cmd->sidemove);
-        delta_move->delta_bits |= Q2P_CMD_MOVE_SIDE;
-    }
-    // The next one can only happen when is_rerelease == false
-    if (new_upmove != from_upmove) {
-        q2proto_var_coords_set_float_comp(&delta_move->move, 2, new_upmove);
-        delta_move->delta_bits |= Q2P_CMD_MOVE_UP;
-    }
-    if (new_buttons != from_buttons) {
-        delta_move->buttons = new_buttons;
-        delta_move->delta_bits |= Q2P_CMD_BUTTONS;
-    }
-
-    delta_move->msec = cmd->msec;
-    delta_move->lightlevel = lightlevel;
+    SZ_Write(&msg_write, staging.data, staging.cursize);
+    return !msg_write.overflowed;
 }
 
 /*
@@ -1249,28 +1550,54 @@ static void CL_SendDefaultCmd(void)
 
     // let the server know what the last frame we
     // got was, so the next message can be delta compressed
-    if (cl_nodelta->integer || !cl.frame.valid /*|| cls.demowaiting*/) {
-        move_message.move.lastframe = -1;   // no compression
-    } else {
-        move_message.move.lastframe = cl.frame.number;
-    }
+    move_message.move.lastframe = CL_SnapshotRecoverySelectLastFrame(
+        cl_nodelta->integer || !cl.frame.valid /*|| cls.demowaiting*/
+            ? -1
+            : cl.frame.number);
 
     // send this and the previous cmds in the message, so
     // if the last packet was dropped, it can be recovered
     cmd = &cl.cmds[(cl.cmdNumber - 2) & CMD_MASK];
-    build_delta_move(&move_message.move.moves[0], NULL, cmd, cl.lightlevel);
+    if (!NetUsercmd_BuildDelta(&move_message.move.moves[0], NULL, cmd,
+                               cl.lightlevel,
+                               cls.q2proto_ctx.features.has_upmove)) {
+        Com_Error(ERR_DROP, "%s: invalid oldest user command", __func__);
+    }
     oldcmd = cmd;
 
     cmd = &cl.cmds[(cl.cmdNumber - 1) & CMD_MASK];
-    build_delta_move(&move_message.move.moves[1], oldcmd, cmd, cl.lightlevel);
+    if (!NetUsercmd_BuildDelta(&move_message.move.moves[1], oldcmd, cmd,
+                               cl.lightlevel,
+                               cls.q2proto_ctx.features.has_upmove)) {
+        Com_Error(ERR_DROP, "%s: invalid previous user command", __func__);
+    }
     oldcmd = cmd;
 
     cmd = &cl.cmds[cl.cmdNumber & CMD_MASK];
-    build_delta_move(&move_message.move.moves[2], oldcmd, cmd, cl.lightlevel);
+    if (!NetUsercmd_BuildDelta(&move_message.move.moves[2], oldcmd, cmd,
+                               cl.lightlevel,
+                               cls.q2proto_ctx.features.has_upmove)) {
+        Com_Error(ERR_DROP, "%s: invalid current user command", __func__);
+    }
 
     move_message.move.sequence = cls.netchan.outgoing_sequence;
 
-    q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &move_message);
+    const bool include_identity =
+        CL_NetCapabilityHas(
+            WORR_NET_CAP_LEGACY_COMMAND_SIDEBAND_V1) &&
+        cl.cmdNumber >= WORR_LEGACY_COMMAND_MOVE_COUNT;
+    const uint32_t canonical_first =
+        cl.cmdNumber - (WORR_LEGACY_COMMAND_MOVE_COUNT - 1u);
+    if (!CL_WriteCommandCarrier(
+            &move_message, include_identity, canonical_first,
+            WORR_LEGACY_COMMAND_MOVE_COUNT)) {
+        Com_Error(ERR_DROP, "%s: failed to encode command carrier",
+                  __func__);
+    }
+    if (include_identity) {
+        CL_NativeReadinessPilotObserveEncodedCommandRange(
+            canonical_first, WORR_LEGACY_COMMAND_MOVE_COUNT);
+    }
 
     P_FRAMES++;
 
@@ -1299,13 +1626,15 @@ static void CL_SendBatchedCmd(void)
     int i, j, seq, numCmds, numDups;
     usercmd_t *cmd, *oldcmd;
     client_history_t *history, *oldest;
+    uint32_t canonicalFirstCmd = 0;
+    uint32_t canonicalCmdCount = 0;
 #if USE_DEBUG
     int totalCmds = 0;
     int totalMsec = 0;
 #endif
 
     // see if we are ready to send this packet
-    if (!ready_to_send()) {
+    if (!ready_to_send(true)) {
         return;
     }
 
@@ -1321,14 +1650,21 @@ static void CL_SendBatchedCmd(void)
     cl.lastTransmitCmdNumberReal = cl.cmdNumber;
 
     q2proto_clc_message_t move_message = {.type = Q2P_CLC_BATCH_MOVE, .batch_move = {0}};
-    if (cl_nodelta->integer || !cl.frame.valid /*|| cls.demowaiting*/) {
-        move_message.batch_move.lastframe = -1; // no compression
-    } else {
-        move_message.batch_move.lastframe = cl.frame.number;
-    }
+    move_message.batch_move.lastframe = CL_SnapshotRecoverySelectLastFrame(
+        cl_nodelta->integer || !cl.frame.valid /*|| cls.demowaiting*/
+            ? -1
+            : cl.frame.number);
 
     Cvar_ClampInteger(cl_packetdup, 0, MAX_PACKET_FRAMES - 1);
-    numDups = cl_packetdup->integer;
+    if (cl_adaptive_input->integer && adaptive_input.decision_valid &&
+        (adaptive_input.output.flags &
+         WORR_ADAPTIVE_INPUT_OUTPUT_REDUNDANCY_AVAILABLE)) {
+        numDups = (int)min(
+            adaptive_input.output.redundancy_frames,
+            (uint32_t)(MAX_PACKET_FRAMES - 1));
+    } else {
+        numDups = cl_packetdup->integer;
+    }
 
     move_message.batch_move.num_dups = numDups;
 
@@ -1346,6 +1682,9 @@ static void CL_SendBatchedCmd(void)
             MSG_BeginWriting();
             break;
         }
+        if (numCmds > 0 && canonicalCmdCount == 0)
+            canonicalFirstCmd = oldest->cmdNumber + 1u;
+        canonicalCmdCount += static_cast<uint32_t>(numCmds);
 #if USE_DEBUG
         totalCmds += numCmds;
 #endif
@@ -1357,14 +1696,32 @@ static void CL_SendBatchedCmd(void)
 #if USE_DEBUG
             totalMsec += cmd->msec;
 #endif
-            build_delta_move(move, oldcmd, cmd, cl.lightlevel);
+            if (!NetUsercmd_BuildDelta(
+                    move, oldcmd, cmd, cl.lightlevel,
+                    cls.q2proto_ctx.features.has_upmove)) {
+                Com_Error(ERR_DROP, "%s: invalid batched user command",
+                          __func__);
+            }
             oldcmd = cmd;
             ++move;
         }
         ++frame;
     }
 
-    q2proto_client_write(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_WRITE, &move_message);
+    const bool include_identity =
+        CL_NetCapabilityHas(
+            WORR_NET_CAP_LEGACY_COMMAND_SIDEBAND_V1) &&
+        canonicalCmdCount != 0;
+    if (!CL_WriteCommandCarrier(
+            &move_message, include_identity, canonicalFirstCmd,
+            canonicalCmdCount)) {
+        Com_Error(ERR_DROP, "%s: failed to encode batched command carrier",
+                  __func__);
+    }
+    if (include_identity) {
+        CL_NativeReadinessPilotObserveEncodedCommandRange(
+            canonicalFirstCmd, canonicalCmdCount);
+    }
 
     P_FRAMES++;
 

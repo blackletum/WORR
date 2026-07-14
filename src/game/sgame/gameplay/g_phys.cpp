@@ -147,7 +147,10 @@ void G_FlyMove(gentity_t* ent, float time, contents_t mask) {
 	ent->groundEntity = nullptr;
 
 	touch_list_t touch;
-	PM_StepSlideMove_Generic(ent->s.origin, ent->velocity, time, ent->mins, ent->maxs, touch, false, [&](const Vector3& start, const Vector3& mins, const Vector3& maxs, const Vector3& end) {
+	PM_StepSlideMove_Generic(ent->s.origin, ent->velocity, time, ent->mins,
+		ent->maxs, touch, false, pm_config,
+		[&](const Vector3& start, const Vector3& mins,
+			const Vector3& maxs, const Vector3& end) {
 		return gi.trace(start, mins, maxs, end, ent, mask);
 		});
 

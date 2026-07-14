@@ -69,10 +69,12 @@ void UpdateCgameUiMenus(gentity_t* ent) {
 		if (cl->ui.mapSelectorActive) {
 			CloseActiveMenu(ent);
 		}
+		cl->ui.mapSelectorDismissed = false;
 	} else {
-		if (!cl->ui.mapSelectorActive) {
+		if (!cl->ui.mapSelectorActive && !cl->ui.mapSelectorDismissed) {
 			OpenMapSelectorMenu(ent);
-		} else if (cl->ui.mapSelectorNextUpdate <= level.time) {
+		} else if (cl->ui.mapSelectorActive &&
+			cl->ui.mapSelectorNextUpdate <= level.time) {
 			RefreshMapSelectorMenu(ent);
 			cl->ui.mapSelectorNextUpdate = level.time + kMapSelectorUpdateInterval;
 		}

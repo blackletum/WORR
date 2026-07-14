@@ -17,6 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "server.h"
+#include "server/native_shadow.h"
+#include "server/snapshot_shadow.h"
 #include "client/input.h"
 #if USE_CLIENT
 #include "renderer/renderer.h"
@@ -61,6 +63,7 @@ cvar_t  *sv_airaccelerate;
 cvar_t  *sv_qwmod;              // atu QW Physics modificator
 cvar_t  *sv_novis;
 cvar_t  *sv_shadow_strict_replication;
+static cvar_t *sv_worr_native_shadow;
 
 cvar_t  *sv_maxclients;
 cvar_t  *sv_reserved_slots;
@@ -144,12 +147,24 @@ static const q2proto_protocol_t q2repro_accepted_protocols[] = {Q2P_PROTOCOL_Q2R
 
 //============================================================================
 
+static void SV_DestroyNativeShadow(client_t *client)
+{
+    if (!client || !client->worr_native_shadow)
+        return;
+    SV_NativeShadowPeerDestroyV1(client->worr_native_shadow);
+    Z_Free(client->worr_native_shadow);
+    client->worr_native_shadow = NULL;
+}
+
 void SV_RemoveClient(client_t *client)
 {
     if (client->msg_pool) {
         SV_ShutdownClientSend(client);
     }
 
+    /* Netchan_Close has no hook finalizer; destroy the stable opaque owner
+     * before the channel storage can be cleared or the slot reused. */
+    SV_DestroyNativeShadow(client);
     Netchan_Close(&client->netchan);
 
     // unlink them from active client list, but don't clear the list entry
@@ -182,6 +197,8 @@ void SV_CleanClient(client_t *client)
     client->ac_bad_files = NULL;
 #endif
 
+    SV_DestroyNativeShadow(client);
+
     // close any existing download
     SV_CloseDownload(client);
 
@@ -195,6 +212,9 @@ void SV_CleanClient(client_t *client)
     // free packet entities
     Z_Freep(&client->entities);
     client->num_entities = 0;
+
+    SV_SnapshotShadowDestroyV1(client->worr_snapshot_shadow);
+    client->worr_snapshot_shadow = NULL;
 }
 
 static void print_drop_reason(client_t *client, const char *reason, clstate_t oldstate)
@@ -254,6 +274,11 @@ void SV_DropClient(client_t *client, const char *reason)
     oldstate = client->state;
     client->state = cs_zombie;        // become free in a few seconds
     client->lastmessage = svs.realtime;
+
+    /* Final legacy disconnect traffic must never pass through an opaque owner
+     * that is about to be freed. */
+    if (client->worr_native_shadow)
+        SV_NativeShadowPeerDetachV1(client->worr_native_shadow);
 
     // print the reason
     if (reason)
@@ -1935,6 +1960,7 @@ static bool SV_BotAddImmediate(const char *name, const char *team,
     newcl->lastframe = -1;
     newcl->last_acked_server_frame = 0;
     newcl->last_acked_server_frame_delta = 0;
+    newcl->last_acked_server_time_us = 0;
     newcl->lastmessage = svs.realtime;
     newcl->lastactivity = svs.realtime;
     newcl->command_msec = 1800;
@@ -7056,6 +7082,24 @@ static void SVC_DirectConnect(void)
     Q_strlcpy(newcl->userinfo, userinfo, sizeof(newcl->userinfo));
     SV_UserinfoChanged(newcl);
 
+    /* Default-off means no allocation, hooks, or wire-visible behavior.  The
+     * private pilot is connection-scoped and snapshots the cvar only here. */
+    if (sv_worr_native_shadow && sv_worr_native_shadow->integer != 0 &&
+        params.nctype == NETCHAN_NEW && !newcl->worr_capability_failed &&
+        (newcl->protocol == PROTOCOL_VERSION_Q2PRO ||
+         newcl->protocol == PROTOCOL_VERSION_R1Q2 ||
+         newcl->protocol == PROTOCOL_VERSION_RERELEASE) &&
+        newcl->worr_capabilities_offered ==
+            WORR_NET_CAP_LEGACY_STAGE_MASK) {
+        sv_native_shadow_peer_v1 *pilot = SV_Mallocz(sizeof(*pilot));
+        if (SV_NativeShadowPeerInitV1(
+                pilot, &newcl->netchan, svs.realtime)) {
+            newcl->worr_native_shadow = pilot;
+        } else {
+            Z_Free(pilot);
+        }
+    }
+
     // send the connect packet to the client
     send_connect_packet(newcl, params.nctype);
 
@@ -7079,6 +7123,7 @@ static void SVC_DirectConnect(void)
     newcl->lastframe = -1;
     newcl->last_acked_server_frame = 0;
     newcl->last_acked_server_frame_delta = 0;
+    newcl->last_acked_server_time_us = 0;
     newcl->lastmessage = svs.realtime;    // don't timeout
     newcl->lastactivity = svs.realtime;
     newcl->min_ping = 9999;
@@ -7443,8 +7488,21 @@ static void SV_PacketEvent(void)
             netchan->remote_address.port = net_from.port;
         }
 
-        if (!Netchan_Process(netchan))
+        if (client->worr_native_shadow) {
+            /* The application RX hook retains DATA using the pilot clock.
+             * Stamp it before admission so the immediately following legacy
+             * reconciliation cannot expire a just-arrived native record. */
+            (void)SV_NativeShadowAdvanceAdmissionClockV1(
+                client->worr_native_shadow, svs.realtime);
+        }
+        const netchan_process_result_t process_result =
+            Netchan_ProcessEx(netchan);
+        if (process_result == NETCHAN_PROCESS_NO_APPLICATION)
             break;
+        if (process_result == NETCHAN_PROCESS_APPLICATION_REJECTED) {
+            SV_DropClient(client, "rejected application payload");
+            break;
+        }
 
         if (client->state == cs_zombie)
             break;
@@ -7705,6 +7763,27 @@ static void SV_RunGameFrame(void)
     SV_MvdEndFrame();
 }
 
+/* Publish the time of the game state that just finished simulating before any
+ * snapshot captures it. Accumulation preserves exact map time if a future
+ * server changes its interval without starting a new snapshot epoch. */
+static void SV_AdvanceSimulationTime(void)
+{
+    const uint64_t interval_us =
+        (uint64_t)SV_FRAMETIME * UINT64_C(1000);
+
+    if (sv.worr_server_time_us > UINT64_MAX - interval_us)
+        Com_Error(ERR_FATAL, "server simulation clock exhausted");
+    sv.worr_server_time_us += interval_us;
+}
+
+/* Spawn and savegame warm-up frames do not emit snapshots, so those paths can
+ * advance both halves of the simulation identity together. */
+void SV_AdvanceSimulationClock(void)
+{
+    SV_AdvanceSimulationTime();
+    sv.framenum++;
+}
+
 /*
 ================
 SV_MasterHeartbeat
@@ -7861,6 +7940,12 @@ unsigned SV_Frame(unsigned msec)
         // let everything in the world think and move
         SV_RunGameFrame();
 
+        // Snapshots emitted below describe the state that just ran, so publish
+        // its exact accumulated time before building any client frame. Keep
+        // sv.framenum stable until after emission because it is that state's
+        // zero-based server-frame identity.
+        SV_AdvanceSimulationTime();
+
         // run deterministic local bot slot smoke after a game map is active
         SV_BotSlotSmokeFrame();
         SV_BotMinPlayersSmokeFrame();
@@ -7887,7 +7972,7 @@ unsigned SV_Frame(unsigned msec)
         // clear teleport flags, etc for next frame
         SV_PrepWorldFrame();
 
-        // advance for next frame
+        // advance the identity used by the next game frame
         sv.framenum++;
     }
 
@@ -7981,6 +8066,27 @@ void SV_UserinfoChanged(client_t *cl)
     val = Info_ValueForKey(cl->userinfo, "msg");
     if (*val) {
         cl->messagelevel = Q_clip(Q_atoi(val), PRINT_LOW, 256);
+    }
+
+    /* Capability offers are connection-bound.  A post-confirmation userinfo
+     * mutation can only disable the modern path; it never renegotiates an
+     * already active legacy packet stream in place. */
+    val = Info_ValueForKey(cl->userinfo,
+                           WORR_NET_CAPABILITY_USERINFO_KEY);
+    uint32_t offered = 0;
+    const worr_net_capability_result_v1 capability_result =
+        *val ? Worr_NetCapabilitiesParseV1(val, &offered)
+             : WORR_NET_CAPABILITY_OK;
+    if (capability_result != WORR_NET_CAPABILITY_OK) {
+        offered = 0;
+        cl->worr_capability_failed = true;
+    }
+    if (!cl->worr_capability_confirm_sent) {
+        cl->worr_capabilities_offered = offered;
+    } else if (offered != cl->worr_capabilities_offered) {
+        cl->worr_capability_failed = true;
+        SV_DropClient(cl, "WORR capability offer changed");
+        return;
     }
 }
 
@@ -8135,6 +8241,7 @@ void SV_Init(void)
     sv_locked = Cvar_Get("sv_locked", "0", 0);
     sv_novis = Cvar_Get("sv_novis", "0", 0);
     sv_shadow_strict_replication = Cvar_Get("sv_shadow_strict_replication", "0", 0);
+    sv_worr_native_shadow = Cvar_Get("sv_worr_native_shadow", "0", 0);
     sv_downloadserver = Cvar_Get("sv_downloadserver", "", 0);
     sv_redirect_address = Cvar_Get("sv_redirect_address", "", 0);
 
@@ -8270,6 +8377,13 @@ static void SV_FinalMessage(const char *message, error_type_t type)
 
     if (LIST_EMPTY(&sv_clientlist))
         return;
+
+    /* Both immediate shutdown transmit loops must be byte-identical legacy
+     * traffic, and every callback opaque remains live until later cleanup. */
+    FOR_EACH_CLIENT(client) {
+        if (client->worr_native_shadow)
+            SV_NativeShadowPeerDetachV1(client->worr_native_shadow);
+    }
 
     if (message) {
         q2proto_svc_message_t print_msg = {.type = Q2P_SVC_PRINT, .print = {0}};

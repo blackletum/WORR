@@ -461,8 +461,11 @@ STB_IMAGE SAVING
 
 static int IMG_SaveTGA(screenshot_t *restrict s)
 {
+	const int previous_tga_rle = stbi_write_tga_with_rle;
+	stbi_write_tga_with_rle = 0;
 	stbi_flip_vertically_on_write(1);
 	int ret = stbi_write_tga_to_func(stbi_write, s, s->width, s->height, 3, s->pixels);
+	stbi_write_tga_with_rle = previous_tga_rle;
 
 	return stbi_write_status(s, ret);
 }
@@ -514,6 +517,7 @@ static cvar_t *r_screenshot_async_legacy;
 static cvar_t *r_screenshot_compression_legacy;
 static cvar_t *r_screenshot_message_legacy;
 static cvar_t *r_screenshot_template_legacy;
+static screenshot_t *r_pending_screenshot;
 
 typedef struct {
     cvar_t **primary;
@@ -769,6 +773,49 @@ static void screenshot_done_cb(void *arg)
     }
 }
 
+screenshot_t *IMG_GetPendingScreenshot_RTX(void)
+{
+    return r_pending_screenshot;
+}
+
+void IMG_CompletePendingScreenshot_RTX(void)
+{
+    screenshot_t *s = r_pending_screenshot;
+    if (!s)
+        return;
+
+    r_pending_screenshot = NULL;
+    if (s->async) {
+        asyncwork_t work = {
+            .work_cb = screenshot_work_cb,
+            .done_cb = screenshot_done_cb,
+            .cb_arg = s,
+        };
+        Com_QueueAsyncWork(&work);
+        return;
+    }
+
+    screenshot_work_cb(s);
+    screenshot_done_cb(s);
+    Z_Free(s->filename);
+    Z_Free(s);
+}
+
+void IMG_FailPendingScreenshot_RTX(int status)
+{
+    screenshot_t *s = r_pending_screenshot;
+    if (!s)
+        return;
+
+    r_pending_screenshot = NULL;
+    s->status = status < 0 ? status : Q_ERR_FAILURE;
+    screenshot_done_cb(s);
+    if (!s->async) {
+        Z_Free(s->filename);
+        Z_Free(s);
+    }
+}
+
 static void make_screenshot(const char *name, const char *ext,
                             save_cb_t save_cb, bool async, int param)
 {
@@ -780,34 +827,26 @@ static void make_screenshot(const char *name, const char *ext,
         Com_WPrintf("Screenshot format not supported in HDR mode\n");
         return;
     }
+    if (r_pending_screenshot) {
+        Com_WPrintf("A screenshot capture is already pending\n");
+        return;
+    }
     ret = create_screenshot(buffer, sizeof(buffer), &fp, name, ext);
     if (ret < 0) {
         Com_EPrintf("Couldn't create screenshot: %s\n", Q_ErrorString(ret));
         return;
     }
 
-    screenshot_t s = {
+    screenshot_t *s = Z_Malloc(sizeof(*s));
+    *s = (screenshot_t) {
         .save_cb = save_cb,
         .fp = fp,
-        .filename = async ? Z_CopyString(buffer) : buffer,
+        .filename = Z_CopyString(buffer),
         .status = -1,
         .param = param,
         .async = async,
     };
-
-    IMG_ReadPixels(&s);
-
-    if (async) {
-        asyncwork_t work = {
-            .work_cb = screenshot_work_cb,
-            .done_cb = screenshot_done_cb,
-            .cb_arg = Z_CopyStruct(&s),
-        };
-        Com_QueueAsyncWork(&work);
-    } else {
-        screenshot_work_cb(&s);
-        screenshot_done_cb(&s);
-    }
+    r_pending_screenshot = s;
 }
 
 static void make_screenshot_hdr(const char *name, bool async)
@@ -820,6 +859,10 @@ static void make_screenshot_hdr(const char *name, bool async)
         Com_WPrintf("Screenshot format supported in HDR mode only\n");
         return;
     }
+    if (r_pending_screenshot) {
+        Com_WPrintf("A screenshot capture is already pending\n");
+        return;
+    }
 
     ret = create_screenshot(buffer, sizeof(buffer), &fp, name, ".hdr");
     if (ret < 0) {
@@ -827,28 +870,16 @@ static void make_screenshot_hdr(const char *name, bool async)
         return;
     }
 
-    screenshot_t s = {
+    screenshot_t *s = Z_Malloc(sizeof(*s));
+    *s = (screenshot_t) {
         .save_cb = IMG_SaveHDR,
         .fp = fp,
-        .filename = async ? Z_CopyString(buffer) : buffer,
+        .filename = Z_CopyString(buffer),
         .status = -1,
         .param = 0,
         .async = async,
     };
-
-    IMG_ReadPixelsHDR(&s);
-
-    if (async) {
-        asyncwork_t work = {
-            .work_cb = screenshot_work_cb,
-            .done_cb = screenshot_done_cb,
-            .cb_arg = Z_CopyStruct(&s),
-        };
-        Com_QueueAsyncWork(&work);
-    } else {
-        screenshot_work_cb(&s);
-        screenshot_done_cb(&s);
-    }
+    r_pending_screenshot = s;
 }
 
 /*
@@ -2238,6 +2269,14 @@ void IMG_Init(void)
 
 void IMG_Shutdown(void)
 {
+    if (r_pending_screenshot) {
+        fclose(r_pending_screenshot->fp);
+        Z_Free(r_pending_screenshot->pixels);
+        remove(r_pending_screenshot->filename);
+        Z_Free(r_pending_screenshot->filename);
+        Z_Free(r_pending_screenshot);
+        r_pending_screenshot = NULL;
+    }
     Cmd_Deregister(img_cmd);
     r_numImages = 0;
 }

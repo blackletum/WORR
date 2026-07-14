@@ -23,6 +23,7 @@ def write_valid_repo(repo_root: Path) -> None:
         repo_root / "meson.build",
         """
 renderer_gl_cpp_args = renderer_cpp_args + ['-DUSE_REF=REF_GL']
+vkpt_shader_sources = ['src/rend_rtx/vkpt/shader/rmlui.vert']
 renderer_vk_rtx_cpp_args = renderer_cpp_args + ['-DUSE_REF=REF_VKPT', '-DRENDERER_VULKAN', '-DRENDERER_VULKAN_RTX=1']
 renderer_vk_cpp_args = renderer_cpp_args + ['-DUSE_REF=REF_VKPT', '-DRENDERER_VULKAN', '-DRENDERER_VULKAN_LEGACY=1']
 renderer_gl_deps = renderer_deps
@@ -49,6 +50,7 @@ renderer_rmlui_family_t R_RmlUiRendererFamily(void);
 const char *R_RmlUiRendererName(void);
 bool R_RmlUiCanRender(void);
 void *R_RmlUiNativeRenderInterface(void);
+bool R_RmlUiDrawGeometry(void);
 typedef struct renderer_export_s {
     renderer_rmlui_family_t (*RmlUiRendererFamily)(void);
     const char *(*RmlUiRendererName)(void);
@@ -60,7 +62,8 @@ typedef struct renderer_export_s {
     write_text(
         repo_root / "src/renderer/renderer_api.c",
         """
-#if USE_REF != REF_GL
+#if USE_REF != REF_GL && !defined(RENDERER_VULKAN_LEGACY) && \
+    !defined(RENDERER_VULKAN_RTX)
 static bool Renderer_RmlUiCanRender(void)
 {
     return false;
@@ -75,7 +78,8 @@ static void *Renderer_RmlUiNativeRenderInterface(void)
 static const renderer_export_t renderer_exports = {
     .RmlUiRendererFamily    = R_RmlUiRendererFamily,
     .RmlUiRendererName      = R_RmlUiRendererName,
-#if USE_REF == REF_GL
+#if USE_REF == REF_GL || defined(RENDERER_VULKAN_LEGACY) || \
+    defined(RENDERER_VULKAN_RTX)
     .RmlUiCanRender         = R_RmlUiCanRender,
     .RmlUiNativeRenderInterface = R_RmlUiNativeRenderInterface,
 #else
@@ -105,12 +109,12 @@ public:
 static R_RmlUiOpenGLRenderInterface r_rmlui_opengl_render_interface;
 #endif
 
-#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_LEGACY)
-class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface {};
-#endif
-
-#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_RTX)
-class R_RmlUiRtxVkptRenderInterface final : public Rml::RenderInterface {};
+#if UI_RML_HAS_RUNTIME && (defined(RENDERER_VULKAN_LEGACY) || \
+                           defined(RENDERER_VULKAN_RTX))
+class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface {
+    void RenderGeometry() { R_RmlUiDrawGeometry(); }
+};
+static R_RmlUiVulkanRenderInterface r_rmlui_vulkan_render_interface;
 #endif
 
 renderer_rmlui_family_t R_RmlUiRendererFamily(void)
@@ -141,7 +145,9 @@ const char *R_RmlUiRendererName(void)
 
 bool R_RmlUiCanRender(void)
 {
-#if UI_RML_HAS_RUNTIME
+#if UI_RML_HAS_RUNTIME && (USE_REF == REF_GL || \
+                           defined(RENDERER_VULKAN_LEGACY) || \
+                           defined(RENDERER_VULKAN_RTX))
     return true;
 #else
     return false;
@@ -150,8 +156,11 @@ bool R_RmlUiCanRender(void)
 
 void *R_RmlUiNativeRenderInterface(void)
 {
-#if UI_RML_HAS_RUNTIME
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
     return &r_rmlui_opengl_render_interface;
+#elif UI_RML_HAS_RUNTIME && (defined(RENDERER_VULKAN_LEGACY) || \
+                             defined(RENDERER_VULKAN_RTX))
+    return &r_rmlui_vulkan_render_interface;
 #else
     return NULL;
 #endif
@@ -196,6 +205,7 @@ void CL_InitRenderer(void)
         repo_root / "tools/ui_smoke/check_rmlui_runtime_capture.py",
         """
 DEFAULT_ROUTE_MATRIX = ("main", "game", "download_status")
+RENDERER_FAMILIES = {"opengl": "opengl", "vulkan": "vulkan", "rtx": "rtx_vkpt"}
 
 def build_engine_command():
     command = [
@@ -237,9 +247,11 @@ def test_valid_renderer_matrix_guardrail_passes(
     assert result == 0
     assert "Malformed findings: 0" in captured.out
     assert "OpenGL (native_guarded): pass" in captured.out
-    assert "Vulkan (blocked_until_native): pass" in captured.out
-    assert "RTX/vkpt (blocked_until_native): pass" in captured.out
-    assert "capture_harness_uses_opengl: yes" in captured.out
+    assert "Vulkan (native_guarded): pass" in captured.out
+    assert "RTX/vkpt (native_guarded): pass" in captured.out
+    assert "capture_harness_supports_opengl: yes" in captured.out
+    assert "capture_harness_supports_vulkan: yes" in captured.out
+    assert "capture_harness_supports_rtx: yes" in captured.out
     assert "Result: RmlUi renderer-family matrix guardrail passed." in captured.out
 
 
@@ -259,13 +271,14 @@ def test_json_report_exposes_renderer_lanes(
     assert payload["contract"]["no_vulkan_or_rtx_to_opengl_redirect"] is True
     assert payload["lanes"]["opengl"]["expected_status"] == "native_guarded"
     assert payload["lanes"]["opengl"]["facts"]["native_render_interface_returned"] is True
-    assert payload["lanes"]["vulkan"]["expected_status"] == "blocked_until_native"
-    assert payload["lanes"]["vulkan"]["facts"]["renderer_api_non_gl_unavailable"] is True
-    assert payload["lanes"]["vulkan"]["facts"]["native_family_export_inactive"] is True
-    assert payload["lanes"]["rtx_vkpt"]["expected_status"] == "blocked_until_native"
-    assert payload["lanes"]["rtx_vkpt"]["facts"]["runtime_dependency_inactive"] is True
-    assert payload["counts"]["native_guarded_lanes"] == 1
-    assert payload["counts"]["blocked_lanes"] == 2
+    assert payload["lanes"]["vulkan"]["expected_status"] == "native_guarded"
+    assert payload["lanes"]["vulkan"]["facts"]["renderer_api_exports_native_hooks"] is True
+    assert payload["lanes"]["vulkan"]["facts"]["native_render_interface_active"] is True
+    assert payload["lanes"]["rtx_vkpt"]["expected_status"] == "native_guarded"
+    assert payload["lanes"]["rtx_vkpt"]["facts"]["runtime_dependency_active"] is True
+    assert payload["lanes"]["rtx_vkpt"]["facts"]["native_render_interface_active"] is True
+    assert payload["counts"]["native_guarded_lanes"] == 3
+    assert payload["counts"]["blocked_lanes"] == 0
     assert payload["counts"]["errors"] == 0
 
 
@@ -332,12 +345,12 @@ def test_vulkan_partial_runtime_dependency_fails(
 
     assert result == 1
     assert (
-        "vulkan: Vulkan runtime dependency must stay inactive until native rendering is available"
+        "vulkan: Vulkan runtime dependency must be enabled for native rendering"
         in captured.out
     )
 
 
-def test_capture_harness_must_stay_explicitly_opengl_scoped(
+def test_capture_harness_must_cover_native_vulkan(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -355,4 +368,4 @@ def test_capture_harness_must_stay_explicitly_opengl_scoped(
     result, captured = run_checker(repo_root, capsys)
 
     assert result == 1
-    assert "guarded runtime capture matrix must remain explicitly OpenGL-scoped" in captured.out
+    assert "guarded runtime capture harness must support the Vulkan native lane" in captured.out

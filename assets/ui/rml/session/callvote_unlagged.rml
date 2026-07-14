@@ -5,24 +5,20 @@
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="session-callvote-unlagged" data-route-id="callvote_unlagged" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="session-callvote-unlagged" data-route-id="callvote_unlagged" data-route-group="session" data-route-version="2" data-document-status="live-provider" data-controller="native-session-cvars" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="callvote-unlagged-screen">
       <header class="page-header">
-        <h1>Vote: Unlagged</h1>
-        <p id="callvote-unlagged-summary">
+        <div class="worr-titlerow"><button id="session-callvote-unlagged-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_vote_unlagged">Vote: Unlagged</h1></div>
+        <p id="callvote-unlagged-summary" data-loc-key="worr_ui_propose_toggling_lag_compensation">
           Propose toggling lag compensation.
         </p>
         <p id="callvote-unlagged-current" class="status-message" data-bind="cvars.ui_callvote_unlagged_current" data-visible-if="ui_callvote_unlagged_current">Current unlagged state</p>
       </header>
 
-      <nav class="menu-list" id="callvote-unlagged-menu" data-model="session.callvote.unlagged" data-owner-boundary="sgame-published-cvars">
-        <button id="callvote-unlagged-enable" type="button" data-command="worr_callvote_unlagged 1" data-menu-sound="confirm">Enable</button>
-        <button id="callvote-unlagged-disable" type="button" data-command="worr_callvote_unlagged 0" data-menu-sound="confirm">Disable</button>
+      <nav class="menu-list session-vote-option-grid" id="callvote-unlagged-menu" data-model="session.callvote.unlagged" data-controller="native-session-cvars" data-owner-boundary="sgame-published-cvars">
+        <button id="callvote-unlagged-enable" type="button" data-command="worr_callvote_unlagged 1" data-menu-sound="confirm" data-loc-key="worr_ui_enable">Enable</button>
+        <button id="callvote-unlagged-disable" type="button" data-command="worr_callvote_unlagged 0" data-menu-sound="confirm" data-loc-key="worr_ui_disable">Disable</button>
       </nav>
-
-      <footer class="actions" id="callvote-unlagged-actions">
-        <button id="callvote-unlagged-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
-      </footer>
     </div>
   </body>
 </rml>

@@ -20,6 +20,8 @@ global game rules.*/
 #include "../bots/bot_runtime.hpp"
 #include "../g_local.hpp"
 #include "../monsters/m_actor.hpp"
+#include "../network/event_shadow.hpp"
+#include "../network/lag_compensation.hpp"
 #include "g_headhunters.hpp"
 #include "g_proball.hpp"
 #include "g_statusbar.hpp"
@@ -2146,6 +2148,9 @@ parsing textual entity definitions out of an ent file.
 */
 void SpawnEntities(const char *mapName, const char *entities,
                    const char *spawnPoint) {
+  SG_EventShadowResetMap();
+  LagCompensation_ResetMap();
+
   std::string entityStringStorage;
   if (entities && *entities) {
     bool overrideAllocated = false;

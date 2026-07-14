@@ -40,7 +40,7 @@
       "legacy_surface": "src/game/cgame/ui/worr.json menu multiplayer",
       "current_surface": "RmlUi multiplayer hub",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T05",
         "FR-09-T07",

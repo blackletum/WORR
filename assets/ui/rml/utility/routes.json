@@ -17,7 +17,8 @@
     "../common/components/command_button.rml"
   ],
   "status_values": {
-    "scaffolded_round2": "Second-round starter RML document exists in Agent 5-owned assets and preserves representative command, keybind, and cvar metadata from worr.json."
+    "scaffolded_round2": "Second-round starter RML document exists in Agent 5-owned assets and preserves representative command, keybind, and cvar metadata from worr.json.",
+    "live_provider": "The route has a native live provider plus installed OpenGL runtime evidence; full renderer/parity gates remain open."
   },
   "migration_phase_values": {
     "starter": "Source RML document and static route metadata exist; runtime, controller, and parity evidence are pending.",
@@ -33,18 +34,20 @@
       "group": "utility",
       "document": "utility/addressbook.rml",
       "document_id": "utility-addressbook",
-      "status": "scaffolded_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:addressbook",
       "legacy_surface": "src/game/cgame/ui/worr.json menu addressbook",
       "current_surface": "RmlUi utility address book",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T05",
         "FR-09-T07",
         "FR-09-T09",
         "FR-03-T08",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-03-T07",
+        "DV-07-T04"
       ],
       "controller_scope": "utility.addressbook",
       "entry_points": [
@@ -59,27 +62,27 @@
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "utility.addressbook.cvars",
-          "status": "mock_fixture",
-          "notes": "Address fields declare static data-cvar attributes for adr0 through adr15."
+          "status": "live_provider",
+          "notes": "The generic native form bridge hydrates and immediately persists archived adr0 through adr15 fields."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "ui.commands",
-          "status": "mock_fixture",
-          "notes": "Browse and back buttons expose data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Browse and back dispatch through the live command listener."
         },
         {
           "category": "navigation",
           "contract": "worr.rml.controller.navigation.mock",
           "fixture": "navigation.mock.json",
           "model": "ui.navigation",
-          "status": "mock_fixture",
-          "notes": "Browse declares data-route-target=\"servers\" while back maps to the shared navigation contract."
+          "status": "live_provider",
+          "notes": "Browse passes favorites, saved-file, and broadcast sources into the live server route; back uses the guarded route stack."
         }
       ],
-      "notes": "Controller-stub readiness metadata only; no live address book controller behavior, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native archived-cvar provider and installed seeded 960x720 OpenGL capture accepted on 2026-07-13. The central migration phase remains controller_stub until native Vulkan/RTX and broader action automation evidence is accepted."
     },
     {
       "id": "keys",
@@ -87,18 +90,20 @@
       "group": "utility",
       "document": "utility/keys.rml",
       "document_id": "utility-keys",
-      "status": "scaffolded_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:keys",
       "legacy_surface": "src/game/cgame/ui/worr.json menu keys",
       "current_surface": "RmlUi utility key bindings",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T05",
         "FR-09-T07",
         "FR-09-T09",
         "FR-03-T08",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-03-T07",
+        "DV-07-T04"
       ],
       "controller_scope": "utility.keybinds",
       "entry_points": [
@@ -113,27 +118,27 @@
           "contract": "worr.rml.input_keybind.mock",
           "fixture": "input-keybind.mock.json",
           "model": "utility.keybinds",
-          "status": "mock_fixture",
-          "notes": "Binding rows declare data-bind-command and data-event-click=\"keybind.capture\" hooks for later key-capture wiring."
+          "status": "live_provider",
+          "notes": "The native controller hydrates primary and alternate bindings, device icons, per-slot capture/clear, an eight-second timeout, and confirm-before-replace conflicts."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "ui.commands",
-          "status": "mock_fixture",
-          "notes": "Legacy Keys and back buttons expose data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Legacy Keys and back controls dispatch through the live command listener."
         },
         {
           "category": "navigation",
           "contract": "worr.rml.controller.navigation.mock",
           "fixture": "navigation.mock.json",
           "model": "ui.navigation",
-          "status": "mock_fixture",
-          "notes": "Legacy Keys declares data-route-target=\"legacykeys\" while back maps to the shared navigation contract."
+          "status": "live_provider",
+          "notes": "Legacy Keys and back navigation dispatch through the live guarded route stack."
         }
       ],
-      "notes": "Controller-stub readiness metadata only; no live key-capture controller behavior, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native two-slot keybind provider and installed 960x720 OpenGL capture accepted on 2026-07-13. The central migration phase remains controller_stub until native Vulkan/RTX and broader action automation evidence is accepted."
     },
     {
       "id": "legacykeys",
@@ -141,18 +146,20 @@
       "group": "utility",
       "document": "utility/legacykeys.rml",
       "document_id": "utility-legacykeys",
-      "status": "scaffolded_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:legacykeys",
       "legacy_surface": "src/game/cgame/ui/worr.json menu legacykeys",
       "current_surface": "RmlUi utility legacy key bindings",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T05",
         "FR-09-T07",
         "FR-09-T09",
         "FR-03-T08",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-03-T07",
+        "DV-07-T04"
       ],
       "controller_scope": "utility.legacy_keybinds",
       "entry_points": [
@@ -167,19 +174,19 @@
           "contract": "worr.rml.input_keybind.mock",
           "fixture": "input-keybind.mock.json",
           "model": "utility.legacy_keybinds",
-          "status": "mock_fixture",
-          "notes": "Legacy binding rows declare data-bind-command and data-event-click=\"keybind.capture\" hooks for later key-capture wiring."
+          "status": "live_provider",
+          "notes": "The native controller hydrates primary and alternate legacy bindings, device icons, per-slot capture/clear, timeout, and conflict confirmation."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "ui.commands",
-          "status": "mock_fixture",
-          "notes": "Back exposes the ui.back data-command hook for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Back dispatches through the live guarded route stack."
         }
       ],
-      "notes": "Controller-stub readiness metadata only; no live key-capture controller behavior, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native two-slot legacy-key provider and installed 960x720 OpenGL capture accepted on 2026-07-13. The central migration phase remains controller_stub until native Vulkan/RTX and broader action automation evidence is accepted."
     },
     {
       "id": "weapons",
@@ -187,18 +194,20 @@
       "group": "utility",
       "document": "utility/weapons.rml",
       "document_id": "utility-weapons",
-      "status": "scaffolded_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:weapons",
       "legacy_surface": "src/game/cgame/ui/worr.json menu weapons",
       "current_surface": "RmlUi utility weapon bindings",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T05",
         "FR-09-T07",
         "FR-09-T09",
         "FR-03-T08",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-03-T07",
+        "DV-07-T04"
       ],
       "controller_scope": "utility.weapon_binds",
       "entry_points": [
@@ -213,19 +222,19 @@
           "contract": "worr.rml.input_keybind.mock",
           "fixture": "input-keybind.mock.json",
           "model": "utility.weapon_binds",
-          "status": "mock_fixture",
-          "notes": "Weapon binding rows declare data-bind-command and data-event-click=\"keybind.capture\" hooks for later key-capture wiring."
+          "status": "live_provider",
+          "notes": "The native controller hydrates primary and alternate weapon bindings, device icons, per-slot capture/clear, timeout, and conflict confirmation."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "ui.commands",
-          "status": "mock_fixture",
-          "notes": "Back exposes the ui.back data-command hook for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Back dispatches through the live guarded route stack."
         }
       ],
-      "notes": "Controller-stub readiness metadata only; no live key-capture controller behavior, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native two-slot weapon-key provider and installed 960x720 OpenGL capture accepted on 2026-07-13. The central migration phase remains controller_stub until native Vulkan/RTX and broader action automation evidence is accepted."
     },
     {
       "id": "servers",
@@ -233,12 +242,12 @@
       "group": "utility",
       "document": "utility/servers.rml",
       "document_id": "utility-servers",
-      "status": "scaffolded_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:servers",
       "legacy_surface": "src/game/cgame/ui/worr.json menu servers",
       "current_surface": "RmlUi server browser",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T05",
         "FR-09-T07",
@@ -260,19 +269,19 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "ui.commands",
-          "status": "mock_fixture",
-          "notes": "Refresh, connect, favorites, and back controls expose data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Refresh, source, connect, paging, sorting, row activation, and back controls dispatch through the live runtime."
         },
         {
           "category": "list_provider",
           "contract": "worr.rml.controller.list_provider.mock",
           "fixture": "list-provider.mock.json",
           "model": "utility.servers",
-          "status": "mock_fixture",
-          "notes": "The server table declares server_browser data models for later sorting, refresh, selection, connect, and status rows."
+          "status": "live_provider",
+          "notes": "The native provider hydrates live discovery, status, sorting, paging, selection, connect, and error rows before display."
         }
       ],
-      "notes": "Controller-stub readiness metadata only; no live server browser list provider, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native provider and populated/empty installed OpenGL captures accepted on 2026-07-13. The central migration phase remains controller_stub until route-specific cross-renderer parity evidence is modeled and accepted."
     },
     {
       "id": "demos",
@@ -280,12 +289,12 @@
       "group": "utility",
       "document": "utility/demos.rml",
       "document_id": "utility-demos",
-      "status": "scaffolded_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:demos",
       "legacy_surface": "src/game/cgame/ui/worr.json menu demos",
       "current_surface": "RmlUi demo browser",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T05",
         "FR-09-T07",
@@ -307,19 +316,19 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "ui.commands",
-          "status": "mock_fixture",
-          "notes": "Parent-directory, refresh, play, and back controls expose data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Directory, refresh, source, paging, sorting, playback, and back controls dispatch through the live runtime."
         },
         {
           "category": "list_provider",
           "contract": "worr.rml.controller.list_provider.mock",
           "fixture": "list-provider.mock.json",
           "model": "utility.demos",
-          "status": "mock_fixture",
-          "notes": "The demo table declares demo_browser data models for later directory navigation, sorting, playback, and status rows."
+          "status": "live_provider",
+          "notes": "The native provider hydrates filesystem discovery, metadata, directories, sorting, paging, playback, and status totals before display."
         }
       ],
-      "notes": "Controller-stub readiness metadata only; no live demo browser list provider, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native provider and two byte-identical populated installed OpenGL captures accepted on 2026-07-13. The central migration phase remains controller_stub until route-specific cross-renderer parity evidence is modeled and accepted."
     },
     {
       "id": "players",
@@ -327,18 +336,21 @@
       "group": "utility",
       "document": "utility/players.rml",
       "document_id": "utility-players",
-      "status": "scaffolded_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:players",
       "legacy_surface": "src/game/cgame/ui/worr.json menu players",
       "current_surface": "RmlUi player setup",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T05",
         "FR-09-T07",
         "FR-09-T09",
+        "FR-03-T05",
         "FR-03-T08",
-        "DV-04-T02"
+        "DV-03-T07",
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "utility.players",
       "entry_points": [
@@ -354,27 +366,27 @@
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "utility.players.cvars",
-          "status": "mock_fixture",
-          "notes": "Name, model, skin, and weapon-hand controls declare data-bind/data-options hooks for later player cvar/data binding."
+          "status": "live_provider",
+          "notes": "Name, dogtag, and weapon-hand controls write live cvars immediately; the native provider enumerates model/skin pairs, initializes the composite skin userinfo value, updates it on selection changes, and drives selected-skin/dogtag image previews."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "ui.commands",
-          "status": "mock_fixture",
-          "notes": "Apply, reset, and back controls expose data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "The standard topbar and document-aware backplate dispatch through the live runtime; player configuration uses immediate persistence and therefore has no inert Apply or Reset footer."
         },
         {
           "category": "preview",
           "contract": "worr.rml.preview.mock",
           "fixture": "preview.mock.json",
           "model": "player.preview",
-          "status": "mock_fixture",
-          "notes": "The player preview panel declares the player_config.preview model for later engine preview surface ownership."
+          "status": "live_provider",
+          "notes": "The native client preview owns the authored surface rect and renders model/skin, attached weapon discovery, staged animations, weapon switching, muzzle flash, and reduced-motion behavior through RDF_NOWORLDMODEL."
         }
       ],
-      "notes": "Controller-stub readiness metadata only; no live player setup controller, preview controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native Player Setup provider, immediate cvar persistence, live skin/dogtag PCX thumbnails, authored loading/empty/error states, staged 3D preview, cached scrap-atlas UV support, automated contract coverage, and installed seeded OpenGL capture accepted on 2026-07-13. The central migration phase remains controller_stub until route-specific cross-renderer parity evidence is modeled and accepted."
     },
     {
       "id": "ui_list",
@@ -382,18 +394,20 @@
       "group": "utility",
       "document": "utility/ui_list.rml",
       "document_id": "utility-ui-list",
-      "status": "scaffolded_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:ui_list",
       "legacy_surface": "code-driven ui_list menu",
       "current_surface": "RmlUi generic session list",
       "source_owner": "cgame_ui_json",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T05",
         "FR-09-T07",
         "FR-09-T09",
         "FR-03-T08",
-        "DV-04-T02"
+        "DV-03-T07",
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "utility.ui_list",
       "entry_points": [
@@ -409,35 +423,35 @@
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "utility.ui_list.cvars",
-          "status": "mock_fixture",
-          "notes": "Title, subtitle, caption, extra action, item, and page labels bind to the existing ui_list cvar publication surface."
+          "status": "live_provider",
+          "notes": "The compiled runtime refreshes owner-published ui_list labels, status, visibility, enablement, and paging cvars every frame."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "ui.commands",
-          "status": "mock_fixture",
-          "notes": "Extra action, item, pagination, and return controls expose data-command or data-command-cvar hooks for later dispatch wiring."
+          "status": "live_provider",
+          "notes": "Extra, item, and pagination actions dispatch through fixed commands or owner-published command cvars; the standard backplate runs the document close side effect."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "ui.conditions",
-          "status": "mock_fixture",
-          "notes": "Visibility flags for subtitle, header, extra actions, item rows, and paging controls declare data-visible-if hooks."
+          "status": "live_provider",
+          "notes": "Runtime conditions hide unused toolbar and paging slabs, disable actionless controls, and select the loading, empty, error, or ready presentation."
         },
         {
           "category": "list_provider",
           "contract": "worr.rml.controller.list_provider.mock",
           "fixture": "list-provider.mock.json",
           "model": "utility.ui_list",
-          "status": "mock_fixture",
-          "notes": "The fixed session list declares session.ui_list item models for later cvar-published list provider wiring."
+          "status": "live_provider",
+          "notes": "Sgame publishes eight-row pages plus explicit state/status cvars while clearing all twelve compatibility slots on every refresh."
         }
       ],
-      "notes": "Controller-stub readiness metadata only; no live ui_list controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live sgame-published provider and installed populated, empty, and error OpenGL captures accepted on 2026-07-13. The central migration phase remains controller_stub until route-specific cross-renderer parity evidence is modeled and accepted."
     }
   ]
 }

@@ -3,31 +3,18 @@
 
 #include "cg_local.h"
 #include "cg_wheel.h"
+#include "cg_event_shadow.hpp"
+#include "cg_canonical_snapshot_timeline.hpp"
 #include "client/cgame_entity_ext.h"
 #include "client/cgame_ui_ext.h"
+#include "shared/cgame_prediction.h"
+#include "shared/prediction_abi.h"
 #include "m_flash.hpp"
-#include "shared/pmove_abi_layout.hpp"
 
-static_assert(std::is_standard_layout_v<PMove>);
-static_assert(std::is_trivially_copyable_v<PMove>);
-static_assert(sizeof(pmove_state_t) == worr::pmove_abi_v1::state_size);
-static_assert(sizeof(usercmd_t) == worr::pmove_abi_v1::command_size);
-static_assert(sizeof(PMove) == worr::pmove_abi_v1::pmove_size);
-static_assert(alignof(PMove) == worr::pmove_abi_v1::pmove_alignment);
-static_assert(offsetof(PMove, cmd) == worr::pmove_abi_v1::command_offset);
-static_assert(offsetof(PMove, snapInitial) ==
-              worr::pmove_abi_v1::snap_initial_offset);
-static_assert(offsetof(PMove, touch) == worr::pmove_abi_v1::touch_offset);
-static_assert(offsetof(PMove, viewAngles) ==
-              worr::pmove_abi_v1::view_angles_offset);
-static_assert(offsetof(PMove, trace) ==
-              worr::pmove_abi_v1::trace_callback_offset);
-static_assert(offsetof(PMove, clip) ==
-              worr::pmove_abi_v1::clip_callback_offset);
-static_assert(offsetof(PMove, pointContents) ==
-              worr::pmove_abi_v1::point_contents_callback_offset);
-static_assert(offsetof(PMove, impactDelta) ==
-              worr::pmove_abi_v1::impact_delta_offset);
+static_assert(static_cast<uint32_t>(MZ2_LAST) ==
+              WORR_EVENT_MONSTER_MUZZLE_LAST);
+static_assert(q_countof(monster_flash_offset) - 1 ==
+              WORR_EVENT_MONSTER_MUZZLE_LAST);
 
 cgame_import_t cgi;
 cgame_export_t cglobals;
@@ -40,6 +27,8 @@ using cgame_entity_import_t = cgame_entity_import_s;
 using cgame_entity_export_t = cgame_entity_export_s;
 extern "C" const cgame_entity_export_t *CG_GetEntityAPI(void);
 void CG_Entity_SetImport(const cgame_entity_import_t *import);
+extern "C" void CG_PredictionInputSetImport(
+	const worr_cgame_prediction_input_import_v1 *import);
 
 static void *CG_GetExtension(const char *name)
 {
@@ -50,6 +39,12 @@ static void *CG_GetExtension(const char *name)
 		return (void *)CG_GetUIAPI();
 	if (!strcmp(name, CGAME_ENTITY_EXPORT_EXT))
 		return (void *)CG_GetEntityAPI();
+	if (!strcmp(name, WORR_CGAME_EVENT_SHADOW_EXPORT_V1))
+		return (void *)CG_GetEventShadowAPI();
+	if (!strcmp(name, WORR_CGAME_EVENT_RANGE_EXPORT_V2))
+		return (void *)CG_GetEventRangeAPIv2();
+	if (!strcmp(name, WORR_CGAME_SNAPSHOT_TIMELINE_EXPORT_V1))
+		return (void *)CG_GetCanonicalSnapshotTimelineAPI();
 
 	return nullptr;
 }
@@ -58,8 +53,25 @@ void CG_InitScreen();
 
 uint64_t cgame_init_time = 0;
 
+extern "C" void CG_GetPredictionConfigV1(worr_prediction_config_v1 *config)
+{
+	if (!config)
+		return;
+
+	*config = {};
+	config->struct_size = sizeof(*config);
+	config->schema_version = WORR_PREDICTION_ABI_VERSION;
+	config->movement_model_revision = WORR_PREDICTION_MODEL_REVISION;
+	config->air_acceleration = pm_config.airAccel;
+	if (pm_config.n64Physics)
+		config->flags |= WORR_PREDICTION_CONFIG_N64_PHYSICS;
+	if (pm_config.q3Overbounce)
+		config->flags |= WORR_PREDICTION_CONFIG_Q3_OVERBOUNCE;
+}
+
 static void InitCGame()
 {
+	(void)CG_CanonicalSnapshotTimelineInitialize();
 	CG_InitScreen();
 	CG_Wheel_Init();
 	CG_WeaponBar_Init();
@@ -73,6 +85,7 @@ static void InitCGame()
 
 static void ShutdownCGame()
 {
+	CG_PredictionInputSetImport(nullptr);
 }
 
 void CG_DrawHUD (int32_t isplit, const cg_server_data_t *data, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale, int32_t playernum, const player_state_t *ps);
@@ -166,13 +179,26 @@ Q2GAME_API cgame_export_t *GetCGameAPI(cgame_import_t *import)
 		const cgame_entity_import_t *entity_import =
 			(const cgame_entity_import_t *)import->GetExtension(CGAME_ENTITY_IMPORT_EXT);
 		CG_Entity_SetImport(entity_import);
+
+		const worr_cgame_prediction_input_import_v1 *prediction_import =
+			(const worr_cgame_prediction_input_import_v1 *)import->GetExtension(
+				WORR_CGAME_PREDICTION_INPUT_IMPORT_V1);
+		if (prediction_import &&
+			(prediction_import->struct_size != sizeof(*prediction_import) ||
+			 prediction_import->api_version !=
+				 WORR_CGAME_PREDICTION_INPUT_API_VERSION ||
+			 !prediction_import->ResolveInputRange)) {
+			prediction_import = nullptr;
+		}
+		CG_PredictionInputSetImport(prediction_import);
+	} else {
+		CG_PredictionInputSetImport(nullptr);
 	}
 
 	cglobals.apiVersion = CGAME_API_VERSION;
 	cglobals.Init = InitCGame;
 	cglobals.Shutdown = ShutdownCGame;
 
-	cglobals.Pmove = Pmove;
 	cglobals.DrawHUD = CG_DrawHUD;
 	cglobals.LayoutFlags = CG_LayoutFlags;
 	cglobals.TouchPics = CG_TouchPics;

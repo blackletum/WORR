@@ -5,40 +5,47 @@
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="session-match-stats" data-route-id="match_stats" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-open-command="worr_matchstats_menu" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="session-match-stats" data-route-id="match_stats" data-route-group="session" data-route-version="2" data-document-status="live-provider" data-controller="native-session-cvars" data-session-owner="sgame" data-open-command="worr_matchstats_menu" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="match-stats-screen" data-close-command="popmenu; worr_matchstats_close">
       <header class="page-header" id="match-stats-header">
-        <h1>Match Stats</h1>
-        <p id="match-stats-summary">
-          Review the player stat lines from the current match.
-        </p>
+        <div class="worr-titlerow"><button id="session-match-stats-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_match_stats">Match Stats</h1></div>
+        <p id="match-stats-summary" data-loc-key="worr_ui_live_performance_for_the_current_match_values_r">Live performance for the current match. Values refresh while this page is open.</p>
       </header>
 
-      <main class="session-panel" id="match-stats-lines" data-model="session.match_stats.lines" data-controller="session.fixed_list" data-list-provider="session.match_stats.lines" data-owner-boundary="sgame-published-cvars">
-        <section class="session-static-report" id="match-stats-fallback" data-show-if="!ui_matchstats_line_0">
-          <p id="match-stats-fallback-title">No match statistics recorded yet.</p>
+      <main class="session-match-stats-content" id="match-stats-content" data-model="session.match_stats.snapshot" data-controller="native-session-cvars" data-list-provider="sgame-fixed-stats-snapshot" data-owner-boundary="sgame-published-cvars" data-refresh-interval-ms="1000">
+        <section class="session-empty-state" id="match-stats-empty" data-show-if="!ui_matchstats_player">
+          <h2 data-loc-key="worr_ui_stats_unavailable">Stats unavailable</h2>
+          <p data-loc-key="worr_ui_no_match_statistics_are_available_for_this_play">No match statistics are available for this player yet.</p>
         </section>
-        <p id="match-stats-line-0" data-bind="cvars.ui_matchstats_line_0" data-bind-cvar="ui_matchstats_line_0" data-visible-if="ui_matchstats_line_0"></p>
-        <p id="match-stats-line-1" data-bind="cvars.ui_matchstats_line_1" data-bind-cvar="ui_matchstats_line_1" data-visible-if="ui_matchstats_line_1"></p>
-        <p id="match-stats-line-2" class="ui-monospace-wrap" data-bind="cvars.ui_matchstats_line_2" data-bind-cvar="ui_matchstats_line_2" data-visible-if="ui_matchstats_line_2"></p>
-        <p id="match-stats-line-3" data-bind="cvars.ui_matchstats_line_3" data-bind-cvar="ui_matchstats_line_3" data-visible-if="ui_matchstats_line_3"></p>
-        <p id="match-stats-line-4" data-bind="cvars.ui_matchstats_line_4" data-bind-cvar="ui_matchstats_line_4" data-visible-if="ui_matchstats_line_4"></p>
-        <p id="match-stats-line-5" data-bind="cvars.ui_matchstats_line_5" data-bind-cvar="ui_matchstats_line_5" data-visible-if="ui_matchstats_line_5"></p>
-        <p id="match-stats-line-6" data-bind="cvars.ui_matchstats_line_6" data-bind-cvar="ui_matchstats_line_6" data-visible-if="ui_matchstats_line_6"></p>
-        <p id="match-stats-line-7" data-bind="cvars.ui_matchstats_line_7" data-bind-cvar="ui_matchstats_line_7" data-visible-if="ui_matchstats_line_7"></p>
-        <p id="match-stats-line-8" data-bind="cvars.ui_matchstats_line_8" data-bind-cvar="ui_matchstats_line_8" data-visible-if="ui_matchstats_line_8"></p>
-        <p id="match-stats-line-9" data-bind="cvars.ui_matchstats_line_9" data-bind-cvar="ui_matchstats_line_9" data-visible-if="ui_matchstats_line_9"></p>
-        <p id="match-stats-line-10" data-bind="cvars.ui_matchstats_line_10" data-bind-cvar="ui_matchstats_line_10" data-visible-if="ui_matchstats_line_10"></p>
-        <p id="match-stats-line-11" data-bind="cvars.ui_matchstats_line_11" data-bind-cvar="ui_matchstats_line_11" data-visible-if="ui_matchstats_line_11"></p>
-        <p id="match-stats-line-12" data-bind="cvars.ui_matchstats_line_12" data-bind-cvar="ui_matchstats_line_12" data-visible-if="ui_matchstats_line_12"></p>
-        <p id="match-stats-line-13" data-bind="cvars.ui_matchstats_line_13" data-bind-cvar="ui_matchstats_line_13" data-visible-if="ui_matchstats_line_13"></p>
-        <p id="match-stats-line-14" data-bind="cvars.ui_matchstats_line_14" data-bind-cvar="ui_matchstats_line_14" data-visible-if="ui_matchstats_line_14"></p>
-        <p id="match-stats-line-15" data-bind="cvars.ui_matchstats_line_15" data-bind-cvar="ui_matchstats_line_15" data-visible-if="ui_matchstats_line_15"></p>
-      </main>
 
-      <footer class="actions" id="match-stats-actions">
-        <button id="match-stats-return" type="button" data-command="popmenu; worr_matchstats_close" data-menu-sound="cancel">Back</button>
-      </footer>
+        <section class="match-stats-player" id="match-stats-player-panel" data-visible-if="ui_matchstats_player">
+          <span data-loc-key="worr_ui_current_player">Current player</span>
+          <h2 id="match-stats-player" data-bind="cvars.ui_matchstats_player" data-bind-cvar="ui_matchstats_player"></h2>
+        </section>
+
+        <div class="match-stats-grid" id="match-stats-grid" data-visible-if="ui_matchstats_player">
+          <section class="match-stats-card" id="match-stats-combat">
+            <h2 data-loc-key="worr_ui_combat">Combat</h2>
+            <div class="match-stats-row"><span data-loc-key="m_kills">Kills</span><strong id="match-stats-kills" data-bind="cvars.ui_matchstats_kills" data-bind-cvar="ui_matchstats_kills"></strong></div>
+            <div class="match-stats-row"><span data-loc-key="worr_ui_deaths">Deaths</span><strong id="match-stats-deaths" data-bind="cvars.ui_matchstats_deaths" data-bind-cvar="ui_matchstats_deaths"></strong></div>
+            <div class="match-stats-row"><span data-loc-key="worr_ui_k_d_ratio">K/D ratio</span><strong id="match-stats-kd" data-bind="cvars.ui_matchstats_kd" data-bind-cvar="ui_matchstats_kd"></strong></div>
+          </section>
+
+          <section class="match-stats-card" id="match-stats-damage">
+            <h2 data-loc-key="worr_ui_damage">Damage</h2>
+            <div class="match-stats-row"><span data-loc-key="worr_ui_dealt">Dealt</span><strong id="match-stats-damage-dealt" data-bind="cvars.ui_matchstats_damage_dealt" data-bind-cvar="ui_matchstats_damage_dealt"></strong></div>
+            <div class="match-stats-row"><span data-loc-key="worr_ui_received">Received</span><strong id="match-stats-damage-received" data-bind="cvars.ui_matchstats_damage_received" data-bind-cvar="ui_matchstats_damage_received"></strong></div>
+            <div class="match-stats-row"><span data-loc-key="worr_ui_damage_ratio">Damage ratio</span><strong id="match-stats-damage-ratio" data-bind="cvars.ui_matchstats_damage_ratio" data-bind-cvar="ui_matchstats_damage_ratio"></strong></div>
+          </section>
+
+          <section class="match-stats-card" id="match-stats-accuracy-card">
+            <h2 data-loc-key="worr_ui_accuracy">Accuracy</h2>
+            <div class="match-stats-row"><span data-loc-key="worr_ui_shots_fired">Shots fired</span><strong id="match-stats-shots" data-bind="cvars.ui_matchstats_shots" data-bind-cvar="ui_matchstats_shots"></strong></div>
+            <div class="match-stats-row"><span data-loc-key="worr_ui_on_target">On target</span><strong id="match-stats-hits" data-bind="cvars.ui_matchstats_hits" data-bind-cvar="ui_matchstats_hits"></strong></div>
+            <div class="match-stats-row"><span data-loc-key="worr_ui_total_accuracy">Total accuracy</span><strong id="match-stats-accuracy" data-bind="cvars.ui_matchstats_accuracy" data-bind-cvar="ui_matchstats_accuracy"></strong></div>
+          </section>
+        </div>
+      </main>
     </div>
   </body>
 </rml>

@@ -22,7 +22,8 @@
   "status_values": {
     "starter": "Starter RML document exists in Agent 5-owned assets and preserves representative session command/cvar hooks.",
     "starter_round2": "Second-round starter RML document exists and preserves utility/session route hooks from the legacy menu surface.",
-    "starter_round3": "Third-round starter RML document exists and preserves session, vote, tournament, map selector, or match stats hooks from the legacy menu surface."
+    "starter_round3": "Third-round starter RML document exists and preserves session, vote, tournament, map selector, or match stats hooks from the legacy menu surface.",
+    "live_provider": "The route consumes live sgame-published state through the native RmlUi cvar/condition/command bridge and has installed OpenGL evidence; broader parity gates remain open."
   },
   "migration_phase_values": {
     "starter": "Source RML document and static route metadata exist; runtime, controller, and parity evidence are pending.",
@@ -38,18 +39,20 @@
       "group": "session",
       "document": "session/dm_welcome.rml",
       "document_id": "session-dm-welcome",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:dm_welcome",
       "legacy_surface": "src/game/cgame/ui/worr.json menu dm_welcome plus sgame-published welcome cvars",
       "current_surface": "RmlUi deathmatch welcome prompt",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
+        "FR-09-T05",
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.deathmatch.welcome",
       "entry_points": [
@@ -64,19 +67,19 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.dm_welcome.commands",
-          "status": "mock_fixture",
-          "notes": "The continue control exposes a static data-command hook for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Continue and close dispatch through the native command listener while preserving the sgame welcome acknowledgement."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.dm_welcome.conditions",
-          "status": "mock_fixture",
-          "notes": "Hostname and MOTD regions declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "Title, hostname, and MOTD bindings and visibility gates consume the live sgame-published cvars before show."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves welcome title, host/MOTD bindings, visibility gates, and continue command hooks while the legacy menu fallback remains authoritative; no live session controller, runtime RmlUi open path, screenshots, or parity is claimed."
+      "notes": "Live native cvar/condition/command bridge and installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until broader action and native renderer parity gates are accepted."
     },
     {
       "id": "dm_join",
@@ -84,19 +87,21 @@
       "group": "session",
       "document": "session/dm_join.rml",
       "document_id": "session-dm-join",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:dm_join",
       "legacy_surface": "src/game/cgame/ui/worr.json menu dm_join plus sgame-published deathmatch lobby cvars",
       "current_surface": "RmlUi deathmatch join/lobby menu",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
+        "FR-09-T05",
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T01",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.deathmatch.join",
       "entry_points": [
@@ -113,35 +118,35 @@
           "contract": "worr.rml.controller.navigation.mock",
           "fixture": "navigation.mock.json",
           "model": "ui.navigation",
-          "status": "mock_fixture",
-          "notes": "Callvote, MyMap, host info, forfeit, match info, admin, and leave controls declare static data-route-target hooks for later navigation wiring."
+          "status": "live_provider",
+          "notes": "Callvote, MyMap, host info, forfeit, match info, stats, admin, settings, leave, and popup targets dispatch through the native route/command listener."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.dm_join.commands",
-          "status": "mock_fixture",
-          "notes": "Team, spectate, tournament, vote, MyMap, info, admin, settings, leave, and close controls expose static data-command hooks for later dispatch wiring."
+          "status": "live_provider",
+          "notes": "Team, spectate, ready, tournament, vote, tools, settings, leave, and close commands dispatch through the native listener, including command-cvar resolution."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.dm_join.cvars",
-          "status": "mock_fixture",
-          "notes": "Team-join labels declare static data-label-cvar hooks for later cvar label binding."
+          "status": "live_provider",
+          "notes": "The native cvar bridge hydrates all live match labels, counts, state, map, rules, notices, and action labels before show and on cvar change."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.dm_join.conditions",
-          "status": "mock_fixture",
-          "notes": "Team, spectator, tournament, vote, MyMap, forfeit, stats, and admin controls declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "The native condition bridge evaluates team, join eligibility, spectator, ready, tournament, vote, MyMap, forfeit, stats, admin, resume, and leave state."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves team selection, spectate, tournament, callvote, MyMap, host info, forfeit, match info, admin, settings, leave, and close command hooks while the legacy menu fallback remains authoritative; no live lobby controller, runtime RmlUi open path, screenshots, or parity is claimed."
+      "notes": "Live native sgame-published match-hub provider and installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
     },
     {
       "id": "join",
@@ -149,19 +154,21 @@
       "group": "session",
       "document": "session/join.rml",
       "document_id": "session-join",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:join",
       "legacy_surface": "src/game/cgame/ui/worr.json menu join plus sgame-published match lobby cvars",
       "current_surface": "RmlUi generic match join/lobby menu",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
+        "FR-09-T05",
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T01",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.match.join",
       "entry_points": [
@@ -178,35 +185,35 @@
           "contract": "worr.rml.controller.navigation.mock",
           "fixture": "navigation.mock.json",
           "model": "ui.navigation",
-          "status": "mock_fixture",
-          "notes": "Callvote, MyMap, host info, forfeit, match info, admin, and leave controls declare static data-route-target hooks for later navigation wiring."
+          "status": "live_provider",
+          "notes": "Callvote, MyMap, host info, forfeit, match info, stats, admin, settings, leave, and popup targets dispatch through the native route/command listener."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.join.commands",
-          "status": "mock_fixture",
-          "notes": "Team, spectator, tournament, vote, MyMap, info, admin, settings, leave, and close controls expose static data-command hooks for later dispatch wiring."
+          "status": "live_provider",
+          "notes": "Team, spectate, ready, tournament, vote, tools, settings, leave, and close commands dispatch through the native listener, including command-cvar resolution."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.join.cvars",
-          "status": "mock_fixture",
-          "notes": "Team-join labels declare static data-label-cvar hooks for later cvar label binding."
+          "status": "live_provider",
+          "notes": "The native cvar bridge hydrates all live match labels, counts, state, map, rules, notices, and action labels before show and on cvar change."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.join.conditions",
-          "status": "mock_fixture",
-          "notes": "Team, spectator, tournament, vote, MyMap, forfeit, stats, and admin controls declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "The native condition bridge evaluates team, join eligibility, spectator, ready, tournament, vote, MyMap, forfeit, stats, admin, resume, and leave state."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML mirrors the alternate join menu with team, spectator, vote, map, match info, admin, settings, and leave hooks while the legacy menu fallback remains authoritative; no live lobby controller, runtime RmlUi open path, screenshots, or parity is claimed."
+      "notes": "Live native sgame-published match-hub provider and installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
     },
     {
       "id": "dm_hostinfo",
@@ -214,17 +221,19 @@
       "group": "session",
       "document": "session/dm_hostinfo.rml",
       "document_id": "session-dm-hostinfo",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:dm_hostinfo",
       "legacy_surface": "src/game/cgame/ui/worr.json menu dm_hostinfo plus sgame-published host information cvars",
       "current_surface": "RmlUi host information dialog",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
+        "FR-09-T05",
         "FR-09-T08",
         "FR-09-T09",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.deathmatch.hostinfo",
       "entry_points": [
@@ -240,19 +249,19 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.dm_hostinfo.commands",
-          "status": "mock_fixture",
-          "notes": "The return control exposes a static data-command hook for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "The standardized back plate dispatches through the guarded native route stack without a duplicate footer action."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.dm_hostinfo.conditions",
-          "status": "mock_fixture",
-          "notes": "Server, host, and MOTD regions declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "Server, host, and MOTD values and their explicit empty state consume live sgame-published cvars through the native binding/condition bridge."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves server, host, MOTD, visibility gates, and return hooks while the legacy menu fallback remains authoritative; no live host-info controller, runtime RmlUi open path, screenshots, or parity is claimed."
+      "notes": "Live native host-information provider, decluttered information rows, and installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until broader navigation and native renderer parity gates are accepted."
     },
     {
       "id": "dm_matchinfo",
@@ -260,18 +269,20 @@
       "group": "session",
       "document": "session/dm_matchinfo.rml",
       "document_id": "session-dm-matchinfo",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:dm_matchinfo",
       "legacy_surface": "src/game/cgame/ui/worr.json menu dm_matchinfo plus sgame-published match information cvars",
       "current_surface": "RmlUi match information dialog",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
+        "FR-09-T05",
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.deathmatch.matchinfo",
       "entry_points": [
@@ -287,19 +298,19 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.dm_matchinfo.commands",
-          "status": "mock_fixture",
-          "notes": "The return control exposes a static data-command hook for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "The standardized back plate dispatches through the guarded native route stack without a duplicate footer action."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.dm_matchinfo.conditions",
-          "status": "mock_fixture",
-          "notes": "Gametype, map, author, ruleset, scorelimit, and timelimit regions declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "Gametype, map, author, ruleset, score limit, and time limit rows plus their explicit empty state consume live sgame-published cvars through the native binding/condition bridge."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves gametype, map, author, ruleset, scorelimit, timelimit, visibility gates, and return hooks while the legacy menu fallback remains authoritative; no live match-info controller, runtime RmlUi open path, screenshots, or parity is claimed."
+      "notes": "Live native match-information provider, decluttered information rows, and installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until broader navigation and native renderer parity gates are accepted."
     },
     {
       "id": "callvote_main",
@@ -307,12 +318,12 @@
       "group": "session",
       "document": "session/callvote_main.rml",
       "document_id": "session-callvote-main",
-      "status": "starter_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:callvote_main",
       "legacy_surface": "src/game/cgame/ui/worr.json menu callvote_main plus sgame callvote publisher",
       "current_surface": "RmlUi callvote hub",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -334,19 +345,19 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.callvote.commands",
-          "status": "mock_fixture",
-          "notes": "Callvote option buttons expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "All published callvote choices dispatch through the native command listener."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.callvote.conditions",
-          "status": "mock_fixture",
-          "notes": "Callvote availability buttons declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "The native condition bridge evaluates every sgame-published vote availability cvar and the complete empty-state conjunction."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves callvote availability gates and action commands; no live callvote controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native sgame-published availability and command provider with installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
     },
     {
       "id": "callvote_ruleset",
@@ -354,12 +365,12 @@
       "group": "session",
       "document": "session/callvote_ruleset.rml",
       "document_id": "session-callvote-ruleset",
-      "status": "starter_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:callvote_ruleset",
       "legacy_surface": "src/game/cgame/ui/worr.json menu callvote_ruleset",
       "current_surface": "RmlUi callvote ruleset picker",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -380,11 +391,11 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.callvote.commands",
-          "status": "mock_fixture",
-          "notes": "Ruleset choices and return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Ruleset choices dispatch through the native command listener; the standardized backplate is the single return affordance."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves ruleset choice commands and return behavior; no live callvote controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native command provider and installed 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
     },
     {
       "id": "callvote_timelimit",
@@ -392,12 +403,12 @@
       "group": "session",
       "document": "session/callvote_timelimit.rml",
       "document_id": "session-callvote-timelimit",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:callvote_timelimit",
       "legacy_surface": "src/game/cgame/ui/worr.json menu callvote_timelimit plus sgame-published timelimit cvars",
       "current_surface": "RmlUi callvote timelimit picker",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -418,19 +429,19 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.callvote.commands",
-          "status": "mock_fixture",
-          "notes": "Timelimit choices and return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Timelimit choices dispatch through the native command listener; the standardized backplate is the single return affordance."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.callvote.conditions",
-          "status": "mock_fixture",
-          "notes": "The current timelimit status line declares a data-visible-if gate for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "The current timelimit label consumes the live sgame-published cvar before show."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves current timelimit label binding, fixed timelimit commands, and return behavior; no live callvote controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native current-value and command provider with installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
     },
     {
       "id": "callvote_scorelimit",
@@ -438,12 +449,12 @@
       "group": "session",
       "document": "session/callvote_scorelimit.rml",
       "document_id": "session-callvote-scorelimit",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:callvote_scorelimit",
       "legacy_surface": "src/game/cgame/ui/worr.json menu callvote_scorelimit plus sgame-published scorelimit cvars",
       "current_surface": "RmlUi callvote scorelimit picker",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -464,27 +475,27 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.callvote.commands",
-          "status": "mock_fixture",
-          "notes": "Scorelimit choices and return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Scorelimit choices dispatch through the native command listener; the standardized backplate is the single return affordance."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.callvote.cvars",
-          "status": "mock_fixture",
-          "notes": "Scorelimit labels declare static data-label-cvar hooks for later cvar label binding."
+          "status": "live_provider",
+          "notes": "The native cvar bridge hydrates the current scorelimit and mode-specific option labels before show."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.callvote.conditions",
-          "status": "mock_fixture",
-          "notes": "The current scorelimit status line declares a data-visible-if gate for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "The current scorelimit row follows the live cvar's populated state."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves current scorelimit label binding, fixed scorelimit commands, and return behavior; no live callvote controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native current-value, option-label, and command provider with installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
     },
     {
       "id": "callvote_unlagged",
@@ -492,12 +503,12 @@
       "group": "session",
       "document": "session/callvote_unlagged.rml",
       "document_id": "session-callvote-unlagged",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:callvote_unlagged",
       "legacy_surface": "src/game/cgame/ui/worr.json menu callvote_unlagged plus sgame-published unlagged cvars",
       "current_surface": "RmlUi callvote unlagged picker",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -518,19 +529,19 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.callvote.commands",
-          "status": "mock_fixture",
-          "notes": "Unlagged choices and return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Enable and Disable choices dispatch through the native command listener; the standardized backplate is the single return affordance."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.callvote.conditions",
-          "status": "mock_fixture",
-          "notes": "The current unlagged status line declares a data-visible-if gate for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "The current unlagged label consumes the live sgame-published cvar before show."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves current unlagged state binding, enable/disable commands, and return behavior; no live callvote controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native current-value and command provider with installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
     },
     {
       "id": "callvote_random",
@@ -538,12 +549,12 @@
       "group": "session",
       "document": "session/callvote_random.rml",
       "document_id": "session-callvote-random",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:callvote_random",
       "legacy_surface": "src/game/cgame/ui/worr.json menu callvote_random",
       "current_surface": "RmlUi callvote random picker",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -564,11 +575,11 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.callvote.commands",
-          "status": "mock_fixture",
-          "notes": "Random-range choices and return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "All fixed random-range choices dispatch through the native command listener; the standardized backplate is the single return affordance."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves fixed random-range vote commands and return behavior; no live callvote controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native command provider and installed 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
     },
     {
       "id": "callvote_map_flags",
@@ -576,12 +587,12 @@
       "group": "session",
       "document": "session/callvote_map_flags.rml",
       "document_id": "session-callvote-map-flags",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:callvote_map_flags",
       "legacy_surface": "src/game/cgame/ui/worr.json menu callvote_map_flags plus sgame-published map flag labels",
       "current_surface": "RmlUi callvote map flags picker",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -603,19 +614,19 @@
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.callvote.commands",
-          "status": "mock_fixture",
-          "notes": "Map-flag choices and return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Map-flag state toggles dispatch through the native command listener and refresh the live labels while the standardized backplate returns to map selection."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.callvote.cvars",
-          "status": "mock_fixture",
-          "notes": "Map-flag labels declare static data-label-cvar hooks for later cvar label binding."
+          "status": "live_provider",
+          "notes": "The native cvar bridge hydrates all ten tri-state map-flag labels before show and after each server refresh."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves map flag label cvars, map-flag vote commands, and return behavior; no live callvote controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native tri-state flag and command provider with installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until action automation and native renderer parity gates are accepted."
     },
     {
       "id": "mymap_main",
@@ -623,12 +634,12 @@
       "group": "session",
       "document": "session/mymap_main.rml",
       "document_id": "session-mymap-main",
-      "status": "starter_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:mymap_main",
       "legacy_surface": "src/game/cgame/ui/worr.json menu mymap_main plus sgame MyMap publisher",
       "current_surface": "RmlUi MyMap main menu",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -645,39 +656,39 @@
       "data_models": [
         "session.mymap"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves MyMap status/flag summary cvar bindings, select/flags/clear commands, route navigation, conditional gates, and return behavior while the legacy menu fallback remains authoritative; no live MyMap controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live native sgame-published MyMap status, flag summary, availability, and command provider with installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until connected action automation and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "navigation",
           "contract": "worr.rml.controller.navigation.mock",
           "fixture": "navigation.mock.json",
           "model": "ui.navigation",
-          "status": "mock_fixture",
-          "notes": "Flags controls declare a static data-route-target hook for later MyMap route navigation wiring."
+        "status": "live_provider",
+        "notes": "The server-owned Flags command opens the live MyMap flag route through the normal pushmenu bridge."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.mymap.commands",
-          "status": "mock_fixture",
-          "notes": "Select, flags, clear, and return controls expose static data-command hooks for later command dispatch wiring."
+        "status": "live_provider",
+        "notes": "Select Map, Flags, and Clear Flags dispatch through the native command listener; the standardized backplate is the single return affordance."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.mymap.cvars",
-          "status": "mock_fixture",
-          "notes": "MyMap status and flag-summary text declare static data-bind-cvar hooks for later cvar label binding."
+        "status": "live_provider",
+        "notes": "The native cvar bridge hydrates the live availability explanation and current flag summary before show and after server refresh."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.mymap.conditions",
-          "status": "mock_fixture",
-          "notes": "MyMap status and flag-summary regions declare data-visible-if gates for later conditional-state wiring."
+        "status": "live_provider",
+        "notes": "The native condition bridge applies live Select, Flags, and Clear Flags enabled state without leaving disabled controls in focus navigation."
         }
       ]
     },
@@ -687,12 +698,12 @@
       "group": "session",
       "document": "session/mymap_flags.rml",
       "document_id": "session-mymap-flags",
-      "status": "starter_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:mymap_flags",
       "legacy_surface": "src/game/cgame/ui/worr.json menu mymap_flags plus sgame MyMap flag labels",
       "current_surface": "RmlUi MyMap flags picker",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -709,23 +720,23 @@
       "data_models": [
         "session.mymap.flags"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves MyMap flag label cvars, flag-toggle command arguments, and return behavior while the legacy menu fallback remains authoritative; no live MyMap controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live native tri-state MyMap flag and command provider with installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until connected action automation and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.mymap.flags.commands",
-          "status": "mock_fixture",
-          "notes": "Flag toggle and return controls expose static data-command hooks for later command dispatch wiring."
+        "status": "live_provider",
+        "notes": "All ten tri-state flag toggles dispatch through the native command listener and the standardized backplate is the single return affordance."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.mymap.flags.cvars",
-          "status": "mock_fixture",
-          "notes": "Flag labels declare static data-label-cvar hooks for later cvar label binding."
+        "status": "live_provider",
+        "notes": "The native cvar bridge hydrates all ten tri-state flag labels before show and after each server refresh."
         }
       ]
     },
@@ -735,12 +746,12 @@
       "group": "session",
       "document": "session/forfeit_confirm.rml",
       "document_id": "session-forfeit-confirm",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:forfeit_confirm",
       "legacy_surface": "src/game/cgame/ui/worr.json menu forfeit_confirm",
       "current_surface": "RmlUi forfeit confirmation prompt",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -756,15 +767,15 @@
       "data_models": [
         "session.forfeit"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves yes/no forfeit commands and close behavior while the legacy menu fallback remains authoritative; no live forfeit controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live native popup route, sgame-owned forfeit command, safe cancel action, and installed 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until connected destructive-action automation and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.forfeit.commands",
-          "status": "mock_fixture",
-          "notes": "Forfeit confirmation and cancel controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Cancel closes the native popup stack and Yes dispatches the registered sgame forfeit action through the native command listener."
         }
       ]
     },
@@ -774,12 +785,12 @@
       "group": "session",
       "document": "session/leave_match_confirm.rml",
       "document_id": "session-leave-match-confirm",
-      "status": "starter_round2",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:leave_match_confirm",
       "legacy_surface": "src/game/cgame/ui/worr.json menu leave_match_confirm",
       "current_surface": "RmlUi leave-match confirmation prompt",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -791,16 +802,18 @@
       "entry_points": [
         "pushmenu leave_match_confirm"
       ],
-      "data_models": [],
-      "notes": "Controller-stub metadata only. Static RML preserves leave/disconnect and cancel commands with localization-key placeholders while the legacy menu fallback remains authoritative; no live leave-match controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "data_models": [
+        "session.leave_match"
+      ],
+      "notes": "Live native popup route, localized leave prompt, safe cancel action, and installed 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until connected disconnect automation and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.leave_match.commands",
-          "status": "mock_fixture",
-          "notes": "Disconnect/leave and cancel controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Cancel closes the native popup stack and Yes closes the menu before dispatching disconnect through the guarded native command listener."
         }
       ]
     },
@@ -810,18 +823,19 @@
       "group": "session",
       "document": "session/admin_menu.rml",
       "document_id": "session-admin-menu",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:admin_menu",
       "legacy_surface": "src/game/cgame/ui/worr.json menu admin_menu plus sgame admin visibility cvars",
       "current_surface": "RmlUi admin menu",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.admin.menu",
       "entry_points": [
@@ -831,31 +845,31 @@
       "data_models": [
         "session.admin.menu"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves replay-game visibility, replay route navigation, admin commands navigation, and return behavior while the legacy menu fallback remains authoritative; no live admin controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live native sgame-published replay availability, command-reference navigation, and installed 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until connected replay automation and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "navigation",
           "contract": "worr.rml.controller.navigation.mock",
           "fixture": "navigation.mock.json",
           "model": "ui.navigation",
-          "status": "mock_fixture",
-          "notes": "Admin command-reference controls declare static data-route-target hooks for later admin route navigation wiring."
+          "status": "live_provider",
+          "notes": "The command reference opens through the compiled native route stack."
         },
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.admin.menu.commands",
-          "status": "mock_fixture",
-          "notes": "Replay, command-reference, and return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Replay and command-reference actions dispatch through the native command and route listeners; the standardized backplate is the single return affordance."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.admin.menu.conditions",
-          "status": "mock_fixture",
-          "notes": "Replay visibility declares a data-visible-if gate for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "The Replay action consumes the live sgame-published tournament availability cvar."
         }
       ]
     },
@@ -865,18 +879,19 @@
       "group": "session",
       "document": "session/admin_commands.rml",
       "document_id": "session-admin-commands",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:admin_commands",
       "legacy_surface": "src/game/cgame/ui/worr.json menu admin_commands",
       "current_surface": "RmlUi admin command reference",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.admin.commands",
       "entry_points": [
@@ -885,15 +900,15 @@
       "data_models": [
         "session.admin.commands"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves the admin command reference rows and return behavior while the legacy menu fallback remains authoritative; no live admin command dispatcher, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live native read-only reference for all 28 registered admin commands with installed 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until localization, navigation, and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.admin.commands.actions",
-          "status": "mock_fixture",
-          "notes": "Return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "The standardized backplate is the single return affordance; admin command execution remains deliberately console-based because entries require heterogeneous arguments."
         }
       ]
     },
@@ -903,18 +918,19 @@
       "group": "session",
       "document": "session/tourney_info.rml",
       "document_id": "session-tourney-info",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:tourney_info",
       "legacy_surface": "src/game/cgame/ui/worr.json menu tourney_info plus tournament status publisher",
       "current_surface": "RmlUi tournament information page",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.tournament.info",
       "entry_points": [
@@ -924,15 +940,15 @@
       "data_models": [
         "session.tournament.info"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves tournament guidance, status command reference, and return behavior while the legacy menu fallback remains authoritative; no live tournament controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live native tournament guidance route opened by the registered sgame command, with one standardized return affordance and current console-status guidance. Seeded 960x720 OpenGL evidence was accepted on 2026-07-13; the central migration phase remains controller_stub until localization, navigation, and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.tournament.info.commands",
-          "status": "mock_fixture",
-          "notes": "Return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "The registered sgame entry point opens the native RmlUi route, and the standardized backplate is its single return affordance."
         }
       ]
     },
@@ -942,18 +958,19 @@
       "group": "session",
       "document": "session/tourney_mapchoices.rml",
       "document_id": "session-tourney-mapchoices",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:tourney_mapchoices",
       "legacy_surface": "src/game/cgame/ui/worr.json menu tourney_mapchoices plus tournament map-choice publisher",
       "current_surface": "RmlUi tournament map choices page",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.tournament.mapchoices",
       "entry_points": [
@@ -964,39 +981,39 @@
         "session.tournament.mapchoices",
         "session.tournament.mapchoices.lines"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves ten map-choice line cvar bindings, repeated-row list intent, visibility gates, and return behavior while the legacy menu fallback remains authoritative; no live tournament controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live native sgame-published ten-line map-order report with deterministic empty-state copy, conditional rows, and one standardized return affordance. Seeded 960x720 OpenGL evidence was accepted on 2026-07-13; the central migration phase remains controller_stub until localization, navigation, and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.tournament.mapchoices.commands",
-          "status": "mock_fixture",
-          "notes": "Return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "The registered sgame route command opens the report, and the standardized backplate is its single return affordance."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.tournament.mapchoices.cvars",
-          "status": "mock_fixture",
-          "notes": "Map-choice line labels declare static data-label-cvar hooks for later cvar label binding."
+          "status": "live_provider",
+          "notes": "All ten map-choice rows consume the ui_tourney_mapchoice_line_* cvars published immediately before the route opens."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.tournament.mapchoices.conditions",
-          "status": "mock_fixture",
-          "notes": "Map-choice line regions declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "Native cvar conditions suppress unused rows while preserving a direct-route empty-state fallback."
         },
         {
           "category": "list_provider",
           "contract": "worr.rml.controller.list_provider.mock",
           "fixture": "list-provider.mock.json",
           "model": "session.tournament.mapchoices.lines",
-          "status": "mock_fixture",
-          "notes": "The repeated map-choice rows declare a static list-provider contract for later tournament map list wiring."
+          "status": "live_provider",
+          "notes": "The fixed ten-row provider renders the complete bounded server-published map order without transferring tournament ownership into cgame."
         }
       ]
     },
@@ -1006,59 +1023,53 @@
       "group": "session",
       "document": "session/tourney_veto.rml",
       "document_id": "session-tourney-veto",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:tourney_veto",
       "legacy_surface": "src/game/cgame/ui/worr.json menu tourney_veto plus tournament veto publisher",
       "current_surface": "RmlUi tournament veto page",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.tournament.veto",
       "entry_points": [
-        "pushmenu tourney_veto"
+        "pushmenu tourney_veto",
+        "worr_tourney_veto"
       ],
       "data_models": [
         "session.tournament.veto"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves inactive, turn, wait, pick, ban, picks-needed, maps-remaining, cvar-bound labels, candidate-list intent, and return hooks while the legacy menu fallback remains authoritative; no live tournament controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live native tournament-veto state route for inactive, waiting, and actor-turn branches. Pick and Ban open the shared live ui_list child provider, whose server-owned entries dispatch the validated veto commands. Seeded 960x720 OpenGL evidence was accepted on 2026-07-13; the central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.tournament.veto.commands",
-          "status": "mock_fixture",
-          "notes": "Pick, ban, and return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Pick and Ban dispatch registered sgame commands into the live ui_list child route; the standardized backplate is the single return affordance."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.tournament.veto.cvars",
-          "status": "mock_fixture",
-          "notes": "Tournament veto status, wait, turn, picks-needed, and maps-remaining labels declare static data-label-cvar hooks for later cvar label binding."
+          "status": "live_provider",
+          "notes": "The route consumes the complete ui_tourney_veto_* state published by sgame for the current client and veto turn."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.tournament.veto.conditions",
-          "status": "mock_fixture",
-          "notes": "Inactive, turn, wait, pick, ban, picks-needed, and maps-remaining regions declare data-visible-if gates for later conditional-state wiring."
-        },
-        {
-          "category": "list_provider",
-          "contract": "worr.rml.controller.list_provider.mock",
-          "fixture": "list-provider.mock.json",
-          "model": "session.tournament.veto.maps",
-          "status": "mock_fixture",
-          "notes": "The veto candidate state declares a static list-provider contract for later tournament map candidate wiring."
+          "status": "live_provider",
+          "notes": "Native cvar conditions select exactly the inactive, waiting, or actionable turn state and independently gate Ban when further bans would invalidate the series."
         }
       ]
     },
@@ -1068,52 +1079,55 @@
       "group": "session",
       "document": "session/tourney_replay_confirm.rml",
       "document_id": "session-tourney-replay-confirm",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:tourney_replay_confirm",
       "legacy_surface": "src/game/cgame/ui/worr.json menu tourney_replay_confirm plus replay command-cvar publisher",
       "current_surface": "RmlUi tournament replay confirmation prompt",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.tournament.replay_confirm",
       "entry_points": [
         "pushmenu tourney_replay_confirm",
-        "worr_tourney_replay_menu"
+        "worr_tourney_replay_menu",
+        "worr_tourney_replay_confirm",
+        "worr_tourney_replay"
       ],
       "data_models": [
         "session.tournament.replay_confirm"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves replay prompt binding, command-cvar confirmation, cancel, and close behavior while the legacy menu fallback remains authoritative; no live tournament controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live admin-only destructive replay confirmation reached through the shared live ui_list provider. Sgame publishes the selected game prompt and exact replay command, the warning explains result truncation, No receives safe default focus, and Yes resets the series through the validated native command. Seeded 960x720 OpenGL evidence was accepted on 2026-07-13; the central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.tournament.replay_confirm.commands",
-          "status": "mock_fixture",
-          "notes": "Replay cancel/return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "No closes the popup safely; Yes dispatches the sgame-published admin replay command and the native handler closes the active menu after applying or reporting the result."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.tournament.replay_confirm.cvars",
-          "status": "mock_fixture",
-          "notes": "The replay confirmation command declares a data-command-cvar hook for later cvar-backed command binding."
+          "status": "live_provider",
+          "notes": "The prompt and exact worr_tourney_replay game-number command are published by sgame immediately before the popup opens."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.tournament.replay_confirm.conditions",
-          "status": "mock_fixture",
-          "notes": "Replay prompt regions declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "The native cvar condition exposes the selected-game warning only when sgame has supplied a valid replay prompt."
         }
       ]
     },
@@ -1123,12 +1137,12 @@
       "group": "session",
       "document": "session/vote_menu.rml",
       "document_id": "session-vote-menu",
-      "status": "starter",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:vote_menu",
       "legacy_surface": "src/game/cgame/ui/worr.json menu vote_menu plus session vote publisher",
       "current_surface": "RmlUi active vote menu",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
@@ -1149,11 +1163,11 @@
           "contract": "worr.rml.session_multiplayer.mock",
           "fixture": "session-multiplayer.mock.json",
           "model": "session.vote.commands",
-          "status": "mock_fixture",
-          "notes": "Active vote controls expose static yes, no, and close command hooks against the existing session multiplayer mock fixture."
+          "status": "live_provider",
+          "notes": "Yes and No dispatch through the native command listener, while close/back preserves the live sgame vote-menu cleanup command."
         }
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves active vote title, description, caller, counts, time remaining, yes/no, and close hooks; no live vote controller, runtime open path, screenshots, or parity is claimed."
+      "notes": "Live native sgame-published vote-state and command provider with installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
     },
     {
       "id": "map_selector",
@@ -1161,61 +1175,63 @@
       "group": "session",
       "document": "session/map_selector.rml",
       "document_id": "session-map-selector",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:map_selector",
       "legacy_surface": "src/game/cgame/ui/worr.json menu map_selector plus sgame map-selector publisher",
       "current_surface": "RmlUi end-of-match map selector",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T01",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.map_selector",
       "entry_points": [
-        "pushmenu map_selector"
+        "pushmenu map_selector",
+        "MapSelectorBegin"
       ],
       "data_models": [
         "session.map_selector",
         "session.map_selector.options"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves title, three option labels, option visibility, vote commands, acknowledgement text, countdown, close command, repeated-option list intent, and close behavior while the legacy menu fallback remains authoritative; no live map-selector controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live native server-driven end-of-match map vote with three sgame-published candidates, per-client acknowledgement, a shrinking bar plus numeric seconds remaining, and persistent per-vote dismissal. Seeded 960x720 OpenGL evidence was accepted on 2026-07-13; the central migration phase remains controller_stub until connected vote/finalization automation and native renderer parity gates are accepted.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.map_selector.commands",
-          "status": "mock_fixture",
-          "notes": "Map vote and close controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "Each candidate dispatches its validated zero-based sgame vote command; Back/Escape/Mouse2 run the close-cleanup command and suppress automatic reopen for the current vote."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.map_selector.cvars",
-          "status": "mock_fixture",
-          "notes": "Map option labels declare static data-label-cvar hooks for later cvar label binding."
+          "status": "live_provider",
+          "notes": "The native bridge consumes the title prompt, three candidate labels, acknowledgement lines, numeric time remaining, and countdown bar republished by sgame every 200 ms."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.map_selector.conditions",
-          "status": "mock_fixture",
-          "notes": "Title, option, acknowledgement, and countdown regions declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "Native conditions switch between candidate and acknowledgement states, suppress the empty-state after voting, and keep the countdown visible through zero seconds."
         },
         {
           "category": "list_provider",
           "contract": "worr.rml.controller.list_provider.mock",
           "fixture": "list-provider.mock.json",
           "model": "session.map_selector.options",
-          "status": "mock_fixture",
-          "notes": "The repeated map option rows declare a static list-provider contract for later end-of-match map option wiring."
+          "status": "live_provider",
+          "notes": "The bounded three-option provider consumes the exact candidate array published by the active server map-selector lifecycle."
         }
       ]
     },
@@ -1225,18 +1241,20 @@
       "group": "session",
       "document": "session/match_stats.rml",
       "document_id": "session-match-stats",
-      "status": "starter_round3",
+      "status": "live_provider",
       "source_menu": "src/game/cgame/ui/worr.json:match_stats",
       "legacy_surface": "src/game/cgame/ui/worr.json menu match_stats plus match stats publisher",
       "current_surface": "RmlUi match stats page",
       "source_owner": "cgame_ui_json_sgame_session",
-      "migration_phase": "controller_stub",
+      "migration_phase": "parity_ready",
       "task_ids": [
+        "FR-09-T05",
         "FR-09-T08",
         "FR-09-T09",
         "FR-07-T02",
         "DV-03-T07",
-        "DV-04-T02"
+        "DV-04-T02",
+        "DV-07-T04"
       ],
       "controller_scope": "session.match_stats",
       "entry_points": [
@@ -1244,41 +1262,41 @@
         "worr_matchstats_menu"
       ],
       "data_models": [
-        "session.match_stats.lines"
+        "session.match_stats.snapshot"
       ],
-      "notes": "Controller-stub metadata only. Static RML preserves the fixed match-stats line cvar bindings, open command, close command, repeated-stat list intent, and return behavior while the legacy menu fallback remains authoritative; no live match-stats controller, runtime RmlUi open path, screenshots, or parity is claimed.",
+      "notes": "Live sgame provider publishes the player plus nine semantic combat, damage, and accuracy values every second while open; the RmlUi route presents the fixed snapshot with a truthful empty state and one connection-aware close path while legacy line cvars remain available for the JSON fallback.",
       "controller_contracts": [
         {
           "category": "command_action",
           "contract": "worr.rml.controller.command_action.mock",
           "fixture": "command-action.mock.json",
           "model": "session.match_stats.commands",
-          "status": "mock_fixture",
-          "notes": "Close/return controls expose static data-command hooks for later command dispatch wiring."
+          "status": "live_provider",
+          "notes": "The registered intermission-safe open/close commands own per-client refresh state, and the single RmlUi backplate preserves connected cleanup without disconnected unknown-command noise."
         },
         {
           "category": "cvar_binding",
           "contract": "worr.rml.controller.cvar_binding.mock",
           "fixture": "cvar-binding.mock.json",
           "model": "session.match_stats.cvars",
-          "status": "mock_fixture",
-          "notes": "Match-stat rows declare static data-bind-cvar hooks for later cvar label binding."
+          "status": "live_provider",
+          "notes": "Ten semantic cvars expose player identity plus all nine live stat values; sixteen compatibility line cvars continue to feed the legacy JSON fallback."
         },
         {
           "category": "condition_state",
           "contract": "worr.rml.controller.condition_state.mock",
           "fixture": "condition-state.mock.json",
           "model": "session.match_stats.conditions",
-          "status": "mock_fixture",
-          "notes": "Match-stat line regions declare data-visible-if gates for later conditional-state wiring."
+          "status": "live_provider",
+          "notes": "The live snapshot and direct-route unavailable state are mutually exclusive based on the server-published player value."
         },
         {
           "category": "list_provider",
           "contract": "worr.rml.controller.list_provider.mock",
           "fixture": "list-provider.mock.json",
-          "model": "session.match_stats.lines",
-          "status": "mock_fixture",
-          "notes": "The fixed match-stat rows declare a static list-provider contract for later match-stat list wiring."
+          "model": "session.match_stats.snapshot",
+          "status": "live_provider",
+          "notes": "The bounded fixed-record provider groups the authoritative snapshot into Combat, Damage, and Accuracy cards without client-side recomputation."
         }
       ]
     }

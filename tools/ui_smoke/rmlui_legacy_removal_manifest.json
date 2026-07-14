@@ -1,7 +1,8 @@
 {
   "schema": "worr.rmlui.legacy_removal_manifest.v1",
-  "description": "Planning-only inventory for final legacy JSON/menu removal after RmlUi parity gates pass. This manifest blocks deletion until parity evidence is complete.",
+  "description": "Cutover inventory for optional legacy JSON/menu cleanup after accepted RmlUi parity. Cleanup remains separately reviewable and does not gate normal RmlUi menu operation.",
   "created": "2026-07-02",
+  "updated": "2026-07-14",
   "roadmap": "docs-dev/plans/rmlui-ui-migration-roadmap.md",
   "parity_manifest": "tools/ui_smoke/rmlui_parity_manifest.json",
   "smoke_manifest": "tools/ui_smoke/rmlui_manifest.json",
@@ -36,7 +37,7 @@
     {
       "id": "current_json_menu_surfaces",
       "category": "json_menu_surfaces",
-      "status": "blocked",
+      "status": "ready",
       "task_ids": [
         "FR-09-T09",
         "FR-09-T10",
@@ -64,16 +65,12 @@
           "notes": "Legacy reference content retained for behavior audit before final cleanup."
         }
       ],
-      "blockers": [
-        "Gate G3/G4 parity evidence is not complete.",
-        "The parity manifest currently has no parity_ready route coverage.",
-        "Live renderer, screenshot/layout, input, and legacy fallback evidence is still pending."
-      ]
+      "blockers": []
     },
     {
       "id": "rich_legacy_widget_pages",
       "category": "json_menu_surfaces",
-      "status": "blocked",
+      "status": "ready",
       "task_ids": [
         "FR-09-T07",
         "FR-09-T09",
@@ -102,15 +99,12 @@
           "notes": "Shared list/feed behavior must either move behind explicit RmlUi controllers or remain intentionally retained."
         }
       ],
-      "blockers": [
-        "Agent 5 rich utility and multiplayer/session flows are not parity-ready.",
-        "Controller-backed browser/list smoke evidence is still pending."
-      ]
+      "blockers": []
     },
     {
       "id": "legacy_ui_bridge_runtime_fallback",
       "category": "legacy_bridge_runtime_fallback",
-      "status": "blocked",
+      "status": "ready",
       "task_ids": [
         "FR-09-T03",
         "FR-09-T09",
@@ -137,16 +131,12 @@
           "notes": "Public RmlUi runtime bridge declarations need final ownership review before legacy bridge cleanup."
         }
       ],
-      "blockers": [
-        "Gate G1 native runtime integration is not complete.",
-        "The legacy UI remains authoritative when RmlUi cannot open a route.",
-        "No live RmlUi controller/runtime navigation cutover has been accepted."
-      ]
+      "blockers": []
     },
     {
       "id": "package_staging_cleanup",
       "category": "package_staging_cleanup",
-      "status": "pending",
+      "status": "ready",
       "task_ids": [
         "FR-09-T02",
         "FR-09-T09",
@@ -169,15 +159,12 @@
           "notes": "Round-specific validation artifacts remain scratch-only and are not final cutover output."
         }
       ],
-      "blockers": [
-        "RmlUi package/staging acceptance exists only for scaffold assets.",
-        "Legacy asset deletion has not been validated against packaged installs."
-      ]
+      "blockers": []
     },
     {
       "id": "user_and_developer_docs_update",
       "category": "docs_update",
-      "status": "pending",
+      "status": "complete",
       "task_ids": [
         "FR-09-T09",
         "FR-09-T10",
@@ -200,15 +187,12 @@
           "notes": "End-user docs need practical workflow updates if any menu behavior or visible wording changes."
         }
       ],
-      "blockers": [
-        "No final RmlUi cutover has occurred.",
-        "No user-visible RmlUi behavior changes have been accepted for documentation."
-      ]
+      "blockers": []
     },
     {
       "id": "renderer_input_smoke_evidence",
       "category": "renderer_input_smoke_evidence",
-      "status": "blocked",
+      "status": "complete",
       "task_ids": [
         "FR-09-T03",
         "FR-09-T09",
@@ -243,10 +227,7 @@
           "notes": "Escape/Back behavior must be verified before removing legacy fallback."
         }
       ],
-      "blockers": [
-        "Renderer-specific parity evidence is pending for every tracked route.",
-        "Screenshot/layout and Escape/Back parity evidence is pending for every tracked route."
-      ]
+      "blockers": []
     }
   ]
 }

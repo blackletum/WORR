@@ -104,6 +104,45 @@ cvar_t      *net_qport;
 cvar_t      *net_maxmsglen;
 cvar_t      *net_chantype;
 
+static bool Netchan_ProcessAcknowledgement(netchan_t *chan,
+                                           unsigned sequence_ack,
+                                           bool reliable_ack)
+{
+    const net_sequence_ack_result_t result = NetSequence_ClassifyAck(
+        sequence_ack, chan->incoming_acknowledged, chan->outgoing_sequence);
+
+    if (result == NET_SEQUENCE_ACK_STALE) {
+        chan->stale_acknowledgements++;
+        SHOWDROP("%s: ignored stale acknowledgement %u at %u\n",
+                 NET_AdrToString(&chan->remote_address), sequence_ack,
+                 chan->incoming_acknowledged);
+        return true;
+    }
+
+    if (result == NET_SEQUENCE_ACK_FUTURE) {
+        chan->future_acknowledgements++;
+        SHOWDROP("%s: rejected future acknowledgement %u before %u\n",
+                 NET_AdrToString(&chan->remote_address), sequence_ack,
+                 chan->outgoing_sequence);
+        return false;
+    }
+
+    if (!NetSequence_ReliableAckConsistent(
+            sequence_ack, reliable_ack, chan->incoming_acknowledged,
+            chan->incoming_reliable_acknowledged)) {
+        chan->conflicting_acknowledgements++;
+        SHOWDROP("%s: ignored conflicting reliable acknowledgement at %u\n",
+                 NET_AdrToString(&chan->remote_address), sequence_ack);
+        return true;
+    }
+
+    chan->incoming_acknowledged = sequence_ack;
+    chan->incoming_reliable_acknowledged = reliable_ack;
+    if (reliable_ack == chan->reliable_sequence)
+        chan->reliable_length = 0;
+    return true;
+}
+
 // allow either 0 (no hard limit), or an integer between 512 and 4086
 static void net_maxmsglen_changed(cvar_t *self)
 {
@@ -308,7 +347,7 @@ static bool NetchanOld_Process(netchan_t *chan)
 //
 // discard stale or duplicated packets
 //
-    if (sequence <= chan->incoming_sequence) {
+    if (!NetSequence_IsNewer(sequence, chan->incoming_sequence)) {
         SHOWDROP("%s: out of order packet %u at %u\n",
                  NET_AdrToString(&chan->remote_address),
                  sequence, chan->incoming_sequence);
@@ -329,15 +368,13 @@ static bool NetchanOld_Process(netchan_t *chan)
 // if the current outgoing reliable message has been acknowledged
 // clear the buffer to make way for the next
 //
-    chan->incoming_reliable_acknowledged = reliable_ack;
-    if (reliable_ack == chan->reliable_sequence)
-        chan->reliable_length = 0;   // it has been received
+    if (!Netchan_ProcessAcknowledgement(chan, sequence_ack, reliable_ack))
+        return false;
 
 //
 // if this message contains a reliable message, bump incoming_reliable_sequence
 //
     chan->incoming_sequence = sequence;
-    chan->incoming_acknowledged = sequence_ack;
     if (reliable_message) {
         chan->reliable_ack_pending = true;
         chan->incoming_reliable_sequence ^= 1;
@@ -450,8 +487,19 @@ static int NetchanNew_Transmit(netchan_t *chan, size_t length, const void *data,
 {
     sizebuf_t   send;
     byte        send_buf[MAX_PACKETLEN];
+    byte        staged_application[MAX_PACKETLEN_WRITABLE];
     bool        send_reliable;
     unsigned    w1, w2;
+    uint32_t    application_offset, legacy_application_bytes, accepted_copies;
+    netchan_app_tx_prepare_fn prepare;
+    netchan_app_tx_completion_fn completion;
+    void *hook_opaque;
+    netchan_app_tx_prepare_result_t prepare_result;
+    netchan_app_tx_completion_result_t completion_result;
+    netchan_app_tx_prepare_info_v1_t prepare_info;
+    netchan_app_tx_prepare_output_v1_t prepare_output;
+    netchan_app_tx_completion_info_v1_t completion_info;
+    bool prepared_application;
 
     if (chan->fragment_pending) {
         return Netchan_TransmitNextFragment(chan);
@@ -509,6 +557,8 @@ static int NetchanNew_Transmit(netchan_t *chan, size_t length, const void *data,
     }
 #endif
 
+    application_offset = send.cursize;
+
     // copy the reliable message to the packet first
     if (send_reliable) {
         chan->last_reliable_sequence = chan->outgoing_sequence;
@@ -517,6 +567,58 @@ static int NetchanNew_Transmit(netchan_t *chan, size_t length, const void *data,
 
     // add the unreliable part
     SZ_Write(&send, data, length);
+
+    /*
+     * This is deliberately after complete reliable+unreliable assembly and
+     * deliberately absent from Netchan_TransmitNextFragment.  Keep the
+     * original send buffer untouched until a staged candidate validates.
+     */
+    prepare = chan->app_tx_prepare;
+    completion = chan->app_tx_completion;
+    hook_opaque = chan->app_tx_opaque;
+    prepared_application = false;
+    completion_result = NETCHAN_APP_TX_COMPLETION_PREPARE_INVALID;
+    legacy_application_bytes = send.cursize - application_offset;
+
+    if (prepare && completion) {
+        memset(&prepare_info, 0, sizeof(prepare_info));
+        prepare_info.abi_version = NETCHAN_APP_TX_HOOK_ABI_V1;
+        prepare_info.struct_size = (uint32_t)sizeof(prepare_info);
+        prepare_info.outgoing_sequence = chan->outgoing_sequence;
+        prepare_info.max_application_bytes = chan->maxpacketlen;
+        prepare_info.reliable_bytes = send_reliable ? chan->reliable_length : 0;
+        prepare_info.unreliable_bytes = (uint32_t)length;
+        prepare_info.legacy_application_bytes = legacy_application_bytes;
+        prepare_info.packet_copies =
+            (uint32_t)(numpackets > 0 ? numpackets : 0);
+
+        memset(&prepare_output, 0, sizeof(prepare_output));
+        prepare_output.abi_version = NETCHAN_APP_TX_HOOK_ABI_V1;
+        prepare_output.struct_size = (uint32_t)sizeof(prepare_output);
+        memset(staged_application, 0, sizeof(staged_application));
+
+        prepare_result = prepare(hook_opaque, &prepare_info,
+                                 send.data + application_offset,
+                                 staged_application, &prepare_output);
+
+        if (prepare_result != NETCHAN_APP_TX_PREPARE_BYPASS) {
+            prepared_application =
+                prepare_result == NETCHAN_APP_TX_PREPARE_PREPARED &&
+                prepare_output.abi_version == NETCHAN_APP_TX_HOOK_ABI_V1 &&
+                prepare_output.struct_size == (uint32_t)sizeof(prepare_output) &&
+                prepare_output.reserved0 == 0 &&
+                prepare_output.application_bytes <= chan->maxpacketlen;
+
+            if (prepared_application) {
+                send.cursize = application_offset;
+                SZ_Write(&send, staged_application,
+                         prepare_output.application_bytes);
+            }
+        }
+    } else {
+        prepare_result = NETCHAN_APP_TX_PREPARE_BYPASS;
+        memset(&prepare_output, 0, sizeof(prepare_output));
+    }
 
     SHOWPACKET("send %4u : s=%u ack=%u rack=%d",
                send.cursize,
@@ -529,13 +631,37 @@ static int NetchanNew_Transmit(netchan_t *chan, size_t length, const void *data,
     SHOWPACKET("\n");
 
     // send the datagram
+    accepted_copies = 0;
     for (int i = 0; i < numpackets; i++) {
-        NET_SendPacket(chan->sock, send.data, send.cursize, &chan->remote_address);
+        if (NET_SendPacket(chan->sock, send.data, send.cursize,
+                           &chan->remote_address)) {
+            accepted_copies++;
+        }
     }
 
     chan->outgoing_sequence++;
     chan->reliable_ack_pending = false;
     chan->last_sent = com_localTime;
+
+    if (prepare_result != NETCHAN_APP_TX_PREPARE_BYPASS) {
+        if (prepared_application) {
+            completion_result = accepted_copies
+                ? NETCHAN_APP_TX_COMPLETION_ACCEPTED
+                : NETCHAN_APP_TX_COMPLETION_NOT_ACCEPTED;
+        }
+
+        memset(&completion_info, 0, sizeof(completion_info));
+        completion_info.abi_version = NETCHAN_APP_TX_HOOK_ABI_V1;
+        completion_info.struct_size = (uint32_t)sizeof(completion_info);
+        completion_info.result = (uint32_t)completion_result;
+        completion_info.packet_copies =
+            (uint32_t)(numpackets > 0 ? numpackets : 0);
+        completion_info.accepted_copies = accepted_copies;
+        completion_info.application_bytes = send.cursize - application_offset;
+        completion_info.token = prepare_output.token;
+        completion(hook_opaque, &completion_info,
+                   send.data + application_offset);
+    }
 
     return send.cursize * numpackets;
 }
@@ -545,7 +671,7 @@ static int NetchanNew_Transmit(netchan_t *chan, size_t length, const void *data,
 NetchanNew_Process
 =================
 */
-static bool NetchanNew_Process(netchan_t *chan)
+static netchan_process_result_t NetchanNew_Process(netchan_t *chan)
 {
     unsigned    sequence, sequence_ack, fragment_offset, length;
     bool        reliable_message, reliable_ack, fragmented_message, more_fragments;
@@ -578,7 +704,7 @@ static bool NetchanNew_Process(netchan_t *chan)
     if (msg_read.readcount > msg_read.cursize) {
         SHOWDROP("%s: message too short\n",
                  NET_AdrToString(&chan->remote_address));
-        return false;
+        return NETCHAN_PROCESS_NO_APPLICATION;
     }
 
     SHOWPACKET("recv %4u : s=%u ack=%u rack=%d",
@@ -595,11 +721,11 @@ static bool NetchanNew_Process(netchan_t *chan)
 //
 // discard stale or duplicated packets
 //
-    if (sequence <= chan->incoming_sequence) {
+    if (!NetSequence_IsNewer(sequence, chan->incoming_sequence)) {
         SHOWDROP("%s: out of order packet %u at %u\n",
                  NET_AdrToString(&chan->remote_address),
                  sequence, chan->incoming_sequence);
-        return false;
+        return NETCHAN_PROCESS_NO_APPLICATION;
     }
 
 //
@@ -616,10 +742,8 @@ static bool NetchanNew_Process(netchan_t *chan)
 // if the current outgoing reliable message has been acknowledged
 // clear the buffer to make way for the next
 //
-    chan->incoming_reliable_acknowledged = reliable_ack;
-    if (reliable_ack == chan->reliable_sequence) {
-        chan->reliable_length = 0;   // it has been received
-    }
+    if (!Netchan_ProcessAcknowledgement(chan, sequence_ack, reliable_ack))
+        return NETCHAN_PROCESS_NO_APPLICATION;
 
 //
 // parse fragment header, if any
@@ -634,25 +758,25 @@ static bool NetchanNew_Process(netchan_t *chan)
         if (fragment_offset < chan->fragment_in.cursize) {
             SHOWDROP("%s: out of order fragment at %u\n",
                      NET_AdrToString(&chan->remote_address), sequence);
-            return false;
+            return NETCHAN_PROCESS_NO_APPLICATION;
         }
 
         if (fragment_offset > chan->fragment_in.cursize) {
             SHOWDROP("%s: dropped fragment(s) at %u\n",
                      NET_AdrToString(&chan->remote_address), sequence);
-            return false;
+            return NETCHAN_PROCESS_NO_APPLICATION;
         }
 
         length = msg_read.cursize - msg_read.readcount;
         if (length > chan->fragment_in.maxsize - chan->fragment_in.cursize) {
             SHOWDROP("%s: oversize fragment at %u\n",
                      NET_AdrToString(&chan->remote_address), sequence);
-            return false;
+            return NETCHAN_PROCESS_NO_APPLICATION;
         }
 
         SZ_Write(&chan->fragment_in, msg_read.data + msg_read.readcount, length);
         if (more_fragments) {
-            return false;
+            return NETCHAN_PROCESS_NO_APPLICATION;
         }
 
         // message has been successfully assembled
@@ -662,7 +786,6 @@ static bool NetchanNew_Process(netchan_t *chan)
     }
 
     chan->incoming_sequence = sequence;
-    chan->incoming_acknowledged = sequence_ack;
 
 //
 // if this message contains a reliable message, bump incoming_reliable_sequence
@@ -680,15 +803,74 @@ static bool NetchanNew_Process(netchan_t *chan)
     chan->total_dropped += chan->dropped;
     chan->total_received += chan->dropped + 1;
 
-    return true;
+    if (chan->app_rx) {
+        const sizebuf_t saved = msg_read;
+        const uint32_t application_bytes =
+            saved.cursize - saved.readcount;
+        netchan_app_rx_info_v1_t info;
+        netchan_app_rx_output_v1_t output;
+        netchan_app_rx_fn receive = chan->app_rx;
+        void *hook_opaque = chan->app_rx_opaque;
+        netchan_app_rx_result_t result;
+        bool descriptor_intact;
+
+        memset(&info, 0, sizeof(info));
+        info.abi_version = NETCHAN_APP_RX_HOOK_ABI_V1;
+        info.struct_size = (uint32_t)sizeof(info);
+        info.incoming_sequence = sequence;
+        info.message_bytes = saved.cursize;
+        info.application_offset = saved.readcount;
+        info.application_bytes = application_bytes;
+        if (reliable_message)
+            info.flags |= NETCHAN_APP_RX_FLAG_RELIABLE;
+        if (fragmented_message)
+            info.flags |= NETCHAN_APP_RX_FLAG_REASSEMBLED;
+
+        memset(&output, 0, sizeof(output));
+        output.abi_version = NETCHAN_APP_RX_HOOK_ABI_V1;
+        output.struct_size = (uint32_t)sizeof(output);
+
+        result = receive(hook_opaque, &info,
+                         saved.data + saved.readcount, &output);
+
+        /* A callback never owns the shared reader descriptor. */
+        descriptor_intact =
+            memcmp(&msg_read, &saved, sizeof(saved)) == 0;
+        msg_read = saved;
+        if (descriptor_intact && result == NETCHAN_APP_RX_BYPASS)
+            return NETCHAN_PROCESS_APPLICATION_READY;
+
+        if (descriptor_intact &&
+            result == NETCHAN_APP_RX_EXPOSE_LEGACY &&
+            output.abi_version == NETCHAN_APP_RX_HOOK_ABI_V1 &&
+            output.struct_size == (uint32_t)sizeof(output) &&
+            output.reserved0 == 0 &&
+            output.legacy_bytes <= application_bytes) {
+            msg_read.cursize = saved.readcount + output.legacy_bytes;
+            return NETCHAN_PROCESS_APPLICATION_READY;
+        }
+
+        /* Never expose rejected or structurally invalid suffix bytes. */
+        msg_read.cursize = saved.readcount;
+        return NETCHAN_PROCESS_APPLICATION_REJECTED;
+    }
+
+    return NETCHAN_PROCESS_APPLICATION_READY;
 }
 
-bool Netchan_Process(netchan_t *chan)
+netchan_process_result_t Netchan_ProcessEx(netchan_t *chan)
 {
     if (chan->type)
         return NetchanNew_Process(chan);
 
-    return NetchanOld_Process(chan);
+    return NetchanOld_Process(chan)
+               ? NETCHAN_PROCESS_APPLICATION_READY
+               : NETCHAN_PROCESS_NO_APPLICATION;
+}
+
+bool Netchan_Process(netchan_t *chan)
+{
+    return Netchan_ProcessEx(chan) == NETCHAN_PROCESS_APPLICATION_READY;
 }
 
 int Netchan_Transmit(netchan_t *chan, size_t length, const void *data, int numpackets)
@@ -762,6 +944,45 @@ void Netchan_Setup(netchan_t *chan, netsrc_t sock, netchan_type_t type,
     default:
         Q_assert(!"bad type");
     }
+}
+
+/*
+==============================
+Netchan_SetApplicationTxHook
+==============================
+*/
+bool Netchan_SetApplicationTxHook(netchan_t *chan,
+                                  netchan_app_tx_prepare_fn prepare,
+                                  netchan_app_tx_completion_fn completion,
+                                  void *opaque)
+{
+    if (!chan || chan->type != NETCHAN_NEW)
+        return false;
+
+    if (!!prepare != !!completion)
+        return false;
+
+    chan->app_tx_prepare = prepare;
+    chan->app_tx_completion = completion;
+    chan->app_tx_opaque = prepare ? opaque : NULL;
+    return true;
+}
+
+/*
+==============================
+Netchan_SetApplicationRxHook
+==============================
+*/
+bool Netchan_SetApplicationRxHook(netchan_t *chan,
+                                  netchan_app_rx_fn receive,
+                                  void *opaque)
+{
+    if (!chan || chan->type != NETCHAN_NEW)
+        return false;
+
+    chan->app_rx = receive;
+    chan->app_rx_opaque = receive ? opaque : NULL;
+    return true;
 }
 
 /*

@@ -7,37 +7,51 @@
   </head>
   <body id="singleplayer-main" data-route-id="singleplayer" data-route-group="singleplayer" data-route-version="1" data-document-status="first-round-scaffold" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen singleplayer-screen" id="singleplayer-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="singleplayer-main-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="singleplayer-main-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="singleplayer-main-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Single Player</h1>
-        <p>Start a campaign episode or level, or manage saved games.</p>
+        <div class="worr-titlerow"><button id="singleplayer-main-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="m_single_player">Single Player</h1></div>
+        <p data-loc-key="worr_ui_start_a_campaign_episode_or_level_or_manage_sav">Start a campaign episode or level, or manage saved games.</p>
       </header>
 
       <main class="menu-stack" id="singleplayer-menu-stack" data-component="common.components.menu_frame">
         <section class="selector-section" id="singleplayer-episode-section" data-component="common.components.selector_list">
-          <label for="singleplayer-episode">Episode</label>
+          <label for="singleplayer-episode" data-loc-key="m_episode">Episode</label>
           <select id="singleplayer-episode" data-model="singleplayer.episodes" data-cvar="_mapdb_episode" data-menu-sound-change="change">
-            <option value="">Episode</option>
+            <option value="" data-loc-key="m_episode">Episode</option>
           </select>
-          <button id="singleplayer-start-episode" class="ui-button-primary" type="button" data-command="set _mapdb_type episode; pushmenu skill_select" data-route-target="skill_select" data-enable-if="_mapdb_episode!=-1" data-menu-sound="open">Start Episode</button>
+          <button id="singleplayer-start-episode" class="ui-button-primary" type="button" data-command="set _mapdb_type episode; pushmenu skill_select" data-route-target="skill_select" data-enable-if="_mapdb_episode!=-1" data-menu-sound="open" data-loc-key="worr_ui_start_episode">Start Episode</button>
         </section>
 
         <section class="selector-section" id="singleplayer-level-section" data-component="common.components.selector_list">
-          <label for="singleplayer-level">Level</label>
+          <label for="singleplayer-level" data-loc-key="m_eou_level">Level</label>
           <select id="singleplayer-level" data-model="singleplayer.units" data-cvar="_mapdb_level" data-menu-sound-change="change">
-            <option value="">Level</option>
+            <option value="" data-loc-key="m_eou_level">Level</option>
           </select>
-          <button id="singleplayer-start-level" class="ui-button-primary" type="button" data-command="set _mapdb_type level; pushmenu skill_select" data-route-target="skill_select" data-enable-if="_mapdb_level!=-1" data-menu-sound="open">Start Level</button>
+          <button id="singleplayer-start-level" class="ui-button-primary" type="button" data-command="set _mapdb_type level; pushmenu skill_select" data-route-target="skill_select" data-enable-if="_mapdb_level!=-1" data-menu-sound="open" data-loc-key="worr_ui_start_level">Start Level</button>
         </section>
 
         <nav class="menu-actions" id="singleplayer-save-load-actions" data-component="common.components.save_slot">
-          <button id="singleplayer-load" type="button" data-command="pushmenu loadgame" data-route-target="loadgame" data-menu-sound="open">Load Game</button>
-          <button id="singleplayer-save" type="button" data-command="pushmenu savegame" data-route-target="savegame" data-enable-if="ingame;deathmatch=0;coop=0" data-menu-sound="open">Save Game</button>
+          <button id="singleplayer-load" type="button" data-command="pushmenu loadgame" data-route-target="loadgame" data-menu-sound="open" data-loc-key="m_load_game">Load Game</button>
+          <button id="singleplayer-save" type="button" data-command="pushmenu savegame" data-route-target="savegame" data-enable-if="ingame;deathmatch=0;coop=0" data-menu-sound="open" data-loc-key="m_save_game">Save Game</button>
         </nav>
       </main>
 
       <footer class="menu-footer" id="singleplayer-menu-footer">
-        <button id="singleplayer-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="singleplayer-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="singleplayer-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="singleplayer-main-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

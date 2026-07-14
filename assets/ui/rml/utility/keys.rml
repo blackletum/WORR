@@ -5,61 +5,265 @@
     <link type="text/rcss" href="../common/theme/utility.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="utility-keys" data-route-id="keys" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="utility-keys" data-route-id="keys" data-route-group="utility" data-route-version="2" data-document-status="live-provider" data-controller="native-keybind-capture" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen" id="keys-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="utility-keys-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="utility-keys-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="utility-keys-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="page-header">
-        <h1>Key Bindings</h1>
-        <p id="keys-summary">
-          Set movement, combat, inventory, and interface controls.
+        <div class="worr-titlerow"><button id="utility-keys-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_key_bindings">Key Bindings</h1></div>
+        <p id="keys-summary" data-loc-key="worr_ui_choose_a_primary_or_alternate_chip_then_press_a">
+          Choose a Primary or Alternate chip, then press a key. Backspace clears; Escape cancels.
         </p>
       </header>
 
-      <section class="content" id="keys-content" data-model="utility.keybinds" data-controller="keybind.capture" data-action-type="capture">
+      <section class="content" id="keys-content" data-model="utility.keybinds" data-controller="native-keybind-capture" data-action-type="capture">
         <div class="bind-column" id="keys-column-1">
         <section class="bind-group" id="keys-combat" data-bind-group="combat">
-          <h2>Combat</h2>
-          <button id="keys-attack" type="button" data-bind-command="+attack" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Attack</span><span class="bind-key"></span></button>
-          <button id="keys-next-weapon" type="button" data-bind-command="weapnext" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Next Weapon</span><span class="bind-key"></span></button>
-          <button id="keys-previous-weapon" type="button" data-bind-command="weapprev" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Previous Weapon</span><span class="bind-key"></span></button>
+          <h2 data-loc-key="worr_ui_combat">Combat</h2>
+          <div class="bind-row" id="keys-attack-row">
+            <span class="bind-label" data-loc-key="m_attack">Attack</span>
+            <div class="bind-slots">
+              <button id="keys-attack" class="bind-slot" type="button" title="Primary binding" data-bind-command="+attack" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-attack-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+attack" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-next-weapon-row">
+            <span class="bind-label" data-loc-key="m_next_weapon">Next Weapon</span>
+            <div class="bind-slots">
+              <button id="keys-next-weapon" class="bind-slot" type="button" title="Primary binding" data-bind-command="weapnext" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-next-weapon-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="weapnext" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-previous-weapon-row">
+            <span class="bind-label" data-loc-key="m_prev_weapon">Previous Weapon</span>
+            <div class="bind-slots">
+              <button id="keys-previous-weapon" class="bind-slot" type="button" title="Primary binding" data-bind-command="weapprev" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-previous-weapon-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="weapprev" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
         </section>
 
         <section class="bind-group" id="keys-inventory" data-bind-group="inventory">
-          <h2>Inventory</h2>
-          <button id="keys-inven" type="button" data-bind-command="inven" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Inventory</span><span class="bind-key"></span></button>
-          <button id="keys-invuse" type="button" data-bind-command="invuse" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Use Item</span><span class="bind-key"></span></button>
-          <button id="keys-invdrop" type="button" data-bind-command="invdrop" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Drop Item</span><span class="bind-key"></span></button>
-          <button id="keys-invprev" type="button" data-bind-command="invprev" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Previous Item</span><span class="bind-key"></span></button>
-          <button id="keys-invnext" type="button" data-bind-command="invnext" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Next Item</span><span class="bind-key"></span></button>
+          <h2 data-loc-key="m_inventory_controls">Inventory</h2>
+          <div class="bind-row" id="keys-inven-row">
+            <span class="bind-label" data-loc-key="m_inventory_controls">Inventory</span>
+            <div class="bind-slots">
+              <button id="keys-inven" class="bind-slot" type="button" title="Primary binding" data-bind-command="inven" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-inven-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="inven" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-invuse-row">
+            <span class="bind-label" data-loc-key="m_invuse">Use Item</span>
+            <div class="bind-slots">
+              <button id="keys-invuse" class="bind-slot" type="button" title="Primary binding" data-bind-command="invuse" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-invuse-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="invuse" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-invdrop-row">
+            <span class="bind-label" data-loc-key="m_invdrop">Drop Item</span>
+            <div class="bind-slots">
+              <button id="keys-invdrop" class="bind-slot" type="button" title="Primary binding" data-bind-command="invdrop" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-invdrop-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="invdrop" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-invprev-row">
+            <span class="bind-label" data-loc-key="m_invprev">Previous Item</span>
+            <div class="bind-slots">
+              <button id="keys-invprev" class="bind-slot" type="button" title="Primary binding" data-bind-command="invprev" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-invprev-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="invprev" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-invnext-row">
+            <span class="bind-label" data-loc-key="m_invnext">Next Item</span>
+            <div class="bind-slots">
+              <button id="keys-invnext" class="bind-slot" type="button" title="Primary binding" data-bind-command="invnext" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-invnext-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="invnext" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
         </section>
         </div>
 
         <div class="bind-column" id="keys-column-2">
         <section class="bind-group" id="keys-movement" data-bind-group="movement">
-          <h2>Movement</h2>
-          <button id="keys-forward" type="button" data-bind-command="+forward" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Walk Forward</span><span class="bind-key"></span></button>
-          <button id="keys-backpedal" type="button" data-bind-command="+back" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Backpedal</span><span class="bind-key"></span></button>
-          <button id="keys-run" type="button" data-bind-command="+speed" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Run</span><span class="bind-key"></span></button>
-          <button id="keys-step-left" type="button" data-bind-command="+moveleft" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Step Left</span><span class="bind-key"></span></button>
-          <button id="keys-step-right" type="button" data-bind-command="+moveright" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Step Right</span><span class="bind-key"></span></button>
-          <button id="keys-jump" type="button" data-bind-command="+moveup" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Up / Jump</span><span class="bind-key"></span></button>
-          <button id="keys-crouch" type="button" data-bind-command="+movedown" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Down / Crouch</span><span class="bind-key"></span></button>
+          <h2 data-loc-key="worr_ui_movement">Movement</h2>
+          <div class="bind-row" id="keys-forward-row">
+            <span class="bind-label" data-loc-key="worr_ui_walk_forward">Walk Forward</span>
+            <div class="bind-slots">
+              <button id="keys-forward" class="bind-slot" type="button" title="Primary binding" data-bind-command="+forward" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-forward-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+forward" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-backpedal-row">
+            <span class="bind-label" data-loc-key="worr_ui_backpedal">Backpedal</span>
+            <div class="bind-slots">
+              <button id="keys-backpedal" class="bind-slot" type="button" title="Primary binding" data-bind-command="+back" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-backpedal-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+back" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-run-row">
+            <span class="bind-label" data-loc-key="worr_ui_run">Run</span>
+            <div class="bind-slots">
+              <button id="keys-run" class="bind-slot" type="button" title="Primary binding" data-bind-command="+speed" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-run-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+speed" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-step-left-row">
+            <span class="bind-label" data-loc-key="worr_ui_step_left">Step Left</span>
+            <div class="bind-slots">
+              <button id="keys-step-left" class="bind-slot" type="button" title="Primary binding" data-bind-command="+moveleft" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-step-left-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+moveleft" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-step-right-row">
+            <span class="bind-label" data-loc-key="worr_ui_step_right">Step Right</span>
+            <div class="bind-slots">
+              <button id="keys-step-right" class="bind-slot" type="button" title="Primary binding" data-bind-command="+moveright" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-step-right-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+moveright" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-jump-row">
+            <span class="bind-label" data-loc-key="worr_ui_up_jump">Up / Jump</span>
+            <div class="bind-slots">
+              <button id="keys-jump" class="bind-slot" type="button" title="Primary binding" data-bind-command="+moveup" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-jump-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+moveup" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-crouch-row">
+            <span class="bind-label" data-loc-key="worr_ui_down_crouch">Down / Crouch</span>
+            <div class="bind-slots">
+              <button id="keys-crouch" class="bind-slot" type="button" title="Primary binding" data-bind-command="+movedown" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-crouch-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="+movedown" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
         </section>
         </div>
 
         <div class="bind-column" id="keys-column-3">
         <section class="bind-group" id="keys-interface" data-bind-group="interface">
-          <h2>Interface</h2>
-          <button id="keys-help" type="button" data-bind-command="help" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Help Computer</span><span class="bind-key"></span></button>
-          <button id="keys-pause" type="button" data-bind-command="pause" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Pause Game</span><span class="bind-key"></span></button>
-          <button id="keys-score" type="button" data-bind-command="score" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Scoreboard</span><span class="bind-key"></span></button>
-          <button id="keys-chat" type="button" data-bind-command="messagemode" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-label">Chat</span><span class="bind-key"></span></button>
+          <h2 data-loc-key="worr_ui_interface">Interface</h2>
+          <div class="bind-row" id="keys-help-row">
+            <span class="bind-label" data-loc-key="m_help_computer">Help Computer</span>
+            <div class="bind-slots">
+              <button id="keys-help" class="bind-slot" type="button" title="Primary binding" data-bind-command="help" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-help-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="help" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-pause-row">
+            <span class="bind-label" data-loc-key="worr_ui_pause_game">Pause Game</span>
+            <div class="bind-slots">
+              <button id="keys-pause" class="bind-slot" type="button" title="Primary binding" data-bind-command="pause" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-pause-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="pause" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-score-row">
+            <span class="bind-label" data-loc-key="worr_ui_scoreboard">Scoreboard</span>
+            <div class="bind-slots">
+              <button id="keys-score" class="bind-slot" type="button" title="Primary binding" data-bind-command="score" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-score-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="score" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
+          <div class="bind-row" id="keys-chat-row">
+            <span class="bind-label" data-loc-key="m_chat">Chat</span>
+            <div class="bind-slots">
+              <button id="keys-chat" class="bind-slot" type="button" title="Primary binding" data-bind-command="messagemode" data-bind-slot="0" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">P</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+              <button id="keys-chat-alternate" class="bind-slot" type="button" title="Alternate binding" data-bind-command="messagemode" data-bind-slot="1" data-event-click="keybind.capture" data-menu-sound="change"><span class="bind-slot-label">A</span><img class="bind-icon" style="display: none;" /><span class="bind-key"></span></button>
+            </div>
+            <div class="bind-conflict" data-keybind-conflict="true" style="display: none;">
+              <span class="bind-conflict-title" data-loc-key="worr_ui_binding_conflict">Binding conflict</span><span class="bind-conflict-detail"></span>
+              <div class="bind-conflict-actions"><button type="button" data-keybind-conflict-action="replace" data-loc-key="worr_ui_replace">Replace</button><button type="button" data-keybind-conflict-action="cancel" data-loc-key="worr_ui_cancel">Cancel</button></div>
+            </div>
+          </div>
         </section>
         </div>
       </section>
 
       <footer class="actions" id="keys-actions">
-        <button id="keys-legacy" type="button" data-command="pushmenu legacykeys" data-route-target="legacykeys" data-menu-sound="open">Legacy Keys</button>
-        <button id="keys-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
+        <button id="keys-legacy" type="button" data-command="pushmenu legacykeys" data-route-target="legacykeys" data-menu-sound="open" data-loc-key="worr_ui_legacy_keys">Legacy Keys</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="utility-keys-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

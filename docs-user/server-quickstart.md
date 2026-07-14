@@ -75,6 +75,14 @@ server to players.
 For voting, MyMap, queued nextmap, map selector, tournament, admin, and match
 logging setup, use [Competitive Server Tools](competitive-server-tools.md).
 
+## Progressive Networking Evaluation
+
+The new server snapshot observation is safe at its default, but historical hit
+validation remains an explicit opt-in while its release gates are completed.
+Before changing `g_lag_compensation`, `sg_lag_compensation_*`, or any
+developer-only `net_impair_*` control, read
+[Progressive Networking Controls](progressive-networking-controls.md).
+
 ## Troubleshooting
 
 - Server starts then exits: check map name and data path (`basedir`).

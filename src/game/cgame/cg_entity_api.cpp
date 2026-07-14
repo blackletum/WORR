@@ -144,6 +144,7 @@ void CG_Entity_InitCvars(void)
     cl_shadowlights = Cvar_Get("cl_shadowlights", "1", 0);
     cl_flashlight_torso_sway = Cvar_Get("cl_flashlight_torso_sway", "1", CVAR_ARCHIVE);
     CG_SnapshotTimeline_InitCvars();
+    CG_CanonicalSnapshotRender_InitCvars();
 
     cg_entity_cvars_initialized = true;
 }

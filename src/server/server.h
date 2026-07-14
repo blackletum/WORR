@@ -33,7 +33,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/files.h"
 #include "common/intreadwrite.h"
 #include "common/msg.h"
+#include "common/net/capability.h"
 #include "common/net/chan.h"
+#include "common/net/legacy_command_adapter.h"
 #include "common/net/net.h"
 #include "common/pmove.h"
 #include "common/prompt.h"
@@ -43,6 +45,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "client/client.h"
 #include "server/server.h"
+#include "server/event_shadow.h"
 #include "system/system.h"
 
 #if USE_MVD_CLIENT
@@ -112,6 +115,9 @@ typedef struct {
     // per-client wire-frame sequence.  Zero means there is no interpolation
     // predecessor (first frame or a server-suppressed wire-frame gap).
     uint32_t    server_frame_delta;
+    // Exact accumulated map simulation time at server_frame. This is advanced
+    // per executed game frame instead of reconstructed from the current rate.
+    uint64_t    server_time_us;
     int         num_entities;
     unsigned    first_entity;
     q2proto_packed_player_state_t ps;
@@ -167,6 +173,8 @@ typedef struct server_entity_packed_s {
 typedef struct {
     server_state_t  state;      // precache commands are only valid during load
     int             spawncount; // random number generated each server spawn
+    uint32_t        worr_snapshot_epoch; // monotonic server-owned map epoch
+    uint64_t        worr_server_time_us; // accumulated map simulation clock
     bool            nextserver_pending;
 
     int         framerate;
@@ -260,6 +268,9 @@ typedef struct {
     unsigned    cost;
 } ratelimit_t;
 
+struct sv_snapshot_shadow_peer_v1_s;
+struct sv_native_shadow_peer_v1_s;
+
 typedef struct client_s {
     list_t          entry;
 
@@ -297,11 +308,12 @@ typedef struct client_s {
     unsigned        lastactivity;   // svs.realtime when user activity was last seen
     int             lastframe;      // for delta compression
     usercmd_t       lastcmd;        // for filling in big drops
-    // Server-validated simulation watermark associated with lastframe.  This
-    // is copied into usercmd_t.server_frame immediately before ClientThink;
-    // clients never author the value used by lag compensation.
+    // Server-validated simulation watermark associated with lastframe.  The
+    // frame is copied into usercmd_t immediately before ClientThink and the
+    // exact time feeds canonical command context; clients author neither.
     uint32_t        last_acked_server_frame;
     uint32_t        last_acked_server_frame_delta;
+    uint64_t        last_acked_server_time_us;
     int             command_msec;   // every seconds this is reset, if user
                                     // commands exhaust it, assume time cheating
     int             num_moves;      // reset every 10 seconds
@@ -325,6 +337,9 @@ typedef struct client_s {
 
     // rate dropping
     unsigned        message_size[RATE_MESSAGES];    // used to rate drop normal packets
+    unsigned        async_message_size[RATE_MESSAGES];
+    uint32_t        async_message_frame[RATE_MESSAGES];
+    bool            async_message_valid[RATE_MESSAGES];
     int             suppress_count;                 // number of messages rate suppressed
     unsigned        send_time, send_delta;          // used to rate drop async packets
 
@@ -344,8 +359,36 @@ typedef struct client_s {
     int             protocol;   // major version
     int             version;    // minor version
     int             settings[CLS_MAX];
+    uint32_t        worr_capabilities_offered;
+    uint32_t        worr_capabilities_supported;
+    uint32_t        worr_capabilities_negotiated;
+    uint32_t        worr_capability_epoch;
+    bool            worr_capability_confirm_sent;
+    bool            worr_capability_failed;
+    bool            worr_native_shadow_challenge_pending;
+    uint32_t        worr_native_shadow_challenge_requested_at;
+    bool            worr_command_parser_initialized;
+    bool            worr_command_sideband_started;
+    bool            worr_command_stream_initialized;
+    uint32_t        worr_command_bootstrap_moves;
+    uint32_t        worr_command_bootstrap_commands;
+    uint64_t        worr_command_bootstrap_sample_time_us;
+    uint64_t        worr_command_fast_forward_attempts;
+    uint64_t        worr_command_fast_forwards;
+    uint64_t        worr_command_fast_forwarded_commands;
+    uint64_t        worr_command_fast_forward_rejections;
+    uint64_t        worr_command_gap_policy_rejections;
+    worr_legacy_command_sideband_parser_v1 worr_command_parser;
+    worr_command_stream_v1 worr_command_stream;
+    worr_command_stream_slot_v1 worr_command_slots[CMD_BACKUP];
     q2proto_servercontext_t q2proto_ctx;
     q2protoio_ioarg_t io_data;
+
+    // Optional, observational canonical record of successfully emitted
+    // per-peer snapshots.  Legacy packet construction remains authoritative.
+    struct sv_snapshot_shadow_peer_v1_s *worr_snapshot_shadow;
+    /* Default-off, heap-owned FR-10-T04 server readiness pilot. */
+    struct sv_native_shadow_peer_v1_s *worr_native_shadow;
 
     pmoveParams_t   pmp;        // spectator speed, etc
     msgEsFlags_t    esFlags;    // entity protocol flags
@@ -480,6 +523,8 @@ typedef struct {
 typedef struct {
     bool        initialized;        // sv_init has completed
     unsigned    realtime;           // always increasing, no clamping, etc
+    uint32_t    worr_next_session_epoch; // nonzero capability/command epoch
+    uint32_t    worr_next_snapshot_epoch; // nonzero canonical map epoch
 
     int         maxclients_soft;    // minus reserved slots
     int         maxclients;
@@ -659,6 +704,7 @@ void SV_BroadcastPrintf(int level, const char *fmt, ...) q_printf(2, 3);
 void SV_ClientCommand(client_t *cl, const char *fmt, ...) q_printf(2, 3);
 void SV_BroadcastCommand(const char *fmt, ...) q_printf(1, 2);
 void SV_ClientAddMessage(client_t *client, int flags);
+bool SV_TryQueueNativeShadowChallenge(client_t *client);
 void SV_ShutdownClientSend(client_t *client);
 void SV_InitClientSend(client_t *newcl);
 
@@ -791,6 +837,7 @@ static inline void SV_CheckEntityNumber(edict_t *ent, int e, const char *func)
 #define SV_CheckEntityNumber(ent, e) SV_CheckEntityNumber(ent, e, __func__)
 
 void SV_BuildClientFrame(client_t *client);
+void SV_AdvanceSimulationClock(void);
 bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize);
 
 //

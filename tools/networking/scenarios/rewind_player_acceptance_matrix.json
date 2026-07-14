@@ -1,0 +1,76 @@
+{
+  "schema": "worr.networking.rewind-player-acceptance-matrix.v1",
+  "task_ids": ["FR-10-T10", "FR-10-T11", "FR-10-T14"],
+  "scope": "authoritative player-bounds rewind policy, history selection, frozen-scene construction, and per-query observation",
+  "seed": 20260713,
+  "normal_latency_ms": [0, 50, 100, 200],
+  "weapon_policies": [
+    {"id": 1, "name": "machinegun", "production_route": "fire_lead/pierce_trace"},
+    {"id": 2, "name": "chaingun", "production_route": "fire_lead/pierce_trace"},
+    {"id": 3, "name": "shotgun", "production_route": "fire_lead/pierce_trace"},
+    {"id": 4, "name": "super-shotgun", "production_route": "fire_lead/pierce_trace"},
+    {"id": 5, "name": "railgun", "production_route": "fire_rail/pierce_trace"},
+    {"id": 6, "name": "disruptor-convergence", "production_route": "point and expanded LagCompensation_Trace"},
+    {"id": 7, "name": "plasma-beam", "production_route": "fire_beams/LagCompensation_TraceLine"},
+    {"id": 8, "name": "thunderbolt", "production_route": "main and side LagCompensation_TraceLine queries"}
+  ],
+  "normal_expectation": {
+    "policy_accepted": true,
+    "policy_reason": 0,
+    "query_found": true,
+    "scene_sealed": true,
+    "outcome": 1,
+    "fallback_reason": 0,
+    "authoritative_unchanged": true
+  },
+  "boundary_scenarios": [
+    {
+      "name": "stale",
+      "latency_ms": 0,
+      "expect": {"policy_accepted": false, "policy_reason": 16, "query_evaluated": false, "outcome": 6, "fallback_reason": 5}
+    },
+    {
+      "name": "future",
+      "latency_ms": 0,
+      "expect": {"policy_accepted": false, "policy_reason": 15, "query_evaluated": false, "outcome": 6, "fallback_reason": 5}
+    },
+    {
+      "name": "cap",
+      "latency_ms": 0,
+      "expect": {"policy_accepted": true, "policy_reason": 2, "applied_time_us": 800000, "query_found": true, "scene_sealed": true, "outcome": 1}
+    },
+    {
+      "name": "history_miss",
+      "latency_ms": 100,
+      "expect": {"policy_accepted": true, "query_found": false, "query_reason": 3, "scene_sealed": false, "outcome": 7, "fallback_reason": 6}
+    },
+    {
+      "name": "teleport",
+      "latency_ms": 100,
+      "expect": {"policy_accepted": true, "query_found": true, "query_reason": 2, "scene_sealed": true, "outcome": 1}
+    },
+    {
+      "name": "death_respawn",
+      "latency_ms": 100,
+      "expect": {"policy_accepted": true, "query_found": false, "query_reason": 4, "scene_sealed": false, "outcome": 7, "fallback_reason": 6}
+    },
+    {
+      "name": "slot_reuse",
+      "latency_ms": 100,
+      "expect": {"policy_accepted": true, "query_found": false, "query_reason": 7, "scene_sealed": false, "outcome": 7, "fallback_reason": 6}
+    },
+    {
+      "name": "disabled",
+      "latency_ms": 0,
+      "expect": {"policy_evaluated": false, "policy_accepted": false, "query_evaluated": false, "path": 3, "outcome": 4, "fallback_reason": 1}
+    }
+  ],
+  "invariants": {
+    "probe_schema": "worr.networking.rewind-acceptance-probe.v1",
+    "journal_count": 1,
+    "authoritative_unchanged": true,
+    "repeat_determinism": true,
+    "normal_latency_applied_delta_us": 0
+  },
+  "declared_gap": "The probe consumes the production sgame core seam but does not invoke engine gi.trace/gi.clip, weapon damage, or a live client/server transport session."
+}

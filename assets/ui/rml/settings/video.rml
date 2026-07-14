@@ -7,49 +7,69 @@
   </head>
   <body id="settings-video" data-route-id="video" data-route-group="settings" data-route-version="1" data-document-status="first-round-scaffold" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="video-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="settings-video-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="settings-video-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="settings-video-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Video Setup</h1>
+        <div class="worr-titlerow"><button id="settings-video-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_video_setup">Video Setup</h1></div>
       </header>
 
+      <nav class="worr-tabstrip">
+        <span class="worr-tab is-active" data-loc-key="worr_ui_video">Video</span>
+        <button id="settings-video-tab-screen" class="worr-tab" type="button" data-command="popmenu; pushmenu screen" data-route-target="screen" data-menu-sound="move" data-loc-key="worr_ui_screen">Screen</button>
+        <button id="settings-video-tab-sound" class="worr-tab" type="button" data-command="popmenu; pushmenu sound" data-route-target="sound" data-menu-sound="move" data-loc-key="m_sound">Sound</button>
+        <button id="settings-video-tab-input" class="worr-tab" type="button" data-command="popmenu; pushmenu input" data-route-target="input" data-menu-sound="move" data-loc-key="m_input">Input</button>
+        <button id="settings-video-tab-effects" class="worr-tab" type="button" data-command="popmenu; pushmenu effects" data-route-target="effects" data-menu-sound="move" data-loc-key="worr_ui_effects">Effects</button>
+        <button id="settings-video-tab-performance" class="worr-tab" type="button" data-command="popmenu; pushmenu performance" data-route-target="performance" data-menu-sound="move" data-loc-key="worr_ui_performance">Performance</button>
+        <button id="settings-video-tab-accessibility" class="worr-tab" type="button" data-command="popmenu; pushmenu accessibility" data-route-target="accessibility" data-menu-sound="move" data-loc-key="worr_ui_access">Access</button>
+        <button id="settings-video-tab-language" class="worr-tab" type="button" data-command="popmenu; pushmenu language" data-route-target="language" data-menu-sound="move" data-loc-key="m_language">Language</button>
+      </nav>
       <main class="settings-form form-compact cols-3" id="video-settings-form" data-component="common.components.cvar_controls">
         <div class="settings-columns" id="video-settings-columns">
           <div class="settings-column" id="video-display-column">
             <section class="settings-section" id="video-window-section">
-              <h2>Display</h2>
+              <h2 data-loc-key="m_display">Display</h2>
               <div class="setting-row" data-control="select" data-cvar="r_fullscreen">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="video-mode">Video Mode</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="video-mode" data-loc-key="worr_ui_video_mode">Video Mode</label>
                 <select id="video-mode" data-cvar="r_fullscreen" data-source-list="$$r_modelist">
-                  <option value="0">Windowed</option>
+                  <option value="0" data-loc-key="m_windowed">Windowed</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="r_borderless">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="video-borderless">Borderless</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="video-borderless" data-loc-key="m_borderless">Borderless</label>
                 <select id="video-borderless" data-cvar="r_borderless">
-                  <option value="0">Off</option>
-                  <option value="1">Fullscreen</option>
-                  <option value="2">Always</option>
+                  <option value="0" data-loc-key="m_off">Off</option>
+                  <option value="1" data-loc-key="m_fullscreen">Fullscreen</option>
+                  <option value="2" data-loc-key="m_always">Always</option>
                 </select>
               </div>
               <div class="setting-row" data-control="action">
-                <span class="setting-widget-icon" data-widget="action"><img src="../common/icons/widgets/action.svg" /></span>
-                <label for="video-multimonitor">Multi-Monitor</label>
-                <button id="video-multimonitor" type="button" data-command="pushmenu multimonitor" data-route-target="multimonitor" data-menu-sound="open">Open</button>
+                <span class="setting-widget-icon" data-widget="action"><img src="../common/icons/widgets/action.png" /></span>
+                <label for="video-multimonitor" data-loc-key="worr_ui_multi_monitor">Multi-Monitor</label>
+                <button id="video-multimonitor" type="button" data-command="pushmenu multimonitor" data-route-target="multimonitor" data-menu-sound="open" data-loc-key="worr_ui_open">Open</button>
               </div>
               <div class="setting-row" data-control="toggle" data-cvar="gl_swapinterval">
-                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-                <label for="video-vsync">Vertical Sync</label>
+                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+                <label for="video-vsync" data-loc-key="m_vsync">Vertical Sync</label>
                 <input id="video-vsync" type="checkbox" data-cvar="gl_swapinterval" />
               </div>
               <div class="setting-row" data-control="select" data-cvar="gl_multisamples">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="video-antialiasing">Anti-Aliasing</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="video-antialiasing" data-loc-key="worr_ui_anti_aliasing">Anti-Aliasing</label>
                 <select id="video-antialiasing" data-cvar="gl_multisamples">
-                  <option value="0">Off</option>
-                  <option value="2">2x MSAA</option>
-                  <option value="4">4x MSAA</option>
-                  <option value="8">8x MSAA</option>
+                  <option value="0" data-loc-key="m_off">Off</option>
+                  <option value="2" data-loc-key="worr_ui_2x_msaa">2x MSAA</option>
+                  <option value="4" data-loc-key="worr_ui_4x_msaa">4x MSAA</option>
+                  <option value="8" data-loc-key="worr_ui_8x_msaa">8x MSAA</option>
                 </select>
               </div>
             </section>
@@ -58,47 +78,47 @@
 
           <div class="settings-column" id="video-texture-column">
             <section class="settings-section" id="video-texture-section">
-              <h2>Textures</h2>
+              <h2 data-loc-key="worr_ui_textures">Textures</h2>
               <div class="setting-row" data-control="range" data-cvar="gl_picmip">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="video-texture-quality">Texture Quality</label>
-                <input id="video-texture-quality" type="range" min="0" max="3" step="1" data-cvar="gl_picmip" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="gl_picmip" data-meter-min="0" data-meter-max="3"></span><span class="setting-meter-text" data-bind-cvar="gl_picmip"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="video-texture-quality" data-loc-key="worr_ui_texture_quality">Texture Quality</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="gl_picmip" data-meter-min="0" data-meter-max="3"></span><span class="setting-meter-text" data-bind-cvar="gl_picmip"></span></span><input id="video-texture-quality" type="range" min="0" max="3" step="1" data-cvar="gl_picmip" />
+
               </div>
               <div class="setting-row" data-control="select" data-cvar="gl_texturemode">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="video-texture-filter">Texture Filter</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="video-texture-filter" data-loc-key="worr_ui_texture_filter">Texture Filter</label>
                 <select id="video-texture-filter" data-cvar="gl_texturemode">
-                  <option value="GL_NEAREST">Nearest</option>
-                  <option value="GL_LINEAR">Linear</option>
-                  <option value="GL_LINEAR_MIPMAP_NEAREST">Bilinear</option>
-                  <option value="GL_LINEAR_MIPMAP_LINEAR">Trilinear</option>
+                  <option value="GL_NEAREST" data-loc-key="worr_ui_nearest">Nearest</option>
+                  <option value="GL_LINEAR" data-loc-key="worr_ui_linear">Linear</option>
+                  <option value="GL_LINEAR_MIPMAP_NEAREST" data-loc-key="worr_ui_bilinear">Bilinear</option>
+                  <option value="GL_LINEAR_MIPMAP_LINEAR" data-loc-key="worr_ui_trilinear">Trilinear</option>
                 </select>
               </div>
               <div class="setting-row" data-control="select" data-cvar="gl_anisotropy">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="video-anisotropy">Anisotropic Filter</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="video-anisotropy" data-loc-key="worr_ui_anisotropic_filter">Anisotropic Filter</label>
                 <select id="video-anisotropy" data-cvar="gl_anisotropy">
-                  <option value="1">Off</option>
-                  <option value="2">2x</option>
-                  <option value="4">4x</option>
-                  <option value="8">8x</option>
-                  <option value="16">16x</option>
+                  <option value="1" data-loc-key="m_off">Off</option>
+                  <option value="2" data-loc-key="worr_ui_2x">2x</option>
+                  <option value="4" data-loc-key="worr_ui_4x">4x</option>
+                  <option value="8" data-loc-key="worr_ui_8x">8x</option>
+                  <option value="16" data-loc-key="worr_ui_16x">16x</option>
                 </select>
               </div>
               <div class="setting-row" data-control="range" data-cvar="gl_saturation">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="video-texture-saturation">Texture Saturation</label>
-                <input id="video-texture-saturation" type="range" min="0" max="1" step="0.05" data-cvar="gl_saturation" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="gl_saturation" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="gl_saturation"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="video-texture-saturation" data-loc-key="worr_ui_texture_saturation">Texture Saturation</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="gl_saturation" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="gl_saturation"></span></span><input id="video-texture-saturation" type="range" min="0" max="1" step="0.05" data-cvar="gl_saturation" />
+
               </div>
               <div class="setting-row" data-control="select" data-cvar="intensity">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="video-texture-intensity">Texture Intensity</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="video-texture-intensity" data-loc-key="worr_ui_texture_intensity">Texture Intensity</label>
                 <select id="video-texture-intensity" data-cvar="intensity">
-                  <option value="1">1x</option>
-                  <option value="2">2x</option>
-                  <option value="3">3x</option>
+                  <option value="1" data-loc-key="worr_ui_1x">1x</option>
+                  <option value="2" data-loc-key="worr_ui_2x">2x</option>
+                  <option value="3" data-loc-key="worr_ui_3x">3x</option>
                 </select>
               </div>
             </section>
@@ -106,40 +126,40 @@
 
           <div class="settings-column" id="video-light-column">
             <section class="settings-section" id="video-gamma-section">
-              <h2>Gamma &amp; Light</h2>
+              <h2 data-loc-key="worr_ui_gamma_light">Gamma &amp; Light</h2>
               <div class="setting-row" data-control="range" data-cvar="r_gamma">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="video-gamma">Texture Gamma</label>
-                <input id="video-gamma" type="range" min="0.3" max="1.3" step="0.05" data-cvar="r_gamma" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="r_gamma" data-meter-min="0.3" data-meter-max="1.3"></span><span class="setting-meter-text" data-bind-cvar="r_gamma"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="video-gamma" data-loc-key="worr_ui_texture_gamma">Texture Gamma</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="r_gamma" data-meter-min="0.3" data-meter-max="1.3"></span><span class="setting-meter-text" data-bind-cvar="r_gamma"></span></span><input id="video-gamma" type="range" min="0.3" max="1.3" step="0.05" data-cvar="r_gamma" />
+
               </div>
               <div class="setting-row" data-control="toggle" data-cvar="r_hwgamma">
-                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-                <label for="video-hardware-gamma">Hardware Gamma</label>
+                <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+                <label for="video-hardware-gamma" data-loc-key="worr_ui_hardware_gamma">Hardware Gamma</label>
                 <input id="video-hardware-gamma" type="checkbox" data-cvar="r_hwgamma" />
               </div>
               <div class="setting-row" data-control="range" data-cvar="gl_coloredlightmaps">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="video-lightmap-saturation">Lightmap Saturation</label>
-                <input id="video-lightmap-saturation" type="range" min="0" max="1" step="0.05" data-cvar="gl_coloredlightmaps" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="gl_coloredlightmaps" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="gl_coloredlightmaps"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="video-lightmap-saturation" data-loc-key="worr_ui_lightmap_saturation">Lightmap Saturation</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="gl_coloredlightmaps" data-meter-min="0" data-meter-max="1"></span><span class="setting-meter-text" data-bind-cvar="gl_coloredlightmaps"></span></span><input id="video-lightmap-saturation" type="range" min="0" max="1" step="0.05" data-cvar="gl_coloredlightmaps" />
+
               </div>
               <div class="setting-row" data-control="range" data-cvar="gl_brightness">
-                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-                <label for="video-lightmap-brightness">Lightmap Brightness</label>
-                <input id="video-lightmap-brightness" type="range" min="0" max="0.3" step="0.01" data-cvar="gl_brightness" />
-                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="gl_brightness" data-meter-min="0" data-meter-max="0.3"></span><span class="setting-meter-text" data-bind-cvar="gl_brightness"></span></span>
+                <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+                <label for="video-lightmap-brightness" data-loc-key="worr_ui_lightmap_brightness">Lightmap Brightness</label>
+                <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="gl_brightness" data-meter-min="0" data-meter-max="0.3"></span><span class="setting-meter-text" data-bind-cvar="gl_brightness"></span></span><input id="video-lightmap-brightness" type="range" min="0" max="0.3" step="0.01" data-cvar="gl_brightness" />
+
               </div>
             </section>
 
             <section class="settings-section" id="video-renderer-section">
-              <h2>Renderer</h2>
+              <h2 data-loc-key="worr_ui_renderer">Renderer</h2>
               <div class="setting-row" data-control="select" data-cvar="gl_shaders">
-                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-                <label for="video-rendering-backend">Rendering Backend</label>
+                <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+                <label for="video-rendering-backend" data-loc-key="worr_ui_rendering_backend">Rendering Backend</label>
                 <select id="video-rendering-backend" data-cvar="gl_shaders">
-                  <option value="0">Legacy</option>
-                  <option value="1">Shaders</option>
+                  <option value="0" data-loc-key="worr_ui_legacy">Legacy</option>
+                  <option value="1" data-loc-key="worr_ui_shaders">Shaders</option>
                 </select>
               </div>
             </section>
@@ -148,8 +168,12 @@
       </main>
 
       <footer class="menu-footer" id="video-menu-footer">
-        <button id="video-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="video-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="video-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="settings-video-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

@@ -5,30 +5,32 @@
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="session-dm-hostinfo" data-route-id="dm_hostinfo" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="session-dm-hostinfo" data-route-id="dm_hostinfo" data-route-group="session" data-route-version="2" data-document-status="live-provider" data-controller="native-session-cvars" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="dm-hostinfo-screen">
       <header class="page-header">
-        <h1>Host Info</h1>
-        <p id="dm-hostinfo-summary">
+        <div class="worr-titlerow"><button id="session-dm-hostinfo-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_host_info">Host Info</h1></div>
+        <p id="dm-hostinfo-summary" data-loc-key="worr_ui_details_about_the_current_server">
           Details about the current server.
         </p>
       </header>
 
-      <section class="session-panel" id="dm-hostinfo-content" data-model="session.dm_hostinfo" data-owner-boundary="sgame-published-cvars">
-        <p id="dm-hostinfo-empty" class="session-pending" data-show-if="!ui_hostinfo_server">No host information published yet.</p>
-        <h2 data-visible-if="ui_hostinfo_server">Server Name</h2>
-        <p id="dm-hostinfo-server" class="ui-server-name" data-bind="cvars.ui_hostinfo_server" data-visible-if="ui_hostinfo_server">Server name</p>
-
-        <h2 data-visible-if="ui_hostinfo_host">Host</h2>
-        <p id="dm-hostinfo-host" class="ui-player-name" data-bind="cvars.ui_hostinfo_host" data-visible-if="ui_hostinfo_host">Host name</p>
-
-        <h2 data-visible-if="ui_hostinfo_motd">Message of the Day</h2>
-        <p id="dm-hostinfo-motd" class="ui-localized-copy" data-bind="cvars.ui_hostinfo_motd" data-visible-if="ui_hostinfo_motd">No message of the day.</p>
+      <section class="session-panel" id="dm-hostinfo-content" data-model="session.dm_hostinfo" data-controller="native-session-cvars" data-owner-boundary="sgame-published-cvars">
+        <p id="dm-hostinfo-empty" class="session-pending" data-show-if="!ui_hostinfo_server" data-loc-key="worr_ui_no_host_information_published_yet">No host information published yet.</p>
+        <div class="session-info-list" id="dm-hostinfo-list">
+          <div class="session-info-row" data-visible-if="ui_hostinfo_server">
+            <span class="session-info-label" data-loc-key="worr_ui_server_name">Server Name</span>
+            <p id="dm-hostinfo-server" class="session-info-value ui-server-name" data-bind="cvars.ui_hostinfo_server">Server name</p>
+          </div>
+          <div class="session-info-row" data-visible-if="ui_hostinfo_host">
+            <span class="session-info-label" data-loc-key="worr_ui_host">Host</span>
+            <p id="dm-hostinfo-host" class="session-info-value ui-player-name" data-bind="cvars.ui_hostinfo_host">Host name</p>
+          </div>
+          <div class="session-info-row session-info-row-tall" data-visible-if="ui_hostinfo_motd">
+            <span class="session-info-label" data-loc-key="worr_ui_message_of_the_day">Message of the Day</span>
+            <p id="dm-hostinfo-motd" class="session-info-value ui-localized-copy" data-bind="cvars.ui_hostinfo_motd">No message of the day.</p>
+          </div>
+        </div>
       </section>
-
-      <footer class="actions" id="dm-hostinfo-actions">
-        <button id="dm-hostinfo-return" type="button" data-command="popmenu" data-menu-sound="cancel">Back</button>
-      </footer>
     </div>
   </body>
 </rml>

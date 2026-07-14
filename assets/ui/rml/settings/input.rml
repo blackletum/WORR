@@ -7,49 +7,73 @@
   </head>
   <body id="settings-input" data-route-id="input" data-route-group="settings" data-route-version="1" data-document-status="scaffolded-round2" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen settings-screen" id="input-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="settings-input-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="settings-input-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="settings-input-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="menu-header">
-        <h1>Input Setup</h1>
+        <div class="worr-titlerow"><button id="settings-input-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_input_setup">Input Setup</h1></div>
       </header>
 
+      <nav class="worr-tabstrip">
+        <button id="settings-input-tab-video" class="worr-tab" type="button" data-command="popmenu; pushmenu video" data-route-target="video" data-menu-sound="move" data-loc-key="worr_ui_video">Video</button>
+        <button id="settings-input-tab-screen" class="worr-tab" type="button" data-command="popmenu; pushmenu screen" data-route-target="screen" data-menu-sound="move" data-loc-key="worr_ui_screen">Screen</button>
+        <button id="settings-input-tab-sound" class="worr-tab" type="button" data-command="popmenu; pushmenu sound" data-route-target="sound" data-menu-sound="move" data-loc-key="m_sound">Sound</button>
+        <span class="worr-tab is-active" data-loc-key="m_input">Input</span>
+        <button id="settings-input-tab-effects" class="worr-tab" type="button" data-command="popmenu; pushmenu effects" data-route-target="effects" data-menu-sound="move" data-loc-key="worr_ui_effects">Effects</button>
+        <button id="settings-input-tab-performance" class="worr-tab" type="button" data-command="popmenu; pushmenu performance" data-route-target="performance" data-menu-sound="move" data-loc-key="worr_ui_performance">Performance</button>
+        <button id="settings-input-tab-accessibility" class="worr-tab" type="button" data-command="popmenu; pushmenu accessibility" data-route-target="accessibility" data-menu-sound="move" data-loc-key="worr_ui_access">Access</button>
+        <button id="settings-input-tab-language" class="worr-tab" type="button" data-command="popmenu; pushmenu language" data-route-target="language" data-menu-sound="move" data-loc-key="m_language">Language</button>
+      </nav>
       <main class="settings-form" id="input-settings-form" data-component="common.components.cvar_controls">
         <section class="settings-section" id="input-mouse-section">
-          <h2>Mouse</h2>
+          <h2 data-loc-key="m_mouse">Mouse</h2>
           <div class="setting-row" data-control="range" data-cvar="sensitivity">
-            <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.svg" /></span>
-            <label for="input-sensitivity">Mouse Sensitivity</label>
-            <input id="input-sensitivity" type="range" min="0.1" max="20" step="0.1" data-cvar="sensitivity" data-numeric="true" />
-            <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="sensitivity" data-meter-min="0.1" data-meter-max="20"></span><span class="setting-meter-text" data-bind-cvar="sensitivity"></span></span>
+            <span class="setting-widget-icon" data-widget="range"><img src="../common/icons/widgets/range.png" /></span>
+            <label for="input-sensitivity" data-loc-key="worr_ui_mouse_sensitivity">Mouse Sensitivity</label>
+            <span class="setting-value setting-meter"><span class="setting-meter-fill" data-meter-cvar="sensitivity" data-meter-min="0.1" data-meter-max="20"></span><span class="setting-meter-text" data-bind-cvar="sensitivity"></span></span><input id="input-sensitivity" type="range" min="0.1" max="20" step="0.1" data-cvar="sensitivity" data-numeric="true" />
+
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="m_autosens">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="input-autosens">Auto Sensitivity Scaling</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="input-autosens" data-loc-key="worr_ui_auto_sensitivity_scaling">Auto Sensitivity Scaling</label>
             <input id="input-autosens" type="checkbox" data-cvar="m_autosens" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="m_filter">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="input-mouse-filter">Mouse Filter</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="input-mouse-filter" data-loc-key="worr_ui_mouse_filter">Mouse Filter</label>
             <input id="input-mouse-filter" type="checkbox" data-cvar="m_filter" />
           </div>
           <div class="setting-row" data-control="toggle" data-cvar="freelook">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="input-freelook">Free Look</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="input-freelook" data-loc-key="worr_ui_free_look">Free Look</label>
             <input id="input-freelook" type="checkbox" data-cvar="freelook" />
           </div>
         </section>
 
         <section class="settings-section" id="input-movement-section">
-          <h2>Movement</h2>
+          <h2 data-loc-key="worr_ui_movement">Movement</h2>
           <div class="setting-row" data-control="toggle" data-cvar="cl_run">
-            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.svg" /></span>
-            <label for="input-always-run">Always Run</label>
+            <span class="setting-widget-icon" data-widget="toggle"><img src="../common/icons/widgets/toggle.png" /></span>
+            <label for="input-always-run" data-loc-key="worr_ui_always_run">Always Run</label>
             <input id="input-always-run" type="checkbox" data-cvar="cl_run" />
           </div>
         </section>
       </main>
 
       <footer class="menu-footer" id="input-menu-footer">
-        <button id="input-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
-        <button id="input-close" type="button" data-command="ui.close" data-menu-sound="cancel">Close</button>
+        <button id="input-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
+      </footer>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="settings-input-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

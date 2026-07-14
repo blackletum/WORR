@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_ents.c -- entity parsing and management
 
 #include "client.h"
+#include "client/cgame_event_shadow_runtime.h"
+#include "client/snapshot_recovery.h"
+#include "client/snapshot_shadow.h"
 
 extern qhandle_t cl_mod_powerscreen;
 extern qhandle_t cl_mod_laser;
@@ -704,6 +707,43 @@ void CL_DeltaFrame(void)
         Com_Error(ERR_DROP, "cgame entity DeltaFrame not available");
 
     cgame_entity->DeltaFrame();
+    if (!cl.frame.canonical_server_time_valid) {
+        CL_SnapshotShadowAbortFrame();
+        CL_EventShadowDeliverAcceptedFrame();
+        return;
+    }
+    const uint64_t canonical_server_time_us =
+        cl.frame.canonical_server_time_us;
+    const bool controlled_entity_valid =
+        cl.frame.clientNum >= 0 &&
+        cl.frame.clientNum + 1 < cl.csr.max_edicts;
+    bool canonical_ok;
+    if (controlled_entity_valid) {
+        canonical_ok = CL_SnapshotShadowAcceptFrame(
+            canonical_server_time_us,
+            static_cast<uint32_t>(cl.frame.clientNum + 1),
+            static_cast<int32_t>(cl.frame.ps.pmove.pm_type),
+            static_cast<uint16_t>(cl.frame.ps.pmove.pm_flags),
+            cl.frame.ps.team_id);
+    } else {
+        canonical_ok = CL_SnapshotShadowAcceptFrameEx(
+            canonical_server_time_us,
+            CL_SNAPSHOT_SHADOW_NO_CONTROLLED_ENTITY,
+            static_cast<int32_t>(cl.frame.ps.pmove.pm_type),
+            static_cast<uint16_t>(cl.frame.ps.pmove.pm_flags),
+            cl.frame.ps.team_id,
+            CL_SNAPSHOT_SHADOW_ACCEPT_DELIVER_CONSUMER |
+                CL_SNAPSHOT_SHADOW_ACCEPT_COMPARE_LEGACY);
+    }
+    cl_snapshot_shadow_status_v1 shadow_status{};
+    if (CL_SnapshotShadowGetStatus(&shadow_status)) {
+        CL_SnapshotRecoveryObserveCanonicalFrame(
+            cl.frame.number, cl.frame.delta, canonical_ok,
+            shadow_status.active != 0, controlled_entity_valid,
+            shadow_status.last_result,
+            shadow_status.last_parity_mismatch);
+    }
+    CL_EventShadowDeliverAcceptedFrame();
 }
 
 #if USE_DEBUG

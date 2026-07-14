@@ -27,6 +27,9 @@ renderer_vk_rtx_src = [
   'src/renderer/rmlui_bridge.cpp',
   'src/renderer/view_setup.c',
 ]
+vkpt_shader_sources = [
+  'src/rend_rtx/vkpt/shader/rmlui.vert',
+]
 renderer_vk_src = [
   'src/renderer/dds.c',
   'src/renderer/rmlui_bridge.cpp',
@@ -59,6 +62,10 @@ renderer_rmlui_family_t R_RmlUiRendererFamily(void);
 const char *R_RmlUiRendererName(void);
 bool R_RmlUiCanRender(void);
 void *R_RmlUiNativeRenderInterface(void);
+typedef struct renderer_rmlui_vertex_s { float position[2]; } renderer_rmlui_vertex_t;
+bool R_RmlUiDrawGeometry(const renderer_rmlui_vertex_t *vertices, size_t vertex_count,
+                         const uint32_t *indices, size_t index_count,
+                         float translation_x, float translation_y, qhandle_t texture);
 typedef struct renderer_export_s {
     renderer_rmlui_family_t (*RmlUiRendererFamily)(void);
     const char *(*RmlUiRendererName)(void);
@@ -70,7 +77,8 @@ typedef struct renderer_export_s {
     write_text(
         repo_root / "src/renderer/renderer_api.c",
         """
-#if USE_REF != REF_GL
+#if USE_REF != REF_GL && !defined(RENDERER_VULKAN_LEGACY) && \
+    !defined(RENDERER_VULKAN_RTX)
 static bool Renderer_RmlUiCanRender(void)
 {
     return false;
@@ -85,7 +93,8 @@ static void *Renderer_RmlUiNativeRenderInterface(void)
 static const renderer_export_t renderer_exports = {
     .RmlUiRendererFamily    = R_RmlUiRendererFamily,
     .RmlUiRendererName      = R_RmlUiRendererName,
-#if USE_REF == REF_GL
+#if USE_REF == REF_GL || defined(RENDERER_VULKAN_LEGACY) || \
+    defined(RENDERER_VULKAN_RTX)
     .RmlUiCanRender         = R_RmlUiCanRender,
     .RmlUiNativeRenderInterface = R_RmlUiNativeRenderInterface,
 #else
@@ -104,12 +113,12 @@ class R_RmlUiOpenGLRenderInterface final : public Rml::RenderInterface {};
 static R_RmlUiOpenGLRenderInterface r_rmlui_opengl_render_interface;
 #endif
 
-#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_LEGACY)
-class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface {};
-#endif
-
-#if UI_RML_HAS_RUNTIME && defined(RENDERER_VULKAN_RTX)
-class R_RmlUiRtxVkptRenderInterface final : public Rml::RenderInterface {};
+#if UI_RML_HAS_RUNTIME && (defined(RENDERER_VULKAN_LEGACY) || \
+                           defined(RENDERER_VULKAN_RTX))
+class R_RmlUiVulkanRenderInterface final : public Rml::RenderInterface {
+    void RenderGeometry() { R_RmlUiDrawGeometry(nullptr, 0, nullptr, 0, 0, 0, 0); }
+};
+static R_RmlUiVulkanRenderInterface r_rmlui_vulkan_render_interface;
 #endif
 
 renderer_rmlui_family_t R_RmlUiRendererFamily(void)
@@ -135,6 +144,29 @@ const char *R_RmlUiRendererName(void)
     return "RTX/vkpt RmlUi render-interface inactive";
 #else
     return "none";
+#endif
+}
+
+bool R_RmlUiCanRender(void)
+{
+#if UI_RML_HAS_RUNTIME && (USE_REF == REF_GL || \
+                           defined(RENDERER_VULKAN_LEGACY) || \
+                           defined(RENDERER_VULKAN_RTX))
+    return true;
+#else
+    return false;
+#endif
+}
+
+void *R_RmlUiNativeRenderInterface(void)
+{
+#if UI_RML_HAS_RUNTIME && USE_REF == REF_GL
+    return &r_rmlui_opengl_render_interface;
+#elif UI_RML_HAS_RUNTIME && (defined(RENDERER_VULKAN_LEGACY) || \
+                             defined(RENDERER_VULKAN_RTX))
+    return &r_rmlui_vulkan_render_interface;
+#else
+    return NULL;
 #endif
 }
 """,
@@ -172,6 +204,9 @@ bool VK_UI_UpdateImageRGBASubRect(qhandle_t handle, int x, int y, int width, int
 void VK_UI_DrawPic(int x, int y, color_t color, qhandle_t pic);
 void VK_UI_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic);
 void VK_UI_DrawStretchSubPic(int x, int y, int w, int h, float s1, float t1, float s2, float t2, color_t color, qhandle_t pic);
+bool VK_UI_DrawRmlGeometry(const renderer_rmlui_vertex_t *vertices, size_t vertex_count,
+                           const uint32_t *indices, size_t index_count,
+                           float translation_x, float translation_y, qhandle_t texture);
 """,
     )
     write_text(
@@ -191,6 +226,9 @@ bool VK_UI_UpdateImageRGBASubRect(qhandle_t handle, int x, int y, int width, int
 void VK_UI_DrawPic(int x, int y, color_t color, qhandle_t pic) {}
 void VK_UI_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic) {}
 void VK_UI_DrawStretchSubPic(int x, int y, int w, int h, float s1, float t1, float s2, float t2, color_t color, qhandle_t pic) {}
+bool VK_UI_DrawRmlGeometry(const renderer_rmlui_vertex_t *vertices, size_t vertex_count,
+                           const uint32_t *indices, size_t index_count,
+                           float translation_x, float translation_y, qhandle_t texture) { return true; }
 static VkDescriptorType descriptor_type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 """,
     )
@@ -214,6 +252,13 @@ bool R_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic)
 {
     return VK_UI_UpdateImageRGBA(handle, width, height, pic);
 }
+bool R_RmlUiDrawGeometry(const renderer_rmlui_vertex_t *vertices, size_t vertex_count,
+                         const uint32_t *indices, size_t index_count,
+                         float translation_x, float translation_y, qhandle_t texture)
+{
+    return VK_UI_DrawRmlGeometry(vertices, vertex_count, indices, index_count,
+                                 translation_x, translation_y, texture);
+}
 """,
     )
     write_text(
@@ -226,6 +271,9 @@ void R_DrawPic(int x, int y, color_t color, qhandle_t pic);
 void R_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic);
 void IMG_Load_RTX(image_t *image, byte *pic);
 bool R_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic);
+bool R_RmlUiDrawGeometry(const renderer_rmlui_vertex_t *vertices, size_t vertex_count,
+                         const uint32_t *indices, size_t index_count,
+                         float translation_x, float translation_y, qhandle_t texture);
 """,
     )
     write_text(
@@ -233,9 +281,25 @@ bool R_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic)
         """
 static clipRect_t clip_rect;
 static bool clip_enable = false;
+typedef struct { float position[2]; } RmlUiVertex_t;
+static RmlUiVertex_t rmlui_vertex_queue[32];
+static uint32_t rmlui_index_queue[32];
+static uint32_t rmlui_stretch_pic_split;
+static VkPipeline pipeline_rmlui[2];
 static inline void enqueue_stretch_pic(int x, int y, int w, int h, float s1, float t1, float s2, float t2, uint32_t color, qhandle_t pic) {}
 VkResult vkpt_draw_clear_stretch_pics(void) { return VK_SUCCESS; }
-VkResult vkpt_draw_submit_stretch_pics(VkCommandBuffer cmd_buf) { return VK_SUCCESS; }
+VkResult vkpt_draw_submit_stretch_pics(VkCommandBuffer cmd_buf) {
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_rmlui[0]);
+    vkCmdBindIndexBuffer(cmd_buf, buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd_buf, 3, 1, 0, 0, 0);
+    return VK_SUCCESS;
+}
+bool R_RmlUiDrawGeometry(const renderer_rmlui_vertex_t *vertices, size_t vertex_count,
+                         const uint32_t *indices, size_t index_count,
+                         float translation_x, float translation_y, qhandle_t texture) {
+    rmlui_stretch_pic_split = 0;
+    return rmlui_vertex_queue != NULL && rmlui_index_queue != NULL;
+}
 void R_SetClipRect(const clipRect_t *clip) { clip_enable = clip != NULL; clip_rect.left = 0; }
 void R_DrawStretchPic(int x, int y, int w, int h, color_t color, qhandle_t pic)
 {
@@ -253,6 +317,9 @@ void frame(void)
     vkpt_textures_update_descriptor_set();
     vkpt_draw_submit_stretch_pics(cmd_buf);
     IMG_Load = IMG_Load_RTX;
+    screenshot_t *shot = IMG_GetPendingScreenshot_RTX();
+    vkCmdCopyImageToBuffer(cmd_buf, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer, 1, &copy);
+    IMG_CompletePendingScreenshot_RTX();
 }
 """,
     )
@@ -261,6 +328,8 @@ void frame(void)
         """
 qhandle_t R_RegisterImage(const char *name, imagetype_t type, imageflags_t flags) { return 1; }
 qhandle_t R_RegisterRawImage(const char *name, int width, int height, byte* pic, imagetype_t type, imageflags_t flags) { return 1; }
+screenshot_t *IMG_GetPendingScreenshot_RTX(void) { return NULL; }
+void IMG_CompletePendingScreenshot_RTX(void) {}
 """,
     )
     write_text(
@@ -285,6 +354,14 @@ void main() { StretchPic sp = stretch_pics[gl_InstanceIndex]; }
         """
 layout(location = 0) out vec4 outColor;
 void main() { outColor = global_textureLod(0, vec2(0), 0); }
+""",
+    )
+    write_text(
+        repo_root / "src/rend_rtx/vkpt/shader/rmlui.vert",
+        """
+struct RmlUiVertex { vec2 position, tex_coord; uint packed_color, texture_id; };
+layout(set = 0, binding = 0) readonly buffer RmlUiVertices { RmlUiVertex vertices[]; };
+void main() { RmlUiVertex vertex = vertices[gl_VertexIndex]; }
 """,
     )
 
@@ -317,12 +394,12 @@ def test_valid_bridge_readiness_audit_passes(
 
     assert result == 0
     assert "Malformed findings: 0" in captured.out
-    assert "Vulkan (blocked_until_native): pass" in captured.out
-    assert "RTX/vkpt (blocked_until_native): pass" in captured.out
+    assert "Vulkan (native_guarded): pass" in captured.out
+    assert "RTX/vkpt (native_guarded): pass" in captured.out
     assert "foundation_ok: yes" in captured.out
-    assert "native_bridge_claimed: no" in captured.out
-    assert "activation_status: partial_activation_blocked" in captured.out
-    assert "next_activation_requirement: native_interface_export_present" in captured.out
+    assert "native_bridge_claimed: yes" in captured.out
+    assert "activation_status: activation_complete" in captured.out
+    assert captured.out.count("activation_status: activation_complete") == 2
     assert "Result: RmlUi Vulkan/RTX bridge-readiness audit passed." in captured.out
 
 
@@ -340,38 +417,40 @@ def test_json_report_exposes_foundations_and_missing_bridge_requirements(
     assert payload["ok"] is True
     assert payload["counts"]["lanes"] == 2
     assert payload["counts"]["foundation_lanes"] == 2
-    assert payload["counts"]["native_bridge_lanes"] == 0
-    assert payload["counts"]["blocked_lanes"] == 2
-    assert payload["counts"]["activation_complete_lanes"] == 0
-    assert payload["counts"]["partial_activation_lanes"] == 2
+    assert payload["counts"]["native_bridge_lanes"] == 2
+    assert payload["counts"]["blocked_lanes"] == 0
+    assert payload["counts"]["activation_complete_lanes"] == 2
+    assert payload["counts"]["partial_activation_lanes"] == 0
     assert payload["counts"]["inactive_activation_lanes"] == 0
     assert payload["counts"]["activation_requirements"] == 10
-    assert payload["counts"]["satisfied_activation_requirements"] == 8
-    assert payload["counts"]["pending_activation_requirements"] == 2
-    assert payload["counts"]["missing_bridge_requirements"] == 2
+    assert payload["counts"]["satisfied_activation_requirements"] == 10
+    assert payload["counts"]["pending_activation_requirements"] == 0
+    assert payload["counts"]["missing_bridge_requirements"] == 0
     assert payload["lanes"]["vulkan"]["foundations"]["draw_entrypoints_present"] is True
-    assert payload["lanes"]["vulkan"]["guardrails"]["runtime_dependency_inactive"] is True
+    assert payload["lanes"]["vulkan"]["guardrails"]["runtime_dependency_active"] is True
     assert payload["lanes"]["vulkan"]["activation_requirements"] == {
         "native_bridge_class_present": True,
         "native_bridge_source_compiled": True,
         "native_family_export_present": True,
-        "native_interface_export_present": False,
+        "native_interface_export_present": True,
         "runtime_dependency_enabled": True,
     }
-    assert payload["lanes"]["vulkan"]["activation_status"] == "partial_activation_blocked"
-    assert payload["lanes"]["vulkan"]["activation_complete"] is False
+    assert payload["lanes"]["vulkan"]["activation_status"] == "activation_complete"
+    assert payload["lanes"]["vulkan"]["activation_complete"] is True
     assert payload["lanes"]["vulkan"]["satisfied_activation_requirement_ids"] == [
         "native_bridge_class_present",
         "native_bridge_source_compiled",
         "native_family_export_present",
         "runtime_dependency_enabled",
-    ]
-    assert payload["lanes"]["vulkan"]["pending_activation_requirement_ids"] == [
         "native_interface_export_present",
     ]
-    assert payload["lanes"]["vulkan"]["next_activation_requirement"] == "native_interface_export_present"
+    assert payload["lanes"]["vulkan"]["pending_activation_requirement_ids"] == []
+    assert payload["lanes"]["vulkan"]["next_activation_requirement"] is None
     assert payload["lanes"]["rtx_vkpt"]["foundations"]["stretch_pic_submit_present"] is True
-    assert payload["lanes"]["rtx_vkpt"]["native_bridge_claimed"] is False
+    assert payload["lanes"]["rtx_vkpt"]["foundations"]["rmlui_shader_present"] is True
+    assert payload["lanes"]["rtx_vkpt"]["guardrails"]["native_indexed_geometry_present"] is True
+    assert payload["lanes"]["rtx_vkpt"]["guardrails"]["native_screenshot_readback_present"] is True
+    assert payload["lanes"]["rtx_vkpt"]["native_bridge_claimed"] is True
 
 
 def test_vulkan_partial_runtime_dependency_fails(
@@ -392,7 +471,7 @@ def test_vulkan_partial_runtime_dependency_fails(
     result, captured = run_checker(repo_root, capsys)
 
     assert result == 1
-    assert "vulkan: Vulkan RmlUi runtime dependency must stay inactive until a native interface export exists" in captured.out
+    assert "vulkan: Vulkan RmlUi runtime dependency must be enabled for the native bridge" in captured.out
 
 
 def test_vulkan_family_export_without_bridge_class_fails(
@@ -414,12 +493,12 @@ def test_vulkan_family_export_without_bridge_class_fails(
 
     assert result == 1
     assert (
-        "vulkan: Vulkan RmlUi family export must stay inactive until bridge source, runtime, and interface exports are wired"
+        "vulkan: Vulkan RmlUi bridge class and instance must remain active"
         in captured.out
     )
 
 
-def test_partial_vulkan_bridge_class_claim_is_accepted_as_incomplete_activation(
+def test_native_vulkan_bridge_claim_is_complete(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -431,29 +510,28 @@ def test_partial_vulkan_bridge_class_claim_is_accepted_as_incomplete_activation(
     assert result == 0
     assert payload["ok"] is True
     assert payload["counts"]["activation_requirements"] == 10
-    assert payload["counts"]["activation_complete_lanes"] == 0
-    assert payload["counts"]["partial_activation_lanes"] == 2
+    assert payload["counts"]["activation_complete_lanes"] == 2
+    assert payload["counts"]["partial_activation_lanes"] == 0
     assert payload["counts"]["inactive_activation_lanes"] == 0
-    assert payload["counts"]["satisfied_activation_requirements"] == 8
-    assert payload["counts"]["pending_activation_requirements"] == 2
-    assert payload["counts"]["missing_bridge_requirements"] == 2
-    assert payload["lanes"]["vulkan"]["activation_status"] == "partial_activation_blocked"
-    assert payload["lanes"]["vulkan"]["activation_complete"] is False
+    assert payload["counts"]["satisfied_activation_requirements"] == 10
+    assert payload["counts"]["pending_activation_requirements"] == 0
+    assert payload["counts"]["missing_bridge_requirements"] == 0
+    assert payload["lanes"]["vulkan"]["activation_status"] == "activation_complete"
+    assert payload["lanes"]["vulkan"]["activation_complete"] is True
     assert payload["lanes"]["vulkan"]["activation_requirements"]["native_bridge_class_present"] is True
     assert payload["lanes"]["vulkan"]["satisfied_activation_requirement_ids"] == [
         "native_bridge_class_present",
         "native_bridge_source_compiled",
         "native_family_export_present",
         "runtime_dependency_enabled",
-    ]
-    assert payload["lanes"]["vulkan"]["pending_activation_requirement_ids"] == [
         "native_interface_export_present",
     ]
-    assert payload["lanes"]["vulkan"]["next_activation_requirement"] == "native_interface_export_present"
-    assert payload["lanes"]["vulkan"]["guardrails"]["native_bridge_class_inactive"] is True
-    assert payload["lanes"]["vulkan"]["guardrails"]["native_family_export_inactive"] is True
-    assert payload["lanes"]["vulkan"]["guardrails"]["runtime_dependency_inactive"] is True
-    assert payload["lanes"]["vulkan"]["native_bridge_claimed"] is False
+    assert payload["lanes"]["vulkan"]["pending_activation_requirement_ids"] == []
+    assert payload["lanes"]["vulkan"]["next_activation_requirement"] is None
+    assert payload["lanes"]["vulkan"]["guardrails"]["native_bridge_class_active"] is True
+    assert payload["lanes"]["vulkan"]["guardrails"]["native_geometry_surface_present"] is True
+    assert payload["lanes"]["vulkan"]["guardrails"]["runtime_dependency_active"] is True
+    assert payload["lanes"]["vulkan"]["native_bridge_claimed"] is True
     assert payload["errors"] == []
 
 

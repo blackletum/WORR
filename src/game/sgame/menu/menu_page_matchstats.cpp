@@ -54,6 +54,35 @@ void UpdateMatchStatsMenu(gentity_t *ent, bool openMenu) {
     cmd.AppendCvar(fmt::format("ui_matchstats_line_{}", lineIndex).c_str(),
                    lines[lineIndex]);
   }
+  cmd.AppendCvar("ui_matchstats_player",
+                 G_ColorResetAfter(ent->client->sess.netName));
+  cmd.AppendCvar("ui_matchstats_kills", fmt::format("{}", st.totalKills));
+  cmd.AppendCvar("ui_matchstats_deaths", fmt::format("{}", st.totalDeaths));
+  cmd.AppendCvar("ui_matchstats_kd",
+                 st.totalDeaths > 0
+                     ? fmt::format("{:.2f}", static_cast<float>(st.totalKills) /
+                                                 st.totalDeaths)
+                     : "N/A");
+  cmd.AppendCvar("ui_matchstats_damage_dealt",
+                 fmt::format("{}", st.totalDmgDealt));
+  cmd.AppendCvar("ui_matchstats_damage_received",
+                 fmt::format("{}", st.totalDmgReceived));
+  cmd.AppendCvar(
+      "ui_matchstats_damage_ratio",
+      st.totalDmgReceived > 0
+          ? fmt::format("{:.2f}", static_cast<float>(st.totalDmgDealt) /
+                                      st.totalDmgReceived)
+          : "N/A");
+  cmd.AppendCvar("ui_matchstats_shots", fmt::format("{}", st.totalShots));
+  cmd.AppendCvar("ui_matchstats_hits", fmt::format("{}", st.totalHits));
+  cmd.AppendCvar(
+      "ui_matchstats_accuracy",
+      st.totalShots > 0
+          ? fmt::format("{}%", static_cast<int>(
+                                  (static_cast<float>(st.totalHits) /
+                                   st.totalShots) *
+                                  100))
+          : "N/A");
   if (openMenu)
     cmd.AppendCommand("pushmenu match_stats");
   cmd.Flush();

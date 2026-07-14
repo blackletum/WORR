@@ -18,6 +18,14 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_parse.c  -- parse a message received from the server
 
 #include "client.h"
+#include "client/cgame_event_shadow_runtime.h"
+#include "client/command_identity.h"
+#include "client/consumed_cursor.h"
+#include "client/demo_clock.h"
+#include "client/net_capability.h"
+#include "client/native_readiness_pilot.h"
+#include "client/snapshot_recovery.h"
+#include "client/snapshot_shadow.h"
 #include "q2proto/q2proto.h"
 #include "shared/m_flash.h"
 #include "shared/game3_shared.h"
@@ -166,9 +174,17 @@ static void CL_ParsePacketEntities(const server_frame_t *oldframe, server_frame_
 
     while (1) {
         q2proto_svc_message_t svc_message;
-        q2proto_client_read(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_READ, &svc_message);
+        const q2proto_error_t error = q2proto_client_read(
+            &cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_READ,
+            &svc_message);
+        if (error != Q2P_ERR_SUCCESS) {
+            Com_Error(ERR_DROP, "%s: malformed entity delta: %s",
+                      __func__, q2proto_error_string(error));
+        }
         if (svc_message.type != Q2P_SVC_FRAME_ENTITY_DELTA)
             Com_Error(ERR_DROP, "%s: unexpected packet type %d", __func__, svc_message.type);
+
+        CL_SnapshotShadowCaptureEntityDelta(&svc_message.frame_entity_delta);
 
         int newnum = svc_message.frame_entity_delta.newnum;
         if (newnum == 0)
@@ -294,8 +310,6 @@ static void apply_playerstate(const q2proto_svc_playerstate_t *playerstate,
         else
             to->pmove.pm_flags = pmflags_from_game3(playerstate->pm_flags, cls.q2proto_ctx.features.server_game_api != Q2PROTO_GAME_VANILLA);
     }
-    to->pmove.haste = (to->pmove.pm_flags & PMF_HASTE) != 0;
-
     if (playerstate->delta_bits & Q2P_PSD_PM_GRAVITY)
         to->pmove.gravity = playerstate->pm_gravity;
 
@@ -352,7 +366,30 @@ static void apply_playerstate(const q2proto_svc_playerstate_t *playerstate,
         to->pmove.viewheight = playerstate->pm_viewheight;
 }
 
-static void CL_ParseFrame(const q2proto_svc_frame_t *frame_msg)
+static bool CL_ProjectSnapshotShadowLineage(const server_frame_t *frame)
+{
+    if (!frame || !frame->canonical_server_time_valid) {
+        CL_SnapshotShadowAbortFrame();
+        return false;
+    }
+    const uint32_t controlled_entity =
+        frame->clientNum >= 0 &&
+                frame->clientNum + 1 < cl.csr.max_edicts
+            ? static_cast<uint32_t>(frame->clientNum + 1)
+            : CL_SNAPSHOT_SHADOW_NO_CONTROLLED_ENTITY;
+    return CL_SnapshotShadowAcceptFrameEx(
+        frame->canonical_server_time_us,
+        controlled_entity,
+        static_cast<int32_t>(frame->ps.pmove.pm_type),
+        static_cast<uint16_t>(frame->ps.pmove.pm_flags),
+        frame->ps.team_id, 0);
+}
+
+static void CL_ParseFrame(
+    const q2proto_svc_frame_t *frame_msg,
+    const worr_snapshot_consumed_command_v2 *consumed_command,
+    bool exact_server_time_present,
+    uint64_t exact_server_time_us)
 {
     int                     currentframe, deltaframe, suppressed;
     server_frame_t          frame;
@@ -367,6 +404,12 @@ static void CL_ParseFrame(const q2proto_svc_frame_t *frame_msg)
     if (currentframe < 0) {
         Com_Error(ERR_DROP, "%s: currentframe < 0", __func__);
     }
+    CL_SnapshotShadowBeginFrame(frame_msg);
+    if (!CL_SnapshotShadowSetConsumedCommand(consumed_command)) {
+        CL_SnapshotShadowAbortFrame();
+        Com_Error(ERR_DROP, "%s: invalid consumed-command cursor",
+                  __func__);
+    }
     deltaframe = frame_msg->deltaframe;
     suppressed = frame_msg->suppress_count;
     if (suppressed)
@@ -374,6 +417,7 @@ static void CL_ParseFrame(const q2proto_svc_frame_t *frame_msg)
 
     frame.number = currentframe;
     frame.delta = deltaframe;
+    frame.consumed_command = *consumed_command;
 
     if (cls.netchan.dropped) {
         cl.frameflags |= FF_SERVERDROP;
@@ -440,6 +484,37 @@ static void CL_ParseFrame(const q2proto_svc_frame_t *frame_msg)
     // parse packetentities
     CL_ParsePacketEntities(oldframe, &frame);
 
+    if (exact_server_time_present && !frame.valid) {
+        CL_SnapshotShadowAbortFrame();
+        Com_Error(ERR_DROP,
+                  "%s: exact demo-clock anchor targets an invalid frame",
+                  __func__);
+    }
+    if (frame.valid) {
+        const uint32_t frame_time_ms =
+            cl.frametime.time > 0
+                ? static_cast<uint32_t>(cl.frametime.time)
+                : static_cast<uint32_t>(BASE_FRAMETIME);
+        if (exact_server_time_present) {
+            frame.canonical_server_time_us = exact_server_time_us;
+            frame.canonical_server_time_valid =
+                CL_SnapshotShadowObserveExactServerTimeUs(
+                    frame.number, exact_server_time_us);
+            if (!frame.canonical_server_time_valid) {
+                CL_SnapshotShadowAbortFrame();
+                Com_Error(
+                    ERR_DROP,
+                    "%s: non-monotonic exact demo-clock anchor",
+                    __func__);
+            }
+        } else {
+            frame.canonical_server_time_valid =
+                CL_SnapshotShadowResolveServerTimeUs(
+                    frame.number, frame_time_ms,
+                    &frame.canonical_server_time_us);
+        }
+    }
+
     // save the frame off in the backup array for later delta comparisons
     cl.frames[currentframe & UPDATE_MASK] = frame;
 
@@ -453,6 +528,9 @@ static void CL_ParseFrame(const q2proto_svc_frame_t *frame_msg)
 #endif
 
     if (!frame.valid) {
+        CL_SnapshotShadowAbortFrame();
+        CL_SnapshotRecoveryObserveLegacyFrame(
+            frame.number, frame.delta, false, cl.frameflags);
         cl.frame.valid = false;
 #if USE_FPS
         cl.keyframe.valid = false;
@@ -465,8 +543,13 @@ static void CL_ParseFrame(const q2proto_svc_frame_t *frame_msg)
         Com_Error(ERR_DROP, "%s: bad fov", __func__);
     }
 
-    if (cls.state < ca_precached)
+    CL_SnapshotRecoveryObserveLegacyFrame(
+        frame.number, frame.delta, true, cl.frameflags);
+
+    if (cls.state < ca_precached) {
+        (void)CL_ProjectSnapshotShadowLineage(&frame);
         return;
+    }
 
     cl.oldframe = cl.frame;
     cl.frame = frame;
@@ -482,6 +565,8 @@ static void CL_ParseFrame(const q2proto_svc_frame_t *frame_msg)
 
     if (!cls.demo.seeking)
         CL_DeltaFrame();
+    else
+        (void)CL_ProjectSnapshotShadowLineage(&cl.frame);
 }
 
 /*
@@ -536,6 +621,9 @@ static void CL_ParseBaseline(const q2proto_svc_spawnbaseline_t* spawnbaseline)
 
     base = &cl.baselines[spawnbaseline->entnum];
     apply_entity_delta(base, spawnbaseline->entnum, &spawnbaseline->delta_state);
+    CL_SnapshotShadowSetBaseline(
+        static_cast<uint32_t>(spawnbaseline->entnum),
+        &spawnbaseline->delta_state);
 }
 
 static void set_server_fps(int value)
@@ -561,12 +649,21 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
 
     Cbuf_Execute(&cl_cmdbuf);          // make sure any stuffed commands are done
 
+    /* CL_ClearState resets packet-local client systems.  Reset only the
+     * readiness carrier parser here so its connection owner and nonce floor
+     * survive the map transition and the same physical packet can reopen. */
+    CL_NativeReadinessPilotServerDataReset();
+
     // wipe the client_state_t struct
     CL_ClearState();
 
     // parse protocol version number
     protocol = serverdata->protocol;
     cl.servercount = serverdata->servercount;
+    CL_NetCapabilityReset(static_cast<uint32_t>(cl.servercount));
+    CL_CommandIdentityShutdown();
+    CL_ConsumedCursorReset();
+    CL_DemoClockServerDataReset();
 
 #if USE_DEBUG
     Com_DPrintf("Serverdata packet received "
@@ -773,6 +870,12 @@ static void CL_ParseServerData(const q2proto_svc_serverdata_t *serverdata)
 
     cl.max_stats = (cl.game_api >= Q2PROTO_GAME_Q2PRO_EXTENDED_V2) ? MAX_STATS_NEW : MAX_STATS_OLD;
 
+    CL_SnapshotShadowBeginConnection(
+        static_cast<uint32_t>(cl.csr.max_edicts),
+        static_cast<uint32_t>(cl.csr.max_models),
+        static_cast<uint32_t>(cl.csr.max_sounds), cl.csr.extended);
+    CL_SnapshotRecoveryBeginConnection();
+
     // Load cgame (after we know all the timings)
     CG_Load(cl.gamedir, cl.game_api == Q2PROTO_GAME_RERELEASE);
     cgame->Init();
@@ -851,13 +954,39 @@ static void CL_ParseTEntPacket(const q2proto_svc_temp_entity_t *temp_entity)
     te.entity1 = temp_entity->entity1;
     te.entity2 = temp_entity->entity2;
     te.time = temp_entity->time;
+    CL_EventRangeCaptureTempV2(temp_entity);
 }
 
-static void CL_ParseMuzzleFlashPacket(const q2proto_svc_muzzleflash_t *muzzleflash)
+static void CL_ParseMuzzleFlashPacket(
+    const q2proto_svc_muzzleflash_t *muzzleflash,
+    uint32_t family)
 {
+    static_assert(MZ2_LAST - 1 <= WORR_EVENT_MONSTER_MUZZLE_LAST);
+
+    if (muzzleflash->entity <= 0 ||
+        muzzleflash->entity >= cl.csr.max_edicts) {
+        Com_Error(ERR_DROP, "%s: bad entity %d (max %d)", __func__,
+                  muzzleflash->entity, cl.csr.max_edicts);
+    }
+    if (!Worr_EventMuzzleCarrierValidV1(
+            family, muzzleflash->entity, muzzleflash->weapon,
+            static_cast<uint32_t>(cl.csr.max_edicts),
+            WORR_EVENT_MONSTER_MUZZLE_LAST + 1u)) {
+        Com_Error(ERR_DROP, "%s: bad %s muzzle ID %u", __func__,
+                  family == WORR_EVENT_MUZZLE_FAMILY_PLAYER
+                      ? "player"
+                      : "monster",
+                  static_cast<unsigned>(muzzleflash->weapon));
+    }
+    if (family == WORR_EVENT_MUZZLE_FAMILY_MONSTER &&
+        muzzleflash->silenced) {
+        Com_Error(ERR_DROP, "%s: silenced monster muzzle is invalid",
+                  __func__);
+    }
     mz.silenced = muzzleflash->silenced;
     mz.weapon = muzzleflash->weapon;
     mz.entity = muzzleflash->entity;
+    CL_EventRangeCaptureMuzzleV2(muzzleflash, family);
 }
 
 static void CL_ParseStartSoundPacket(const q2proto_svc_sound_t* sound)
@@ -867,6 +996,7 @@ static void CL_ParseStartSoundPacket(const q2proto_svc_sound_t* sound)
         Com_Error(ERR_DROP, "%s: bad index: %d", __func__, snd.index);
     if (snd.entity >= cl.csr.max_edicts)
         Com_Error(ERR_DROP, "%s: bad entity: %d", __func__, snd.entity);
+    CL_EventRangeCaptureSoundV2(&snd);
     SHOWNET(3, "    %s\n", cl.configstrings[cl.csr.sounds + snd.index]);
     CL_CheckPickupPulseSound();
 }
@@ -881,6 +1011,7 @@ static void CL_ParseReconnect(void)
 
     // close netchan now to prevent `disconnect'
     // message from being sent to server
+    CL_NativeReadinessPilotBeforeNetchanClose(&cls.netchan);
     Netchan_Close(&cls.netchan);
 
     CL_Disconnect(ERR_RECONNECT);
@@ -1148,8 +1279,87 @@ static void CL_ParseDownload(const q2proto_svc_download_t *download)
     CL_HandleDownload(static_cast<const byte *>(download->data), size, percent);
 }
 
+static bool CL_NetCapabilityFailed(void)
+{
+    worr_net_capability_state_v1 state{};
+    return CL_NetCapabilityGetState(&state) &&
+           state.phase == WORR_NET_CAPABILITY_FAILED;
+}
+
+static void CL_CanonicalPacketBegin(const char *caller)
+{
+    const bool capability_ok = CL_NetCapabilityPacketBegin();
+    const bool cursor_ok = CL_ConsumedCursorPacketBegin();
+    const bool demo_clock_ok = CL_DemoClockPacketBegin();
+    CL_NativeReadinessPilotPacketBegin();
+    if (!capability_ok || !cursor_ok || !demo_clock_ok) {
+        Com_Error(ERR_DROP,
+                  "%s: overlapping WORR packet transaction",
+                  caller);
+    }
+}
+
+static void CL_CanonicalPacketEnd(const char *caller)
+{
+    /* End both transactions even if one fails so neither parser can retain a
+     * partial tuple after the caller handles the protocol error. */
+    const bool capability_ok = CL_NetCapabilityPacketEnd();
+    const bool cursor_ok = CL_ConsumedCursorPacketEnd();
+    const bool demo_clock_ok = CL_DemoClockPacketEnd();
+    CL_NativeReadinessPilotPacketEnd();
+    if (!capability_ok || !cursor_ok || !demo_clock_ok) {
+        Com_Error(ERR_DROP,
+                  "%s: incomplete WORR packet transaction",
+                  caller);
+    }
+}
+
+static bool CL_IsPrivateCarrierSetting(
+    const q2proto_svc_message_t *service)
+{
+    if (!service || service->type != Q2P_SVC_SETTING)
+        return false;
+    if (CL_NativeReadinessPilotIsCarrierSetting(service->setting.index))
+        return true;
+    return CL_NetCapabilityHas(
+               WORR_NET_CAP_CONSUMED_COMMAND_CURSOR_V1) &&
+           service->setting.index >= WORR_CONSUMED_CURSOR_SETTING_BEGIN &&
+           service->setting.index <= WORR_CONSUMED_CURSOR_SETTING_COMMIT;
+}
+
 static void CL_ParseSetting(const q2proto_svc_setting_t *setting)
 {
+    const bool capability_setting =
+        CL_NetCapabilityObserveSetting(setting->index, setting->value);
+    /* Capability confirmation must run first so a challenge immediately
+     * following its final field sees the official legacy state.  Readiness
+     * still observes every decoded setting before another parser can abort. */
+    const bool native_readiness_setting =
+        CL_NativeReadinessPilotObserveSetting(
+            setting->index, setting->value);
+    if (CL_NetCapabilityFailed()) {
+        Com_Error(ERR_DROP, "%s: malformed WORR capability confirmation",
+                  __func__);
+    }
+    if (!CL_ConsumedCursorObserveSetting(
+            setting->index, setting->value)) {
+        Com_Error(ERR_DROP, "%s: malformed consumed-command cursor",
+                  __func__);
+    }
+    bool demo_clock_setting = false;
+    if (!CL_DemoClockObserveSetting(
+            setting->index, setting->value,
+            &demo_clock_setting)) {
+        Com_Error(ERR_DROP, "%s: malformed demo-clock anchor",
+                  __func__);
+    }
+    if (demo_clock_setting)
+        return;
+    if (capability_setting)
+        return;
+    if (native_readiness_setting)
+        return;
+
     switch (setting->index) {
 #if USE_FPS
     case SVS_FPS:
@@ -1277,23 +1487,6 @@ static void CL_ParseLocPrint(const q2proto_svc_locprint_t *locprint)
 }
 
 
-#if USE_FPS
-static void set_server_fps(int value)
-{
-    cl.frametime = Com_ComputeFrametime(value);
-    cl.frametime_inv = cl.frametime.div * BASE_1_FRAMETIME;
-
-    // fix time delta
-    if (cls.state == ca_active) {
-        int delta = cl.frame.number - cl.servertime / cl.frametime.time;
-        cl.serverdelta = Q_align_down(delta, cl.frametime.div);
-    }
-
-    Com_DPrintf("client framediv=%d time=%d delta=%d\n",
-                cl.frametime.div, cl.servertime, cl.serverdelta);
-}
-#endif
-
 /*
 =====================
 CL_ParseServerMessage
@@ -1312,6 +1505,7 @@ void CL_ParseServerMessage(void)
 #endif
 
     msg_read.allowunderflow = false;
+    CL_CanonicalPacketBegin(__func__);
 
 //
 // parse the message
@@ -1323,7 +1517,52 @@ void CL_ParseServerMessage(void)
         q2proto_error_t err = q2proto_client_read(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_READ, &svc_msg);
         if (err == Q2P_ERR_NO_MORE_INPUT) {
             SHOWNET(2, "%3u:END OF MESSAGE\n", readcount);
+            CL_CanonicalPacketEnd(__func__);
             break;
+        }
+        if (err != Q2P_ERR_SUCCESS) {
+            Com_Error(ERR_DROP, "%s: malformed server message: %s",
+                      __func__, q2proto_error_string(err));
+        }
+
+        if (svc_msg.type != Q2P_SVC_SETTING) {
+            CL_NetCapabilityObserveInterveningService();
+            CL_NativeReadinessPilotObserveInterveningService();
+            if (CL_NetCapabilityFailed()) {
+                Com_Error(
+                    ERR_DROP,
+                    "%s: interrupted WORR capability confirmation",
+                    __func__);
+            }
+        }
+
+        worr_snapshot_consumed_command_v2 consumed_command{};
+        bool exact_server_time_present = false;
+        uint64_t exact_server_time_us = 0;
+        if (svc_msg.type == Q2P_SVC_FRAME) {
+            if (!CL_ConsumedCursorConsumeFrame(&consumed_command)) {
+                Com_Error(ERR_DROP,
+                          "%s: frame missing consumed-command cursor",
+                          __func__);
+            }
+            if (!CL_DemoClockConsumeFrame(
+                    svc_msg.frame.serverframe,
+                    &exact_server_time_present,
+                    &exact_server_time_us)) {
+                Com_Error(ERR_DROP,
+                          "%s: frame missing exact demo-clock anchor",
+                          __func__);
+            }
+        } else if (svc_msg.type != Q2P_SVC_SETTING &&
+                   !CL_ConsumedCursorObserveInterveningService()) {
+            Com_Error(ERR_DROP,
+                      "%s: consumed-command cursor is not adjacent to frame",
+                      __func__);
+        } else if (svc_msg.type != Q2P_SVC_SETTING &&
+                   !CL_DemoClockObserveInterveningService()) {
+            Com_Error(ERR_DROP,
+                      "%s: demo-clock anchor is not adjacent to frame",
+                      __func__);
         }
 
         switch(svc_msg.type)
@@ -1340,6 +1579,7 @@ void CL_ParseServerMessage(void)
             break;
 
         case Q2P_SVC_RECONNECT:
+            CL_ConsumedCursorShutdown();
             CL_ParseReconnect();
             return;
 
@@ -1357,6 +1597,7 @@ void CL_ParseServerMessage(void)
 
         case Q2P_SVC_SERVERDATA:
             CL_ParseServerData(&svc_msg.serverdata);
+            CL_CanonicalPacketBegin(__func__);
             continue;
 
         case Q2P_SVC_CONFIGSTRING:
@@ -1378,12 +1619,14 @@ void CL_ParseServerMessage(void)
             break;
 
         case Q2P_SVC_MUZZLEFLASH:
-            CL_ParseMuzzleFlashPacket(&svc_msg.muzzleflash);
+            CL_ParseMuzzleFlashPacket(
+                &svc_msg.muzzleflash, WORR_EVENT_MUZZLE_FAMILY_PLAYER);
             CL_MuzzleFlash();
             break;
 
         case Q2P_SVC_MUZZLEFLASH2:
-            CL_ParseMuzzleFlashPacket(&svc_msg.muzzleflash);
+            CL_ParseMuzzleFlashPacket(
+                &svc_msg.muzzleflash, WORR_EVENT_MUZZLE_FAMILY_MONSTER);
             CL_MuzzleFlash2();
             break;
 
@@ -1392,7 +1635,9 @@ void CL_ParseServerMessage(void)
             continue;
 
         case Q2P_SVC_FRAME:
-            CL_ParseFrame(&svc_msg.frame);
+            CL_ParseFrame(&svc_msg.frame, &consumed_command,
+                          exact_server_time_present,
+                          exact_server_time_us);
             continue;
 
         case Q2P_SVC_INVENTORY:
@@ -1435,7 +1680,8 @@ void CL_ParseServerMessage(void)
         }
 
         // if recording demos, copy off protocol invariant stuff
-        if (cls.demo.recording && !cls.demo.paused) {
+        if (cls.demo.recording && !cls.demo.paused &&
+            !CL_IsPrivateCarrierSetting(&svc_msg)) {
             uint32_t len = msg_read.readcount - readcount;
 
             // it is very easy to overflow standard 1390 bytes
@@ -1449,8 +1695,10 @@ void CL_ParseServerMessage(void)
         }
 
         // if running GTV server, add current message
-        CL_GTV_WriteMessage(msg_read.data + readcount,
-                            msg_read.readcount - readcount);
+        if (!CL_IsPrivateCarrierSetting(&svc_msg)) {
+            CL_GTV_WriteMessage(msg_read.data + readcount,
+                                msg_read.readcount - readcount);
+        }
     }
 }
 
@@ -1475,6 +1723,7 @@ bool CL_SeekDemoMessage(void)
 #endif
 
     msg_read.allowunderflow = false;
+    CL_CanonicalPacketBegin(__func__);
 
 //
 // parse the message
@@ -1484,7 +1733,51 @@ bool CL_SeekDemoMessage(void)
         q2proto_error_t err = q2proto_client_read(&cls.q2proto_ctx, Q2PROTO_IOARG_CLIENT_READ, &svc_msg);
         if (err == Q2P_ERR_NO_MORE_INPUT) {
             SHOWNET(2, "%3u:END OF MESSAGE\n", msg_read.readcount);
+            CL_CanonicalPacketEnd(__func__);
             break;
+        }
+        if (err != Q2P_ERR_SUCCESS) {
+            Com_Error(ERR_DROP, "%s: malformed seek message: %s",
+                      __func__, q2proto_error_string(err));
+        }
+        if (svc_msg.type != Q2P_SVC_SETTING) {
+            CL_NetCapabilityObserveInterveningService();
+            CL_NativeReadinessPilotObserveInterveningService();
+            if (CL_NetCapabilityFailed()) {
+                Com_Error(
+                    ERR_DROP,
+                    "%s: interrupted WORR capability confirmation",
+                    __func__);
+            }
+        }
+
+        worr_snapshot_consumed_command_v2 consumed_command{};
+        bool exact_server_time_present = false;
+        uint64_t exact_server_time_us = 0;
+        if (svc_msg.type == Q2P_SVC_FRAME) {
+            if (!CL_ConsumedCursorConsumeFrame(&consumed_command)) {
+                Com_Error(ERR_DROP,
+                          "%s: frame missing consumed-command cursor",
+                          __func__);
+            }
+            if (!CL_DemoClockConsumeFrame(
+                    svc_msg.frame.serverframe,
+                    &exact_server_time_present,
+                    &exact_server_time_us)) {
+                Com_Error(ERR_DROP,
+                          "%s: frame missing exact demo-clock anchor",
+                          __func__);
+            }
+        } else if (svc_msg.type != Q2P_SVC_SETTING &&
+                   !CL_ConsumedCursorObserveInterveningService()) {
+            Com_Error(ERR_DROP,
+                      "%s: consumed-command cursor is not adjacent to frame",
+                      __func__);
+        } else if (svc_msg.type != Q2P_SVC_SETTING &&
+                   !CL_DemoClockObserveInterveningService()) {
+            Com_Error(ERR_DROP,
+                      "%s: demo-clock anchor is not adjacent to frame",
+                      __func__);
         }
         switch(svc_msg.type)
         {
@@ -1513,6 +1806,7 @@ bool CL_SeekDemoMessage(void)
 
         case Q2P_SVC_SERVERDATA:
             CL_ParseServerData(&svc_msg.serverdata);
+            CL_CanonicalPacketBegin(__func__);
             serverdata = true;
             break;
 
@@ -1535,17 +1829,21 @@ bool CL_SeekDemoMessage(void)
             break;
 
         case Q2P_SVC_MUZZLEFLASH:
-            CL_ParseMuzzleFlashPacket(&svc_msg.muzzleflash);
+            CL_ParseMuzzleFlashPacket(
+                &svc_msg.muzzleflash, WORR_EVENT_MUZZLE_FAMILY_PLAYER);
             CL_MuzzleFlash();
             break;
 
         case Q2P_SVC_MUZZLEFLASH2:
-            CL_ParseMuzzleFlashPacket(&svc_msg.muzzleflash);
+            CL_ParseMuzzleFlashPacket(
+                &svc_msg.muzzleflash, WORR_EVENT_MUZZLE_FAMILY_MONSTER);
             CL_MuzzleFlash2();
             break;
 
         case Q2P_SVC_FRAME:
-            CL_ParseFrame(&svc_msg.frame);
+            CL_ParseFrame(&svc_msg.frame, &consumed_command,
+                          exact_server_time_present,
+                          exact_server_time_us);
             continue;
 
         case Q2P_SVC_INVENTORY:
@@ -1554,6 +1852,10 @@ bool CL_SeekDemoMessage(void)
 
         case Q2P_SVC_LAYOUT:
             CL_ParseLayout(&svc_msg.layout);
+            break;
+
+        case Q2P_SVC_SETTING:
+            CL_ParseSetting(&svc_msg.setting);
             break;
 
         case Q2P_SVC_FOG:

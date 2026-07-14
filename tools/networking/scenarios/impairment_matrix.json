@@ -1,0 +1,127 @@
+{
+  "schema": "worr.networking.impairment-matrix.v1",
+  "profiles": [
+    {
+      "name": "baseline_0ms",
+      "seed": 1000,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3
+    },
+    {
+      "name": "latency_50ms",
+      "seed": 1050,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "latency_ms": 50
+    },
+    {
+      "name": "latency_100ms",
+      "seed": 1100,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "latency_ms": 100
+    },
+    {
+      "name": "latency_200ms",
+      "seed": 1200,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "latency_ms": 200
+    },
+    {
+      "name": "jitter_25ms",
+      "seed": 2001,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "latency_ms": 50,
+      "jitter_ms": 25
+    },
+    {
+      "name": "loss_1pct",
+      "seed": 3001,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "loss_basis_points": 100
+    },
+    {
+      "name": "loss_5pct",
+      "seed": 3005,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "loss_basis_points": 500
+    },
+    {
+      "name": "loss_10pct",
+      "seed": 3010,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "loss_basis_points": 1000
+    },
+    {
+      "name": "loss_20pct",
+      "seed": 3020,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "loss_basis_points": 2000
+    },
+    {
+      "name": "burst_loss",
+      "seed": 4001,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "burst_start_basis_points": 200,
+      "burst_length": 5
+    },
+    {
+      "name": "reorder_5pct",
+      "seed": 5001,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "latency_ms": 20,
+      "reorder_basis_points": 500
+    },
+    {
+      "name": "duplicate_5pct",
+      "seed": 6001,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "duplicate_basis_points": 500
+    },
+    {
+      "name": "corrupt_2pct",
+      "seed": 7001,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "corrupt_basis_points": 200
+    },
+    {
+      "name": "throttle_128kbps",
+      "seed": 8001,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 3,
+      "rate_bytes_per_sec": 16000
+    },
+    {
+      "name": "upstream_stall_100ms",
+      "seed": 9001,
+      "packets": 10000,
+      "step_ms": 10,
+      "upstream_every": 2,
+      "upstream_stall_ms": 100
+    }
+  ]
+}

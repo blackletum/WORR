@@ -48,6 +48,7 @@ void        UI_KeyEvent(int key, bool down);
 void        UI_CharEvent(int key);
 void        UI_Draw(unsigned realtime);
 void        UI_OpenMenu(uiMenu_t menu);
+void        UI_CloseMenu(void);
 void        UI_Frame(int msec);
 void        UI_StatusEvent(const serverStatus_t *status);
 void        UI_ErrorEvent(const netadr_t *from);
@@ -62,6 +63,7 @@ void        UI_StartFeedbackSound(uiFeedbackSound_t sound);
 #define     UI_CharEvent(key)       (void)0
 #define     UI_Draw(realtime)       (void)0
 #define     UI_OpenMenu(menu)       (void)0
+#define     UI_CloseMenu()           (void)0
 #define     UI_Frame(msec)          (void)0
 #define     UI_StatusEvent(status)  (void)0
 #define     UI_ErrorEvent(from)     (void)0

@@ -1,0 +1,6329 @@
+{
+  "matrix": {
+    "correction_replay": {
+      "acknowledged_sequence": 4294967294,
+      "commands": 12,
+      "current_sequence": 6,
+      "first_sequence": 4294967291,
+      "replayed_commands": 8
+    },
+    "coverage_cases": [
+      {
+        "category": "pm-type",
+        "name": "pm-normal"
+      },
+      {
+        "category": "pm-type",
+        "name": "pm-grapple"
+      },
+      {
+        "category": "pm-type",
+        "name": "pm-noclip"
+      },
+      {
+        "category": "pm-type",
+        "name": "pm-spectator"
+      },
+      {
+        "category": "pm-type",
+        "name": "pm-dead"
+      },
+      {
+        "category": "pm-type",
+        "name": "pm-gib"
+      },
+      {
+        "category": "pm-type",
+        "name": "pm-freeze"
+      },
+      {
+        "category": "control",
+        "name": "control-jump"
+      },
+      {
+        "category": "control",
+        "name": "control-duck"
+      },
+      {
+        "category": "timer",
+        "name": "timer-waterjump"
+      },
+      {
+        "category": "timer",
+        "name": "timer-land"
+      },
+      {
+        "category": "timer",
+        "name": "timer-knockback"
+      },
+      {
+        "category": "timer",
+        "name": "timer-trick"
+      },
+      {
+        "category": "timer",
+        "name": "timer-spawn-lock"
+      },
+      {
+        "category": "config",
+        "name": "config-n64"
+      },
+      {
+        "category": "config",
+        "name": "config-q3-control-default"
+      },
+      {
+        "category": "config",
+        "name": "config-q3-overbounce"
+      },
+      {
+        "category": "config",
+        "name": "config-air-accel-zero"
+      },
+      {
+        "category": "config",
+        "name": "config-air-accel-high"
+      },
+      {
+        "category": "duration",
+        "name": "duration-1"
+      },
+      {
+        "category": "duration",
+        "name": "duration-7"
+      },
+      {
+        "category": "duration",
+        "name": "duration-8"
+      },
+      {
+        "category": "duration",
+        "name": "duration-9"
+      },
+      {
+        "category": "duration",
+        "name": "duration-66"
+      },
+      {
+        "category": "duration",
+        "name": "duration-250"
+      },
+      {
+        "category": "contents",
+        "name": "contents-water-waist"
+      },
+      {
+        "category": "contents",
+        "name": "contents-ladder"
+      }
+    ],
+    "fail_closed_cases": [
+      "null-step",
+      "non-finite-state",
+      "unknown-movement-flag",
+      "non-finite-command",
+      "command-reserved-bits",
+      "unknown-model-revision",
+      "unknown-config-flags",
+      "non-boolean-snap",
+      "null-trace-callback",
+      "trace-non-finite-fraction",
+      "trace-surface-without-id",
+      "trace-invalid-struct-size",
+      "trace-conflicting-surface-flags",
+      "trace-throws",
+      "canonicalize-nan",
+      "replay-zero-capacity",
+      "replay-null-count",
+      "replay-range-fills-capacity",
+      "replay-index-out-of-range",
+      "replay-null-sequence"
+    ],
+    "focused_fixtures": [
+      {
+        "category": "full-output",
+        "name": "angled-full-output-floor",
+        "requires": [
+          "nonzero-canonical-angles",
+          "nonzero-delta-angles",
+          "all-step-output-fields",
+          "bitwise-native-parity"
+        ]
+      },
+      {
+        "category": "snap-initial",
+        "name": "snap-initial-stuck-order",
+        "requires": [
+          "startsolid",
+          "allsolid",
+          "snap-initial-success",
+          "snap-disabled-control",
+          "exact-total-order-result"
+        ]
+      },
+      {
+        "category": "collision-identity",
+        "name": "entity-touch-dual-surface-mask",
+        "requires": [
+          "nonworld-ground-entity",
+          "ordered-touch-identity",
+          "dual-surface",
+          "pass-entity",
+          "world-only-query",
+          "ignore-player-mask-control"
+        ]
+      },
+      {
+        "category": "movement-flag",
+        "name": "haste-speed-differential",
+        "requires": [
+          "default-speed-cap",
+          "haste-speed-cap",
+          "flag-persistence",
+          "multi-command-full-output-parity"
+        ]
+      },
+      {
+        "category": "movement-type",
+        "name": "grapple-velocity-wall",
+        "requires": [
+          "nonzero-initial-velocity",
+          "wall-collision",
+          "no-gravity",
+          "ordered-touch-identity"
+        ]
+      },
+      {
+        "category": "presentation-exclusion",
+        "name": "presentation-water-hash-exclusion",
+        "requires": [
+          "exact-water-blend",
+          "underwater-render-flag",
+          "unchanged-state-hash",
+          "unchanged-collision-hash",
+          "dry-control"
+        ]
+      }
+    ],
+    "movement_model_revision": 1,
+    "prediction_abi_version": 1,
+    "scenarios": [
+      {
+        "commands": 18,
+        "fixture": "empty-space",
+        "name": "empty"
+      },
+      {
+        "commands": 36,
+        "fixture": "infinite-analytic-floor",
+        "name": "floor"
+      },
+      {
+        "commands": 56,
+        "fixture": "floor-plus-infinite-analytic-wall",
+        "name": "wall"
+      },
+      {
+        "commands": 60,
+        "fixture": "floor-plus-analytic-aabb-step",
+        "name": "step"
+      },
+      {
+        "commands": 40,
+        "fixture": "infinite-analytic-walkable-slope",
+        "name": "slope"
+      }
+    ],
+    "schema": "worr.networking.prediction-replay-matrix.v1"
+  },
+  "report": {
+    "abi_version": 1,
+    "bridge_repeatability": true,
+    "correction_replay": {
+      "acknowledged_sequence": 4294967294,
+      "authoritative_state": "0f5598ad2f7a25fa",
+      "collision_transcript": "a782fed92128503a",
+      "commands": 12,
+      "current_sequence": 6,
+      "final_state": "dcfc456ee0d6d6cc",
+      "first_sequence": 4294967291,
+      "pre_correction_state": "048c4105a0acc079",
+      "replay_chain": "c908a12765f2258b",
+      "replayed_commands": 8,
+      "sequence_transcript": "e179cb4f8b2cfac6"
+    },
+    "coverage_cases": [
+      {
+        "category": "pm-type",
+        "collision": "a0915d408de461ec",
+        "collision_queries": 12,
+        "command": "386606d30390e637",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "1302bfc6873b877a",
+        "full_output_parity": true,
+        "name": "pm-normal",
+        "native_server_state": "1302bfc6873b877a"
+      },
+      {
+        "category": "pm-type",
+        "collision": "e1ba2de932acea0a",
+        "collision_queries": 9,
+        "command": "386606d30390e637",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "ea6c3e35d3c52881",
+        "full_output_parity": true,
+        "name": "pm-grapple",
+        "native_server_state": "ea6c3e35d3c52881"
+      },
+      {
+        "category": "pm-type",
+        "collision": "55311ed006cd9b98",
+        "collision_queries": 0,
+        "command": "386606d30390e637",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "c959ea5cc95bf903",
+        "full_output_parity": true,
+        "name": "pm-noclip",
+        "native_server_state": "c959ea5cc95bf903"
+      },
+      {
+        "category": "pm-type",
+        "collision": "a632af4977baad43",
+        "collision_queries": 6,
+        "command": "386606d30390e637",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "65c927538837540d",
+        "full_output_parity": true,
+        "name": "pm-spectator",
+        "native_server_state": "65c927538837540d"
+      },
+      {
+        "category": "pm-type",
+        "collision": "40956e17c58f72ff",
+        "collision_queries": 8,
+        "command": "386606d30390e637",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "ed5ca267437ed185",
+        "full_output_parity": true,
+        "name": "pm-dead",
+        "native_server_state": "ed5ca267437ed185"
+      },
+      {
+        "category": "pm-type",
+        "collision": "56174a4e0c142349",
+        "collision_queries": 6,
+        "command": "386606d30390e637",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "6f633c310f70fb6c",
+        "full_output_parity": true,
+        "name": "pm-gib",
+        "native_server_state": "6f633c310f70fb6c"
+      },
+      {
+        "category": "pm-type",
+        "collision": "55311ed006cd9b98",
+        "collision_queries": 0,
+        "command": "386606d30390e637",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "c392ecfa84c7d77d",
+        "full_output_parity": true,
+        "name": "pm-freeze",
+        "native_server_state": "c392ecfa84c7d77d"
+      },
+      {
+        "category": "control",
+        "collision": "864068891b97a876",
+        "collision_queries": 10,
+        "command": "5a9a5233bff6c4af",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "c16b61a5ee14ca70",
+        "full_output_parity": true,
+        "name": "control-jump",
+        "native_server_state": "c16b61a5ee14ca70"
+      },
+      {
+        "category": "control",
+        "collision": "855cf1586d5122d1",
+        "collision_queries": 15,
+        "command": "6785a96fc3abf6a7",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "7583f4cb9f3af3a4",
+        "full_output_parity": true,
+        "name": "control-duck",
+        "native_server_state": "7583f4cb9f3af3a4"
+      },
+      {
+        "category": "timer",
+        "collision": "b6f22d8924d0d089",
+        "collision_queries": 8,
+        "command": "15782a4c115b5314",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "146bd58cb8bf5096",
+        "full_output_parity": true,
+        "name": "timer-waterjump",
+        "native_server_state": "146bd58cb8bf5096"
+      },
+      {
+        "category": "timer",
+        "collision": "375eb56438385982",
+        "collision_queries": 11,
+        "command": "15782a4c115b5314",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "9276ff931b389787",
+        "full_output_parity": true,
+        "name": "timer-land",
+        "native_server_state": "9276ff931b389787"
+      },
+      {
+        "category": "timer",
+        "collision": "8ff77a5e446a4df3",
+        "collision_queries": 5,
+        "command": "15782a4c115b5314",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "30af0bf1cd92e07d",
+        "full_output_parity": true,
+        "name": "timer-knockback",
+        "native_server_state": "30af0bf1cd92e07d"
+      },
+      {
+        "category": "timer",
+        "collision": "375eb56438385982",
+        "collision_queries": 11,
+        "command": "15782a4c115b5314",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "a02aa2ac74ec209b",
+        "full_output_parity": true,
+        "name": "timer-trick",
+        "native_server_state": "a02aa2ac74ec209b"
+      },
+      {
+        "category": "timer",
+        "collision": "8ff77a5e446a4df3",
+        "collision_queries": 5,
+        "command": "15782a4c115b5314",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "7a0e41c89ded0acd",
+        "full_output_parity": true,
+        "name": "timer-spawn-lock",
+        "native_server_state": "7a0e41c89ded0acd"
+      },
+      {
+        "category": "config",
+        "collision": "5a3096c7fbbb26c6",
+        "collision_queries": 11,
+        "command": "386606d30390e637",
+        "config": "3bbcdd56ca21499d",
+        "final_state": "6782ba70303fc63a",
+        "full_output_parity": true,
+        "name": "config-n64",
+        "native_server_state": "6782ba70303fc63a"
+      },
+      {
+        "category": "config",
+        "collision": "d792610898dfb951",
+        "collision_queries": 13,
+        "command": "d40c35319e8b7d09",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "1cc262f19a743ec6",
+        "full_output_parity": true,
+        "name": "config-q3-control-default",
+        "native_server_state": "1cc262f19a743ec6"
+      },
+      {
+        "category": "config",
+        "collision": "638b154cd7192f38",
+        "collision_queries": 13,
+        "command": "d40c35319e8b7d09",
+        "config": "dbb7895f2057062e",
+        "final_state": "7cd08af5d7aa7f01",
+        "full_output_parity": true,
+        "name": "config-q3-overbounce",
+        "native_server_state": "7cd08af5d7aa7f01"
+      },
+      {
+        "category": "config",
+        "collision": "1c08b42e3fe9a060",
+        "collision_queries": 11,
+        "command": "386606d30390e637",
+        "config": "babcf8577edad72d",
+        "final_state": "380ce6c0c46031e0",
+        "full_output_parity": true,
+        "name": "config-air-accel-zero",
+        "native_server_state": "380ce6c0c46031e0"
+      },
+      {
+        "category": "config",
+        "collision": "7eb0e0d0f9b53fe8",
+        "collision_queries": 11,
+        "command": "386606d30390e637",
+        "config": "00dc4e213d3f1a67",
+        "final_state": "a7c6af88b29f64bf",
+        "full_output_parity": true,
+        "name": "config-air-accel-high",
+        "native_server_state": "a7c6af88b29f64bf"
+      },
+      {
+        "category": "duration",
+        "collision": "187b3adea4e1463c",
+        "collision_queries": 11,
+        "command": "81c8958f4048bfde",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "343e4ae0b099b997",
+        "full_output_parity": true,
+        "name": "duration-1",
+        "native_server_state": "343e4ae0b099b997"
+      },
+      {
+        "category": "duration",
+        "collision": "079c73e61c50bfcb",
+        "collision_queries": 11,
+        "command": "15782a4c115b5314",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "ba9a20be01b9cf34",
+        "full_output_parity": true,
+        "name": "duration-7",
+        "native_server_state": "ba9a20be01b9cf34"
+      },
+      {
+        "category": "duration",
+        "collision": "6a5dd1c703871b9f",
+        "collision_queries": 11,
+        "command": "5ba1a586aee8069f",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "352d69a47ba33336",
+        "full_output_parity": true,
+        "name": "duration-8",
+        "native_server_state": "352d69a47ba33336"
+      },
+      {
+        "category": "duration",
+        "collision": "0035403fceb170e1",
+        "collision_queries": 11,
+        "command": "5e8cf6db94f19f76",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "a5eaf7df2687a358",
+        "full_output_parity": true,
+        "name": "duration-9",
+        "native_server_state": "a5eaf7df2687a358"
+      },
+      {
+        "category": "duration",
+        "collision": "b7b455b7dc82def1",
+        "collision_queries": 11,
+        "command": "b457f02b419812f1",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "99a43be927189626",
+        "full_output_parity": true,
+        "name": "duration-66",
+        "native_server_state": "99a43be927189626"
+      },
+      {
+        "category": "duration",
+        "collision": "30b18ef8888a1970",
+        "collision_queries": 11,
+        "command": "c243573f4cd3d759",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "ddb799acaa042d2f",
+        "full_output_parity": true,
+        "name": "duration-250",
+        "native_server_state": "ddb799acaa042d2f"
+      },
+      {
+        "category": "contents",
+        "collision": "d51d5de672601c40",
+        "collision_queries": 17,
+        "command": "386606d30390e637",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "470886ab0e89267a",
+        "full_output_parity": true,
+        "name": "contents-water-waist",
+        "native_server_state": "470886ab0e89267a"
+      },
+      {
+        "category": "contents",
+        "collision": "5a06a4652257e7a3",
+        "collision_queries": 11,
+        "command": "386606d30390e637",
+        "config": "9bc2314e73eb8d0c",
+        "final_state": "8de4649c9de429e6",
+        "full_output_parity": true,
+        "name": "contents-ladder",
+        "native_server_state": "8de4649c9de429e6"
+      }
+    ],
+    "fail_closed": {
+      "case_names": [
+        "null-step",
+        "non-finite-state",
+        "unknown-movement-flag",
+        "non-finite-command",
+        "command-reserved-bits",
+        "unknown-model-revision",
+        "unknown-config-flags",
+        "non-boolean-snap",
+        "null-trace-callback",
+        "trace-non-finite-fraction",
+        "trace-surface-without-id",
+        "trace-invalid-struct-size",
+        "trace-conflicting-surface-flags",
+        "trace-throws",
+        "canonicalize-nan",
+        "replay-zero-capacity",
+        "replay-null-count",
+        "replay-range-fills-capacity",
+        "replay-index-out-of-range",
+        "replay-null-sequence"
+      ],
+      "passed_cases": 20,
+      "transcript": "310e057202c6fd0b"
+    },
+    "focused_fixtures": [
+      {
+        "behaviour_assertions": {
+          "all_step_output_fields": true,
+          "bitwise_native_parity": true,
+          "canonical_short_angles_exact": true,
+          "floor_plane_exact": true,
+          "full_native_output_equal": true,
+          "movement_truncated_to_wire_units": true,
+          "nonzero_canonical_angles": true,
+          "nonzero_delta_angles": true,
+          "standing_bounds_exact": true,
+          "view_angles_include_delta": true
+        },
+        "canonical_command": {
+          "buttons": 0,
+          "duration_ms": 17,
+          "forward_move": {
+            "bits": "435c0000",
+            "value": 220
+          },
+          "hash": "8c7c480d066af2f3",
+          "reserved0": 0,
+          "schema_version": 1,
+          "side_move": {
+            "bits": "c2140000",
+            "value": -37
+          },
+          "struct_size": 32,
+          "view_angles": [
+            {
+              "bits": "42147dc0",
+              "value": 37.1228027
+            },
+            {
+              "bits": "42f6e820",
+              "value": 123.453369
+            },
+            {
+              "bits": "c195fc40",
+              "value": -18.7481689
+            }
+          ]
+        },
+        "category": "full-output",
+        "config": {
+          "air_acceleration": 1,
+          "flags": 0,
+          "hash": "9bc2314e73eb8d0c",
+          "movement_model_revision": 1,
+          "schema_version": 1,
+          "struct_size": 20
+        },
+        "control": null,
+        "full_output_equal": true,
+        "initial_state": {
+          "delta_angles": [
+            {
+              "bits": "41340000",
+              "value": 11.25
+            },
+            {
+              "bits": "c1b40000",
+              "value": -22.5
+            },
+            {
+              "bits": "40700000",
+              "value": 3.75
+            }
+          ],
+          "gravity": 800,
+          "movement_flags": 0,
+          "movement_time_ms": 0,
+          "movement_type": 0,
+          "origin": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "41c00000",
+              "value": 24
+            }
+          ],
+          "reserved0": 0,
+          "schema_version": 1,
+          "semantic_hash": "6d93fddd82a0ae74",
+          "struct_size": 56,
+          "velocity": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "view_height": 22
+        },
+        "name": "angled-full-output-floor",
+        "native_output": {
+          "collision_hash": null,
+          "collision_query_count": 12,
+          "ground_entity_id": 17,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "3f800000",
+                "value": 1
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 2
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "41340000",
+                "value": 11.25
+              },
+              {
+                "bits": "c1b40000",
+                "value": -22.5
+              },
+              {
+                "bits": "40700000",
+                "value": 3.75
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 4,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "be5d2f75",
+                "value": -0.216001347
+              },
+              {
+                "bits": "3f128ec0",
+                "value": 0.572490692
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "be94aed19cd2c604",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "c14b4b9e",
+                "value": -12.7059612
+              },
+              {
+                "bits": "4206b425",
+                "value": 33.6759224
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "be94aed19cd2c604",
+          "step_clip": 0,
+          "touch_count": 1,
+          "touch_entity_ids": [
+            17,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "42417dc0",
+              "value": 48.3728027
+            },
+            {
+              "bits": "42c9e820",
+              "value": 100.953369
+            },
+            {
+              "bits": "c16ff880",
+              "value": -14.9981689
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "output": {
+          "collision_hash": "2a292b9f5ec0f8fd",
+          "collision_query_count": 12,
+          "ground_entity_id": 17,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "3f800000",
+                "value": 1
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 2
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "41340000",
+                "value": 11.25
+              },
+              {
+                "bits": "c1b40000",
+                "value": -22.5
+              },
+              {
+                "bits": "40700000",
+                "value": 3.75
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 4,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "be5d2f75",
+                "value": -0.216001347
+              },
+              {
+                "bits": "3f128ec0",
+                "value": 0.572490692
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "be94aed19cd2c604",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "c14b4b9e",
+                "value": -12.7059612
+              },
+              {
+                "bits": "4206b425",
+                "value": 33.6759224
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "be94aed19cd2c604",
+          "step_clip": 0,
+          "touch_count": 1,
+          "touch_entity_ids": [
+            17,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "42417dc0",
+              "value": 48.3728027
+            },
+            {
+              "bits": "42c9e820",
+              "value": 100.953369
+            },
+            {
+              "bits": "c16ff880",
+              "value": -14.9981689
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "player_entity_id": 7,
+        "snap_initial": 0,
+        "view_offset": [
+          {
+            "bits": "3f800000",
+            "value": 1
+          },
+          {
+            "bits": "c0000000",
+            "value": -2
+          },
+          {
+            "bits": "40400000",
+            "value": 3
+          }
+        ]
+      },
+      {
+        "behaviour_assertions": {
+          "allsolid": true,
+          "exact_total_order_result": true,
+          "penetration_observed": true,
+          "snap_control_differs": true,
+          "snap_disabled_control": true,
+          "snap_full_native_output_equal": true,
+          "snap_initial_success": true,
+          "snap_selected_positive_z_candidate": true,
+          "startsolid": true,
+          "stuck_control_total_order_exact": true
+        },
+        "canonical_command": {
+          "buttons": 0,
+          "duration_ms": 0,
+          "forward_move": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "hash": "85d14c5c80856dbe",
+          "reserved0": 0,
+          "schema_version": 1,
+          "side_move": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "struct_size": 32,
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ]
+        },
+        "category": "snap-initial",
+        "config": {
+          "air_acceleration": 1,
+          "flags": 0,
+          "hash": "9bc2314e73eb8d0c",
+          "movement_model_revision": 1,
+          "schema_version": 1,
+          "struct_size": 20
+        },
+        "control": {
+          "canonical_command": {
+            "buttons": 0,
+            "duration_ms": 0,
+            "forward_move": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "hash": "85d14c5c80856dbe",
+            "reserved0": 0,
+            "schema_version": 1,
+            "side_move": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "struct_size": 32,
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ]
+          },
+          "config": {
+            "air_acceleration": 1,
+            "flags": 0,
+            "hash": "9bc2314e73eb8d0c",
+            "movement_model_revision": 1,
+            "schema_version": 1,
+            "struct_size": 20
+          },
+          "full_output_equal": true,
+          "initial_state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 0,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41bc0000",
+                "value": 23.5
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "9fd3fbe6ff49db40",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 22
+          },
+          "native_output": {
+            "collision_hash": null,
+            "collision_query_count": 39,
+            "ground_entity_id": 17,
+            "ground_plane": {
+              "distance": {
+                "bits": "00000000",
+                "value": 0
+              },
+              "normal": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "3f800000",
+                  "value": 1
+                }
+              ],
+              "reserved": [
+                0,
+                0
+              ],
+              "sign_bits": 0,
+              "type": 2
+            },
+            "impact_delta": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "jump_sound": 0,
+            "maxs": [
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "42000000",
+                "value": 32
+              }
+            ],
+            "mins": [
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1c00000",
+                "value": -24
+              }
+            ],
+            "rd_flags": 0,
+            "reserved1": 0,
+            "screen_blend": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "state": {
+              "delta_angles": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "gravity": 800,
+              "movement_flags": 4,
+              "movement_time_ms": 0,
+              "movement_type": 0,
+              "origin": [
+                {
+                  "bits": "3e000000",
+                  "value": 0.125
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "41c40000",
+                  "value": 24.5
+                }
+              ],
+              "reserved0": 0,
+              "schema_version": 1,
+              "semantic_hash": "fa5f0bf64641cb5a",
+              "struct_size": 56,
+              "velocity": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "view_height": 26
+            },
+            "state_hash": "fa5f0bf64641cb5a",
+            "step_clip": 0,
+            "touch_count": 1,
+            "touch_entity_ids": [
+              17,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295
+            ],
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "water_level": 0,
+            "water_type": 0
+          },
+          "output": {
+            "collision_hash": "539e170dbe309b18",
+            "collision_query_count": 39,
+            "ground_entity_id": 17,
+            "ground_plane": {
+              "distance": {
+                "bits": "00000000",
+                "value": 0
+              },
+              "normal": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "3f800000",
+                  "value": 1
+                }
+              ],
+              "reserved": [
+                0,
+                0
+              ],
+              "sign_bits": 0,
+              "type": 2
+            },
+            "impact_delta": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "jump_sound": 0,
+            "maxs": [
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "42000000",
+                "value": 32
+              }
+            ],
+            "mins": [
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1c00000",
+                "value": -24
+              }
+            ],
+            "rd_flags": 0,
+            "reserved1": 0,
+            "screen_blend": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "state": {
+              "delta_angles": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "gravity": 800,
+              "movement_flags": 4,
+              "movement_time_ms": 0,
+              "movement_type": 0,
+              "origin": [
+                {
+                  "bits": "3e000000",
+                  "value": 0.125
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "41c40000",
+                  "value": 24.5
+                }
+              ],
+              "reserved0": 0,
+              "schema_version": 1,
+              "semantic_hash": "fa5f0bf64641cb5a",
+              "struct_size": 56,
+              "velocity": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "view_height": 26
+            },
+            "state_hash": "fa5f0bf64641cb5a",
+            "step_clip": 0,
+            "touch_count": 1,
+            "touch_entity_ids": [
+              17,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295
+            ],
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "water_level": 0,
+            "water_type": 0
+          },
+          "player_entity_id": 7,
+          "snap_initial": 0,
+          "view_offset": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ]
+        },
+        "full_output_equal": true,
+        "initial_state": {
+          "delta_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "gravity": 800,
+          "movement_flags": 0,
+          "movement_time_ms": 0,
+          "movement_type": 0,
+          "origin": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "41bc0000",
+              "value": 23.5
+            }
+          ],
+          "reserved0": 0,
+          "schema_version": 1,
+          "semantic_hash": "9fd3fbe6ff49db40",
+          "struct_size": 56,
+          "velocity": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "view_height": 22
+        },
+        "name": "snap-initial-stuck-order",
+        "native_output": {
+          "collision_hash": null,
+          "collision_query_count": 25,
+          "ground_entity_id": 4294967295,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 0
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 0,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c40000",
+                "value": 24.5
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "68cbeac17783b2c4",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "68cbeac17783b2c4",
+          "step_clip": 0,
+          "touch_count": 2,
+          "touch_entity_ids": [
+            17,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "output": {
+          "collision_hash": "d28901593733c8ee",
+          "collision_query_count": 25,
+          "ground_entity_id": 4294967295,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 0
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 0,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c40000",
+                "value": 24.5
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "68cbeac17783b2c4",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "68cbeac17783b2c4",
+          "step_clip": 0,
+          "touch_count": 2,
+          "touch_entity_ids": [
+            17,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "player_entity_id": 7,
+        "snap_initial": 1,
+        "view_offset": [
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "behaviour_assertions": {
+          "collision_identity_positions_exact": true,
+          "dual_surface": true,
+          "dual_surface_consumed": true,
+          "identity_full_native_output_equal": true,
+          "ignore_player_mask_control": true,
+          "ignore_player_mask_differential": true,
+          "nonworld_ground_entity": true,
+          "ordered_touch_contains_player": true,
+          "ordered_touch_identity": true,
+          "pass_and_world_query_identity": true,
+          "pass_entity": true,
+          "stable_entity_surface_token_set": true,
+          "stable_nonworld_ground_entity": true,
+          "world_only_query": true
+        },
+        "canonical_command": {
+          "buttons": 0,
+          "duration_ms": 250,
+          "forward_move": {
+            "bits": "43c80000",
+            "value": 400
+          },
+          "hash": "e2b64cd153458595",
+          "reserved0": 0,
+          "schema_version": 1,
+          "side_move": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "struct_size": 32,
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ]
+        },
+        "category": "collision-identity",
+        "config": {
+          "air_acceleration": 1,
+          "flags": 0,
+          "hash": "9bc2314e73eb8d0c",
+          "movement_model_revision": 1,
+          "schema_version": 1,
+          "struct_size": 20
+        },
+        "control": {
+          "canonical_command": {
+            "buttons": 0,
+            "duration_ms": 250,
+            "forward_move": {
+              "bits": "43c80000",
+              "value": 400
+            },
+            "hash": "e2b64cd153458595",
+            "reserved0": 0,
+            "schema_version": 1,
+            "side_move": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "struct_size": 32,
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ]
+          },
+          "config": {
+            "air_acceleration": 1,
+            "flags": 0,
+            "hash": "9bc2314e73eb8d0c",
+            "movement_model_revision": 1,
+            "schema_version": 1,
+            "struct_size": 20
+          },
+          "full_output_equal": true,
+          "initial_state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 512,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "76a5524aae00357a",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 22
+          },
+          "native_output": {
+            "collision_hash": null,
+            "collision_query_count": 12,
+            "ground_entity_id": 17,
+            "ground_plane": {
+              "distance": {
+                "bits": "00000000",
+                "value": 0
+              },
+              "normal": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "3f800000",
+                  "value": 1
+                }
+              ],
+              "reserved": [
+                0,
+                0
+              ],
+              "sign_bits": 0,
+              "type": 2
+            },
+            "impact_delta": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "jump_sound": 0,
+            "maxs": [
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "42000000",
+                "value": 32
+              }
+            ],
+            "mins": [
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1c00000",
+                "value": -24
+              }
+            ],
+            "rd_flags": 0,
+            "reserved1": 0,
+            "screen_blend": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "state": {
+              "delta_angles": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "gravity": 800,
+              "movement_flags": 516,
+              "movement_time_ms": 0,
+              "movement_type": 0,
+              "origin": [
+                {
+                  "bits": "42960000",
+                  "value": 75
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "41c00000",
+                  "value": 24
+                }
+              ],
+              "reserved0": 0,
+              "schema_version": 1,
+              "semantic_hash": "68a5dfc9a96a72b5",
+              "struct_size": 56,
+              "velocity": [
+                {
+                  "bits": "43960000",
+                  "value": 300
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "view_height": 26
+            },
+            "state_hash": "68a5dfc9a96a72b5",
+            "step_clip": 0,
+            "touch_count": 1,
+            "touch_entity_ids": [
+              17,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295
+            ],
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "water_level": 0,
+            "water_type": 0
+          },
+          "output": {
+            "collision_hash": "34859a09ae04ca15",
+            "collision_query_count": 12,
+            "ground_entity_id": 17,
+            "ground_plane": {
+              "distance": {
+                "bits": "00000000",
+                "value": 0
+              },
+              "normal": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "3f800000",
+                  "value": 1
+                }
+              ],
+              "reserved": [
+                0,
+                0
+              ],
+              "sign_bits": 0,
+              "type": 2
+            },
+            "impact_delta": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "jump_sound": 0,
+            "maxs": [
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "42000000",
+                "value": 32
+              }
+            ],
+            "mins": [
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1c00000",
+                "value": -24
+              }
+            ],
+            "rd_flags": 0,
+            "reserved1": 0,
+            "screen_blend": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "state": {
+              "delta_angles": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "gravity": 800,
+              "movement_flags": 516,
+              "movement_time_ms": 0,
+              "movement_type": 0,
+              "origin": [
+                {
+                  "bits": "42960000",
+                  "value": 75
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "41c00000",
+                  "value": 24
+                }
+              ],
+              "reserved0": 0,
+              "schema_version": 1,
+              "semantic_hash": "68a5dfc9a96a72b5",
+              "struct_size": 56,
+              "velocity": [
+                {
+                  "bits": "43960000",
+                  "value": 300
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "view_height": 26
+            },
+            "state_hash": "68a5dfc9a96a72b5",
+            "step_clip": 0,
+            "touch_count": 1,
+            "touch_entity_ids": [
+              17,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295
+            ],
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "water_level": 0,
+            "water_type": 0
+          },
+          "player_entity_id": 7,
+          "snap_initial": 0,
+          "view_offset": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ]
+        },
+        "full_output_equal": true,
+        "initial_state": {
+          "delta_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "gravity": 800,
+          "movement_flags": 0,
+          "movement_time_ms": 0,
+          "movement_type": 0,
+          "origin": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "41c00000",
+              "value": 24
+            }
+          ],
+          "reserved0": 0,
+          "schema_version": 1,
+          "semantic_hash": "9de301c61bc7f6d4",
+          "struct_size": 56,
+          "velocity": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "view_height": 22
+        },
+        "name": "entity-touch-dual-surface-mask",
+        "native_output": {
+          "collision_hash": null,
+          "collision_query_count": 12,
+          "ground_entity_id": 17,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "3f800000",
+                "value": 1
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 2
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 4,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "41c00000",
+                "value": 24
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "bf63360b9402dfbb",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "bf63360b9402dfbb",
+          "step_clip": 0,
+          "touch_count": 2,
+          "touch_entity_ids": [
+            17,
+            42,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "output": {
+          "collision_hash": "c248272559219a11",
+          "collision_query_count": 12,
+          "ground_entity_id": 17,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "3f800000",
+                "value": 1
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 2
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 4,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "41c00000",
+                "value": 24
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "bf63360b9402dfbb",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "bf63360b9402dfbb",
+          "step_clip": 0,
+          "touch_count": 2,
+          "touch_entity_ids": [
+            17,
+            42,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "player_entity_id": 7,
+        "snap_initial": 0,
+        "view_offset": [
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "behaviour_assertions": {
+          "default_speed_cap": true,
+          "default_speed_cap_exact": true,
+          "flag_persistence": true,
+          "haste_changes_state": true,
+          "haste_flag_persists": true,
+          "haste_full_native_output_equal": true,
+          "haste_speed_cap": true,
+          "haste_speed_cap_exact": true,
+          "multi_command_full_output_parity": true
+        },
+        "canonical_command": {
+          "buttons": 0,
+          "duration_ms": 16,
+          "forward_move": {
+            "bits": "43c80000",
+            "value": 400
+          },
+          "hash": "c4e2ee4989b74603",
+          "reserved0": 0,
+          "schema_version": 1,
+          "side_move": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "struct_size": 32,
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ]
+        },
+        "category": "movement-flag",
+        "config": {
+          "air_acceleration": 1,
+          "flags": 0,
+          "hash": "9bc2314e73eb8d0c",
+          "movement_model_revision": 1,
+          "schema_version": 1,
+          "struct_size": 20
+        },
+        "control": {
+          "canonical_command": {
+            "buttons": 0,
+            "duration_ms": 16,
+            "forward_move": {
+              "bits": "43c80000",
+              "value": 400
+            },
+            "hash": "c4e2ee4989b74603",
+            "reserved0": 0,
+            "schema_version": 1,
+            "side_move": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "struct_size": 32,
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ]
+          },
+          "config": {
+            "air_acceleration": 1,
+            "flags": 0,
+            "hash": "9bc2314e73eb8d0c",
+            "movement_model_revision": 1,
+            "schema_version": 1,
+            "struct_size": 20
+          },
+          "full_output_equal": true,
+          "initial_state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 0,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "9de301c61bc7f6d4",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 22
+          },
+          "native_output": {
+            "collision_hash": null,
+            "collision_query_count": 12,
+            "ground_entity_id": 0,
+            "ground_plane": {
+              "distance": {
+                "bits": "00000000",
+                "value": 0
+              },
+              "normal": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "3f800000",
+                  "value": 1
+                }
+              ],
+              "reserved": [
+                0,
+                0
+              ],
+              "sign_bits": 0,
+              "type": 2
+            },
+            "impact_delta": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "jump_sound": 0,
+            "maxs": [
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "42000000",
+                "value": 32
+              }
+            ],
+            "mins": [
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1c00000",
+                "value": -24
+              }
+            ],
+            "rd_flags": 0,
+            "reserved1": 0,
+            "screen_blend": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "state": {
+              "delta_angles": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "gravity": 800,
+              "movement_flags": 4,
+              "movement_time_ms": 0,
+              "movement_type": 0,
+              "origin": [
+                {
+                  "bits": "4355ab70",
+                  "value": 213.669678
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "41c00000",
+                  "value": 24
+                }
+              ],
+              "reserved0": 0,
+              "schema_version": 1,
+              "semantic_hash": "275782ada3a09076",
+              "struct_size": 56,
+              "velocity": [
+                {
+                  "bits": "43960000",
+                  "value": 300
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "view_height": 26
+            },
+            "state_hash": "275782ada3a09076",
+            "step_clip": 0,
+            "touch_count": 1,
+            "touch_entity_ids": [
+              0,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295
+            ],
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "water_level": 0,
+            "water_type": 0
+          },
+          "output": {
+            "collision_hash": "ae0147c0acc1be1c",
+            "collision_query_count": 12,
+            "ground_entity_id": 0,
+            "ground_plane": {
+              "distance": {
+                "bits": "00000000",
+                "value": 0
+              },
+              "normal": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "3f800000",
+                  "value": 1
+                }
+              ],
+              "reserved": [
+                0,
+                0
+              ],
+              "sign_bits": 0,
+              "type": 2
+            },
+            "impact_delta": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "jump_sound": 0,
+            "maxs": [
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "42000000",
+                "value": 32
+              }
+            ],
+            "mins": [
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1c00000",
+                "value": -24
+              }
+            ],
+            "rd_flags": 0,
+            "reserved1": 0,
+            "screen_blend": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "state": {
+              "delta_angles": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "gravity": 800,
+              "movement_flags": 4,
+              "movement_time_ms": 0,
+              "movement_type": 0,
+              "origin": [
+                {
+                  "bits": "4355ab70",
+                  "value": 213.669678
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "41c00000",
+                  "value": 24
+                }
+              ],
+              "reserved0": 0,
+              "schema_version": 1,
+              "semantic_hash": "275782ada3a09076",
+              "struct_size": 56,
+              "velocity": [
+                {
+                  "bits": "43960000",
+                  "value": 300
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "view_height": 26
+            },
+            "state_hash": "275782ada3a09076",
+            "step_clip": 0,
+            "touch_count": 1,
+            "touch_entity_ids": [
+              0,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295
+            ],
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "water_level": 0,
+            "water_type": 0
+          },
+          "player_entity_id": 7,
+          "snap_initial": 0,
+          "view_offset": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ]
+        },
+        "full_output_equal": true,
+        "initial_state": {
+          "delta_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "gravity": 800,
+          "movement_flags": 2048,
+          "movement_time_ms": 0,
+          "movement_type": 0,
+          "origin": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "41c00000",
+              "value": 24
+            }
+          ],
+          "reserved0": 0,
+          "schema_version": 1,
+          "semantic_hash": "69743958a7bb550c",
+          "struct_size": 56,
+          "velocity": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "view_height": 22
+        },
+        "name": "haste-speed-differential",
+        "native_output": {
+          "collision_hash": null,
+          "collision_query_count": 12,
+          "ground_entity_id": 0,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "3f800000",
+                "value": 1
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 2
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 2052,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "4385b923",
+                "value": 267.446381
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "de4e9581f35d3c4e",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "43bb8000",
+                "value": 375
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "de4e9581f35d3c4e",
+          "step_clip": 0,
+          "touch_count": 1,
+          "touch_entity_ids": [
+            0,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "output": {
+          "collision_hash": "d8f3187ebc8efd94",
+          "collision_query_count": 12,
+          "ground_entity_id": 0,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "3f800000",
+                "value": 1
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 2
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 2052,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "4385b923",
+                "value": 267.446381
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "de4e9581f35d3c4e",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "43bb8000",
+                "value": 375
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "de4e9581f35d3c4e",
+          "step_clip": 0,
+          "touch_count": 1,
+          "touch_entity_ids": [
+            0,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "player_entity_id": 7,
+        "snap_initial": 0,
+        "view_offset": [
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "behaviour_assertions": {
+          "grapple_collides_with_wall": true,
+          "grapple_full_native_output_equal": true,
+          "grapple_retains_type": true,
+          "grapple_skips_gravity": true,
+          "no_gravity": true,
+          "nonzero_initial_velocity": true,
+          "ordered_touch_identity": true,
+          "wall_collision": true
+        },
+        "canonical_command": {
+          "buttons": 0,
+          "duration_ms": 250,
+          "forward_move": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "hash": "de163f9e43321f24",
+          "reserved0": 0,
+          "schema_version": 1,
+          "side_move": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "struct_size": 32,
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ]
+        },
+        "category": "movement-type",
+        "config": {
+          "air_acceleration": 1,
+          "flags": 0,
+          "hash": "9bc2314e73eb8d0c",
+          "movement_model_revision": 1,
+          "schema_version": 1,
+          "struct_size": 20
+        },
+        "control": null,
+        "full_output_equal": true,
+        "initial_state": {
+          "delta_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "gravity": 800,
+          "movement_flags": 0,
+          "movement_time_ms": 0,
+          "movement_type": 1,
+          "origin": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "42a00000",
+              "value": 80
+            }
+          ],
+          "reserved0": 0,
+          "schema_version": 1,
+          "semantic_hash": "e14892f59471df65",
+          "struct_size": 56,
+          "velocity": [
+            {
+              "bits": "43960000",
+              "value": 300
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "c2c80000",
+              "value": -100
+            }
+          ],
+          "view_height": 22
+        },
+        "name": "grapple-velocity-wall",
+        "native_output": {
+          "collision_hash": null,
+          "collision_query_count": 11,
+          "ground_entity_id": 4294967295,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 0
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 0,
+            "movement_time_ms": 0,
+            "movement_type": 1,
+            "origin": [
+              {
+                "bits": "425f3d71",
+                "value": 55.8100014
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "425c0001",
+                "value": 55.0000038
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "375e74842e393758",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "c0400000",
+                "value": -3
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "c2c80000",
+                "value": -100
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "375e74842e393758",
+          "step_clip": 0,
+          "touch_count": 1,
+          "touch_entity_ids": [
+            42,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "output": {
+          "collision_hash": "8627cb05dc49b8bd",
+          "collision_query_count": 11,
+          "ground_entity_id": 4294967295,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 0
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 0,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 0,
+            "movement_time_ms": 0,
+            "movement_type": 1,
+            "origin": [
+              {
+                "bits": "425f3d71",
+                "value": 55.8100014
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "425c0001",
+                "value": 55.0000038
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "375e74842e393758",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "c0400000",
+                "value": -3
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "c2c80000",
+                "value": -100
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "375e74842e393758",
+          "step_clip": 0,
+          "touch_count": 1,
+          "touch_entity_ids": [
+            42,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "player_entity_id": 7,
+        "snap_initial": 0,
+        "view_offset": [
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          }
+        ]
+      },
+      {
+        "behaviour_assertions": {
+          "dry_control": true,
+          "exact_water_blend": true,
+          "one_presentation_query_per_control": true,
+          "presentation_does_not_set_movement_water": true,
+          "presentation_excluded_from_hashes": true,
+          "presentation_full_native_output_equal": true,
+          "presentation_sets_underwater_flag": true,
+          "presentation_water_blend_exact": true,
+          "unchanged_collision_hash": true,
+          "unchanged_state_hash": true,
+          "underwater_render_flag": true
+        },
+        "canonical_command": {
+          "buttons": 0,
+          "duration_ms": 0,
+          "forward_move": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "hash": "85d14c5c80856dbe",
+          "reserved0": 0,
+          "schema_version": 1,
+          "side_move": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "struct_size": 32,
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ]
+        },
+        "category": "presentation-exclusion",
+        "config": {
+          "air_acceleration": 1,
+          "flags": 0,
+          "hash": "9bc2314e73eb8d0c",
+          "movement_model_revision": 1,
+          "schema_version": 1,
+          "struct_size": 20
+        },
+        "control": {
+          "canonical_command": {
+            "buttons": 0,
+            "duration_ms": 0,
+            "forward_move": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "hash": "85d14c5c80856dbe",
+            "reserved0": 0,
+            "schema_version": 1,
+            "side_move": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "struct_size": 32,
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ]
+          },
+          "config": {
+            "air_acceleration": 1,
+            "flags": 0,
+            "hash": "9bc2314e73eb8d0c",
+            "movement_model_revision": 1,
+            "schema_version": 1,
+            "struct_size": 20
+          },
+          "full_output_equal": true,
+          "initial_state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 0,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "9de301c61bc7f6d4",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 22
+          },
+          "native_output": {
+            "collision_hash": null,
+            "collision_query_count": 6,
+            "ground_entity_id": 0,
+            "ground_plane": {
+              "distance": {
+                "bits": "00000000",
+                "value": 0
+              },
+              "normal": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "3f800000",
+                  "value": 1
+                }
+              ],
+              "reserved": [
+                0,
+                0
+              ],
+              "sign_bits": 0,
+              "type": 2
+            },
+            "impact_delta": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "jump_sound": 0,
+            "maxs": [
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "42000000",
+                "value": 32
+              }
+            ],
+            "mins": [
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1c00000",
+                "value": -24
+              }
+            ],
+            "rd_flags": 0,
+            "reserved1": 0,
+            "screen_blend": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "state": {
+              "delta_angles": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "gravity": 800,
+              "movement_flags": 4,
+              "movement_time_ms": 0,
+              "movement_type": 0,
+              "origin": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "41c00000",
+                  "value": 24
+                }
+              ],
+              "reserved0": 0,
+              "schema_version": 1,
+              "semantic_hash": "af3330da1f5fd7e4",
+              "struct_size": 56,
+              "velocity": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "view_height": 26
+            },
+            "state_hash": "af3330da1f5fd7e4",
+            "step_clip": 0,
+            "touch_count": 1,
+            "touch_entity_ids": [
+              0,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295
+            ],
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "water_level": 0,
+            "water_type": 0
+          },
+          "output": {
+            "collision_hash": "2120a63fa543d48f",
+            "collision_query_count": 6,
+            "ground_entity_id": 0,
+            "ground_plane": {
+              "distance": {
+                "bits": "00000000",
+                "value": 0
+              },
+              "normal": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "3f800000",
+                  "value": 1
+                }
+              ],
+              "reserved": [
+                0,
+                0
+              ],
+              "sign_bits": 0,
+              "type": 2
+            },
+            "impact_delta": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "jump_sound": 0,
+            "maxs": [
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "41800000",
+                "value": 16
+              },
+              {
+                "bits": "42000000",
+                "value": 32
+              }
+            ],
+            "mins": [
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1800000",
+                "value": -16
+              },
+              {
+                "bits": "c1c00000",
+                "value": -24
+              }
+            ],
+            "rd_flags": 0,
+            "reserved1": 0,
+            "screen_blend": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "state": {
+              "delta_angles": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "gravity": 800,
+              "movement_flags": 4,
+              "movement_time_ms": 0,
+              "movement_type": 0,
+              "origin": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "41c00000",
+                  "value": 24
+                }
+              ],
+              "reserved0": 0,
+              "schema_version": 1,
+              "semantic_hash": "af3330da1f5fd7e4",
+              "struct_size": 56,
+              "velocity": [
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                },
+                {
+                  "bits": "00000000",
+                  "value": 0
+                }
+              ],
+              "view_height": 26
+            },
+            "state_hash": "af3330da1f5fd7e4",
+            "step_clip": 0,
+            "touch_count": 1,
+            "touch_entity_ids": [
+              0,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295,
+              4294967295
+            ],
+            "view_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "water_level": 0,
+            "water_type": 0
+          },
+          "player_entity_id": 7,
+          "snap_initial": 0,
+          "view_offset": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ]
+        },
+        "full_output_equal": true,
+        "initial_state": {
+          "delta_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "gravity": 800,
+          "movement_flags": 0,
+          "movement_time_ms": 0,
+          "movement_type": 0,
+          "origin": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "41c00000",
+              "value": 24
+            }
+          ],
+          "reserved0": 0,
+          "schema_version": 1,
+          "semantic_hash": "9de301c61bc7f6d4",
+          "struct_size": 56,
+          "velocity": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "view_height": 22
+        },
+        "name": "presentation-water-hash-exclusion",
+        "native_output": {
+          "collision_hash": null,
+          "collision_query_count": 6,
+          "ground_entity_id": 0,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "3f800000",
+                "value": 1
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 2
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 1,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "3f000000",
+              "value": 0.5
+            },
+            {
+              "bits": "3e99999a",
+              "value": 0.300000012
+            },
+            {
+              "bits": "3e4ccccd",
+              "value": 0.200000003
+            },
+            {
+              "bits": "3ecccccd",
+              "value": 0.400000006
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 4,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "af3330da1f5fd7e4",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "af3330da1f5fd7e4",
+          "step_clip": 0,
+          "touch_count": 1,
+          "touch_entity_ids": [
+            0,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "output": {
+          "collision_hash": "2120a63fa543d48f",
+          "collision_query_count": 6,
+          "ground_entity_id": 0,
+          "ground_plane": {
+            "distance": {
+              "bits": "00000000",
+              "value": 0
+            },
+            "normal": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "3f800000",
+                "value": 1
+              }
+            ],
+            "reserved": [
+              0,
+              0
+            ],
+            "sign_bits": 0,
+            "type": 2
+          },
+          "impact_delta": {
+            "bits": "00000000",
+            "value": 0
+          },
+          "jump_sound": 0,
+          "maxs": [
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "41800000",
+              "value": 16
+            },
+            {
+              "bits": "42000000",
+              "value": 32
+            }
+          ],
+          "mins": [
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1800000",
+              "value": -16
+            },
+            {
+              "bits": "c1c00000",
+              "value": -24
+            }
+          ],
+          "rd_flags": 1,
+          "reserved1": 0,
+          "screen_blend": [
+            {
+              "bits": "3f000000",
+              "value": 0.5
+            },
+            {
+              "bits": "3e99999a",
+              "value": 0.300000012
+            },
+            {
+              "bits": "3e4ccccd",
+              "value": 0.200000003
+            },
+            {
+              "bits": "3ecccccd",
+              "value": 0.400000006
+            }
+          ],
+          "state": {
+            "delta_angles": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "gravity": 800,
+            "movement_flags": 4,
+            "movement_time_ms": 0,
+            "movement_type": 0,
+            "origin": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "41c00000",
+                "value": 24
+              }
+            ],
+            "reserved0": 0,
+            "schema_version": 1,
+            "semantic_hash": "af3330da1f5fd7e4",
+            "struct_size": 56,
+            "velocity": [
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              },
+              {
+                "bits": "00000000",
+                "value": 0
+              }
+            ],
+            "view_height": 26
+          },
+          "state_hash": "af3330da1f5fd7e4",
+          "step_clip": 0,
+          "touch_count": 1,
+          "touch_entity_ids": [
+            0,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295,
+            4294967295
+          ],
+          "view_angles": [
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            },
+            {
+              "bits": "00000000",
+              "value": 0
+            }
+          ],
+          "water_level": 0,
+          "water_type": 0
+        },
+        "player_entity_id": 7,
+        "snap_initial": 0,
+        "view_offset": [
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          },
+          {
+            "bits": "00000000",
+            "value": 0
+          }
+        ]
+      }
+    ],
+    "full_output_parity_all_cases": true,
+    "full_output_scope": "all-pmove-value-outputs-excluding-native-collision-hash",
+    "hash_contract": {
+      "command": "0c7d5b304f0cf0a3",
+      "config": "9bc2314e73eb8d0c",
+      "state": "9de301c61bc7f6d4"
+    },
+    "movement_model_revision": 1,
+    "nested_step": {
+      "inner_collision": "60bb4a8ea18838d8",
+      "inner_state": "c49d060afd603cea",
+      "outer_collision": "7e66b7008818231c",
+      "outer_state": "abfb9d3630c5bbf0"
+    },
+    "parity_scope": "abi-client-vs-native-server-core",
+    "scenarios": [
+      {
+        "collision_queries": 198,
+        "collision_transcript": "56e8b91cd3823c6b",
+        "command_count": 18,
+        "command_transcript": "ccbe63883028fd35",
+        "final_state": "3f6342cec1b175be",
+        "full_output_parity": true,
+        "name": "empty",
+        "native_server_state": "3f6342cec1b175be",
+        "replay_chain": "9aae5b2c1de3e6e7",
+        "state_transcript": "1aa26805b7a76067"
+      },
+      {
+        "collision_queries": 432,
+        "collision_transcript": "964f7c7417b2bc26",
+        "command_count": 36,
+        "command_transcript": "81741c3565e9137b",
+        "final_state": "f93bb2f1989b6386",
+        "full_output_parity": true,
+        "name": "floor",
+        "native_server_state": "f93bb2f1989b6386",
+        "replay_chain": "493a45ffb5b28c7c",
+        "state_transcript": "1fa4784997b5c306"
+      },
+      {
+        "collision_queries": 672,
+        "collision_transcript": "c761dbe3925e0f6b",
+        "command_count": 56,
+        "command_transcript": "9b8150e393d661af",
+        "final_state": "fa91a196b23df502",
+        "full_output_parity": true,
+        "name": "wall",
+        "native_server_state": "fa91a196b23df502",
+        "replay_chain": "7d59b0bc1edb8eae",
+        "state_transcript": "38a5852ebda8e9c9"
+      },
+      {
+        "collision_queries": 720,
+        "collision_transcript": "c43002e818a7d245",
+        "command_count": 60,
+        "command_transcript": "705638e6cc6a997d",
+        "final_state": "4101abb546b4bc13",
+        "full_output_parity": true,
+        "name": "step",
+        "native_server_state": "4101abb546b4bc13",
+        "replay_chain": "390339189927c577",
+        "state_transcript": "021f6e6e8e0d24da"
+      },
+      {
+        "collision_queries": 828,
+        "collision_transcript": "0949276e169c374f",
+        "command_count": 40,
+        "command_transcript": "894327da4aba9249",
+        "final_state": "7f19425f1f19de23",
+        "full_output_parity": true,
+        "name": "slope",
+        "native_server_state": "7f19425f1f19de23",
+        "replay_chain": "a5bb3747c5113f1b",
+        "state_transcript": "35fc1d4b7d1de621"
+      }
+    ],
+    "schema": "worr.networking.prediction-parity.v1",
+    "wire_parity_scope": "not-covered-by-this-harness"
+  },
+  "schema": "worr.networking.prediction-parity-golden.v1",
+  "wire_report": {
+    "atomic_rejection": true,
+    "move_batch_equivalence": {
+      "q2pro": true,
+      "q2repro": true
+    },
+    "multi_turn_angle_stable": true,
+    "rows": [
+      {
+        "canonical_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 146,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "bf31e3be09f6f73a",
+            "side_move_float_bits": "c4000000"
+          }
+        ],
+        "canonical_idempotent": true,
+        "decoded_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 146,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "bf31e3be09f6f73a",
+            "side_move_float_bits": "c4000000"
+          }
+        ],
+        "decoded_equal": true,
+        "has_upmove": true,
+        "message": "move",
+        "protocol": "vanilla",
+        "wire_bytes": 41,
+        "wire_sha256": "c1395c3352ecbecf640ecf49ed5863647a0a4c14358b6e51c9adb00b1feaa6e2"
+      },
+      {
+        "canonical_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 146,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "bf31e3be09f6f73a",
+            "side_move_float_bits": "c4000000"
+          }
+        ],
+        "canonical_idempotent": true,
+        "decoded_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 146,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "bf31e3be09f6f73a",
+            "side_move_float_bits": "c4000000"
+          }
+        ],
+        "decoded_equal": true,
+        "has_upmove": true,
+        "message": "move",
+        "protocol": "q2pro",
+        "wire_bytes": 40,
+        "wire_sha256": "4cbf4412efdc943deea8a316c856b4fab90d7684992351b6e8af07bb82aa5246"
+      },
+      {
+        "canonical_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 146,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "bf31e3be09f6f73a",
+            "side_move_float_bits": "c4000000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "00000000",
+              "00000000"
+            ],
+            "buttons": 16,
+            "duration_ms": 0,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "8ff5786d2cf734ba",
+            "side_move_float_bits": "c4000000"
+          },
+          {
+            "angle_float_bits": [
+              "42b3e110",
+              "42340000",
+              "00000000"
+            ],
+            "buttons": 1,
+            "duration_ms": 7,
+            "forward_move_float_bits": "00000000",
+            "prediction_hash": "5ed155210a3ce5a4",
+            "side_move_float_bits": "00000000"
+          },
+          {
+            "angle_float_bits": [
+              "42b3e110",
+              "42340000",
+              "00000000"
+            ],
+            "buttons": 0,
+            "duration_ms": 8,
+            "forward_move_float_bits": "00000000",
+            "prediction_hash": "f3bd7c41fc86be76",
+            "side_move_float_bits": "00000000"
+          },
+          {
+            "angle_float_bits": [
+              "c3340000",
+              "c2b40000",
+              "00000000"
+            ],
+            "buttons": 128,
+            "duration_ms": 9,
+            "forward_move_float_bits": "3f800000",
+            "prediction_hash": "cbcc2b7856f9b7fc",
+            "side_move_float_bits": "bf800000"
+          },
+          {
+            "angle_float_bits": [
+              "c3340000",
+              "c2b40000",
+              "00000000"
+            ],
+            "buttons": 128,
+            "duration_ms": 255,
+            "forward_move_float_bits": "3f800000",
+            "prediction_hash": "b5b70e50b0f5b44e",
+            "side_move_float_bits": "bf800000"
+          }
+        ],
+        "canonical_idempotent": true,
+        "decoded_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 146,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "bf31e3be09f6f73a",
+            "side_move_float_bits": "c4000000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "00000000",
+              "00000000"
+            ],
+            "buttons": 16,
+            "duration_ms": 0,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "8ff5786d2cf734ba",
+            "side_move_float_bits": "c4000000"
+          },
+          {
+            "angle_float_bits": [
+              "42b3e110",
+              "42340000",
+              "00000000"
+            ],
+            "buttons": 1,
+            "duration_ms": 7,
+            "forward_move_float_bits": "00000000",
+            "prediction_hash": "5ed155210a3ce5a4",
+            "side_move_float_bits": "00000000"
+          },
+          {
+            "angle_float_bits": [
+              "42b3e110",
+              "42340000",
+              "00000000"
+            ],
+            "buttons": 0,
+            "duration_ms": 8,
+            "forward_move_float_bits": "00000000",
+            "prediction_hash": "f3bd7c41fc86be76",
+            "side_move_float_bits": "00000000"
+          },
+          {
+            "angle_float_bits": [
+              "c3340000",
+              "c2b40000",
+              "00000000"
+            ],
+            "buttons": 128,
+            "duration_ms": 9,
+            "forward_move_float_bits": "3f800000",
+            "prediction_hash": "cbcc2b7856f9b7fc",
+            "side_move_float_bits": "bf800000"
+          },
+          {
+            "angle_float_bits": [
+              "c3340000",
+              "c2b40000",
+              "00000000"
+            ],
+            "buttons": 128,
+            "duration_ms": 255,
+            "forward_move_float_bits": "3f800000",
+            "prediction_hash": "b5b70e50b0f5b44e",
+            "side_move_float_bits": "bf800000"
+          }
+        ],
+        "decoded_equal": true,
+        "has_upmove": true,
+        "message": "batch_move",
+        "protocol": "q2pro",
+        "wire_bytes": 64,
+        "wire_sha256": "69445ef929df0631f66a4b25d99a3bca7ce11bf12866dea26de67cf6b4e40327"
+      },
+      {
+        "canonical_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 150,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "d5226deb6bc64656",
+            "side_move_float_bits": "c4000000"
+          }
+        ],
+        "canonical_idempotent": true,
+        "decoded_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 150,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "d5226deb6bc64656",
+            "side_move_float_bits": "c4000000"
+          }
+        ],
+        "decoded_equal": true,
+        "has_upmove": false,
+        "message": "move",
+        "protocol": "q2repro",
+        "wire_bytes": 36,
+        "wire_sha256": "075a599e1b3d2d818c26ed474a90fab05e3f729b3235029cc991f2562b868762"
+      },
+      {
+        "canonical_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 150,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "d5226deb6bc64656",
+            "side_move_float_bits": "c4000000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "00000000",
+              "00000000"
+            ],
+            "buttons": 16,
+            "duration_ms": 0,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "8ff5786d2cf734ba",
+            "side_move_float_bits": "c4000000"
+          },
+          {
+            "angle_float_bits": [
+              "42b3e110",
+              "42340000",
+              "00000000"
+            ],
+            "buttons": 5,
+            "duration_ms": 7,
+            "forward_move_float_bits": "00000000",
+            "prediction_hash": "4bd58eb009d3d450",
+            "side_move_float_bits": "00000000"
+          },
+          {
+            "angle_float_bits": [
+              "42b3e110",
+              "42340000",
+              "00000000"
+            ],
+            "buttons": 24,
+            "duration_ms": 8,
+            "forward_move_float_bits": "00000000",
+            "prediction_hash": "616247df163f38ae",
+            "side_move_float_bits": "00000000"
+          },
+          {
+            "angle_float_bits": [
+              "c3340000",
+              "c2b40000",
+              "00000000"
+            ],
+            "buttons": 128,
+            "duration_ms": 9,
+            "forward_move_float_bits": "3f800000",
+            "prediction_hash": "cbcc2b7856f9b7fc",
+            "side_move_float_bits": "bf800000"
+          },
+          {
+            "angle_float_bits": [
+              "c3340000",
+              "c2b40000",
+              "00000000"
+            ],
+            "buttons": 128,
+            "duration_ms": 255,
+            "forward_move_float_bits": "3f800000",
+            "prediction_hash": "b5b70e50b0f5b44e",
+            "side_move_float_bits": "bf800000"
+          }
+        ],
+        "canonical_idempotent": true,
+        "decoded_commands": [
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 1,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "6a8dfd87b73d4487",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c116ff00",
+              "c3340000",
+              "42b40000"
+            ],
+            "buttons": 9,
+            "duration_ms": 66,
+            "forward_move_float_bits": "c4000000",
+            "prediction_hash": "ca36b45272c400dc",
+            "side_move_float_bits": "43ff8000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "3e7d2000",
+              "c2b4fff0"
+            ],
+            "buttons": 150,
+            "duration_ms": 250,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "d5226deb6bc64656",
+            "side_move_float_bits": "c4000000"
+          },
+          {
+            "angle_float_bits": [
+              "c2b3e110",
+              "00000000",
+              "00000000"
+            ],
+            "buttons": 16,
+            "duration_ms": 0,
+            "forward_move_float_bits": "43ff8000",
+            "prediction_hash": "8ff5786d2cf734ba",
+            "side_move_float_bits": "c4000000"
+          },
+          {
+            "angle_float_bits": [
+              "42b3e110",
+              "42340000",
+              "00000000"
+            ],
+            "buttons": 5,
+            "duration_ms": 7,
+            "forward_move_float_bits": "00000000",
+            "prediction_hash": "4bd58eb009d3d450",
+            "side_move_float_bits": "00000000"
+          },
+          {
+            "angle_float_bits": [
+              "42b3e110",
+              "42340000",
+              "00000000"
+            ],
+            "buttons": 24,
+            "duration_ms": 8,
+            "forward_move_float_bits": "00000000",
+            "prediction_hash": "616247df163f38ae",
+            "side_move_float_bits": "00000000"
+          },
+          {
+            "angle_float_bits": [
+              "c3340000",
+              "c2b40000",
+              "00000000"
+            ],
+            "buttons": 128,
+            "duration_ms": 9,
+            "forward_move_float_bits": "3f800000",
+            "prediction_hash": "cbcc2b7856f9b7fc",
+            "side_move_float_bits": "bf800000"
+          },
+          {
+            "angle_float_bits": [
+              "c3340000",
+              "c2b40000",
+              "00000000"
+            ],
+            "buttons": 128,
+            "duration_ms": 255,
+            "forward_move_float_bits": "3f800000",
+            "prediction_hash": "b5b70e50b0f5b44e",
+            "side_move_float_bits": "bf800000"
+          }
+        ],
+        "decoded_equal": true,
+        "has_upmove": false,
+        "message": "batch_move",
+        "protocol": "q2repro",
+        "wire_bytes": 65,
+        "wire_sha256": "82f3939374f5aabff80f251ea23726eb7277035ad0332a894b6f4b16d2d022da"
+      }
+    ],
+    "schema": "worr.networking.usercmd-live-wire-parity.v1",
+    "serverdata_serialized_and_parsed": true,
+    "signed_short_angle_exhaustive_identity": true
+  }
+}

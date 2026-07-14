@@ -55,15 +55,17 @@ static cvar_t *vk_draw_world;
 static cvar_t *vk_draw_entities;
 static cvar_t *vk_draw_ui;
 static cvar_t *vk_damageblend_frac;
+static cvar_t *vk_screenshot_dir;
 static shadow_frontend_state_t vk_shadow_frontend;
 static shadow_frontend_cvars_t vk_shadow_frontend_cvars;
 static bool vk_shadow_frontend_cvars_registered;
 
 // Swapchain readback for the screenshot commands. A request latches in
 // vk_screenshot_pending; the next presented frame records a copy of its
-// swapchain image into a host-visible buffer and writes the PNG after the
+// swapchain image into a host-visible buffer and writes the requested format after the
 // frame fence signals.
 static char vk_screenshot_path[MAX_OSPATH];
+static bool vk_screenshot_tga;
 static bool vk_screenshot_pending;
 static bool vk_screenshot_armed;
 static bool vk_screenshot_supported;
@@ -900,6 +902,10 @@ static void VK_DestroySwapchain(vk_context_t *ctx)
         vkDestroyRenderPass(ctx->device, ctx->render_pass, NULL);
         ctx->render_pass = VK_NULL_HANDLE;
     }
+    if (ctx->overlay_render_pass) {
+        vkDestroyRenderPass(ctx->device, ctx->overlay_render_pass, NULL);
+        ctx->overlay_render_pass = VK_NULL_HANDLE;
+    }
 
     if (ctx->swapchain.views) {
         for (uint32_t i = 0; i < ctx->swapchain.image_count; ++i) {
@@ -1291,6 +1297,27 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
         return VK_Check(result, "vkCreateRenderPass");
     }
 
+    // A compatible load pass lets native no-world entity previews overlay
+    // the completed RmlUi shell without clearing its color attachment. Depth
+    // is cleared because the menu preview is an independent scene.
+    VkAttachmentDescription overlay_attachments[2] = {
+        attachments[0],
+        attachments[1],
+    };
+    overlay_attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    overlay_attachments[0].initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    overlay_attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    overlay_attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VkRenderPassCreateInfo overlay_render_pass_info = render_pass_info;
+    overlay_render_pass_info.pAttachments = overlay_attachments;
+    result = vkCreateRenderPass(ctx->device, &overlay_render_pass_info, NULL,
+                                &ctx->overlay_render_pass);
+    if (result != VK_SUCCESS) {
+        VK_DestroySwapchain(ctx);
+        return VK_Check(result, "vkCreateRenderPass(preview overlay)");
+    }
+
     ctx->swapchain.framebuffers = VK_AllocArray(image_count,
                                                 sizeof(*ctx->swapchain.framebuffers),
                                                 "swapchain framebuffers");
@@ -1635,8 +1662,16 @@ static void VK_Screenshot_Complete(void)
     }
     vkUnmapMemory(ctx->device, vk_screenshot_memory);
 
-    int ok = stbi_write_png(vk_screenshot_path, (int)width, (int)height, 3,
+    int ok;
+    if (vk_screenshot_tga) {
+        const int previous_tga_rle = stbi_write_tga_with_rle;
+        stbi_write_tga_with_rle = 0;
+        ok = stbi_write_tga(vk_screenshot_path, (int)width, (int)height, 3, rgb);
+        stbi_write_tga_with_rle = previous_tga_rle;
+    } else {
+        ok = stbi_write_png(vk_screenshot_path, (int)width, (int)height, 3,
                             rgb, (int)row_stride);
+    }
     Z_Free(rgb);
 
     if (!ok) {
@@ -1647,7 +1682,7 @@ static void VK_Screenshot_Complete(void)
     Com_Printf("Wrote %s\n", vk_screenshot_path);
 }
 
-static void VK_ScreenShotPNG_f(void)
+static void VK_RequestScreenshot(const char *extension, bool tga)
 {
     if (!vk_state.initialized || !vk_state.ctx.swapchain.handle) {
         Com_EPrintf("No Vulkan swapchain available for screenshot.\n");
@@ -1674,9 +1709,27 @@ static void VK_ScreenShotPNG_f(void)
                    (unsigned long long)time(NULL));
     }
 
-    if (Q_snprintf(vk_screenshot_path, sizeof(vk_screenshot_path),
-                   "%s/screenshots/%s.png", fs_gamedir, name) >=
-        sizeof(vk_screenshot_path)) {
+    if (vk_screenshot_dir && vk_screenshot_dir->string[0]) {
+        char directory[MAX_OSPATH];
+        if (Q_strlcpy(directory, vk_screenshot_dir->string,
+                      sizeof(directory)) >= sizeof(directory)) {
+            Com_EPrintf("Screenshot directory too long.\n");
+            return;
+        }
+        for (char *cursor = directory; *cursor; ++cursor) {
+            if (*cursor == '\\') {
+                *cursor = '/';
+            }
+        }
+        if (Q_snprintf(vk_screenshot_path, sizeof(vk_screenshot_path),
+                       "%s/%s%s", directory, name, extension) >=
+            sizeof(vk_screenshot_path)) {
+            Com_EPrintf("Screenshot path too long.\n");
+            return;
+        }
+    } else if (Q_snprintf(vk_screenshot_path, sizeof(vk_screenshot_path),
+                          "%s/screenshots/%s%s", fs_gamedir, name,
+                          extension) >= sizeof(vk_screenshot_path)) {
         Com_EPrintf("Screenshot path too long.\n");
         return;
     }
@@ -1688,7 +1741,18 @@ static void VK_ScreenShotPNG_f(void)
         return;
     }
 
+    vk_screenshot_tga = tga;
     vk_screenshot_pending = true;
+}
+
+static void VK_ScreenShotPNG_f(void)
+{
+    VK_RequestScreenshot(".png", false);
+}
+
+static void VK_ScreenShotTGA_f(void)
+{
+    VK_RequestScreenshot(".tga", true);
 }
 
 static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
@@ -1726,18 +1790,33 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
     };
 
     VK_Shadow_Record(cmd);
+    VK_Entity_ResetFlareQueries(cmd);
+
+    // Native menu previews are submitted after RmlUi has queued its draw
+    // list. Overlay only the no-world subview entity pass after the UI so the
+    // opaque shell background cannot hide it; the preserved entity scissor
+    // keeps the model inside the authored preview surface.
+    const bool entity_overlay = VK_Entity_IsNoWorldSubview();
 
     vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);
     if (!vk_draw_world || vk_draw_world->integer) {
         VK_World_Record(cmd, &ctx->swapchain.extent);
     }
-    if (!vk_draw_entities || vk_draw_entities->integer) {
+    if (!entity_overlay && (!vk_draw_entities || vk_draw_entities->integer)) {
         VK_Entity_Record(cmd, &ctx->swapchain.extent);
     }
     if (!vk_draw_ui || vk_draw_ui->integer) {
         VK_UI_Record(cmd, &ctx->swapchain.extent);
     }
     vkCmdEndRenderPass(cmd);
+
+    if (entity_overlay && (!vk_draw_entities || vk_draw_entities->integer)) {
+        VkRenderPassBeginInfo overlay_info = render_info;
+        overlay_info.renderPass = ctx->overlay_render_pass;
+        vkCmdBeginRenderPass(cmd, &overlay_info, VK_SUBPASS_CONTENTS_INLINE);
+        VK_Entity_Record(cmd, &ctx->swapchain.extent);
+        vkCmdEndRenderPass(cmd);
+    }
 
     if (vk_screenshot_armed) {
         VK_Screenshot_RecordCopy(cmd, image_index);
@@ -1916,12 +1995,16 @@ bool R_Init(bool total)
     if (!vk_damageblend_frac) {
         vk_damageblend_frac = Cvar_Get("gl_damageblend_frac", "0.2", 0);
     }
+    if (!vk_screenshot_dir) {
+        vk_screenshot_dir = Cvar_Get("r_screenshot_dir", "", CVAR_NOARCHIVE);
+    }
     if (!vk_shadow_frontend_cvars_registered) {
         ShadowFrontend_RegisterCvars(&vk_shadow_frontend_cvars, "vk");
         Cmd_AddCommand("r_shadow_dump", VK_ShadowDump_f);
         Cmd_AddCommand("vk_shadow_dump", VK_ShadowDump_f);
         Cmd_AddCommand("screenshot", VK_ScreenShotPNG_f);
         Cmd_AddCommand("screenshotpng", VK_ScreenShotPNG_f);
+        Cmd_AddCommand("screenshottga", VK_ScreenShotTGA_f);
         vk_shadow_frontend_cvars_registered = true;
     }
 
@@ -2036,6 +2119,7 @@ void R_Shutdown(bool total)
     Cmd_RemoveCommand("vk_shadow_dump");
     Cmd_RemoveCommand("screenshot");
     Cmd_RemoveCommand("screenshotpng");
+    Cmd_RemoveCommand("screenshottga");
     vk_shadow_frontend_cvars_registered = false;
     vid->shutdown();
 
@@ -2067,6 +2151,18 @@ qhandle_t R_RegisterRawImage(const char *name, int width, int height, byte *pic,
 void R_UnregisterImage(qhandle_t handle)
 {
     VK_UI_UnregisterImage(handle);
+}
+
+bool R_RmlUiDrawGeometry(const renderer_rmlui_vertex_t *vertices,
+                         size_t vertex_count,
+                         const uint32_t *indices,
+                         size_t index_count,
+                         float translation_x,
+                         float translation_y,
+                         qhandle_t texture)
+{
+    return VK_UI_DrawRmlGeometry(vertices, vertex_count, indices, index_count,
+                                 translation_x, translation_y, texture);
 }
 
 void R_SetSky(const char *name, float rotate, bool autorotate, const vec3_t axis)

@@ -1162,7 +1162,8 @@ static void grab_mouse(bool grab)
     SDL_SetWindowMouseGrab(sdl.window, grab);
     SDL_SetWindowRelativeMouseMode(sdl.window, grab && !(Key_GetDest() & (KEY_MENU | KEY_MESSAGE)));
     SDL_GetRelativeMouseState(NULL, NULL);
-    bool show_cursor = !(sdl.flags & QVF_FULLSCREEN) && !(Key_GetDest() & KEY_MENU);
+    bool show_cursor = !(sdl.flags & QVF_FULLSCREEN) &&
+                       !(Key_GetDest() & (KEY_MENU | KEY_CONSOLE));
     set_cursor_visible(show_cursor);
 }
 

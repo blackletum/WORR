@@ -5,70 +5,89 @@
     <link type="text/rcss" href="../common/theme/utility.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="utility-players" data-route-id="players" data-route-group="utility" data-route-version="1" data-document-status="round2-scaffold" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="utility-players" data-route-id="players" data-route-group="utility" data-route-version="2" data-document-status="live-provider" data-controller="native-player-config" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen" id="players-screen">
+      <header class="worr-topbar">
+        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+        <div class="worr-topbar-spacer"></div>
+        <button id="utility-players-topbar-play" class="ui-button-cta" type="button" data-command="pushmenu play" data-route-target="play" data-menu-sound="open" data-loc-key="m_play">Play</button>
+        <div class="worr-topbar-spacer"></div>
+        <div class="worr-topbar-cluster">
+          <button id="utility-players-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
+          <button id="utility-players-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
+        </div>
+      </header>
       <header class="page-header">
-        <h1>Player Setup</h1>
-        <p id="players-summary">
-          Configure your name, model, skin, and weapon hand.
+        <div class="worr-titlerow"><button id="utility-players-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 data-loc-key="worr_ui_player_setup">Player Setup</h1></div>
+        <p id="players-summary" data-loc-key="worr_ui_configure_your_player_identity_and_inspect_ever">
+          Configure your player identity and inspect every appearance change in the live 3D preview.
         </p>
       </header>
 
       <section class="content two-column" id="players-content" data-model="player_config">
         <div class="form-panel" id="players-form">
-          <h2>Identity</h2>
+          <h2 data-loc-key="worr_ui_identity">Identity</h2>
           <div class="utility-field" data-control="field">
-            <span class="setting-widget-icon" data-widget="field"><img src="../common/icons/widgets/field.svg" /></span>
-            <label for="players-name">Name</label>
+            <span class="setting-widget-icon" data-widget="field"><img src="../common/icons/widgets/field.png" /></span>
+            <label for="players-name" data-loc-key="m_name">Name</label>
             <input id="players-name" type="text" maxlength="15" data-cvar="name" data-menu-sound-change="change" />
           </div>
 
-          <h2>Appearance</h2>
+          <h2 data-loc-key="worr_ui_appearance">Appearance</h2>
           <div class="utility-field" data-control="select">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="players-model">Model</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="players-model" data-loc-key="m_model">Model</label>
             <select id="players-model" data-menu-sound-change="change">
-              <option value="">Choose Model</option>
+              <option value="" data-loc-key="worr_ui_choose_model">Choose Model</option>
             </select>
           </div>
 
           <div class="utility-field" data-control="select">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="players-skin">Skin</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="players-skin" data-loc-key="m_skin">Skin</label>
             <select id="players-skin" data-menu-sound-change="change">
-              <option value="">Choose Skin</option>
+              <option value="" data-loc-key="worr_ui_choose_skin">Choose Skin</option>
             </select>
           </div>
 
           <div class="utility-field" data-control="select">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="players-dogtag">Dogtag</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="players-dogtag" data-loc-key="worr_ui_dogtag">Dogtag</label>
             <select id="players-dogtag" data-cvar="dogtag" data-source-dir="tags" data-menu-sound-change="change">
-              <option value="default">Default</option>
+              <option value="default" data-loc-key="worr_ui_default">Default</option>
             </select>
           </div>
 
+          <div id="players-appearance-thumbnails" aria-label="Selected appearance previews">
+            <img id="players-skin-thumbnail" src="/players/male/grunt_i.pcx" data-src-cvar="skin" data-src-prefix="/players/" data-src-suffix="_i.pcx" data-src-fallback="/players/male/grunt_i.pcx" title="Selected skin" />
+            <img id="players-dogtag-thumbnail" src="/tags/default.pcx" data-src-cvar="dogtag" data-src-prefix="/tags/" data-src-suffix=".pcx" data-src-fallback="/tags/default.pcx" title="Selected dogtag" />
+          </div>
+
           <div class="utility-field" data-control="select">
-            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.svg" /></span>
-            <label for="players-hand">Weapon Hand</label>
+            <span class="setting-widget-icon" data-widget="select"><img src="../common/icons/widgets/select.png" /></span>
+            <label for="players-hand" data-loc-key="m_hand">Weapon Hand</label>
             <select id="players-hand" data-cvar="hand" data-integer="true" data-menu-sound-change="change">
-              <option value="0">Right</option>
-              <option value="1">Left</option>
-              <option value="2">Center</option>
+              <option value="0" data-loc-key="m_right">Right</option>
+              <option value="1" data-loc-key="m_left">Left</option>
+              <option value="2" data-loc-key="m_center">Center</option>
             </select>
           </div>
         </div>
 
         <div class="preview-panel" id="players-preview" data-component="player_preview" data-model="player_config.preview">
-          <h2>Preview</h2>
-          <div id="players-preview-surface" class="preview-surface">
-            <span id="players-preview-placeholder">Player preview</span>
+          <h2 data-loc-key="worr_ui_preview">Preview</h2>
+          <div id="players-preview-surface" class="preview-surface" aria-live="polite">
+            <span id="players-preview-loading" class="ui-loading-state" data-loc-key="worr_ui_loading_player_models">Loading player models...</span>
+            <span id="players-preview-empty" class="ui-empty-state" style="display: none;" data-loc-key="worr_ui_no_compatible_player_models_were_found">No compatible player models were found.</span>
+            <span id="players-preview-error" class="ui-error-state" style="display: none;" data-loc-key="worr_ui_the_selected_player_preview_could_not_be_loaded">The selected player preview could not be loaded.</span>
           </div>
         </div>
       </section>
 
-      <footer class="actions" id="players-actions">
-        <button id="players-back" type="button" data-command="ui.back" data-menu-sound="cancel">Back</button>
+      <footer class="worr-statusbar">
+        <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
+        <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
+        <button id="utility-players-statusbar-download" class="worr-statusbar-chip" type="button" data-command="pushmenu download_status" data-route-target="download_status" data-visible-if="ui_download_active" data-menu-sound="open" data-loc-key="worr_ui_downloading">Downloading</button>
       </footer>
     </div>
   </body>

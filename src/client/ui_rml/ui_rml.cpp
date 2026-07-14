@@ -46,6 +46,9 @@ static bool ui_rml_runtime_started;
 static bool ui_rml_runtime_failed;
 static bool ui_rml_route_active;
 static char ui_rml_active_route[MAX_QPATH];
+static char ui_rml_route_arguments[MAX_STRING_CHARS];
+static char ui_rml_next_route_arguments[MAX_STRING_CHARS];
+static bool ui_rml_next_route_arguments_set;
 static char ui_rml_restore_route_after_init[MAX_QPATH];
 #define UI_RML_ROUTE_HISTORY_MAX 16
 static char ui_rml_route_history[UI_RML_ROUTE_HISTORY_MAX][MAX_QPATH];
@@ -95,6 +98,7 @@ typedef struct {
 
 static const ui_rml_route_t ui_rml_routes[] = {
     { "main", "shell/main.rml" },
+    { "play", "shell/play.rml" },
     { "game", "shell/game.rml" },
     { "options", "shell/options.rml" },
     { "video", "settings/video.rml" },
@@ -754,6 +758,18 @@ static bool UI_Rml_OpenRouteInternal(const char *route_id)
     return UI_Rml_OpenRouteInternalEx(route_id, true);
 }
 
+static void UI_Rml_SetNextRouteArguments(const char *arguments)
+{
+#if UI_RML_HAS_RUNTIME
+    Q_strlcpy(ui_rml_next_route_arguments,
+              arguments ? arguments : "",
+              sizeof(ui_rml_next_route_arguments));
+    ui_rml_next_route_arguments_set = true;
+#else
+    (void)arguments;
+#endif
+}
+
 static bool UI_Rml_OpenRouteInternalEx(const char *route_id, bool record_history)
 {
 #if UI_RML_HAS_RUNTIME
@@ -814,6 +830,16 @@ static bool UI_Rml_OpenRouteInternalEx(const char *route_id, bool record_history
         Q_strlcpy(previous_route, ui_rml_active_route, sizeof(previous_route));
     }
 
+    if (ui_rml_next_route_arguments_set) {
+        Q_strlcpy(ui_rml_route_arguments,
+                  ui_rml_next_route_arguments,
+                  sizeof(ui_rml_route_arguments));
+    } else {
+        ui_rml_route_arguments[0] = 0;
+    }
+    ui_rml_next_route_arguments[0] = 0;
+    ui_rml_next_route_arguments_set = false;
+
     if (ui_rml_runtime.OpenRoute(route->id, document)) {
         const bool establishes_root_history =
             !strcmp(route->id, "main") ||
@@ -846,6 +872,7 @@ static bool UI_Rml_OpenRouteInternalEx(const char *route_id, bool record_history
     if (had_previous_route) {
         UI_StartFeedbackSound(UI_FEEDBACK_ALERT);
     }
+    ui_rml_route_arguments[0] = 0;
     return false;
 #else
     (void)route_id;
@@ -946,13 +973,14 @@ static void UI_Rml_RuntimeOpenRoute_f(void)
 static void UI_Rml_RuntimeOpenRouteFallback_f(void)
 {
 #if UI_RML_HAS_RUNTIME
-    if (Cmd_Argc() != 2) {
-        Com_Printf("Usage: %s <route_id>\n", Cmd_Argv(0));
+    if (Cmd_Argc() < 2) {
+        Com_Printf("Usage: %s <route_id> [route arguments...]\n", Cmd_Argv(0));
         return;
     }
 
-    const char *route_id = Cmd_Argv(1);
-    if (!UI_Rml_OpenRouteInternal(route_id)) {
+    char route_id[MAX_QPATH];
+    Q_strlcpy(route_id, Cmd_Argv(1), sizeof(route_id));
+    if (!UI_Rml_OpenRouteWithArguments(route_id, Cmd_RawArgsFrom(2))) {
         Com_Printf("RmlUi bridged route '%s' failed; opening the cgame fallback.\n",
                    route_id);
         UI_Rml_FallbackRoute(route_id, true);
@@ -1035,6 +1063,43 @@ static void UI_Rml_RuntimeCaptureMenu_f(void)
     UI_Rml_PrintRuntimeStatus();
 #else
     Com_Printf("RmlUi runtime menu capture is unavailable; runtime support is not compiled.\n");
+#endif
+}
+
+static void UI_Rml_RuntimeCaptureRoute_f(void)
+{
+#if UI_RML_HAS_RUNTIME
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: %s <route_id>\n", Cmd_Argv(0));
+        return;
+    }
+
+    // Opening browser routes may tokenize their preserved route arguments.
+    // Keep the capture target independent of the shared command argv buffer.
+    char route_id[MAX_QPATH];
+    Q_strlcpy(route_id, Cmd_Argv(1), sizeof(route_id));
+    if (!UI_Rml_RuntimeRouteIsAllowed(route_id)) {
+        Com_Printf("RmlUi runtime route capture target '%s' is not registered.\n",
+                   route_id);
+        return;
+    }
+
+    // Evidence runs must be isolated from whichever root menu happened to be
+    // active at startup. Otherwise the synthetic back input reopens that
+    // history entry and resets the per-route counters before they can be
+    // reported by the harness.
+    UI_Rml_ClearRouteHistory();
+    if (!UI_Rml_OpenRouteInternalEx(route_id, false)) {
+        Com_Printf("RmlUi runtime route capture target '%s' could not be opened.\n",
+                   route_id);
+        return;
+    }
+
+    Com_Printf("RmlUi guarded route capture '%s' is active through UI_Rml_OpenRoute; capture after the next rendered frame and attach the current ui_rml_runtime_status output to the evidence note.\n",
+               route_id);
+    UI_Rml_PrintRuntimeStatus();
+#else
+    Com_Printf("RmlUi runtime route capture is unavailable; runtime support is not compiled.\n");
 #endif
 }
 
@@ -1137,7 +1202,12 @@ static void UI_Rml_RuntimeSyntheticInput_f(void)
 static void UI_Rml_RuntimeCapture_f(void)
 {
 #if UI_RML_HAS_RUNTIME
-    if (!UI_Rml_IsRouteActive() && !UI_Rml_OpenRouteInternal("core.runtime_smoke")) {
+    // The engine can already have a root menu active by the time queued
+    // command-line capture commands run. Always replace that startup route so
+    // the dedicated layout evidence command deterministically captures the
+    // smoke document and its counters are isolated from prior menu history.
+    UI_Rml_ClearRouteHistory();
+    if (!UI_Rml_OpenRouteInternalEx("core.runtime_smoke", false)) {
         Com_Printf("RmlUi guarded capture route could not be opened.\n");
         return;
     }
@@ -1161,6 +1231,7 @@ static const cmdreg_t ui_rml_commands[] = {
     { "ui_rml_runtime_status", UI_Rml_RuntimeStatus_f },
     { "ui_rml_runtime_capture", UI_Rml_RuntimeCapture_f },
     { "ui_rml_runtime_capture_menu", UI_Rml_RuntimeCaptureMenu_f, UI_Rml_RuntimeMenuRoute_c },
+    { "ui_rml_runtime_capture_route", UI_Rml_RuntimeCaptureRoute_f, UI_Rml_RuntimeOpenRoute_c },
     { "ui_rml_runtime_synthetic_input", UI_Rml_RuntimeSyntheticInput_f },
     { NULL }
 };
@@ -1474,7 +1545,18 @@ bool UI_Rml_ProbeRoute(const char *route_id)
 
 bool UI_Rml_OpenRoute(const char *route_id)
 {
-    return UI_Rml_OpenRouteInternal(route_id);
+    return UI_Rml_OpenRouteWithArguments(route_id, NULL);
+}
+
+bool UI_Rml_OpenRouteWithArguments(const char *route_id, const char *arguments)
+{
+    UI_Rml_SetNextRouteArguments(arguments);
+    const bool opened = UI_Rml_OpenRouteInternal(route_id);
+    if (!opened) {
+        ui_rml_next_route_arguments[0] = 0;
+        ui_rml_next_route_arguments_set = false;
+    }
+    return opened;
 }
 
 bool UI_Rml_OpenMenu(uiMenu_t menu)
@@ -1594,7 +1676,7 @@ bool UI_Rml_KeyEvent(int key, bool down)
 
     if (down && (key == K_ESCAPE || key == K_MOUSE2)) {
         // The runtime may consume the back request itself: an active
-        // keybind capture, or a document-declared data-close-command
+        // keybind capture/conflict, or a document-declared data-close-command
         // whose legacy side effects must run.
         if (ui_rml_runtime.HandleBackKey && ui_rml_runtime.HandleBackKey(key)) {
             return true;
@@ -1671,6 +1753,37 @@ bool UI_Rml_MouseEvent(int x, int y)
     (void)x;
     (void)y;
     return false;
+#endif
+}
+
+bool UI_Rml_StatusEvent(const serverStatus_t *status)
+{
+#if UI_RML_HAS_RUNTIME
+    return ui_rml_route_active && ui_rml_runtime_started &&
+           ui_rml_runtime.StatusEvent && ui_rml_runtime.StatusEvent(status);
+#else
+    (void)status;
+    return false;
+#endif
+}
+
+bool UI_Rml_ErrorEvent(const netadr_t *from)
+{
+#if UI_RML_HAS_RUNTIME
+    return ui_rml_route_active && ui_rml_runtime_started &&
+           ui_rml_runtime.ErrorEvent && ui_rml_runtime.ErrorEvent(from);
+#else
+    (void)from;
+    return false;
+#endif
+}
+
+const char *UI_Rml_RouteArguments(void)
+{
+#if UI_RML_HAS_RUNTIME
+    return ui_rml_route_arguments;
+#else
+    return "";
 #endif
 }
 

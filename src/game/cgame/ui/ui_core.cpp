@@ -277,12 +277,21 @@ static bool UI_Command_TryPushRmlRoute(const char *menu_name)
         return false;
     }
 
-    Cbuf_InsertText(&cmd_buffer,
-                    va("%s %s\n",
-                       UI_IsRmlPopupRouteName(menu_name)
-                           ? "ui_rml_runtime_popup_fallback"
-                           : "ui_rml_runtime_open_fallback",
-                       menu_name));
+    const char *arguments = Cmd_RawArgsFrom(2);
+    Cbuf_InsertText(
+        &cmd_buffer,
+        arguments && arguments[0]
+            ? va("%s %s %s\n",
+                 UI_IsRmlPopupRouteName(menu_name)
+                     ? "ui_rml_runtime_popup_fallback"
+                     : "ui_rml_runtime_open_fallback",
+                 menu_name,
+                 arguments)
+            : va("%s %s\n",
+                 UI_IsRmlPopupRouteName(menu_name)
+                     ? "ui_rml_runtime_popup_fallback"
+                     : "ui_rml_runtime_open_fallback",
+                 menu_name));
     if (Cvar_VariableInteger("ui_rml_debug")) {
         Com_Printf("RmlUi pushmenu bridge routed '%s' through %s.\n",
                    menu_name,

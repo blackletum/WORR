@@ -5,14 +5,14 @@
     <link type="text/rcss" href="../common/theme/session.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="session-dm-welcome" data-route-id="dm_welcome" data-route-group="session" data-route-version="1" data-document-status="round3-scaffold" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="session-dm-welcome" data-route-id="dm_welcome" data-route-group="session" data-route-version="2" data-document-status="live-provider" data-controller="native-session-cvars" data-session-owner="sgame" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen compact-screen session-screen" id="dm-welcome-screen" data-close-command="forcemenuoff; worr_welcome_continue">
       <header class="page-header" id="dm-welcome-header" data-model="session.dm_welcome" data-owner-boundary="sgame-published-cvars">
-        <p class="session-badge" id="dm-welcome-prefix">Welcome to</p>
-        <h1 id="dm-welcome-title" data-bind="cvars.ui_welcome_title">WORR</h1>
+        <p class="session-badge" id="dm-welcome-prefix" data-loc-key="worr_ui_welcome_to">Welcome to</p>
+        <div class="worr-titlerow"><button id="session-dm-welcome-backplate" class="worr-backplate" type="button" data-command="ui.back" data-menu-sound="cancel"></button><h1 id="dm-welcome-title" data-bind="cvars.ui_welcome_title">WORR</h1></div>
       </header>
 
-      <section class="session-panel" id="dm-welcome-content" data-model="session.dm_welcome" data-owner-boundary="sgame-published-cvars">
+      <section class="session-panel" id="dm-welcome-content" data-model="session.dm_welcome" data-controller="native-session-cvars" data-owner-boundary="sgame-published-cvars">
         <h2 id="dm-welcome-hostname" data-bind="cvars.ui_welcome_hostname" data-visible-if="ui_welcome_hostname">Server Name</h2>
         <p id="dm-welcome-motd" class="ui-localized-copy" data-bind="cvars.ui_welcome_motd" data-visible-if="ui_welcome_motd">
           No message of the day.
@@ -20,7 +20,7 @@
       </section>
 
       <footer class="actions" id="dm-welcome-actions">
-        <button id="dm-welcome-continue" type="button" data-command="forcemenuoff; worr_welcome_continue" data-menu-sound="confirm">Continue</button>
+        <button class="is-primary" id="dm-welcome-continue" type="button" data-command="forcemenuoff; worr_welcome_continue" data-menu-sound="confirm" data-loc-key="m_continue">Continue</button>
       </footer>
     </div>
   </body>

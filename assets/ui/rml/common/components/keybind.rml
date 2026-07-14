@@ -1,8 +1,9 @@
 <!--
   WORR RmlUi keybind capture component contracts.
 
-  These templates define the data fields and event hooks for future live
-  keybind controllers. No C++ capture controller is implemented in this slice.
+  These templates document the shared fields and event hooks used by the live
+  native keybind controller. Utility routes author their rows statically so
+  their source-menu command coverage remains directly auditable.
 -->
 <templates>
   <template name="worr-keybind-list">

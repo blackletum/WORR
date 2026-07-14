@@ -18,6 +18,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // sv_send.c
 
 #include "server.h"
+#include "server/native_shadow.h"
+
+#include <limits.h>
 
 /*
 =============================================================================
@@ -60,6 +63,7 @@ static bool SV_RateDrop(client_t *client)
 {
     size_t  total;
     int     i;
+    const uint32_t current_frame = (uint32_t)client->framenum;
 
     // never drop over the loopback
     if (!client->rate) {
@@ -68,7 +72,22 @@ static bool SV_RateDrop(client_t *client)
 
     total = 0;
     for (i = 0; i < RATE_MESSAGES; i++) {
-        total += client->message_size[i];
+        const size_t normal_bytes = client->message_size[i];
+        size_t async_bytes = 0;
+
+        if (client->async_message_valid[i] &&
+            current_frame - client->async_message_frame[i] <
+                RATE_MESSAGES) {
+            async_bytes = client->async_message_size[i];
+        }
+        if (normal_bytes > (size_t)-1 - total)
+            total = (size_t)-1;
+        else
+            total += normal_bytes;
+        if (async_bytes > (size_t)-1 - total)
+            total = (size_t)-1;
+        else
+            total += async_bytes;
     }
 
 #if USE_FPS
@@ -87,7 +106,8 @@ static bool SV_RateDrop(client_t *client)
     return false;
 }
 
-static void SV_CalcSendTime(client_t *client, unsigned size)
+static void SV_CalcSendTime(client_t *client, unsigned size,
+                            bool async_send)
 {
     // never drop over the loopback
     if (!client->rate) {
@@ -96,8 +116,25 @@ static void SV_CalcSendTime(client_t *client, unsigned size)
         return;
     }
 
-    if (client->state == cs_spawned)
-        client->message_size[client->framenum % RATE_MESSAGES] = size;
+    if (client->state == cs_spawned) {
+        const uint32_t frame = (uint32_t)client->framenum;
+        const uint32_t index = frame % RATE_MESSAGES;
+
+        if (!async_send) {
+            client->message_size[index] = size;
+        } else {
+            if (!client->async_message_valid[index] ||
+                client->async_message_frame[index] != frame) {
+                client->async_message_size[index] = 0;
+                client->async_message_frame[index] = frame;
+                client->async_message_valid[index] = true;
+            }
+            if (size > UINT_MAX - client->async_message_size[index])
+                client->async_message_size[index] = UINT_MAX;
+            else
+                client->async_message_size[index] += size;
+        }
+    }
 
     client->send_time = svs.realtime;
     client->send_delta = size * 1000 / client->rate;
@@ -734,7 +771,7 @@ static void write_datagram_old(client_t *client)
                                client->numpackets);
 
     // record the size for rate estimation
-    SV_CalcSendTime(client, cursize);
+    SV_CalcSendTime(client, cursize, false);
 
     // clear the write buffer
     SZ_Clear(&msg_write);
@@ -795,6 +832,11 @@ static void write_datagram_new(client_t *client)
 
     Q_assert(!msg_write.overflowed);
 
+    if (client->worr_native_shadow) {
+        (void)SV_NativeShadowAckDueV1(
+            client->worr_native_shadow, svs.realtime);
+    }
+
     // send the datagram
     cursize = Netchan_Transmit(&client->netchan,
                                msg_write.cursize,
@@ -802,7 +844,7 @@ static void write_datagram_new(client_t *client)
                                client->numpackets);
 
     // record the size for rate estimation
-    SV_CalcSendTime(client, cursize);
+    SV_CalcSendTime(client, cursize, false);
 
     // clear the write buffer
     SZ_Clear(&msg_write);
@@ -886,9 +928,34 @@ void SV_SendClientMessages(void)
 
         // don't write any frame data until all fragments are sent
         if (client->netchan.fragment_pending) {
+            /* The synchronous fragment owner runs before another normal
+             * application packet can carry a native ACK.  Record that real
+             * deferral here as well as in the asynchronous scheduler; on an
+             * active client this path commonly consumes the fragment before
+             * the later async pass can observe it. */
+            if (client->worr_native_shadow &&
+                SV_NativeShadowAckEligiblePeekV1(
+                    client->worr_native_shadow, svs.realtime)) {
+                SV_NativeShadowRecordAsyncFragmentDeferralV1(
+                    client->worr_native_shadow);
+            }
             client->frameflags |= FF_SUPPRESSED;
             cursize = Netchan_TransmitNextFragment(&client->netchan);
-            SV_CalcSendTime(client, cursize);
+            SV_CalcSendTime(client, cursize, false);
+            goto advance;
+        }
+
+        /* A post-bootstrap readiness request starts its deadline only at the
+         * first clean, rate-admitted boundary.  Transmit the 117-byte reliable
+         * alone so no later frame or game-start output can delay visibility
+         * behind an arbitrarily large fragmented application message. */
+        if (SV_TryQueueNativeShadowChallenge(client)) {
+            client->frameflags |= FF_SUPPRESSED;
+            client->suppress_count++;
+            cursize = Netchan_Transmit(
+                &client->netchan, 0, msg_write.data,
+                client->numpackets);
+            SV_CalcSendTime(client, cursize, false);
             goto advance;
         }
 
@@ -961,6 +1028,9 @@ packets synchronously with game DLL ticks.
 void SV_SendAsyncPackets(void)
 {
     bool        retransmit;
+    bool        native_ack_eligible;
+    bool        native_ack_due;
+    bool        native_async_wake_started;
     client_t    *client;
     netchan_t   *netchan;
     int         cursize;
@@ -970,30 +1040,60 @@ void SV_SendAsyncPackets(void)
             continue;
         }
 
+        netchan = &client->netchan;
+        native_ack_eligible = client->worr_native_shadow &&
+            netchan->type == NETCHAN_NEW &&
+            SV_NativeShadowAckEligiblePeekV1(
+                client->worr_native_shadow, svs.realtime);
+
         // don't overrun bandwidth
         if (svs.realtime - client->send_time < client->send_delta) {
+            if (native_ack_eligible) {
+                SV_NativeShadowRecordAsyncRateDeferralV1(
+                    client->worr_native_shadow);
+            }
             continue;
         }
 
-        netchan = &client->netchan;
-
         // make sure all fragments are transmitted first
         if (netchan->fragment_pending) {
+            if (native_ack_eligible) {
+                SV_NativeShadowRecordAsyncFragmentDeferralV1(
+                    client->worr_native_shadow);
+            }
             cursize = Netchan_TransmitNextFragment(netchan);
             SV_DPrintf(2, "%s: frag: %d\n", client->name, cursize);
             goto calctime;
         }
 
+        native_ack_due = client->worr_native_shadow &&
+            netchan->type == NETCHAN_NEW &&
+            SV_NativeShadowAckDueV1(
+                client->worr_native_shadow, svs.realtime);
+
         // spawned clients are handled elsewhere
         if (CLIENT_ACTIVE(client) && !SV_PAUSED) {
-            continue;
+            if (!native_ack_due)
+                continue;
+            native_async_wake_started =
+                SV_NativeShadowBeginAsyncWakeV1(
+                    client->worr_native_shadow);
+            cursize = Netchan_Transmit(netchan, 0, NULL, 1);
+            if (native_async_wake_started) {
+                SV_NativeShadowEndAsyncWakeV1(
+                    client->worr_native_shadow);
+            }
+            SV_DPrintf(2, "%s: native ack: %d\n",
+                       client->name, cursize);
+            goto calctime;
         }
 
         // see if it's time to resend a (possibly dropped) packet
         retransmit = (com_localTime - netchan->last_sent > 1000);
 
         // don't write new reliables if not yet acknowledged
-        if (netchan->reliable_length && !retransmit && client->state != cs_zombie) {
+        if (netchan->reliable_length && !retransmit &&
+            !native_ack_due && client->state != cs_zombie) {
             continue;
         }
 
@@ -1006,11 +1106,20 @@ void SV_SendAsyncPackets(void)
         write_pending_download(client);
 
         if (netchan->message.cursize || netchan->reliable_ack_pending ||
-            netchan->reliable_length || retransmit) {
+            netchan->reliable_length || retransmit || native_ack_due) {
+            if (native_ack_due) {
+                native_async_wake_started =
+                    SV_NativeShadowBeginAsyncWakeV1(
+                        client->worr_native_shadow);
+            }
             cursize = Netchan_Transmit(netchan, 0, NULL, 1);
+            if (native_ack_due && native_async_wake_started) {
+                SV_NativeShadowEndAsyncWakeV1(
+                    client->worr_native_shadow);
+            }
             SV_DPrintf(2, "%s: send: %d\n", client->name, cursize);
 calctime:
-            SV_CalcSendTime(client, cursize);
+            SV_CalcSendTime(client, cursize, true);
         }
     }
 }
