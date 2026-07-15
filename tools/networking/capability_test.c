@@ -19,6 +19,9 @@ static void test_text(void)
 {
     char text[11] = {0};
     uint32_t value = UINT32_MAX;
+    CHECK(WORR_NET_CAP_LEGACY_STAGE_MASK == UINT32_C(0x03));
+    CHECK(WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK == UINT32_C(0x53));
+    CHECK(WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK == UINT32_C(0x73));
     CHECK(Worr_NetCapabilitiesFormatV1(WORR_NET_CAP_LEGACY_STAGE_MASK,
                                        text, sizeof(text)));
     CHECK(!strcmp(text, "3"));
@@ -34,8 +37,20 @@ static void test_text(void)
     CHECK(Worr_NetCapabilitiesParseV1("4294967296", &value) ==
           WORR_NET_CAPABILITY_INVALID_TEXT);
     CHECK(Worr_NetCapabilitiesParseV1("32", &value) ==
+          WORR_NET_CAPABILITY_OK);
+    CHECK(value == WORR_NET_CAP_NATIVE_EVENT_STREAM_V1);
+    CHECK(Worr_NetCapabilitiesFormatV1(
+        WORR_NET_CAP_NATIVE_EVENT_STREAM_V1, text, sizeof(text)));
+    CHECK(!strcmp(text, "32"));
+    CHECK(Worr_NetCapabilitiesParseV1("64", &value) ==
+          WORR_NET_CAPABILITY_OK);
+    CHECK(value == WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1);
+    CHECK(Worr_NetCapabilitiesFormatV1(
+        WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1, text, sizeof(text)));
+    CHECK(!strcmp(text, "64"));
+    CHECK(Worr_NetCapabilitiesParseV1("128", &value) ==
           WORR_NET_CAPABILITY_UNKNOWN_BITS);
-    CHECK(!Worr_NetCapabilitiesFormatV1(UINT32_C(32), text,
+    CHECK(!Worr_NetCapabilitiesFormatV1(UINT32_C(128), text,
                                         sizeof(text)));
 }
 
@@ -72,6 +87,37 @@ static void test_confirmation(void)
           WORR_NET_CAP_LEGACY_COMMAND_SIDEBAND_V1);
 }
 
+static void test_private_bit_echo_and_downgrade(void)
+{
+    worr_net_capability_state_v1 state;
+    worr_net_capability_confirm_v1 confirm;
+
+    CHECK(Worr_NetCapabilityStateInitV1(
+        &state, 19, WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK,
+        WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK));
+    CHECK(Worr_NetCapabilitySelectV1(
+        19, state.offered, state.supported, &confirm) ==
+          WORR_NET_CAPABILITY_OK);
+    CHECK(confirm.negotiated == WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK);
+    CHECK((confirm.negotiated & WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1) != 0);
+    CHECK(Worr_NetCapabilityConfirmV1(&state, &confirm) ==
+          WORR_NET_CAPABILITY_OK);
+    CHECK(state.negotiated == WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK);
+
+    CHECK(Worr_NetCapabilityStateInitV1(
+        &state, 20, WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK,
+        WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK));
+    CHECK(Worr_NetCapabilitySelectV1(
+        20, state.offered, WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK,
+        &confirm) ==
+          WORR_NET_CAPABILITY_OK);
+    CHECK(confirm.negotiated == WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK);
+    CHECK((confirm.negotiated & WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1) != 0);
+    CHECK(Worr_NetCapabilityConfirmV1(&state, &confirm) ==
+          WORR_NET_CAPABILITY_OK);
+    CHECK(state.negotiated == WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK);
+}
+
 static void test_fail_closed(void)
 {
     worr_net_capability_state_v1 state;
@@ -106,6 +152,7 @@ int main(void)
 {
     test_text();
     test_confirmation();
+    test_private_bit_echo_and_downgrade();
     test_fail_closed();
     puts("capability_test: ok");
     return EXIT_SUCCESS;

@@ -80,31 +80,21 @@ static bool id_equal(worr_event_id_v1 a, worr_event_id_v1 b)
 }
 
 static bool records_semantically_equal(const worr_event_record_v1 *a,
-                                       const worr_event_record_v1 *b)
+                                       const worr_event_record_v1 *b,
+                                       uint32_t max_entities)
 {
-    return a->model_revision == b->model_revision &&
-           (a->flags & ~(uint32_t)WORR_EVENT_FLAG_HAS_AUTHORITY_ID) ==
-               (b->flags & ~(uint32_t)WORR_EVENT_FLAG_HAS_AUTHORITY_ID) &&
-           a->source_tick == b->source_tick &&
-           a->source_ordinal == b->source_ordinal &&
-           a->source_time_us == b->source_time_us &&
-           ref_equal(a->source_entity, b->source_entity) &&
-           ref_equal(a->subject_entity, b->subject_entity) &&
-           a->event_type == b->event_type &&
-           a->delivery_class == b->delivery_class &&
-           a->prediction_class == b->prediction_class &&
-           prediction_key_equal(a->prediction_key, b->prediction_key) &&
-           a->expiry_tick == b->expiry_tick &&
-           a->payload_kind == b->payload_kind &&
-           a->payload_size == b->payload_size &&
-           memcmp(a->payload, b->payload, WORR_EVENT_PAYLOAD_CAPACITY) == 0;
+    /* Keep journal reconciliation on the same fieldwise canonical contract as
+     * codecs and snapshot references.  Raw payload bytes would incorrectly
+     * distinguish equivalent floating representations such as signed zero. */
+    return Worr_EventRecordSemanticallyEqualV1(a, b, max_entities);
 }
 
 static bool records_equal(const worr_event_record_v1 *a,
-                          const worr_event_record_v1 *b)
+                          const worr_event_record_v1 *b,
+                          uint32_t max_entities)
 {
     return a->flags == b->flags && id_equal(a->event_id, b->event_id) &&
-           records_semantically_equal(a, b);
+           records_semantically_equal(a, b, max_entities);
 }
 
 static bool persistent_key_equal(const worr_event_record_v1 *a,
@@ -187,7 +177,12 @@ static uint32_t find_cosmetic_coalesce(
     uint64_t oldest_order = UINT64_MAX;
     for (index = 0; index < journal->capacity; ++index) {
         const worr_event_journal_slot_v1 *slot = &journal->slots[index];
+        /* Speculation may never evict a received authority record. Authority
+         * is allowed to coalesce an older cosmetic under the explicit
+         * pressure policy, including an unmatched prediction. */
         if (slot_used(slot) && !slot_terminal(slot) &&
+            (((record->flags & WORR_EVENT_FLAG_HAS_AUTHORITY_ID) != 0) ||
+             (slot->state & WORR_EVENT_SLOT_RECEIVED) == 0) &&
             cosmetic_coalesce_key_equal(&slot->record, record) &&
             slot->resident_order < oldest_order) {
             oldest = index;
@@ -299,7 +294,8 @@ worr_event_journal_result_v1 Worr_EventJournalInsertAuthoritativeV1(
             continue;
         }
         set_slot_out(slot_out, slot_ref(journal, index));
-        return records_equal(&slot->record, record)
+        return records_equal(&slot->record, record,
+                             journal->max_entities)
                    ? WORR_EVENT_JOURNAL_DUPLICATE
                    : WORR_EVENT_JOURNAL_CONFLICT;
     }
@@ -316,20 +312,31 @@ worr_event_journal_result_v1 Worr_EventJournalInsertAuthoritativeV1(
     replacement = find_prediction_key(journal, record);
     if (replacement != WORR_EVENT_SLOT_INVALID) {
         worr_event_journal_slot_v1 *slot = &journal->slots[replacement];
+        bool semantic_match;
+        bool was_presented;
         if ((slot->state & WORR_EVENT_SLOT_RECEIVED) != 0) {
             set_slot_out(slot_out, slot_ref(journal, replacement));
             return WORR_EVENT_JOURNAL_CONFLICT;
         }
-        if (!records_semantically_equal(&slot->record, record)) {
-            set_slot_out(slot_out, slot_ref(journal, replacement));
-            return WORR_EVENT_JOURNAL_CONFLICT;
-        }
+        semantic_match = records_semantically_equal(
+            &slot->record, record, journal->max_entities);
+        was_presented =
+            (slot->state & WORR_EVENT_SLOT_PRESENTED) != 0;
         slot->record = *record;
-        slot->state |= WORR_EVENT_SLOT_RECEIVED | WORR_EVENT_SLOT_MATCHED |
-                       WORR_EVENT_SLOT_PREDICTED;
+        /* CANCELED and EXPIRED describe the speculative lifetime, not the
+         * later authoritative record.  Preserve only a presentation that
+         * already happened; that bit is the at-most-once suppression fence. */
+        slot->state = WORR_EVENT_SLOT_RECEIVED | WORR_EVENT_SLOT_PREDICTED |
+                      (semantic_match ? WORR_EVENT_SLOT_MATCHED
+                                      : WORR_EVENT_SLOT_CORRECTED) |
+                      (was_presented ? WORR_EVENT_SLOT_PRESENTED : 0u);
         journal->receipt = receipt_after;
         set_slot_out(slot_out, slot_ref(journal, replacement));
-        return WORR_EVENT_JOURNAL_MATCHED;
+        if (semantic_match)
+            return WORR_EVENT_JOURNAL_MATCHED;
+        return was_presented
+                   ? WORR_EVENT_JOURNAL_CORRECTED_AFTER_PRESENTATION
+                   : WORR_EVENT_JOURNAL_CORRECTED;
     }
 
     if (record->delivery_class == WORR_EVENT_DELIVERY_PERSISTENT_STATE) {
@@ -398,13 +405,23 @@ worr_event_journal_result_v1 Worr_EventJournalInsertPredictedV1(
     if (replacement != WORR_EVENT_SLOT_INVALID) {
         worr_event_journal_slot_v1 *slot = &journal->slots[replacement];
         set_slot_out(slot_out, slot_ref(journal, replacement));
-        if (!records_semantically_equal(&slot->record, record))
-            return WORR_EVENT_JOURNAL_CONFLICT;
         if ((slot->state & WORR_EVENT_SLOT_RECEIVED) != 0) {
+            if (!records_semantically_equal(
+                    &slot->record, record, journal->max_entities)) {
+                slot->state |= WORR_EVENT_SLOT_PREDICTED |
+                               WORR_EVENT_SLOT_CORRECTED;
+                slot->state &= ~WORR_EVENT_SLOT_MATCHED;
+                return (slot->state & WORR_EVENT_SLOT_PRESENTED) != 0
+                           ? WORR_EVENT_JOURNAL_CORRECTED_AFTER_PRESENTATION
+                           : WORR_EVENT_JOURNAL_CORRECTED;
+            }
             slot->state |= WORR_EVENT_SLOT_PREDICTED |
                            WORR_EVENT_SLOT_MATCHED;
             return WORR_EVENT_JOURNAL_MATCHED;
         }
+        if (!records_semantically_equal(
+                &slot->record, record, journal->max_entities))
+            return WORR_EVENT_JOURNAL_CONFLICT;
         return WORR_EVENT_JOURNAL_DUPLICATE;
     }
 

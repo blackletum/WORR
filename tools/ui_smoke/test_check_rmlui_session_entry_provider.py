@@ -24,6 +24,7 @@ def _write_valid_repo(repo_root: Path) -> None:
         session_provider.CLIENT_RML,
         session_provider.SESSION_PUBLISHER,
         session_provider.SESSION_COMMANDS,
+        session_provider.SESSION_UI_UPDATE,
         session_provider.SESSION_THEME,
         session_provider.ACCESSIBILITY_THEME,
         session_provider.SESSION_ROUTES,
@@ -44,7 +45,7 @@ def test_valid_session_entry_provider_passes(tmp_path: Path, capsys) -> None:
     assert session_provider.main(["--repo-root", str(repo_root)]) == 0
     output = capsys.readouterr().out
     assert "Routes checked: 5" in output
-    assert "Sgame-published cvars checked: 49" in output
+    assert "Sgame-published cvars checked: 56" in output
 
 
 def test_missing_published_state_regression_fails(tmp_path: Path, capsys) -> None:
@@ -91,6 +92,38 @@ def test_ready_command_cvar_regression_fails(tmp_path: Path, capsys) -> None:
     )
     assert session_provider.main(["--repo-root", str(repo_root)]) == 1
     assert "Ready must resolve" in capsys.readouterr().err
+
+
+def test_hidden_unavailable_tab_regression_fails(tmp_path: Path, capsys) -> None:
+    repo_root = tmp_path / "repo"
+    _write_valid_repo(repo_root)
+    document = repo_root / session_provider.DOCUMENTS["dm_join"]
+    document.write_text(
+        document.read_text(encoding="utf-8").replace(
+            'data-enable-if="ui_dm_show_mymap!=0"',
+            'data-visible-if="ui_dm_show_mymap!=0"',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    assert session_provider.main(["--repo-root", str(repo_root)]) == 1
+    assert "mymap-tab must disable" in capsys.readouterr().err
+
+
+def test_embedded_vote_regression_fails(tmp_path: Path, capsys) -> None:
+    repo_root = tmp_path / "repo"
+    _write_valid_repo(repo_root)
+    document = repo_root / session_provider.DOCUMENTS["join"]
+    document.write_text(
+        document.read_text(encoding="utf-8").replace(
+            'data-visible-if="ui_dm_vote_active!=0"',
+            'data-visible-if="ui_dm_vote_active=0"',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    assert session_provider.main(["--repo-root", str(repo_root)]) == 1
+    assert "embedded active-vote pane" in capsys.readouterr().err
 
 
 def test_match_hub_close_regression_fails(tmp_path: Path, capsys) -> None:

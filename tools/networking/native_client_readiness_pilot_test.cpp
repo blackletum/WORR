@@ -1,6 +1,7 @@
 /* Standalone FR-10-T04 client readiness/carrier integration tests. */
 
 #include "client.h"
+#include "client/cgame_event_runtime.h"
 #include "client/native_readiness_pilot.h"
 
 #include "common/net/native_carrier.h"
@@ -22,12 +23,96 @@ unsigned com_localTime{};
 namespace {
 
 constexpr uint32_t kPrivateCapabilities =
-    WORR_NET_CAP_LEGACY_STAGE_MASK | WORR_NET_CAP_NATIVE_ENVELOPE_V1;
+    WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK;
+constexpr uint32_t kEventPrivateCapabilities =
+    WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK;
+static_assert(kPrivateCapabilities == UINT32_C(0x53));
+static_assert(kEventPrivateCapabilities == UINT32_C(0x73));
 constexpr size_t kApplicationCeiling = 1024;
 
 cvar_t pilot_cvar{};
+cvar_t event_pilot_cvar{};
 cvar_t probe_hold_cvar{};
 std::array<byte, 512> reliable_storage{};
+
+struct fake_event_runtime_t {
+    bool active{};
+    bool fail_status{};
+    uint32_t stream_epoch{};
+    uint32_t first_sequence{};
+    uint32_t next_sequence{};
+    uint32_t authority_count{};
+    uint32_t reset_calls{};
+    uint32_t submit_calls{};
+};
+
+fake_event_runtime_t fake_event_runtime{};
+
+worr_cgame_event_runtime_result_v1 fake_reset_authority(
+    uint32_t stream_epoch, uint32_t first_sequence)
+{
+    ++fake_event_runtime.reset_calls;
+    if ((stream_epoch == 0) != (first_sequence == 0))
+        return WORR_CGAME_EVENT_RUNTIME_INVALID_ARGUMENT;
+    fake_event_runtime.active = stream_epoch != 0;
+    fake_event_runtime.stream_epoch = stream_epoch;
+    fake_event_runtime.first_sequence = first_sequence;
+    fake_event_runtime.next_sequence = first_sequence;
+    fake_event_runtime.authority_count = 0;
+    return WORR_CGAME_EVENT_RUNTIME_OK;
+}
+
+worr_cgame_event_runtime_result_v1 fake_submit_authority(
+    const worr_event_record_v1 *records, uint32_t count)
+{
+    if (!fake_event_runtime.active || !records || count == 0)
+        return WORR_CGAME_EVENT_RUNTIME_NOT_READY;
+    for (uint32_t index = 0; index < count; ++index) {
+        if (!Worr_EventRecordValidateV1(
+                &records[index], WORR_EVENT_STREAM_MAX_ENTITIES_V1) ||
+            records[index].event_id.stream_epoch !=
+                fake_event_runtime.stream_epoch ||
+            records[index].event_id.sequence !=
+                fake_event_runtime.next_sequence) {
+            return WORR_CGAME_EVENT_RUNTIME_CONFLICT;
+        }
+        ++fake_event_runtime.next_sequence;
+        ++fake_event_runtime.authority_count;
+    }
+    ++fake_event_runtime.submit_calls;
+    return WORR_CGAME_EVENT_RUNTIME_OK;
+}
+
+bool fake_get_status(worr_cgame_event_runtime_status_v1 *status_out)
+{
+    if (!status_out || fake_event_runtime.fail_status)
+        return false;
+    worr_cgame_event_runtime_status_v1 status{};
+    status.struct_size = sizeof(status);
+    status.api_version = WORR_CGAME_EVENT_RUNTIME_API_VERSION;
+    if (fake_event_runtime.active) {
+        status.authority_epoch = fake_event_runtime.stream_epoch;
+        status.next_presentation_sequence =
+            fake_event_runtime.next_sequence;
+        status.authority_count = fake_event_runtime.authority_count;
+        status.state_flags = WORR_CGAME_EVENT_RUNTIME_STATE_ACTIVE;
+        status.receipt.struct_size = sizeof(status.receipt);
+        status.receipt.schema_version = WORR_EVENT_ABI_VERSION;
+        status.receipt.stream_epoch = fake_event_runtime.stream_epoch;
+        status.receipt.highest_contiguous =
+            fake_event_runtime.next_sequence - 1u;
+    }
+    *status_out = status;
+    return true;
+}
+
+const worr_cgame_event_runtime_export_v1 fake_event_export{
+    sizeof(fake_event_export),
+    WORR_CGAME_EVENT_RUNTIME_API_VERSION,
+    fake_reset_authority,
+    fake_submit_authority,
+    fake_get_status,
+};
 
 struct packet_t {
     std::array<byte, WORR_NATIVE_CARRIER_MAX_PACKET_BYTES> bytes{};
@@ -94,10 +179,15 @@ cl_native_readiness_pilot_status_v1 pilot_status()
 void reset_environment(uint32_t raw_time, size_t reliable_capacity)
 {
     CL_NativeReadinessPilotBeforeNetchanClose(&cls.netchan);
+    CHECK(CL_CGameEventRuntimeSetConsumer(nullptr));
+    CHECK(CL_CGameEventRuntimeResetConnection() ==
+          WORR_CGAME_EVENT_RUNTIME_OK);
     std::memset(&cls, 0, sizeof(cls));
     std::memset(&cl, 0, sizeof(cl));
     std::memset(&pilot_cvar, 0, sizeof(pilot_cvar));
+    std::memset(&event_pilot_cvar, 0, sizeof(event_pilot_cvar));
     std::memset(&probe_hold_cvar, 0, sizeof(probe_hold_cvar));
+    fake_event_runtime = {};
     reliable_storage.fill(0);
     com_localTime = raw_time;
     cls.netchan.type = NETCHAN_NEW;
@@ -113,6 +203,17 @@ bool begin_enabled(uint32_t raw_time,
 {
     reset_environment(raw_time, reliable_capacity);
     pilot_cvar.integer = 1;
+    return CL_NativeReadinessPilotBeginConnection(&cls.netchan);
+}
+
+bool begin_event_enabled(
+    uint32_t raw_time,
+    size_t reliable_capacity = reliable_storage.size())
+{
+    reset_environment(raw_time, reliable_capacity);
+    pilot_cvar.integer = 1;
+    event_pilot_cvar.integer = 1;
+    CHECK(CL_CGameEventRuntimeSetConsumer(&fake_event_export));
     return CL_NativeReadinessPilotBeginConnection(&cls.netchan);
 }
 
@@ -195,14 +296,17 @@ worr_native_readiness_record_v1 server_challenge(
     uint64_t nonce, uint64_t now, bool advance)
 {
     worr_native_readiness_record_v1 challenge{};
+    const uint32_t private_capabilities = event_pilot_cvar.integer
+        ? kEventPrivateCapabilities
+        : kPrivateCapabilities;
     const auto result = advance
                             ? Worr_NativeReadinessServerAdvanceEpochV1(
                                   &server, transport_epoch,
-                                  kPrivateCapabilities, nonce, now, 10000,
+                                  private_capabilities, nonce, now, 10000,
                                   &challenge)
                             : Worr_NativeReadinessServerInitV1(
                                   &server, transport_epoch,
-                                  kPrivateCapabilities, nonce, now, 10000,
+                                  private_capabilities, nonce, now, 10000,
                                   &challenge);
     CHECK(result == WORR_NATIVE_READINESS_OK);
     return challenge;
@@ -241,6 +345,26 @@ void complete_handshake(
     CHECK(state.transport_epoch == server_active.transport_epoch);
 }
 
+void complete_event_handshake(
+    worr_native_readiness_state_v1 &server,
+    const worr_native_readiness_record_v1 &server_active)
+{
+    const size_t confirm_offset = cls.netchan.message.cursize;
+    complete_handshake(server_active);
+    CHECK(cls.netchan.message.cursize == confirm_offset + 65u);
+    const auto confirm = decode_client_record(confirm_offset);
+    CHECK(confirm.record_kind ==
+          WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM);
+    CHECK(confirm.negotiated_capabilities == kEventPrivateCapabilities);
+    CHECK(Worr_NativeReadinessServerObserveClientActiveConfirmV1(
+              &server, &confirm, com_localTime) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(server.phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE);
+    const auto state = pilot_state();
+    CHECK(state.event_enabled && state.client_active_confirm_queued);
+    CHECK(state.private_capabilities == kEventPrivateCapabilities);
+}
+
 worr_prediction_command_v1 prediction_command(uint32_t sequence)
 {
     worr_prediction_command_v1 command{};
@@ -248,20 +372,24 @@ worr_prediction_command_v1 prediction_command(uint32_t sequence)
     command.schema_version = WORR_PREDICTION_ABI_VERSION;
     command.duration_ms = 10;
     command.buttons = static_cast<uint8_t>(sequence & 3u);
-    command.view_angles[1] = static_cast<float>(sequence * 10u);
-    command.forward_move = static_cast<float>(sequence * 3u);
-    command.side_move = -static_cast<float>(sequence);
+    command.view_angles[1] = static_cast<float>((sequence % 36u) * 10u);
+    command.forward_move = static_cast<float>((sequence % 100u) * 3u);
+    command.side_move = -static_cast<float>(sequence % 100u);
     return command;
+}
+
+void build_command(uint32_t command_epoch, uint32_t sequence)
+{
+    const worr_command_id_v1 id{command_epoch, sequence};
+    const auto command = prediction_command(sequence);
+    CL_NativeReadinessPilotObserveFinalizedCommand(
+        sequence, &id, &command);
 }
 
 void build_commands(uint32_t command_epoch, uint32_t count)
 {
-    for (uint32_t sequence = 1; sequence <= count; ++sequence) {
-        const worr_command_id_v1 id{command_epoch, sequence};
-        const auto command = prediction_command(sequence);
-        CL_NativeReadinessPilotObserveFinalizedCommand(
-            sequence, &id, &command);
-    }
+    for (uint32_t sequence = 1; sequence <= count; ++sequence)
+        build_command(command_epoch, sequence);
 }
 
 tx_attempt_t prepare_tx(size_t legacy_bytes,
@@ -315,7 +443,8 @@ void complete_tx(const tx_attempt_t &attempt,
 
 worr_native_envelope_frame_info_v1 inspect_command_packet(
     const tx_attempt_t &attempt, uint32_t expected_epoch,
-    uint32_t expected_command_sequence)
+    uint32_t expected_command_sequence,
+    uint32_t expected_message_sequence = 1u)
 {
     CHECK(attempt.result == NETCHAN_APP_TX_PREPARE_PREPARED);
     CHECK(attempt.output.application_bytes ==
@@ -340,7 +469,7 @@ worr_native_envelope_frame_info_v1 inspect_command_packet(
               datagram, view.entries[0].data_bytes, &frame) ==
           WORR_NATIVE_ENVELOPE_DECODE_OK);
     CHECK(frame.transport_epoch == expected_epoch);
-    CHECK(frame.message_sequence == 1u);
+    CHECK(frame.message_sequence == expected_message_sequence);
     CHECK(frame.record.record_class == WORR_NATIVE_RECORD_COMMAND_V1);
     CHECK(frame.record.object_sequence == expected_command_sequence);
     CHECK(frame.priority == 0u);
@@ -378,7 +507,11 @@ packet_t ack_packet(uint32_t transport_epoch, uint32_t first,
     return packet;
 }
 
-packet_t multi_ack_packet(uint32_t transport_epoch)
+packet_t multi_ack_packet(uint32_t transport_epoch,
+                          uint32_t first_a = 1,
+                          uint32_t last_a = 1,
+                          uint32_t first_b = 1,
+                          uint32_t last_b = 1)
 {
     packet_t packet{};
     std::array<worr_native_carrier_entry_v1, 2> entries{};
@@ -386,14 +519,141 @@ packet_t multi_ack_packet(uint32_t transport_epoch)
         entry.struct_size = sizeof(entry);
         entry.schema_version = WORR_NATIVE_CARRIER_ABI_VERSION;
         entry.entry_type = WORR_NATIVE_CARRIER_ENTRY_ACK_V1;
-        entry.first_message_sequence = 1;
-        entry.last_message_sequence = 1;
     }
+    entries[0].first_message_sequence = first_a;
+    entries[0].last_message_sequence = last_a;
+    entries[1].first_message_sequence = first_b;
+    entries[1].last_message_sequence = last_b;
     CHECK(Worr_NativeCarrierEncodeV1(
               transport_epoch, nullptr, 0, nullptr, 0, entries.data(),
               static_cast<uint16_t>(entries.size()), packet.bytes.data(),
               packet.bytes.size(), &packet.count) == WORR_NATIVE_CARRIER_OK);
     return packet;
+}
+
+packet_t native_payload_packet(
+    uint32_t transport_epoch, uint32_t message_sequence,
+    worr_native_record_ref_v1 record, const void *payload,
+    uint32_t payload_bytes, bool include_ack = false,
+    uint32_t ack_first = 0, uint32_t ack_last = 0,
+    size_t legacy_bytes = 0)
+{
+    CHECK(payload && payload_bytes != 0);
+    std::array<byte, WORR_NATIVE_ENVELOPE_MAX_DATAGRAM_BYTES> datagram{};
+    worr_native_envelope_fragmenter_v1 fragmenter{};
+    CHECK(Worr_NativeEnvelopeFragmenterInitV1(
+        &fragmenter, transport_epoch, message_sequence, record, 1,
+        payload, payload_bytes, datagram.size()));
+    size_t datagram_bytes = 0;
+    CHECK(Worr_NativeEnvelopeFragmentNextV1(
+              &fragmenter, payload, payload_bytes, datagram.data(),
+              datagram.size(), &datagram_bytes) ==
+          WORR_NATIVE_ENVELOPE_EMIT_OK);
+    CHECK(fragmenter.next_fragment == fragmenter.fragment_count);
+
+    std::array<worr_native_carrier_entry_v1, 2> entries{};
+    entries[0].struct_size = sizeof(entries[0]);
+    entries[0].schema_version = WORR_NATIVE_CARRIER_ABI_VERSION;
+    entries[0].entry_type = WORR_NATIVE_CARRIER_ENTRY_DATA_V1;
+    entries[0].data_bytes = static_cast<uint32_t>(datagram_bytes);
+    uint16_t entry_count = 1;
+    if (include_ack) {
+        CHECK(ack_first != 0 && ack_first <= ack_last);
+        entries[1].struct_size = sizeof(entries[1]);
+        entries[1].schema_version = WORR_NATIVE_CARRIER_ABI_VERSION;
+        entries[1].entry_type = WORR_NATIVE_CARRIER_ENTRY_ACK_V1;
+        entries[1].first_message_sequence = ack_first;
+        entries[1].last_message_sequence = ack_last;
+        entry_count = 2;
+    }
+
+    std::array<byte, 32> legacy{};
+    CHECK(legacy_bytes <= legacy.size());
+    for (size_t index = 0; index < legacy_bytes; ++index)
+        legacy[index] = static_cast<byte>(0x30u + index);
+    packet_t packet{};
+    CHECK(Worr_NativeCarrierEncodeV1(
+              transport_epoch, legacy_bytes ? legacy.data() : nullptr,
+              legacy_bytes, datagram.data(), datagram_bytes,
+              entries.data(), entry_count, packet.bytes.data(),
+              packet.bytes.size(), &packet.count) ==
+          WORR_NATIVE_CARRIER_OK);
+    return packet;
+}
+
+packet_t descriptor_packet(
+    uint32_t transport_epoch, uint32_t message_sequence,
+    const worr_event_stream_descriptor_v1 &descriptor,
+    bool include_ack = false, uint32_t ack_first = 0,
+    uint32_t ack_last = 0, size_t legacy_bytes = 0)
+{
+    std::array<byte, 128> encoded{};
+    size_t encoded_bytes = 0;
+    CHECK(Worr_NativeCodecEventStreamEncodeV1(
+              &descriptor, encoded.data(), encoded.size(),
+              &encoded_bytes) == WORR_NATIVE_CODEC_OK);
+    worr_native_codec_info_v1 info{};
+    worr_native_record_ref_v1 record{};
+    CHECK(Worr_NativeCodecInspectV1(
+              encoded.data(), encoded_bytes, &info) ==
+          WORR_NATIVE_CODEC_OK);
+    CHECK(Worr_NativeCodecInfoRecordRefV1(&info, &record));
+    return native_payload_packet(
+        transport_epoch, message_sequence, record, encoded.data(),
+        static_cast<uint32_t>(encoded_bytes), include_ack, ack_first,
+        ack_last, legacy_bytes);
+}
+
+worr_event_record_v1 event_record(uint32_t stream_epoch,
+                                  uint32_t sequence)
+{
+    worr_event_record_v1 record{};
+    record.struct_size = sizeof(record);
+    record.schema_version = WORR_EVENT_ABI_VERSION;
+    record.model_revision = WORR_EVENT_MODEL_REVISION;
+    record.flags = WORR_EVENT_FLAG_HAS_AUTHORITY_ID |
+                   WORR_EVENT_FLAG_REPLAY_SAFE |
+                   WORR_EVENT_FLAG_PRESENT_ONCE;
+    record.event_id.stream_epoch = stream_epoch;
+    record.event_id.sequence = sequence;
+    record.source_tick = 1000u + sequence;
+    record.source_ordinal = sequence;
+    record.source_time_us = UINT64_C(9000000) + sequence;
+    record.source_entity.index = 1;
+    record.source_entity.generation = 4;
+    record.subject_entity.index = WORR_EVENT_NO_ENTITY;
+    record.event_type = WORR_EVENT_TYPE_GAMEPLAY_CUE;
+    record.delivery_class = WORR_EVENT_DELIVERY_RELIABLE_ORDERED;
+    record.prediction_class =
+        WORR_EVENT_PREDICTION_AUTHORITATIVE_ONLY;
+    record.payload_kind = WORR_EVENT_PAYLOAD_NONE;
+    CHECK(Worr_EventRecordValidateV1(
+        &record, WORR_EVENT_STREAM_MAX_ENTITIES_V1));
+    return record;
+}
+
+packet_t event_packet(
+    uint32_t transport_epoch, uint32_t message_sequence,
+    const worr_event_record_v1 &event, bool include_ack = false,
+    uint32_t ack_first = 0, uint32_t ack_last = 0,
+    size_t legacy_bytes = 0)
+{
+    std::array<byte, WORR_NATIVE_CODEC_MAX_EVENT_ENCODED_BYTES> encoded{};
+    size_t encoded_bytes = 0;
+    CHECK(Worr_NativeCodecEventEncodeV1(
+              &event, WORR_EVENT_STREAM_MAX_ENTITIES_V1,
+              encoded.data(), encoded.size(), &encoded_bytes) ==
+          WORR_NATIVE_CODEC_OK);
+    worr_native_codec_info_v1 info{};
+    worr_native_record_ref_v1 record{};
+    CHECK(Worr_NativeCodecInspectV1(
+              encoded.data(), encoded_bytes, &info) ==
+          WORR_NATIVE_CODEC_OK);
+    CHECK(Worr_NativeCodecInfoRecordRefV1(&info, &record));
+    return native_payload_packet(
+        transport_epoch, message_sequence, record, encoded.data(),
+        static_cast<uint32_t>(encoded_bytes), include_ack, ack_first,
+        ack_last, legacy_bytes);
 }
 
 netchan_app_rx_result_t receive_packet(
@@ -422,6 +682,13 @@ void test_default_off_demo_and_hook_ownership()
      * network-netchan-application-tx-hook. */
     CHECK(CL_NativeReadinessPilotIsCarrierSetting(
         WORR_NATIVE_READINESS_SETTING_BEGIN));
+
+    /* Event streaming is a subordinate opt-in and cannot activate a pilot
+     * without the base native shadow cvar. */
+    reset_environment(10, reliable_storage.size());
+    event_pilot_cvar.integer = 1;
+    CHECK(!CL_NativeReadinessPilotBeginConnection(&cls.netchan));
+    CHECK(!cls.netchan.app_tx_prepare && !cls.netchan.app_rx);
 
     reset_environment(11, reliable_storage.size());
     pilot_cvar.integer = 1;
@@ -464,7 +731,7 @@ void test_default_off_demo_and_hook_ownership()
     CHECK(pilot_status().hooks == 1u);
 }
 
-void test_one_shot_exact_boundary_loss_retry_ack_release()
+void test_initial_exact_boundary_loss_retry_ack_release()
 {
     CHECK(begin_enabled(100));
     confirm_capability(7);
@@ -541,7 +808,7 @@ void test_one_shot_exact_boundary_loss_retry_ack_release()
     state = pilot_state();
     CHECK(state.retained_messages == 0u && state.retained_payloads == 0u);
 
-    /* Exact duplicate ACK is idempotent and the per-epoch latch stays shut. */
+    /* Exact duplicate ACK is idempotent. */
     CHECK(receive_packet(acknowledgement, output) ==
           NETCHAN_APP_RX_EXPOSE_LEGACY);
     CHECK(pilot_state().retained_payloads == 0u);
@@ -561,12 +828,124 @@ void test_one_shot_exact_boundary_loss_retry_ack_release()
           status.acknowledged_reliable == 1u);
     CHECK(status.drains == 0u && status.failures == 0u &&
           status.last_failure == 0u);
+
+    /* Once ACK releases the stop-and-wait slot, a later legacy command range
+     * may contribute another observational native sample. */
     CL_NativeReadinessPilotObserveEncodedCommandRange(4, 1);
-    CHECK(pilot_state().message_sequence_highwater == 1u);
+    CHECK(pilot_state().message_sequence_highwater == 2u);
+    CHECK(pilot_state().retained_messages == 1u);
+    const auto second = prepare_tx(0);
+    inspect_command_packet(second, 101, 4, 2);
+    complete_tx(second, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+    const auto second_acknowledgement = ack_packet(101, 2, 2);
+    CHECK(receive_packet(second_acknowledgement, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(pilot_state().retained_messages == 0u);
+
+    /* Repeated and older range notifications cannot re-enqueue a sample. */
+    CL_NativeReadinessPilotObserveEncodedCommandRange(4, 1);
+    CL_NativeReadinessPilotObserveEncodedCommandRange(1, 3);
+    CHECK(pilot_state().message_sequence_highwater == 2u);
     CHECK(prepare_tx(0).result == NETCHAN_APP_TX_PREPARE_BYPASS);
 }
 
-void test_map_drain_old_ack_epoch_switch_and_reconnect()
+void test_repeated_stop_and_wait_loss_retry_ack_release()
+{
+    constexpr uint32_t kCommandCount = 256;
+    constexpr uint32_t kCommandEpoch = 8;
+    constexpr uint32_t kTransportEpoch = 301;
+
+    CHECK(begin_enabled(300));
+    confirm_capability(kCommandEpoch);
+    worr_native_readiness_state_v1 server{};
+    const auto active = begin_handshake(
+        server, kTransportEpoch, 700, false);
+    complete_handshake(active);
+
+    netchan_app_rx_output_v1_t output{};
+    uint64_t accepted_retries = 0;
+    uint64_t duplicate_acks = 0;
+    for (uint32_t sequence = 1; sequence <= kCommandCount; ++sequence) {
+        build_command(kCommandEpoch, sequence);
+        CL_NativeReadinessPilotObserveEncodedCommandRange(sequence, 1);
+        auto state = pilot_state();
+        CHECK(state.mode == 2u && state.proof_enqueued_once);
+        CHECK(state.retained_messages == 1u &&
+              state.retained_payloads == 1u);
+        CHECK(state.message_sequence_highwater == sequence);
+
+        /* While occupied, even a malformed later callback is observationally
+         * ignored: the authoritative legacy send path must never be stalled. */
+        CL_NativeReadinessPilotObserveEncodedCommandRange(0, 0);
+        CHECK(pilot_status().failures == 0u);
+
+        const size_t legacy_bytes = sequence % 17u;
+        auto outgoing = prepare_tx(legacy_bytes);
+        inspect_command_packet(outgoing, kTransportEpoch, sequence,
+                               sequence);
+        if (sequence % 17u == 0u) {
+            complete_tx(outgoing, NETCHAN_APP_TX_COMPLETION_NOT_ACCEPTED);
+            CHECK(pilot_state().selected_send_attempts == 0u);
+            outgoing = prepare_tx(legacy_bytes);
+            inspect_command_packet(outgoing, kTransportEpoch, sequence,
+                                   sequence);
+        }
+        complete_tx(outgoing, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+
+        /* Deterministic lost-receipt samples prove byte-identical resend of
+         * retained DATA without allocating a second command. */
+        if (sequence % 23u == 0u) {
+            com_localTime += 100;
+            const auto retry = prepare_tx(legacy_bytes);
+            inspect_command_packet(retry, kTransportEpoch, sequence,
+                                   sequence);
+            CHECK(std::memcmp(outgoing.candidate.data(),
+                              retry.candidate.data(),
+                              retry.output.application_bytes) == 0);
+            complete_tx(retry, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+            ++accepted_retries;
+        }
+
+        const auto acknowledgement = sequence >= 3u && sequence % 19u == 0u
+            ? multi_ack_packet(
+                  kTransportEpoch, 1, 1, sequence, sequence)
+            : ack_packet(
+                  kTransportEpoch, sequence, sequence, sequence % 5u);
+        CHECK(receive_packet(acknowledgement, output) ==
+              NETCHAN_APP_RX_EXPOSE_LEGACY);
+        state = pilot_state();
+        CHECK(state.retained_messages == 0u &&
+              state.retained_payloads == 0u);
+
+        if (sequence % 31u == 0u) {
+            CHECK(receive_packet(acknowledgement, output) ==
+                  NETCHAN_APP_RX_EXPOSE_LEGACY);
+            ++duplicate_acks;
+        }
+
+        CL_NativeReadinessPilotObserveEncodedCommandRange(sequence, 1);
+        if (sequence > 1u) {
+            CL_NativeReadinessPilotObserveEncodedCommandRange(
+                sequence - 1u, 1);
+        }
+        CHECK(pilot_state().retained_messages == 0u);
+        CHECK(pilot_state().message_sequence_highwater == sequence);
+    }
+
+    const auto status = pilot_status();
+    CHECK(status.proof_enqueued == kCommandCount);
+    CHECK(status.retained == 0u && status.retained_highwater == 1u);
+    CHECK(status.retained_releases == kCommandCount);
+    CHECK(status.tx_first_sends == kCommandCount);
+    CHECK(status.tx_retries == accepted_retries);
+    CHECK(status.tx_handoffs == kCommandCount + accepted_retries);
+    CHECK(status.ack_carriers == kCommandCount + duplicate_acks);
+    CHECK(status.acknowledged_reliable == kCommandCount);
+    CHECK(status.drains == 0u && status.failures == 0u &&
+          status.last_failure == 0u);
+}
+
+void test_map_cancellation_barrier_epoch_switch_and_reconnect()
 {
     CHECK(begin_enabled(500));
     confirm_capability(20);
@@ -590,27 +969,43 @@ void test_map_drain_old_ack_epoch_switch_and_reconnect()
     confirm_capability(21);
     ++com_localTime;
     active = begin_handshake(server, 502, 901, true);
+    auto state = pilot_state();
+    CHECK(state.mode == 1u && state.transport_epoch == 0u &&
+          state.retained_messages == 0u &&
+          state.retained_payloads == 0u &&
+          state.retired_transport_epoch == 0u &&
+          state.cancelled_through_transport_epoch == 501u &&
+          state.cancelled_transports == 1u &&
+          state.cancelled_commands == 1u);
+    CHECK(pilot_status().cancelled_through_transport_epoch == 501u &&
+          pilot_status().retained == 0u);
     complete_handshake(active);
-    CHECK(pilot_state().retired_transport_epoch == 501u);
-    CHECK(pilot_state().retired_messages == 1u &&
-          pilot_state().retired_payloads == 1u);
+    CHECK(pilot_state().transport_epoch == 502u &&
+          pilot_state().retired_transport_epoch == 0u);
     build_commands(21, 1);
     CL_NativeReadinessPilotObserveEncodedCommandRange(1, 1);
     CHECK(pilot_state().retained_messages == 1u);
-    CHECK(pilot_status().retained == 2u &&
-          pilot_status().retained_highwater == 2u);
+    CHECK(pilot_status().retained == 1u &&
+          pilot_status().retained_highwater == 1u);
 
-    /* A post-active old-epoch ACK routes only to the one retired bank. */
+    /* The negotiated barrier makes delayed old ACKs legacy-only.  They do
+     * not release the fresh epoch's identically numbered retained command. */
     netchan_app_rx_output_v1_t output{};
-    const auto old_ack = ack_packet(501, 1, 1);
+    const auto old_ack = ack_packet(501, 1, 1, 3);
+    const auto before_old_ack = pilot_state();
+    const auto status_before_old_ack = pilot_status();
     CHECK(receive_packet(old_ack, output) ==
           NETCHAN_APP_RX_EXPOSE_LEGACY);
-    CHECK(pilot_state().retired_messages == 0u &&
-          pilot_state().retired_payloads == 0u);
+    CHECK(output.legacy_bytes == 3u);
     CHECK(pilot_state().retained_messages == 1u &&
           pilot_state().retained_payloads == 1u);
     CHECK(pilot_status().retained == 1u &&
-          pilot_status().retained_releases == 1u);
+          pilot_status().retained_releases == 0u &&
+          pilot_status().ack_carriers ==
+              status_before_old_ack.ack_carriers);
+    CHECK(pilot_state().message_sequence_highwater ==
+              before_old_ack.message_sequence_highwater &&
+          pilot_state().cancelled_through_transport_epoch == 501u);
 
     auto second = prepare_tx(0);
     const auto second_frame = inspect_command_packet(second, 502, 1);
@@ -622,15 +1017,21 @@ void test_map_drain_old_ack_epoch_switch_and_reconnect()
     CHECK(pilot_state().retained_messages == 0u &&
           pilot_state().retained_payloads == 0u);
 
-    /* A third activation replaces, rather than accumulates, retired banks. */
+    /* A second rotation advances the monotonic floor and again creates a
+     * fresh current transport without overwriting/accumulating retired work. */
     CL_NativeReadinessPilotQuiesceMap();
     CL_NativeReadinessPilotServerDataReset();
     confirm_capability(23);
     ++com_localTime;
     active = begin_handshake(server, 503, 902, true);
+    CHECK(pilot_state().transport_epoch == 0u &&
+          pilot_state().retired_transport_epoch == 0u &&
+          pilot_state().cancelled_through_transport_epoch == 502u &&
+          pilot_state().cancelled_transports == 2u);
     complete_handshake(active);
-    CHECK(pilot_state().retired_transport_epoch == 502u);
-    CHECK(pilot_state().retired_messages == 0u &&
+    CHECK(pilot_state().transport_epoch == 503u &&
+          pilot_state().retired_transport_epoch == 0u &&
+          pilot_state().retired_messages == 0u &&
           pilot_state().retired_payloads == 0u);
 
     CL_NativeReadinessPilotBeforeNetchanClose(&cls.netchan);
@@ -644,10 +1045,97 @@ void test_map_drain_old_ack_epoch_switch_and_reconnect()
     server = {};
     active = begin_handshake(server, 41, 1000, false);
     complete_handshake(active);
+    CHECK(pilot_state().cancelled_through_transport_epoch == 0u);
     build_commands(22, 1);
     CL_NativeReadinessPilotObserveEncodedCommandRange(1, 1);
     const auto reconnect = prepare_tx(0);
     inspect_command_packet(reconnect, 41, 1);
+}
+
+void test_pending_handshake_epoch_enters_cancellation_floor()
+{
+    constexpr uint32_t kPendingEpoch = 601;
+    constexpr uint32_t kReplacementEpoch = 602;
+
+    CHECK(begin_enabled(600));
+    confirm_capability(24);
+    worr_native_readiness_state_v1 server{};
+    const size_t first_ready_offset = cls.netchan.message.cursize;
+    const auto first_challenge = server_challenge(
+        server, kPendingEpoch, 1050, com_localTime, false);
+    feed_packet_record(first_challenge);
+    const auto first_ready = decode_client_record(first_ready_offset);
+    CHECK(first_ready.transport_epoch == kPendingEpoch);
+    const auto first_active = server_accept_ready(
+        server, first_ready, com_localTime);
+    CHECK(first_active.transport_epoch == kPendingEpoch);
+    auto state = pilot_state();
+    CHECK(state.transport_epoch == 0u &&
+          state.cancelled_through_transport_epoch == 0u &&
+          state.cancelled_transports == 0u);
+    const uint64_t barriers_before = state.cancellation_barriers;
+
+    /* Replace the map while CLIENT_READY is pending and before any transport
+     * bank exists.  The observed epoch is still an issued private identity
+     * and must become part of the next cancellation declaration. */
+    CL_NativeReadinessPilotQuiesceMap();
+    CL_NativeReadinessPilotServerDataReset();
+    confirm_capability(25);
+    ++com_localTime;
+    const size_t second_ready_offset = cls.netchan.message.cursize;
+    const auto second_challenge = server_challenge(
+        server, kReplacementEpoch, 1051, com_localTime, true);
+    feed_packet_record(second_challenge);
+    const auto second_ready = decode_client_record(second_ready_offset);
+    CHECK(second_ready.transport_epoch == kReplacementEpoch);
+    state = pilot_state();
+    CHECK(state.mode == 1u && state.transport_epoch == 0u &&
+          state.retired_transport_epoch == 0u &&
+          state.cancelled_through_transport_epoch == kPendingEpoch &&
+          state.cancellation_barriers == barriers_before + 1u &&
+          state.cancelled_transports == 0u &&
+          state.cancelled_commands == 0u &&
+          state.cancelled_event_rx == 0u &&
+          state.cancelled_event_receipts == 0u);
+
+    /* Both control declarations were valid for the replaced pending epoch.
+     * Their reliable delivery may occur after the newer CHALLENGE; consume
+     * them at the cancellation floor without requeueing READY/CONFIRM,
+     * reactivating the old session, or entering DRAIN. */
+    const size_t stale_control_offset = cls.netchan.message.cursize;
+    const auto status_before_stale_control = pilot_status();
+    feed_packet_record(first_challenge);
+    feed_packet_record(first_active);
+    const auto after_stale_control = pilot_state();
+    const auto status_after_stale_control = pilot_status();
+    CHECK(cls.netchan.message.cursize == stale_control_offset &&
+          after_stale_control.mode == state.mode &&
+          after_stale_control.transport_epoch == state.transport_epoch &&
+          after_stale_control.cancelled_through_transport_epoch ==
+              state.cancelled_through_transport_epoch &&
+          status_after_stale_control.server_active ==
+              status_before_stale_control.server_active &&
+          status_after_stale_control.failures ==
+              status_before_stale_control.failures &&
+          status_after_stale_control.stale_cancelled_readiness_records ==
+              status_before_stale_control
+                      .stale_cancelled_readiness_records + 2u);
+
+    netchan_app_rx_output_v1_t output{};
+    const auto delayed_pending_ack = ack_packet(
+        kPendingEpoch, 1, 1, 2);
+    CHECK(receive_packet(delayed_pending_ack, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(output.legacy_bytes == 2u &&
+          pilot_status().stale_cancelled_carriers == 1u);
+
+    const auto replacement_active = server_accept_ready(
+        server, second_ready, com_localTime);
+    complete_handshake(replacement_active);
+    CHECK(pilot_state().transport_epoch == kReplacementEpoch &&
+          pilot_state().retired_transport_epoch == 0u &&
+          pilot_state().cancelled_through_transport_epoch ==
+              kPendingEpoch);
 }
 
 void test_no_carrier_malformed_wrong_direction_and_epoch()
@@ -709,10 +1197,14 @@ void test_no_carrier_malformed_wrong_direction_and_epoch()
     CL_NativeReadinessPilotObserveEncodedCommandRange(1, 1);
     outgoing = prepare_tx(0);
     complete_tx(outgoing, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+    /* ACK-only carriers may contain the protocol's full bounded range list;
+     * redundant ranges remain idempotent and release at most one retained
+     * stop-and-wait message. */
     const auto multiple = multi_ack_packet(951);
-    CHECK(receive_packet(multiple, output) == NETCHAN_APP_RX_REJECT);
-    CHECK(pilot_state().mode == 3u &&
-          pilot_state().retained_payloads == 1u);
+    CHECK(receive_packet(multiple, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(pilot_state().mode == 2u &&
+          pilot_state().retained_payloads == 0u);
 
     CHECK(begin_enabled(1000));
     confirm_capability(34);
@@ -799,6 +1291,361 @@ void test_readiness_atomic_capacity_and_pretraffic_failure()
     CHECK(pilot_state().retained_messages == 0u &&
           pilot_state().retained_payloads == 0u);
     CHECK(prepare_tx(0).result == NETCHAN_APP_TX_PREPARE_BYPASS);
+
+    /* A rotation with insufficient reliable capacity proves cancellation on
+     * copies but cannot publish it: no CLIENT_READY byte, floor advance, or
+     * retained-state disposition occurs before the queue point of no return. */
+    CHECK(begin_enabled(1500));
+    confirm_capability(44);
+    server = {};
+    auto active = begin_handshake(server, 1501, 1700, false);
+    complete_handshake(active);
+    build_command(44, 1);
+    CL_NativeReadinessPilotObserveEncodedCommandRange(1, 1);
+    CHECK(pilot_state().retained_messages == 1u);
+    CL_NativeReadinessPilotQuiesceMap();
+    CL_NativeReadinessPilotServerDataReset();
+    confirm_capability(45);
+    const auto before_capacity_barrier = pilot_state();
+    const size_t reliable_before = cls.netchan.message.cursize;
+    cls.netchan.message.maxsize =
+        static_cast<uint32_t>(reliable_before + 64u);
+    ++com_localTime;
+    const auto capacity_challenge = server_challenge(
+        server, 1502, 1701, com_localTime, true);
+    feed_packet_record(capacity_challenge);
+    const auto after_capacity_barrier = pilot_state();
+    CHECK(cls.netchan.message.cursize == reliable_before &&
+          after_capacity_barrier.mode == 3u &&
+          after_capacity_barrier.transport_epoch == 1501u &&
+          after_capacity_barrier.retained_messages == 1u &&
+          after_capacity_barrier.retained_payloads == 1u &&
+          after_capacity_barrier.cancelled_through_transport_epoch == 0u &&
+          after_capacity_barrier.cancellation_barriers ==
+              before_capacity_barrier.cancellation_barriers &&
+          after_capacity_barrier.cancelled_transports ==
+              before_capacity_barrier.cancelled_transports &&
+          after_capacity_barrier.hooks_installed);
+}
+
+void test_event_opt_in_semantic_admission_and_mixed_egress()
+{
+    constexpr uint32_t kCommandEpoch = 70;
+    constexpr uint32_t kTransportEpoch = 1701;
+    constexpr uint32_t kStreamEpoch = 9001;
+
+    CHECK(begin_event_enabled(1700));
+    CHECK(pilot_state().event_enabled);
+    CHECK(pilot_status().private_mask == kEventPrivateCapabilities);
+    confirm_capability(kCommandEpoch);
+    worr_native_readiness_state_v1 server{};
+    const auto active = begin_handshake(
+        server, kTransportEpoch, 2700, false);
+    CHECK(server.phase ==
+          WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM);
+    complete_event_handshake(server, active);
+
+    worr_event_stream_descriptor_v1 descriptor{};
+    CHECK(Worr_EventStreamDescriptorInitV1(
+        &descriptor, kStreamEpoch, 1));
+    const auto descriptor_data = descriptor_packet(
+        kTransportEpoch, 1, descriptor, false, 0, 0, 3);
+    netchan_app_rx_output_v1_t output{};
+    const uint32_t reset_calls_before = fake_event_runtime.reset_calls;
+    CHECK(receive_packet(descriptor_data, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(output.legacy_bytes == 3u);
+    CHECK(fake_event_runtime.active &&
+          fake_event_runtime.stream_epoch == kStreamEpoch &&
+          fake_event_runtime.reset_calls == reset_calls_before + 1u);
+    auto state = pilot_state();
+    CHECK(state.event_rx_occupied == 0u &&
+          state.event_ack_receipts == 1u);
+    CHECK((state.event_owner_flags &
+           WORR_EVENT_STREAM_OWNER_ACTIVE) != 0);
+    CHECK(CL_NativeReadinessPilotOutputDue());
+
+    auto ack_only = prepare_tx(0);
+    CHECK(ack_only.result == NETCHAN_APP_TX_PREPARE_PREPARED);
+    worr_native_carrier_view_v1 ack_view{};
+    CHECK(Worr_NativeCarrierDecodeV1(
+              ack_only.candidate.data(),
+              ack_only.output.application_bytes, &ack_view) ==
+          WORR_NATIVE_CARRIER_OK);
+    CHECK(ack_view.transport_epoch == kTransportEpoch &&
+          ack_view.entry_count == 1u &&
+          ack_view.entries[0].entry_type ==
+              WORR_NATIVE_CARRIER_ENTRY_ACK_V1 &&
+          ack_view.entries[0].first_message_sequence == 1u &&
+          ack_view.entries[0].last_message_sequence == 1u);
+    complete_tx(ack_only, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+    CHECK(!CL_NativeReadinessPilotOutputDue());
+
+    /* Exact committed descriptor DATA revalidates against a fresh cgame
+     * status and rearms only its existing semantic receipt. */
+    const uint32_t resets_after_descriptor =
+        fake_event_runtime.reset_calls;
+    CHECK(receive_packet(descriptor_data, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(fake_event_runtime.reset_calls == resets_after_descriptor);
+    CHECK(CL_NativeReadinessPilotOutputDue());
+
+    com_localTime += 100;
+    const auto event = event_record(kStreamEpoch, 1);
+    const auto event_data = event_packet(
+        kTransportEpoch, 2, event);
+    CHECK(receive_packet(event_data, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(fake_event_runtime.submit_calls == 1u &&
+          fake_event_runtime.authority_count == 1u &&
+          fake_event_runtime.next_sequence == 2u);
+    state = pilot_state();
+    CHECK(state.event_ack_receipts == 2u);
+
+    build_command(kCommandEpoch, 1);
+    CL_NativeReadinessPilotObserveEncodedCommandRange(1, 1);
+    CHECK(CL_NativeReadinessPilotOutputDue());
+    const auto mixed = prepare_tx(0);
+    CHECK(mixed.result == NETCHAN_APP_TX_PREPARE_PREPARED);
+    worr_native_carrier_view_v1 mixed_view{};
+    CHECK(Worr_NativeCarrierDecodeV1(
+              mixed.candidate.data(), mixed.output.application_bytes,
+              &mixed_view) == WORR_NATIVE_CARRIER_OK);
+    CHECK(mixed_view.transport_epoch == kTransportEpoch &&
+          mixed_view.entry_count == 2u &&
+          mixed_view.entries[0].entry_type ==
+              WORR_NATIVE_CARRIER_ENTRY_DATA_V1 &&
+          mixed_view.entries[1].entry_type ==
+              WORR_NATIVE_CARRIER_ENTRY_ACK_V1 &&
+          mixed_view.entries[1].first_message_sequence == 1u &&
+          mixed_view.entries[1].last_message_sequence == 2u);
+    worr_native_envelope_frame_info_v1 command_frame{};
+    CHECK(Worr_NativeEnvelopeDecodeV1(
+              mixed.candidate.data() + mixed_view.entries[0].data_offset,
+              mixed_view.entries[0].data_bytes, &command_frame) ==
+          WORR_NATIVE_ENVELOPE_DECODE_OK);
+    CHECK(command_frame.record.record_class ==
+              WORR_NATIVE_RECORD_COMMAND_V1 &&
+          command_frame.record.object_sequence == 1u);
+    complete_tx(mixed, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+    CHECK(pilot_state().retained_messages == 1u);
+
+    const auto command_ack = ack_packet(kTransportEpoch, 1, 1);
+    CHECK(receive_packet(command_ack, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(pilot_state().retained_messages == 0u);
+    CHECK(!CL_NativeReadinessPilotOutputDue());
+    com_localTime += 100;
+    CHECK(CL_NativeReadinessPilotOutputDue());
+}
+
+void test_event_ack_exhaustion_cancellation_and_stale_floor()
+{
+    constexpr uint32_t kOldTransportEpoch = 1801;
+    constexpr uint32_t kNewTransportEpoch = 1802;
+
+    CHECK(begin_event_enabled(1800));
+    confirm_capability(80);
+    worr_native_readiness_state_v1 server{};
+    auto active = begin_handshake(
+        server, kOldTransportEpoch, 2800, false);
+    complete_event_handshake(server, active);
+
+    worr_event_stream_descriptor_v1 old_descriptor{};
+    CHECK(Worr_EventStreamDescriptorInitV1(
+        &old_descriptor, 9101, 1));
+    const auto old_data = descriptor_packet(
+        kOldTransportEpoch, 1, old_descriptor, false, 0, 0, 4);
+    netchan_app_rx_output_v1_t output{};
+    CHECK(receive_packet(old_data, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(output.legacy_bytes == 4u);
+
+    build_command(80, 1);
+    CL_NativeReadinessPilotObserveEncodedCommandRange(1, 1);
+    auto old_mixed = prepare_tx(0);
+    CHECK(old_mixed.result == NETCHAN_APP_TX_PREPARE_PREPARED);
+    complete_tx(old_mixed, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+    CHECK(pilot_state().retained_messages == 1u);
+    /* The descriptor receipt has three bounded proactive handoffs.  Lose all
+     * three while keeping the client command retained on the old transport. */
+    com_localTime += 100;
+    CL_NativeReadinessPilotQuiesceMap();
+    CHECK(pilot_state().mode == 3u);
+    CHECK(CL_NativeReadinessPilotOutputDue());
+    for (uint32_t handoff = 0; handoff < 2; ++handoff) {
+        const auto drain_ack = prepare_tx(0);
+        worr_native_carrier_view_v1 drain_view{};
+        CHECK(Worr_NativeCarrierDecodeV1(
+                  drain_ack.candidate.data(),
+                  drain_ack.output.application_bytes, &drain_view) ==
+              WORR_NATIVE_CARRIER_OK);
+        CHECK(drain_view.transport_epoch == kOldTransportEpoch &&
+              drain_view.entry_count == 1u &&
+              drain_view.entries[0].entry_type ==
+                  WORR_NATIVE_CARRIER_ENTRY_ACK_V1);
+        complete_tx(drain_ack, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+        CHECK(pilot_state().retained_messages == 1u);
+        if (handoff == 0) {
+            com_localTime += 100;
+            CHECK(CL_NativeReadinessPilotOutputDue());
+        }
+    }
+    CHECK(pilot_state().event_ack_receipts == 1u);
+    CHECK(!CL_NativeReadinessPilotOutputDue());
+    CHECK(prepare_tx(0).result == NETCHAN_APP_TX_PREPARE_BYPASS);
+
+    CL_NativeReadinessPilotServerDataReset();
+    confirm_capability(81);
+    ++com_localTime;
+    const size_t ready_offset = cls.netchan.message.cursize;
+    const auto challenge = server_challenge(
+        server, kNewTransportEpoch, 2801, com_localTime, true);
+    const auto before_barrier = pilot_state();
+    feed_packet_record(challenge);
+    CHECK(cls.netchan.message.cursize == ready_offset + 65u);
+    const auto ready = decode_client_record(ready_offset);
+    auto state = pilot_state();
+    CHECK(state.mode == 1u && state.transport_epoch == 0u &&
+          state.retired_transport_epoch == 0u &&
+          state.retained_messages == 0u &&
+          state.retained_payloads == 0u &&
+          state.event_ack_receipts == 0u &&
+          state.cancelled_through_transport_epoch ==
+              kOldTransportEpoch &&
+          state.cancellation_barriers ==
+              before_barrier.cancellation_barriers + 1u &&
+          state.cancelled_transports == 1u &&
+          state.cancelled_commands == 1u &&
+          state.cancelled_event_receipts == 1u);
+    CHECK((state.event_owner_flags &
+           WORR_EVENT_STREAM_OWNER_REQUIRES_RESYNC) != 0 &&
+          state.event_owner_epoch_high_water == 9101u);
+    const auto cancellation_status = pilot_status();
+    CHECK(cancellation_status.cancelled_through_transport_epoch ==
+              kOldTransportEpoch &&
+          cancellation_status.cancellation_barriers ==
+              state.cancellation_barriers &&
+          cancellation_status.cancelled_transports == 1u &&
+          cancellation_status.cancelled_command_tx == 1u &&
+          cancellation_status.cancelled_event_rx == 0u &&
+          cancellation_status.cancelled_event_receipts == 1u &&
+          cancellation_status.stale_cancelled_carriers == 0u &&
+          cancellation_status.stale_cancelled_readiness_records == 0u);
+
+    /* An exact duplicate requeues the exact CLIENT_READY but cannot reopen
+     * cancellation, advance its floor, or reset cgame/event-owner state. */
+    const size_t duplicate_offset = cls.netchan.message.cursize;
+    const uint32_t resets_before_duplicate =
+        fake_event_runtime.reset_calls;
+    feed_packet_record(challenge);
+    CHECK(cls.netchan.message.cursize == duplicate_offset + 65u);
+    const auto duplicate_ready = decode_client_record(duplicate_offset);
+    CHECK(std::memcmp(&ready, &duplicate_ready, sizeof(ready)) == 0);
+    const auto duplicate_state = pilot_state();
+    CHECK(duplicate_state.cancelled_through_transport_epoch ==
+              state.cancelled_through_transport_epoch &&
+          duplicate_state.cancellation_barriers ==
+              state.cancellation_barriers &&
+          duplicate_state.cancelled_transports ==
+              state.cancelled_transports &&
+          fake_event_runtime.reset_calls == resets_before_duplicate);
+
+    active = server_accept_ready(server, ready, com_localTime);
+    complete_event_handshake(server, active);
+    state = pilot_state();
+    CHECK(state.transport_epoch == kNewTransportEpoch &&
+          state.retired_transport_epoch == 0u &&
+          state.event_ack_receipts == 0u);
+
+    /* Valid canceled DATA and ACK carriers expose their exact legacy prefix
+     * without touching the fresh transport, readiness, ACKs, or cgame. */
+    build_command(81, 1);
+    CL_NativeReadinessPilotObserveEncodedCommandRange(1, 1);
+    CHECK(pilot_state().retained_messages == 1u);
+    const auto before_stale = pilot_state();
+    const auto status_before_stale = pilot_status();
+    const uint32_t resets_before_stale = fake_event_runtime.reset_calls;
+    const uint32_t submits_before_stale = fake_event_runtime.submit_calls;
+    CHECK(receive_packet(old_data, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(output.legacy_bytes == 4u);
+    const auto old_command_ack = ack_packet(
+        kOldTransportEpoch, 1, 1, 3);
+    CHECK(receive_packet(old_command_ack, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(output.legacy_bytes == 3u);
+    const auto after_stale = pilot_state();
+    const auto status_after_stale = pilot_status();
+    CHECK(after_stale.transport_epoch == before_stale.transport_epoch &&
+          after_stale.retained_messages ==
+              before_stale.retained_messages &&
+          after_stale.retained_payloads ==
+              before_stale.retained_payloads &&
+          after_stale.message_sequence_highwater ==
+              before_stale.message_sequence_highwater &&
+          after_stale.event_rx_occupied ==
+              before_stale.event_rx_occupied &&
+          after_stale.event_ack_receipts ==
+              before_stale.event_ack_receipts &&
+          after_stale.event_owner_flags ==
+              before_stale.event_owner_flags &&
+          after_stale.event_owner_epoch_high_water ==
+              before_stale.event_owner_epoch_high_water &&
+          after_stale.cancelled_through_transport_epoch ==
+              before_stale.cancelled_through_transport_epoch &&
+          status_after_stale.readiness_phase ==
+              status_before_stale.readiness_phase &&
+          status_after_stale.ack_carriers ==
+              status_before_stale.ack_carriers &&
+          status_after_stale.stale_cancelled_carriers ==
+              status_before_stale.stale_cancelled_carriers + 2u &&
+          fake_event_runtime.reset_calls == resets_before_stale &&
+          fake_event_runtime.submit_calls == submits_before_stale);
+
+    /* The floor is neither a wrong-direction/malformed envelope nor a
+     * corrupt-packet bypass. */
+    packet_t malformed_old{};
+    malformed_old.count = old_mixed.output.application_bytes;
+    std::memcpy(malformed_old.bytes.data(), old_mixed.candidate.data(),
+                malformed_old.count);
+    CHECK(receive_packet(malformed_old, output) ==
+          NETCHAN_APP_RX_REJECT);
+    CHECK(pilot_state().mode == 3u &&
+          fake_event_runtime.reset_calls == resets_before_stale + 1u &&
+          fake_event_runtime.submit_calls == submits_before_stale);
+
+    auto corrupt_old = old_data;
+    corrupt_old.bytes[4] ^= 0x40u;
+    CHECK(receive_packet(corrupt_old, output) == NETCHAN_APP_RX_REJECT);
+    CHECK(pilot_state().mode == 3u &&
+          fake_event_runtime.reset_calls == resets_before_stale + 1u &&
+          fake_event_runtime.submit_calls == submits_before_stale);
+}
+
+void test_event_repeat_requires_fresh_cgame_receipt()
+{
+    CHECK(begin_event_enabled(1900));
+    confirm_capability(90);
+    worr_native_readiness_state_v1 server{};
+    const auto active = begin_handshake(server, 1901, 2900, false);
+    complete_event_handshake(server, active);
+
+    worr_event_stream_descriptor_v1 descriptor{};
+    CHECK(Worr_EventStreamDescriptorInitV1(&descriptor, 9201, 1));
+    const auto data = descriptor_packet(1901, 1, descriptor);
+    netchan_app_rx_output_v1_t output{};
+    CHECK(receive_packet(data, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(pilot_state().event_ack_receipts == 1u);
+
+    fake_event_runtime.fail_status = true;
+    CHECK(receive_packet(data, output) == NETCHAN_APP_RX_REJECT);
+    const auto state = pilot_state();
+    CHECK(state.mode == 3u);
+    CHECK(state.event_ack_receipts == 0u);
+    CHECK((state.event_owner_flags &
+           WORR_EVENT_STREAM_OWNER_REQUIRES_RESYNC) != 0);
 }
 
 } // namespace
@@ -807,6 +1654,8 @@ extern "C" cvar_t *Cvar_Get(const char *name, const char *, int)
 {
     if (name && std::strcmp(name, "cl_worr_native_shadow_probe_hold") == 0)
         return &probe_hold_cvar;
+    if (name && std::strcmp(name, "cl_worr_native_event_shadow") == 0)
+        return &event_pilot_cvar;
     return &pilot_cvar;
 }
 
@@ -892,10 +1741,15 @@ extern "C" q2proto_error_t q2proto_client_write(
 int main()
 {
     test_default_off_demo_and_hook_ownership();
-    test_one_shot_exact_boundary_loss_retry_ack_release();
-    test_map_drain_old_ack_epoch_switch_and_reconnect();
+    test_initial_exact_boundary_loss_retry_ack_release();
+    test_repeated_stop_and_wait_loss_retry_ack_release();
+    test_map_cancellation_barrier_epoch_switch_and_reconnect();
+    test_pending_handshake_epoch_enters_cancellation_floor();
     test_no_carrier_malformed_wrong_direction_and_epoch();
     test_readiness_atomic_capacity_and_pretraffic_failure();
+    test_event_opt_in_semantic_admission_and_mixed_egress();
+    test_event_ack_exhaustion_cancellation_and_stale_floor();
+    test_event_repeat_requires_fresh_cgame_receipt();
     CL_NativeReadinessPilotBeforeNetchanClose(&cls.netchan);
     std::puts("native_client_readiness_pilot_test: ok");
     return EXIT_SUCCESS;

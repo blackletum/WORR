@@ -82,6 +82,22 @@ bool Worr_NativeSessionBindingInitFromReadinessV1(
     worr_native_session_binding_v1 *binding_out,
     const worr_native_readiness_state_v1 *readiness,
     uint64_t connection_owner_id);
+
+/*
+ * Receive-side variant for the event-stream confirmation barrier.  In
+ * addition to either final ACTIVE phase, this accepts only a server in
+ * SERVER_WAIT_CLIENT_ACTIVE_CONFIRM whose mutating readiness RX gate succeeds
+ * at now_tick.  That narrow phase is RX-safe because CLIENT_ACTIVE_CONFIRM may
+ * share its legacy packet with client-originated native DATA; it is never a TX
+ * authorization.  The input readiness object is copied before the deadline
+ * check and remains unchanged.  Existing active-only callers should continue
+ * to use InitFromReadinessV1.
+ */
+bool Worr_NativeSessionBindingInitReceiveFromReadinessV1(
+    worr_native_session_binding_v1 *binding_out,
+    const worr_native_readiness_state_v1 *readiness,
+    uint64_t connection_owner_id,
+    uint64_t now_tick);
 bool Worr_NativeSessionBindingValidateV1(
     const worr_native_session_binding_v1 *binding);
 bool Worr_NativeAckRangeValidateV1(
@@ -90,6 +106,7 @@ bool Worr_NativeAckRangeValidateV1(
 enum {
     WORR_NATIVE_TX_INITIALIZED = 1u << 0,
     WORR_NATIVE_TX_SEQUENCE_EXHAUSTED = 1u << 1,
+    WORR_NATIVE_TX_TERMINAL_CANCELLED = 1u << 2,
     WORR_NATIVE_TX_SLOT_OCCUPIED = 1u << 0,
 };
 
@@ -192,6 +209,7 @@ typedef enum worr_native_tx_result_v1_e {
     WORR_NATIVE_TX_CLOCK_REGRESSION = 13,
     WORR_NATIVE_TX_INVALID_ARGUMENT = 14,
     WORR_NATIVE_TX_INVALID_STATE = 15,
+    WORR_NATIVE_TX_CANCELLED = 16,
 } worr_native_tx_result_v1;
 
 /* Invalid initialization leaves both objects byte-identical. */
@@ -296,8 +314,25 @@ worr_native_tx_result_v1 Worr_NativeTxSessionApplyAckV1(
     const worr_native_ack_range_v1 *acknowledgement,
     uint32_t *acked_count_out);
 
+/*
+ * Explicitly disposes every retained TX slot without changing connection
+ * owner, transport epoch, sequence/snapshot high-water marks, scheduler
+ * clock, dispatch high-water, or telemetry.  The session core has no mutable
+ * prepare token: a non-mutating send ticket becomes stale after success.
+ * The resulting session is terminal until AdvanceEpoch reinitializes it.
+ * Adapters with a carrier dispatch/completion gate must first prove that gate
+ * has no packet whose transport outcome is unknown.  Success is idempotent,
+ * returns CANCELLED, and writes the exact number of released slots.
+ */
+worr_native_tx_result_v1 Worr_NativeTxSessionCancelRetainedV1(
+    worr_native_tx_session_v1 *session,
+    worr_native_tx_slot_v1 *slots,
+    uint16_t slot_capacity,
+    uint32_t *cancelled_count_out);
+
 enum {
     WORR_NATIVE_RX_INITIALIZED = 1u << 0,
+    WORR_NATIVE_RX_TERMINAL_CANCELLED = 1u << 1,
     WORR_NATIVE_RX_SLOT_OCCUPIED = 1u << 0,
     WORR_NATIVE_RX_SLOT_COMPLETE = 1u << 1,
     WORR_NATIVE_RX_SLOT_SNAPSHOT_RETRY = 1u << 2,
@@ -410,6 +445,12 @@ typedef struct worr_native_rx_message_v1_s {
     uint64_t connection_owner_id;
 } worr_native_rx_message_v1;
 
+/* Counted terminal disposition for unresolved receive-side reassembly. */
+typedef struct worr_native_rx_cancel_report_v1_s {
+    uint32_t incomplete_messages;
+    uint32_t complete_messages;
+} worr_native_rx_cancel_report_v1;
+
 typedef enum worr_native_rx_result_v1_e {
     WORR_NATIVE_RX_FRAGMENT_ACCEPTED = 0,
     WORR_NATIVE_RX_FRAGMENT_DUPLICATE = 1,
@@ -435,6 +476,8 @@ typedef enum worr_native_rx_result_v1_e {
     WORR_NATIVE_RX_STALE_SNAPSHOT = 21,
     WORR_NATIVE_RX_INVALID_ARGUMENT = 22,
     WORR_NATIVE_RX_INVALID_STATE = 23,
+    WORR_NATIVE_RX_SEMANTIC_ADMISSION_REQUIRED = 24,
+    WORR_NATIVE_RX_CANCELLED = 25,
 } worr_native_rx_result_v1;
 
 bool Worr_NativeRxSessionInitV1(
@@ -456,6 +499,19 @@ bool Worr_NativeRxSessionValidateV1(
     const worr_native_rx_session_v1 *session,
     const worr_native_rx_slot_v1 *slots,
     uint16_t slot_capacity);
+
+/*
+ * Explicitly disposes all incomplete and complete-but-uncommitted RX slots.
+ * Committed receipt history, snapshot tombstones, semantic high-water marks,
+ * owner/epoch provenance, clocks, configuration, and telemetry are retained.
+ * The resulting session rejects all receive/commit work until AdvanceEpoch;
+ * success is idempotent, returns CANCELLED, and reports both dispositions.
+ */
+worr_native_rx_result_v1 Worr_NativeRxSessionCancelPendingV1(
+    worr_native_rx_session_v1 *session,
+    worr_native_rx_slot_v1 *slots,
+    uint16_t slot_capacity,
+    worr_native_rx_cancel_report_v1 *report_out);
 
 /* The payload arena is caller-owned and divided into slot_capacity regions of
  * payload_stride bytes.  A malformed, unsupported, corrupt, wrong-epoch, or
@@ -570,6 +626,9 @@ WORR_NATIVE_SESSION_STATIC_ASSERT(
     "native rx session owner offset changed");
 WORR_NATIVE_SESSION_STATIC_ASSERT(sizeof(worr_native_rx_message_v1) == 56,
                                   "native rx message v1 layout changed");
+WORR_NATIVE_SESSION_STATIC_ASSERT(
+    sizeof(worr_native_rx_cancel_report_v1) == 8,
+    "native rx cancel report v1 layout changed");
 WORR_NATIVE_SESSION_STATIC_ASSERT(
     offsetof(worr_native_rx_message_v1, connection_owner_id) == 48,
     "native rx message owner offset changed");

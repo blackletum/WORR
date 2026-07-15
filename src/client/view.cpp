@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_view.c -- player rendering positioning
 
 #include "client.h"
+#include "client/gameplay_light.h"
 
 //=============
 //
@@ -708,28 +709,16 @@ static void V_SetLightLevel(void)
 {
     vec3_t shadelight;
 
-    // save off light value for server to look at (BIG HACK!)
-    R_LightPoint(cl.refdef.vieworg, shadelight);
-
-    // pick the greatest component, which should be the same
-    // as the mono value returned by software
-    float brightest;
-    if (shadelight[0] > shadelight[1])
-        brightest = shadelight[0] > shadelight[2] ? shadelight[0] : shadelight[2];
-    else
-        brightest = shadelight[1] > shadelight[2] ? shadelight[1] : shadelight[2];
-
-    const float level = 150.0f * brightest;
-    // The move protocol serializes this int as uint8_t. Clamp before the
-    // conversion so overbright samples saturate instead of wrapping, and do
-    // not allow a poisoned renderer sample to trigger undefined float-to-int
-    // conversion.
-    if (isnan(level) || level <= 0.0f)
-        cl.lightlevel = 0;
-    else if (level >= 255.0f)
-        cl.lightlevel = 255;
-    else
-        cl.lightlevel = (int)level;
+    // This byte is sent to the server, so it must be independent of all
+    // renderer presentation settings and renderer DLL implementation details.
+    gameplay_light_query_t query = {};
+    query.bsp = cl.bsp;
+    query.lightstyles = r_lightstyles;
+    query.num_lightstyles = MAX_LIGHTSTYLES;
+    query.entities = r_entities;
+    query.num_entities = r_numentities;
+    GameplayLight_Query(&query, cl.refdef.vieworg, shadelight);
+    cl.lightlevel = GameplayLight_LevelToByte(shadelight);
 }
 
 static inline void V_SetDebugCvarInt(cvar_t *var, int value)

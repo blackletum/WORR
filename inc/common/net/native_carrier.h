@@ -20,11 +20,12 @@ extern "C" {
 #endif
 
 /*
- * Bounded native sideband trailer foundation.  WTC1 is not emitted by a live
- * path yet.  The fixed footer ends in the eight-byte WORRWTC1 marker, allowing
- * a receiver to distinguish an ordinary legacy packet without probing its
- * contents.  A matching terminal marker always denotes a carrier candidate;
- * malformed candidates are errors and never silently fall back to legacy.
+ * Bounded native sideband trailer.  The default-off command-shadow pilot emits
+ * WTC1 only after private readiness; legacy-only peers never see it.  The fixed
+ * footer ends in the eight-byte WORRWTC1 marker, allowing a receiver to
+ * distinguish an ordinary legacy packet without probing its contents.  A
+ * matching terminal marker always denotes a carrier candidate; malformed
+ * candidates are errors and never silently fall back to legacy.
  */
 #define WORR_NATIVE_CARRIER_ABI_VERSION 1u
 #define WORR_NATIVE_CARRIER_WIRE_VERSION 1u

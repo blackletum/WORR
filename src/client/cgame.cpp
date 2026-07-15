@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client.h"
 #include "cgame_classic.h"
 #include "client/cgame_entity.h"
+#include "client/cgame_event_runtime.h"
 #include "client/cgame_event_shadow_runtime.h"
 #include "client/command_identity.h"
 #include "client/consumed_cursor.h"
@@ -362,7 +363,7 @@ static void CG_UI_DrawFill32(int x, int y, int w, int h, color_t color)
     R_DrawFill32(x, y, w, h, color);
 }
 
-static void CG_UI_SetMenuBlurRect(const clipRect_t *rect)
+void CL_SetMenuBlurRect(const clipRect_t *rect)
 {
     if (rect) {
         cl.menu_blur_rect = *rect;
@@ -488,7 +489,7 @@ static cgame_ui_import_t cg_ui_import = {
     .Re_DrawFill8 = CG_UI_DrawFill8,
     .Re_DrawFill32 = CG_UI_DrawFill32,
     .Re_GetConfig = CG_UI_GetConfig,
-    .CL_SetMenuBlurRect = CG_UI_SetMenuBlurRect,
+    .CL_SetMenuBlurRect = CL_SetMenuBlurRect,
 
     .SetClipboardData = CG_UI_SetClipboardData,
     .GetEventTime = CG_UI_GetEventTime,
@@ -1533,6 +1534,28 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
         }
         CL_EventRangeSetConsumerV2(event_range_v2);
 
+        const worr_cgame_event_runtime_export_v1 *event_runtime = NULL;
+        if (cgame->GetExtension) {
+            event_runtime = static_cast<
+                const worr_cgame_event_runtime_export_v1 *>(
+                cgame->GetExtension(
+                    WORR_CGAME_EVENT_RUNTIME_EXPORT_V1));
+            if (event_runtime &&
+                (event_runtime->struct_size != sizeof(*event_runtime) ||
+                 event_runtime->api_version !=
+                     WORR_CGAME_EVENT_RUNTIME_API_VERSION ||
+                 !event_runtime->ResetAuthority ||
+                 !event_runtime->SubmitAuthoritativeBatch ||
+                 !event_runtime->GetStatus)) {
+                Com_WPrintf("cgame event runtime extension mismatch\n");
+                event_runtime = NULL;
+            }
+        }
+        if (!CL_CGameEventRuntimeSetConsumer(event_runtime) &&
+            event_runtime) {
+            Com_WPrintf("cgame event runtime consumer rejected\n");
+        }
+
         const worr_cgame_snapshot_timeline_export_v1 *snapshot_timeline =
             NULL;
         if (cgame->GetExtension) {
@@ -1569,6 +1592,7 @@ void CG_Load(const char* new_game, bool is_rerelease_server)
 void CG_Unload(void)
 {
     (void)CL_SnapshotShadowSetConsumer(NULL);
+    (void)CL_CGameEventRuntimeSetConsumer(NULL);
     CL_EventRangeSetConsumerV2(NULL);
     CL_EventShadowSetConsumer(NULL);
     cgame = NULL;

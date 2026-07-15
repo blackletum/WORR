@@ -14,6 +14,7 @@ Counts: Displays the current number of players in the match or on each team.
 Info", "Match Info", and "Call a Vote".*/
 
 #include "../g_local.hpp"
+#include "../commands/command_system.hpp"
 #include "menu_ui_helpers.hpp"
 
 extern bool SetTeam(gentity_t *ent, Team desired_team, bool inactive,
@@ -228,8 +229,41 @@ static void OpenJoinMenuInternal(gentity_t *ent, const std::string &title,
   const bool showTourneyMaps =
       isTournament && !isIntermission && Tournament_VetoComplete() &&
       !game.tournament.mapOrder.empty();
+  const bool voteSessionActive = Vote_Session_Active();
+  const int voteElapsed = voteSessionActive
+                              ? (level.time - level.vote.time).seconds<int>()
+                              : 0;
+  const int voteTimeLeft = voteSessionActive
+                               ? std::max(0, 30 - voteElapsed)
+                               : 0;
+  const bool voteParticipant =
+      voteSessionActive && !cl->pers.voted &&
+      (ClientIsPlaying(cl) || g_allowSpecVote->integer);
+  const bool voteCanVote = voteParticipant && voteElapsed >= 3;
+  std::string voteCaller;
+  std::string voteProposal;
+  std::string voteStatus;
+  if (voteSessionActive) {
+    voteCaller = PlainUiText(level.vote.client->sess.netName);
+    voteProposal = level.vote.cmd->name;
+    if (!level.vote.arg.empty()) {
+      voteProposal = fmt::format("{} {}", voteProposal, level.vote.arg.c_str());
+    }
+
+    if (cl->pers.voted) {
+      voteStatus = "Vote recorded";
+    } else if (!ClientIsPlaying(cl) && !g_allowSpecVote->integer) {
+      voteStatus = "Spectators cannot vote on this server";
+    } else if (!voteCanVote) {
+      voteStatus = fmt::format("Voting opens in {}...", std::max(0, 3 - voteElapsed));
+    } else {
+      voteStatus = "Choose Yes or No";
+    }
+  }
+
   const bool showCallvote =
-      !isIntermission && !isTournament && g_allowVoting->integer &&
+      !voteSessionActive && !isIntermission && !isTournament &&
+      g_allowVoting->integer &&
       (isPlaying || (!isPlaying && g_allowSpecVote->integer));
   const bool showMymap =
       !isIntermission && !isTournament &&
@@ -297,11 +331,18 @@ static void OpenJoinMenuInternal(gentity_t *ent, const std::string &title,
   cmd.AppendCvar("ui_dm_ready_command", readyCommand);
   cmd.AppendCvar("ui_dm_show_tourney_info", showTourneyInfo ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_tourney_maps", showTourneyMaps ? "1" : "0");
+  cmd.AppendCvar("ui_dm_tab_server_available", "1");
   cmd.AppendCvar("ui_dm_show_callvote", showCallvote ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_mymap", showMymap ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_forfeit", showForfeit ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_matchstats", showMatchStats ? "1" : "0");
   cmd.AppendCvar("ui_dm_show_admin", showAdmin ? "1" : "0");
+  cmd.AppendCvar("ui_dm_vote_active", voteSessionActive ? "1" : "0");
+  cmd.AppendCvar("ui_dm_vote_caller", voteCaller);
+  cmd.AppendCvar("ui_dm_vote_proposal", voteProposal);
+  cmd.AppendCvar("ui_dm_vote_status", voteStatus);
+  cmd.AppendCvar("ui_dm_vote_time_left", fmt::format("{}", voteTimeLeft));
+  cmd.AppendCvar("ui_dm_vote_can_vote", voteCanVote ? "1" : "0");
   if (menuName && *menuName)
     cmd.AppendCommand(std::string("pushmenu ") + menuName);
   cmd.Flush();
@@ -382,6 +423,7 @@ void CloseDmJoinMenu(gentity_t *ent) {
 
   ent->client->initialMenu.dmJoinActive = false;
   ent->client->initialMenu.nextUpdate = 0_ms;
+  ent->client->ui.voteActive = false;
   ent->client->ui.commandQueue.clear();
   MenuUi::SendUiCommand(ent, "set ui_dm_menu_active 0\n");
 }

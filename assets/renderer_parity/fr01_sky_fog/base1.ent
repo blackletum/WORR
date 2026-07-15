@@ -1,0 +1,15 @@
+{
+"classname" "worldspawn"
+"message" "WORR FR-01-T12 authored sky-fog parity"
+"sky" "unit1_"
+"skyAxis" "1 0 0"
+"skyRotate" "0"
+"fog_color" "0.30 0.50 0.70"
+"fog_density" "0.50"
+"fog_sky_factor" "0.60"
+}
+{
+"classname" "info_player_start"
+"origin" "128 -320 32"
+"angle" "0"
+}

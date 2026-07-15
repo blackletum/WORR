@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Generate the deterministic FR-10-T10 real-BSP collision fixture.
 
-The output is a collision-only Quake II IBSP v38 with one empty world hull and
-two independent inline brush-model hulls.  It deliberately contains no render
-geometry: the production server collision loader does not require it, and the
-fixture only exists to exercise the immutable rewind collision boundary.
+The output is a collision-only Quake II IBSP v38 with a bounded world-water
+leaf and two independent inline brush-model hulls.  It deliberately contains
+no render geometry: the production server collision loader does not require it,
+and the fixture only exists to exercise the immutable rewind collision
+boundary.
 """
 
 from __future__ import annotations
@@ -39,7 +40,10 @@ SURF_WARP = 1 << 3
 SOLID_MINS = (-16.0, -24.0, -8.0)
 SOLID_MAXS = (16.0, 24.0, 8.0)
 WATER_MINS = (-20.0, -12.0, -10.0)
-WATER_MAXS = (20.0, 12.0, 10.0)
+# The water volume is deliberately tall enough to intersect a normal player
+# beam muzzle while its narrow X/Y footprint remains isolated from the mover
+# and player-history fixture lanes.
+WATER_MAXS = (20.0, 12.0, 48.0)
 
 
 def _plane(normal: tuple[float, float, float], distance: float) -> bytes:
@@ -93,15 +97,12 @@ def _leaf(
     )
 
 
-def _node(plane: int, front_leaf: int, back_leaf: int) -> bytes:
-    def child_for_leaf(leaf: int) -> int:
-        return -1 - leaf
-
+def _node_children(plane: int, front_child: int, back_child: int) -> bytes:
     return struct.pack(
         "<iii3h3h2H",
         plane,
-        child_for_leaf(front_leaf),
-        child_for_leaf(back_leaf),
+        front_child,
+        back_child,
         -512,
         -512,
         -512,
@@ -111,6 +112,10 @@ def _node(plane: int, front_leaf: int, back_leaf: int) -> bytes:
         0,
         0,
     )
+
+
+def _node(plane: int, front_leaf: int, back_leaf: int) -> bytes:
+    return _node_children(plane, -1 - front_leaf, -1 - back_leaf)
 
 
 def _model(
@@ -127,7 +132,10 @@ def build_fixture() -> bytes:
     entities = (
         '{\n"classname" "worldspawn"\n'
         '"message" "WORR rewind collision real-BSP parity fixture"\n}\n'
-        '{\n"classname" "func_wall"\n"model" "*1"\n}\n'
+        '{\n"classname" "info_player_deathmatch"\n'
+        '"origin" "128 128 64"\n}\n'
+        '{\n"classname" "func_rotating"\n"model" "*1"\n'
+        '"spawnflags" "1"\n"speed" "45"\n"dmg" "0"\n}\n'
         '{\n"classname" "func_water"\n"model" "*2"\n}\n\0'
     ).encode("ascii")
 
@@ -135,19 +143,24 @@ def build_fixture() -> bytes:
         _plane((1.0, 0.0, 0.0), 0.0),
         *_box_planes(SOLID_MINS, SOLID_MAXS),
         *_box_planes(WATER_MINS, WATER_MAXS),
+        _plane((1.0, 0.0, 0.0), WATER_MAXS[0]),
+        _plane((-1.0, 0.0, 0.0), -WATER_MINS[0]),
     ]
 
-    # Each model owns a disjoint node/leaf tree so BSP_ValidateTree can prove
-    # there are no cycles or cross-model parent aliases.  The two leaves of an
-    # inline model both reference its convex brush; CM's per-trace checkcount
-    # suppresses duplicate brush work when a sweep crosses the split plane.
+    # The world tree reserves a bounded water leaf so gi.pointContents() enters
+    # the real Thunderbolt underwater-discharge branch.  Each inline model then
+    # owns a disjoint node/leaf tree, so BSP_ValidateTree can prove there are no
+    # cycles or cross-model parent aliases.  The two leaves of an inline model
+    # both reference its convex brush; CM's per-trace checkcount suppresses
+    # duplicate brush work when a sweep crosses the split plane.
     leafs = [
         _leaf(CONTENTS_SOLID, 0, 0, (-512, -512, -512), (0, 512, 512)),
         _leaf(0, 0, 0, (0, -512, -512), (512, 512, 512)),
-        _leaf(CONTENTS_SOLID, 0, 1, (-17, -25, -9), (17, 25, 9)),
+        _leaf(CONTENTS_WATER, 0, 1, (-21, -13, -11), (21, 13, 49)),
         _leaf(CONTENTS_SOLID, 1, 1, (-17, -25, -9), (17, 25, 9)),
-        _leaf(CONTENTS_WATER, 2, 1, (-21, -13, -11), (21, 13, 11)),
-        _leaf(CONTENTS_WATER, 3, 1, (-21, -13, -11), (21, 13, 11)),
+        _leaf(CONTENTS_SOLID, 2, 1, (-17, -25, -9), (17, 25, 9)),
+        _leaf(CONTENTS_WATER, 3, 1, (-21, -13, -11), (21, 13, 49)),
+        _leaf(CONTENTS_WATER, 4, 1, (-21, -13, -11), (21, 13, 49)),
     ]
 
     lumps: list[bytes] = [b"" for _ in range(HEADER_LUMPS)]
@@ -155,9 +168,10 @@ def build_fixture() -> bytes:
     lumps[LUMP_PLANES] = b"".join(planes)
     lumps[LUMP_NODES] = b"".join(
         (
-            _node(0, 1, 0),
-            _node(1, 2, 3),
-            _node(7, 4, 5),
+            _node_children(13, -1 - 1, 1),
+            _node(14, 0, 2),
+            _node(1, 3, 4),
+            _node(7, 5, 6),
         )
     )
     lumps[LUMP_TEXINFO] = b"".join(
@@ -167,16 +181,17 @@ def build_fixture() -> bytes:
         )
     )
     lumps[LUMP_LEAFS] = b"".join(leafs)
-    lumps[LUMP_LEAFBRUSHES] = struct.pack("<4H", 0, 0, 1, 1)
+    lumps[LUMP_LEAFBRUSHES] = struct.pack("<5H", 0, 1, 1, 2, 2)
     lumps[LUMP_MODELS] = b"".join(
         (
             _model((-512.0, -512.0, -512.0), (512.0, 512.0, 512.0), 0),
-            _model(SOLID_MINS, SOLID_MAXS, 1),
-            _model(WATER_MINS, WATER_MAXS, 2),
+            _model(SOLID_MINS, SOLID_MAXS, 2),
+            _model(WATER_MINS, WATER_MAXS, 3),
         )
     )
     lumps[LUMP_BRUSHES] = b"".join(
         (
+            struct.pack("<iii", 6, 6, CONTENTS_WATER),
             struct.pack("<iii", 0, 6, CONTENTS_SOLID),
             struct.pack("<iii", 6, 6, CONTENTS_WATER),
         )

@@ -3,6 +3,7 @@ Copyright (C) 2026
 */
 
 #include "vk_shadow.h"
+#include "vk_debug.h"
 
 #include "vk_entity.h"
 #include "vk_world.h"
@@ -23,6 +24,7 @@ Copyright (C) 2026
 #define VK_SHADOW_CONE_NORMAL_OFFSET 0.05f
 #define VK_SHADOW_CONE_DEPTH_BIAS 0.25f
 #define VK_SHADOW_INITIAL_VERTEX_CAPACITY 4096u
+#define VK_SHADOW_STREAM_BUFFER_MIN_BYTES (64u * 1024u)
 
 // EVSM warp exponent shared by the moment pass (push constant) and the world
 // receiver (shadow_moment_tuning UBO member). Moments are stored as (w, w*w)
@@ -30,6 +32,27 @@ Copyright (C) 2026
 // 65504, which caps e at ~5.54.
 #define VK_SHADOW_EVSM_EXPONENT 5.4f
 #define VK_SHADOW_MOMENT_MIN_VARIANCE 0.00002f
+
+enum {
+    VK_FOG_GLOBAL = BIT(0),
+    VK_FOG_HEIGHT = BIT(1),
+    VK_FOG_SKY = BIT(2),
+};
+
+typedef struct {
+    VkDescriptorSet descriptor_set;
+    VkBuffer uniform_buffer;
+    VkDeviceMemory uniform_memory;
+    void *uniform_mapped;
+    VkBuffer vertex_buffer;
+    VkDeviceMemory vertex_memory;
+    VkBuffer vertex_staging_buffer;
+    VkDeviceMemory vertex_staging_memory;
+    void *vertex_staging_mapped;
+    size_t vertex_buffer_bytes;
+    size_t vertex_upload_bytes;
+    bool vertex_upload_recorded;
+} vk_shadow_frame_resources_t;
 
 typedef struct {
     float pos[3];
@@ -76,10 +99,21 @@ typedef struct {
 typedef struct {
     float global[4];
     float sun[4];
-    // x = VSM/EVSM minimum variance, y = EVSM warp exponent. Must match the
+    // x = VSM/EVSM minimum variance, y = EVSM warp exponent, z = legacy
+    // texture intensity, w = global r_fullbright state. Must match the
     // ShadowPages block in src/rend_vk/shaders/vk_world_shadow.frag.
     float moment_tuning[4];
+    // x = r_glowmap_intensity; reserved components deliberately keep the
+    // receiver UBO 16-byte aligned for both world and entity shaders.
+    float glowmap_tuning[4];
     float dlight_count[4];
+    float view_origin[4];
+    // rgb + global density / 64, height fog start/end colours + distances,
+    // then height density/falloff, sky factor and native fog feature bits.
+    float fog_color_density[4];
+    float heightfog_start[4];
+    float heightfog_end[4];
+    float fog_params[4];
     vk_shadow_uniform_page_t pages[VK_SHADOW_MAX_PAGES];
     vk_shadow_uniform_dlight_t dlights[MAX_DLIGHTS];
 } vk_shadow_uniform_t;
@@ -117,10 +151,7 @@ typedef struct {
     VkPipeline moment_pipeline;
     VkDescriptorSetLayout descriptor_set_layout;
     VkDescriptorPool descriptor_pool;
-    VkDescriptorSet descriptor_set;
-    VkBuffer uniform_buffer;
-    VkDeviceMemory uniform_memory;
-    void *uniform_mapped;
+    vk_shadow_frame_resources_t frame_resources[VK_MAX_FRAMES_IN_FLIGHT];
     VkImageView layer_views[VK_SHADOW_MAX_PAGES];
     VkImageView moment_layer_views[VK_SHADOW_MAX_PAGES];
     VkFramebuffer framebuffers[VK_SHADOW_MAX_PAGES];
@@ -136,11 +167,6 @@ typedef struct {
     int world_faces_considered;
     int world_faces_submitted;
 
-    VkBuffer vertex_buffer;
-    VkDeviceMemory vertex_memory;
-    void *vertex_mapped;
-    size_t vertex_buffer_bytes;
-
     vk_shadow_vertex_t *vertices;
     uint32_t vertex_count;
     uint32_t vertex_capacity;
@@ -151,6 +177,7 @@ typedef struct {
 } vk_shadow_state_t;
 
 static vk_shadow_state_t vk_shadow;
+static cvar_t *vk_fog;
 
 typedef struct {
     vec3_t mins;
@@ -167,6 +194,15 @@ typedef struct {
 } vk_shadow_world_cache_t;
 
 static vk_shadow_world_cache_t vk_shadow_world_cache;
+
+static vk_shadow_frame_resources_t *VK_Shadow_CurrentFrameResources(void)
+{
+    if (!vk_shadow.ctx || !vk_shadow.ctx->frame_count ||
+        vk_shadow.ctx->current_frame >= vk_shadow.ctx->frame_count) {
+        return NULL;
+    }
+    return &vk_shadow.frame_resources[vk_shadow.ctx->current_frame];
+}
 
 static void VK_Shadow_FreeWorldCache(void)
 {
@@ -218,8 +254,9 @@ static float VK_Shadow_ViewConstantBias(const shadow_view_desc_t *view)
 
 static void VK_Shadow_UploadUniform(void)
 {
-    if (vk_shadow.uniform_mapped) {
-        memcpy(vk_shadow.uniform_mapped, &vk_shadow.uniform,
+    vk_shadow_frame_resources_t *frame = VK_Shadow_CurrentFrameResources();
+    if (frame && frame->uniform_mapped) {
+        memcpy(frame->uniform_mapped, &vk_shadow.uniform,
                sizeof(vk_shadow.uniform));
     }
 }
@@ -466,49 +503,83 @@ static void VK_Shadow_BuildPush(const shadow_view_desc_t *view,
     }
 }
 
-static void VK_Shadow_DestroyVertexBuffer(void)
+static void VK_Shadow_DestroyVertexBuffer(vk_shadow_frame_resources_t *frame)
 {
-    if (!vk_shadow.ctx || !vk_shadow.ctx->device) {
+    if (!frame || !vk_shadow.ctx || !vk_shadow.ctx->device) {
         return;
     }
     VkDevice device = vk_shadow.ctx->device;
-    if (vk_shadow.vertex_mapped) {
-        vkUnmapMemory(device, vk_shadow.vertex_memory);
-        vk_shadow.vertex_mapped = NULL;
+    if (frame->vertex_staging_mapped) {
+        vkUnmapMemory(device, frame->vertex_staging_memory);
+        frame->vertex_staging_mapped = NULL;
     }
-    if (vk_shadow.vertex_buffer) {
-        vkDestroyBuffer(device, vk_shadow.vertex_buffer, NULL);
-        vk_shadow.vertex_buffer = VK_NULL_HANDLE;
+    if (frame->vertex_staging_buffer) {
+        vkDestroyBuffer(device, frame->vertex_staging_buffer, NULL);
+        frame->vertex_staging_buffer = VK_NULL_HANDLE;
     }
-    if (vk_shadow.vertex_memory) {
-        vkFreeMemory(device, vk_shadow.vertex_memory, NULL);
-        vk_shadow.vertex_memory = VK_NULL_HANDLE;
+    if (frame->vertex_staging_memory) {
+        vkFreeMemory(device, frame->vertex_staging_memory, NULL);
+        frame->vertex_staging_memory = VK_NULL_HANDLE;
     }
-    vk_shadow.vertex_buffer_bytes = 0;
+    if (frame->vertex_buffer) {
+        vkDestroyBuffer(device, frame->vertex_buffer, NULL);
+        frame->vertex_buffer = VK_NULL_HANDLE;
+    }
+    if (frame->vertex_memory) {
+        vkFreeMemory(device, frame->vertex_memory, NULL);
+        frame->vertex_memory = VK_NULL_HANDLE;
+    }
+    frame->vertex_buffer_bytes = 0;
+    frame->vertex_upload_bytes = 0;
+    frame->vertex_upload_recorded = false;
 }
 
-static void VK_Shadow_DestroyUniformBuffer(void)
+static bool VK_Shadow_GrowStreamBuffer(size_t current, size_t needed,
+                                       size_t *out_capacity)
 {
-    if (!vk_shadow.ctx || !vk_shadow.ctx->device) {
+    if (!out_capacity || !needed) {
+        Com_SetLastError("Vulkan shadow: invalid stream buffer capacity request");
+        return false;
+    }
+
+    size_t capacity = current ? current : VK_SHADOW_STREAM_BUFFER_MIN_BYTES;
+    while (capacity < needed) {
+        if (capacity > SIZE_MAX / 2) {
+            capacity = needed;
+            break;
+        }
+        capacity *= 2;
+    }
+
+    *out_capacity = capacity;
+    return true;
+}
+
+static void VK_Shadow_DestroyUniformBuffer(vk_shadow_frame_resources_t *frame)
+{
+    if (!frame || !vk_shadow.ctx || !vk_shadow.ctx->device) {
         return;
     }
     VkDevice device = vk_shadow.ctx->device;
-    if (vk_shadow.uniform_mapped) {
-        vkUnmapMemory(device, vk_shadow.uniform_memory);
-        vk_shadow.uniform_mapped = NULL;
+    if (frame->uniform_mapped) {
+        vkUnmapMemory(device, frame->uniform_memory);
+        frame->uniform_mapped = NULL;
     }
-    if (vk_shadow.uniform_buffer) {
-        vkDestroyBuffer(device, vk_shadow.uniform_buffer, NULL);
-        vk_shadow.uniform_buffer = VK_NULL_HANDLE;
+    if (frame->uniform_buffer) {
+        vkDestroyBuffer(device, frame->uniform_buffer, NULL);
+        frame->uniform_buffer = VK_NULL_HANDLE;
     }
-    if (vk_shadow.uniform_memory) {
-        vkFreeMemory(device, vk_shadow.uniform_memory, NULL);
-        vk_shadow.uniform_memory = VK_NULL_HANDLE;
+    if (frame->uniform_memory) {
+        vkFreeMemory(device, frame->uniform_memory, NULL);
+        frame->uniform_memory = VK_NULL_HANDLE;
     }
 }
 
-static bool VK_Shadow_CreateUniformBuffer(void)
+static bool VK_Shadow_CreateUniformBuffer(vk_shadow_frame_resources_t *frame)
 {
+    if (!frame) {
+        return false;
+    }
     VkDevice device = vk_shadow.ctx->device;
     VkBufferCreateInfo buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -517,20 +588,20 @@ static bool VK_Shadow_CreateUniformBuffer(void)
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
     if (!VK_Shadow_Check(vkCreateBuffer(device, &buffer_info, NULL,
-                                        &vk_shadow.uniform_buffer),
+                                        &frame->uniform_buffer),
                          "vkCreateBuffer(shadow uniforms)")) {
         return false;
     }
 
     VkMemoryRequirements req;
-    vkGetBufferMemoryRequirements(device, vk_shadow.uniform_buffer, &req);
+    vkGetBufferMemoryRequirements(device, frame->uniform_buffer, &req);
     uint32_t memory_index =
         VK_Shadow_FindMemoryType(req.memoryTypeBits,
                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     if (memory_index == UINT32_MAX) {
         Com_EPrintf("Vulkan shadow: suitable uniform memory type not found\n");
-        VK_Shadow_DestroyUniformBuffer();
+        VK_Shadow_DestroyUniformBuffer(frame);
         return false;
     }
 
@@ -540,27 +611,26 @@ static bool VK_Shadow_CreateUniformBuffer(void)
         .memoryTypeIndex = memory_index,
     };
     if (!VK_Shadow_Check(vkAllocateMemory(device, &alloc_info, NULL,
-                                          &vk_shadow.uniform_memory),
+                                          &frame->uniform_memory),
                          "vkAllocateMemory(shadow uniforms)")) {
-        VK_Shadow_DestroyUniformBuffer();
+        VK_Shadow_DestroyUniformBuffer(frame);
         return false;
     }
-    if (!VK_Shadow_Check(vkBindBufferMemory(device, vk_shadow.uniform_buffer,
-                                            vk_shadow.uniform_memory, 0),
+    if (!VK_Shadow_Check(vkBindBufferMemory(device, frame->uniform_buffer,
+                                            frame->uniform_memory, 0),
                          "vkBindBufferMemory(shadow uniforms)")) {
-        VK_Shadow_DestroyUniformBuffer();
+        VK_Shadow_DestroyUniformBuffer(frame);
         return false;
     }
-    if (!VK_Shadow_Check(vkMapMemory(device, vk_shadow.uniform_memory, 0,
-                                     req.size, 0, &vk_shadow.uniform_mapped),
+    if (!VK_Shadow_Check(vkMapMemory(device, frame->uniform_memory, 0,
+                                     req.size, 0, &frame->uniform_mapped),
                          "vkMapMemory(shadow uniforms)")) {
-        VK_Shadow_DestroyUniformBuffer();
+        VK_Shadow_DestroyUniformBuffer(frame);
         return false;
     }
 
     memset(&vk_shadow.uniform, 0, sizeof(vk_shadow.uniform));
     vk_shadow.uniform.sun[0] = -1.0f;
-    VK_Shadow_UploadUniform();
     return true;
 }
 
@@ -573,7 +643,9 @@ static void VK_Shadow_DestroyDescriptors(void)
     if (vk_shadow.descriptor_pool) {
         vkDestroyDescriptorPool(device, vk_shadow.descriptor_pool, NULL);
         vk_shadow.descriptor_pool = VK_NULL_HANDLE;
-        vk_shadow.descriptor_set = VK_NULL_HANDLE;
+        for (uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
+            vk_shadow.frame_resources[i].descriptor_set = VK_NULL_HANDLE;
+        }
     }
     if (vk_shadow.descriptor_set_layout) {
         vkDestroyDescriptorSetLayout(device, vk_shadow.descriptor_set_layout,
@@ -626,16 +698,16 @@ static bool VK_Shadow_CreateDescriptors(void)
     VkDescriptorPoolSize pool_sizes[2] = {
         {
             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 3,
+            .descriptorCount = 3 * VK_MAX_FRAMES_IN_FLIGHT,
         },
         {
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
+            .descriptorCount = VK_MAX_FRAMES_IN_FLIGHT,
         },
     };
     VkDescriptorPoolCreateInfo pool_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 1,
+        .maxSets = VK_MAX_FRAMES_IN_FLIGHT,
         .poolSizeCount = q_countof(pool_sizes),
         .pPoolSizes = pool_sizes,
     };
@@ -646,26 +718,33 @@ static bool VK_Shadow_CreateDescriptors(void)
         return false;
     }
 
+    VkDescriptorSetLayout set_layouts[VK_MAX_FRAMES_IN_FLIGHT];
+    for (uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
+        set_layouts[i] = vk_shadow.descriptor_set_layout;
+    }
     VkDescriptorSetAllocateInfo alloc_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .descriptorPool = vk_shadow.descriptor_pool,
-        .descriptorSetCount = 1,
-        .pSetLayouts = &vk_shadow.descriptor_set_layout,
+        .descriptorSetCount = VK_MAX_FRAMES_IN_FLIGHT,
+        .pSetLayouts = set_layouts,
     };
+    VkDescriptorSet descriptor_sets[VK_MAX_FRAMES_IN_FLIGHT];
     if (!VK_Shadow_Check(vkAllocateDescriptorSets(device, &alloc_info,
-                                                  &vk_shadow.descriptor_set),
+                                                  descriptor_sets),
                          "vkAllocateDescriptorSets(shadow)")) {
         VK_Shadow_DestroyDescriptors();
         return false;
+    }
+    for (uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
+        vk_shadow.frame_resources[i].descriptor_set = descriptor_sets[i];
     }
     return true;
 }
 
 static void VK_Shadow_UpdateDescriptorSet(void)
 {
-    if (!vk_shadow.descriptor_set || !vk_shadow.sampler ||
-        !vk_shadow.compare_sampler || !vk_shadow.array_view ||
-        !vk_shadow.uniform_buffer) {
+    if (!vk_shadow.sampler || !vk_shadow.compare_sampler ||
+        !vk_shadow.array_view) {
         return;
     }
 
@@ -688,85 +767,100 @@ static void VK_Shadow_UpdateDescriptorSet(void)
             ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
             : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
     };
-    VkDescriptorBufferInfo buffer_info = {
-        .buffer = vk_shadow.uniform_buffer,
-        .offset = 0,
-        .range = sizeof(vk_shadow.uniform),
-    };
-    VkWriteDescriptorSet writes[4] = {
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = vk_shadow.descriptor_set,
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &image_info,
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = vk_shadow.descriptor_set,
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo = &buffer_info,
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = vk_shadow.descriptor_set,
-            .dstBinding = 2,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &moment_info,
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = vk_shadow.descriptor_set,
-            .dstBinding = 3,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &compare_info,
-        },
-    };
-    vkUpdateDescriptorSets(vk_shadow.ctx->device, q_countof(writes), writes,
-                           0, NULL);
+    for (uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
+        vk_shadow_frame_resources_t *frame = &vk_shadow.frame_resources[i];
+        if (!frame->descriptor_set || !frame->uniform_buffer) {
+            continue;
+        }
+        VkDescriptorBufferInfo buffer_info = {
+            .buffer = frame->uniform_buffer,
+            .offset = 0,
+            .range = sizeof(vk_shadow.uniform),
+        };
+        VkWriteDescriptorSet writes[4] = {
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = frame->descriptor_set,
+                .dstBinding = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = &image_info,
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = frame->descriptor_set,
+                .dstBinding = 1,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .pBufferInfo = &buffer_info,
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = frame->descriptor_set,
+                .dstBinding = 2,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = &moment_info,
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = frame->descriptor_set,
+                .dstBinding = 3,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = &compare_info,
+            },
+        };
+        vkUpdateDescriptorSets(vk_shadow.ctx->device, q_countof(writes), writes,
+                               0, NULL);
+    }
 }
 
 static bool VK_Shadow_EnsureVertexBuffer(size_t bytes)
 {
+    vk_shadow_frame_resources_t *frame = VK_Shadow_CurrentFrameResources();
     if (bytes == 0) {
         return true;
     }
-    if (!vk_shadow.ctx || !vk_shadow.ctx->device) {
+    if (!frame || !vk_shadow.ctx || !vk_shadow.ctx->device) {
         return false;
     }
-    if (vk_shadow.vertex_buffer && vk_shadow.vertex_buffer_bytes >= bytes) {
+    if (frame->vertex_buffer && frame->vertex_memory &&
+        frame->vertex_staging_buffer && frame->vertex_staging_memory &&
+        frame->vertex_staging_mapped && frame->vertex_buffer_bytes >= bytes) {
         return true;
     }
 
-    VK_Shadow_DestroyVertexBuffer();
+    size_t capacity;
+    if (!VK_Shadow_GrowStreamBuffer(frame->vertex_buffer_bytes, bytes,
+                                    &capacity)) {
+        return false;
+    }
+
+    VK_Shadow_DestroyVertexBuffer(frame);
 
     VkDevice device = vk_shadow.ctx->device;
     VkBufferCreateInfo buffer_info = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = bytes,
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        .size = capacity,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
     if (!VK_Shadow_Check(vkCreateBuffer(device, &buffer_info, NULL,
-                                        &vk_shadow.vertex_buffer),
+                                        &frame->vertex_buffer),
                          "vkCreateBuffer(shadow vertices)")) {
         return false;
     }
 
     VkMemoryRequirements req;
-    vkGetBufferMemoryRequirements(device, vk_shadow.vertex_buffer, &req);
+    vkGetBufferMemoryRequirements(device, frame->vertex_buffer, &req);
     uint32_t memory_index =
         VK_Shadow_FindMemoryType(req.memoryTypeBits,
-                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     if (memory_index == UINT32_MAX) {
-        Com_EPrintf("Vulkan shadow: suitable vertex memory type not found\n");
-        VK_Shadow_DestroyVertexBuffer();
+        Com_EPrintf("Vulkan shadow: suitable device-local vertex memory type not found\n");
+        VK_Shadow_DestroyVertexBuffer(frame);
         return false;
     }
 
@@ -776,25 +870,60 @@ static bool VK_Shadow_EnsureVertexBuffer(size_t bytes)
         .memoryTypeIndex = memory_index,
     };
     if (!VK_Shadow_Check(vkAllocateMemory(device, &alloc_info, NULL,
-                                          &vk_shadow.vertex_memory),
+                                          &frame->vertex_memory),
                          "vkAllocateMemory(shadow vertices)")) {
-        VK_Shadow_DestroyVertexBuffer();
+        VK_Shadow_DestroyVertexBuffer(frame);
         return false;
     }
-    if (!VK_Shadow_Check(vkBindBufferMemory(device, vk_shadow.vertex_buffer,
-                                            vk_shadow.vertex_memory, 0),
+    if (!VK_Shadow_Check(vkBindBufferMemory(device, frame->vertex_buffer,
+                                            frame->vertex_memory, 0),
                          "vkBindBufferMemory(shadow vertices)")) {
-        VK_Shadow_DestroyVertexBuffer();
+        VK_Shadow_DestroyVertexBuffer(frame);
         return false;
     }
-    if (!VK_Shadow_Check(vkMapMemory(device, vk_shadow.vertex_memory, 0,
-                                     req.size, 0, &vk_shadow.vertex_mapped),
-                         "vkMapMemory(shadow vertices)")) {
-        VK_Shadow_DestroyVertexBuffer();
+    VkBufferCreateInfo staging_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = capacity,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    if (!VK_Shadow_Check(vkCreateBuffer(device, &staging_info, NULL,
+                                        &frame->vertex_staging_buffer),
+                         "vkCreateBuffer(shadow vertex staging)")) {
+        VK_Shadow_DestroyVertexBuffer(frame);
         return false;
     }
 
-    vk_shadow.vertex_buffer_bytes = req.size;
+    VkMemoryRequirements staging_req;
+    vkGetBufferMemoryRequirements(device, frame->vertex_staging_buffer,
+                                  &staging_req);
+    uint32_t staging_memory_index = VK_Shadow_FindMemoryType(
+        staging_req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (staging_memory_index == UINT32_MAX) {
+        Com_EPrintf("Vulkan shadow: suitable host-visible staging memory type not found\n");
+        VK_Shadow_DestroyVertexBuffer(frame);
+        return false;
+    }
+    VkMemoryAllocateInfo staging_alloc = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = staging_req.size,
+        .memoryTypeIndex = staging_memory_index,
+    };
+    if (!VK_Shadow_Check(vkAllocateMemory(device, &staging_alloc, NULL,
+                                          &frame->vertex_staging_memory),
+                         "vkAllocateMemory(shadow vertex staging)") ||
+        !VK_Shadow_Check(vkBindBufferMemory(device, frame->vertex_staging_buffer,
+                                            frame->vertex_staging_memory, 0),
+                         "vkBindBufferMemory(shadow vertex staging)") ||
+        !VK_Shadow_Check(vkMapMemory(device, frame->vertex_staging_memory, 0,
+                                     capacity, 0, &frame->vertex_staging_mapped),
+                         "vkMapMemory(shadow vertex staging)")) {
+        VK_Shadow_DestroyVertexBuffer(frame);
+        return false;
+    }
+
+    frame->vertex_buffer_bytes = capacity;
     return true;
 }
 
@@ -1769,11 +1898,32 @@ bool VK_Shadow_Init(vk_context_t *ctx)
     }
     vk_shadow.moment_mips_supported =
         VK_Shadow_ColorFormatMipBlitUsable(vk_shadow.moment_format);
-    if (!VK_Shadow_CreateDescriptors() ||
-        !VK_Shadow_CreateUniformBuffer() ||
-        !VK_Shadow_EnsureResources(64, SHADOW_STORAGE_DEPTH_COMPARE, NULL)) {
+    if (!VK_Shadow_CreateDescriptors()) {
         VK_Shadow_DestroyResources();
-        VK_Shadow_DestroyUniformBuffer();
+        VK_Shadow_DestroyDescriptors();
+        memset(&vk_shadow, 0, sizeof(vk_shadow));
+        return false;
+    }
+    memset(&vk_shadow.uniform, 0, sizeof(vk_shadow.uniform));
+    vk_shadow.uniform.sun[0] = -1.0f;
+    for (uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
+        if (!VK_Shadow_CreateUniformBuffer(&vk_shadow.frame_resources[i])) {
+            VK_Shadow_DestroyResources();
+            for (uint32_t j = 0; j < VK_MAX_FRAMES_IN_FLIGHT; ++j) {
+                VK_Shadow_DestroyUniformBuffer(&vk_shadow.frame_resources[j]);
+            }
+            VK_Shadow_DestroyDescriptors();
+            memset(&vk_shadow, 0, sizeof(vk_shadow));
+            return false;
+        }
+        memcpy(vk_shadow.frame_resources[i].uniform_mapped,
+               &vk_shadow.uniform, sizeof(vk_shadow.uniform));
+    }
+    if (!VK_Shadow_EnsureResources(64, SHADOW_STORAGE_DEPTH_COMPARE, NULL)) {
+        VK_Shadow_DestroyResources();
+        for (uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
+            VK_Shadow_DestroyUniformBuffer(&vk_shadow.frame_resources[i]);
+        }
         VK_Shadow_DestroyDescriptors();
         memset(&vk_shadow, 0, sizeof(vk_shadow));
         return false;
@@ -1793,8 +1943,10 @@ void VK_Shadow_Shutdown(vk_context_t *ctx)
     }
     VK_Shadow_FreeWorldCache();
     VK_Shadow_DestroyResources();
-    VK_Shadow_DestroyVertexBuffer();
-    VK_Shadow_DestroyUniformBuffer();
+    for (uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
+        VK_Shadow_DestroyVertexBuffer(&vk_shadow.frame_resources[i]);
+        VK_Shadow_DestroyUniformBuffer(&vk_shadow.frame_resources[i]);
+    }
     VK_Shadow_DestroyDescriptors();
     free(vk_shadow.vertices);
     memset(&vk_shadow, 0, sizeof(vk_shadow));
@@ -1807,7 +1959,8 @@ VkDescriptorSetLayout VK_Shadow_GetDescriptorSetLayout(void)
 
 VkDescriptorSet VK_Shadow_GetDescriptorSet(void)
 {
-    return vk_shadow.descriptor_set;
+    vk_shadow_frame_resources_t *frame = VK_Shadow_CurrentFrameResources();
+    return frame ? frame->descriptor_set : VK_NULL_HANDLE;
 }
 
 static void VK_Shadow_FillDlightPages(int source_index,
@@ -1835,6 +1988,47 @@ static void VK_Shadow_FillDlightPages(int source_index,
     out->shadow_pages1[3] = (float)light->page_count;
 }
 
+static void VK_Shadow_UpdateFog(const refdef_t *fd)
+{
+    if (!vk_fog) {
+        vk_fog = Cvar_Get("vk_fog", "1", 0);
+    }
+
+    memset(vk_shadow.uniform.fog_color_density, 0,
+           sizeof(vk_shadow.uniform.fog_color_density));
+    memset(vk_shadow.uniform.heightfog_start, 0,
+           sizeof(vk_shadow.uniform.heightfog_start));
+    memset(vk_shadow.uniform.heightfog_end, 0,
+           sizeof(vk_shadow.uniform.heightfog_end));
+    memset(vk_shadow.uniform.fog_params, 0,
+           sizeof(vk_shadow.uniform.fog_params));
+
+    if (!fd || !vk_fog || vk_fog->integer <= 0) {
+        return;
+    }
+
+    uint32_t flags = 0;
+    if (fd->fog.density > 0.0f) {
+        VectorCopy(fd->fog.color, vk_shadow.uniform.fog_color_density);
+        vk_shadow.uniform.fog_color_density[3] = fd->fog.density * (1.0f / 64.0f);
+        flags |= VK_FOG_GLOBAL;
+    }
+    if (fd->heightfog.density > 0.0f && fd->heightfog.falloff > 0.0f) {
+        VectorCopy(fd->heightfog.start.color, vk_shadow.uniform.heightfog_start);
+        vk_shadow.uniform.heightfog_start[3] = fd->heightfog.start.dist;
+        VectorCopy(fd->heightfog.end.color, vk_shadow.uniform.heightfog_end);
+        vk_shadow.uniform.heightfog_end[3] = fd->heightfog.end.dist;
+        vk_shadow.uniform.fog_params[0] = fd->heightfog.density;
+        vk_shadow.uniform.fog_params[1] = fd->heightfog.falloff;
+        flags |= VK_FOG_HEIGHT;
+    }
+    if (fd->fog.sky_factor > 0.0f) {
+        vk_shadow.uniform.fog_params[2] = fd->fog.sky_factor;
+        flags |= VK_FOG_SKY;
+    }
+    vk_shadow.uniform.fog_params[3] = (float)flags;
+}
+
 void VK_Shadow_UpdateDlights(const refdef_t *fd)
 {
     for (int i = 0; i < MAX_DLIGHTS; i++) {
@@ -1843,6 +2037,11 @@ void VK_Shadow_UpdateDlights(const refdef_t *fd)
         VK_Shadow_FillDlightPages(-1, &vk_shadow.uniform.dlights[i]);
     }
     vk_shadow.uniform.dlight_count[0] = 0.0f;
+    if (fd) {
+        VectorCopy(fd->vieworg, vk_shadow.uniform.view_origin);
+        vk_shadow.uniform.view_origin[3] = 1.0f;
+    }
+    VK_Shadow_UpdateFog(fd);
 
     if (!fd || !fd->dlights) {
         VK_Shadow_UploadUniform();
@@ -1877,6 +2076,11 @@ void VK_Shadow_BeginFrame(void *userdata,
     vk_shadow.reallocated_last_frame = vk_shadow.reallocated_this_frame;
     vk_shadow.reallocated_this_frame = false;
     vk_shadow.policy = policy ? *policy : (shadow_frontend_policy_t){0};
+    vk_shadow_frame_resources_t *frame = VK_Shadow_CurrentFrameResources();
+    if (frame) {
+        frame->vertex_upload_bytes = 0;
+        frame->vertex_upload_recorded = false;
+    }
     vk_shadow.vertex_count = 0;
     vk_shadow.job_count = 0;
     vk_shadow.max_active_page = -1;
@@ -1891,6 +2095,8 @@ void VK_Shadow_BeginFrame(void *userdata,
     vk_shadow.uniform.moment_tuning[0] = VK_SHADOW_MOMENT_MIN_VARIANCE;
     vk_shadow.uniform.moment_tuning[1] = VK_SHADOW_EVSM_EXPONENT;
     vk_shadow.uniform.moment_tuning[2] = 1.0f;
+    vk_shadow.uniform.moment_tuning[3] = VK_World_Fullbright() ? 1.0f : 0.0f;
+    vk_shadow.uniform.glowmap_tuning[0] = 1.0f;
     for (int i = 0; i < MAX_DLIGHTS; i++) {
         for (int j = 0; j < SHADOW_FRONTEND_POINT_FACES; j++) {
             vk_shadow.lights[i].pages[j] = -1;
@@ -2010,9 +2216,12 @@ void VK_Shadow_EndFrame(void *userdata,
     vk_shadow.uniform.dlight_count[1] = VK_World_LightmapModulate();
     vk_shadow.uniform.dlight_count[2] = VK_World_LightmapAdd();
     vk_shadow.uniform.dlight_count[3] = VK_World_EntityModulate();
-    // z is spare in the moment-tuning vector and carries the legacy texture
-    // intensity uniformly to both native Vulkan receiver shaders.
+    // z/w carry legacy texture intensity and the global fullbright state.
+    // Fullbright is evaluated in the world fragment shader so changing the
+    // cvar never rebuilds or re-uploads static world geometry.
     vk_shadow.uniform.moment_tuning[2] = VK_World_Intensity();
+    vk_shadow.uniform.moment_tuning[3] = VK_World_Fullbright() ? 1.0f : 0.0f;
+    vk_shadow.uniform.glowmap_tuning[0] = VK_World_GlowmapIntensity();
     VK_Shadow_UploadUniform();
 
     if (!vk_shadow.vertex_count) {
@@ -2028,12 +2237,43 @@ void VK_Shadow_EndFrame(void *userdata,
         return;
     }
 
-    if (!VK_Shadow_EnsureVertexBuffer(bytes) || !vk_shadow.vertex_mapped) {
+    vk_shadow_frame_resources_t *frame = VK_Shadow_CurrentFrameResources();
+    if (!VK_Shadow_EnsureVertexBuffer(bytes) || !frame ||
+        !frame->vertex_staging_mapped) {
         vk_shadow.vertex_count = 0;
         vk_shadow.job_count = 0;
         return;
     }
-    memcpy(vk_shadow.vertex_mapped, vk_shadow.vertices, bytes);
+    memcpy(frame->vertex_staging_mapped, vk_shadow.vertices, bytes);
+    frame->vertex_upload_bytes = bytes;
+    VK_Debug_RecordUpload(VK_DEBUG_DOMAIN_SHADOW, bytes);
+}
+
+void VK_Shadow_RecordUploads(VkCommandBuffer cmd)
+{
+    vk_shadow_frame_resources_t *frame = VK_Shadow_CurrentFrameResources();
+    if (!cmd || !vk_shadow.initialized || !frame ||
+        !frame->vertex_upload_bytes || !frame->vertex_staging_buffer ||
+        !frame->vertex_buffer || frame->vertex_upload_recorded) {
+        return;
+    }
+
+    const VkBufferCopy copy = { .size = frame->vertex_upload_bytes };
+    vkCmdCopyBuffer(cmd, frame->vertex_staging_buffer, frame->vertex_buffer,
+                    1, &copy);
+    VkBufferMemoryBarrier barrier = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer = frame->vertex_buffer,
+        .size = frame->vertex_upload_bytes,
+    };
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0,
+                         0, NULL, 1, &barrier, 0, NULL);
+    frame->vertex_upload_recorded = true;
 }
 
 const char *VK_Shadow_DescribeMaterialization(void *userdata)
@@ -2237,8 +2477,9 @@ void VK_Shadow_Record(VkCommandBuffer cmd)
         return;
     }
 
-    if (!vk_shadow.vertex_buffer || !vk_shadow.vertex_count ||
-        !vk_shadow.job_count) {
+    vk_shadow_frame_resources_t *frame = VK_Shadow_CurrentFrameResources();
+    if (!frame || !frame->vertex_buffer || !frame->vertex_upload_recorded ||
+        !vk_shadow.vertex_count || !vk_shadow.job_count) {
         if (!vk_shadow.layout_initialized) {
             VK_Shadow_Barrier(cmd, VK_IMAGE_LAYOUT_UNDEFINED,
                               VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
@@ -2307,7 +2548,7 @@ void VK_Shadow_Record(VkCommandBuffer cmd)
     VkDeviceSize offset = 0;
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       vk_shadow.pipeline);
-    vkCmdBindVertexBuffers(cmd, 0, 1, &vk_shadow.vertex_buffer, &offset);
+    vkCmdBindVertexBuffers(cmd, 0, 1, &frame->vertex_buffer, &offset);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
@@ -2358,6 +2599,7 @@ void VK_Shadow_Record(VkCommandBuffer cmd)
                            0,
                            sizeof(job->push), &job->push);
         vkCmdDraw(cmd, job->vertex_count, 1, job->first_vertex, 0);
+        VK_Debug_RecordDraw(VK_DEBUG_DOMAIN_SHADOW, job->vertex_count, 0);
         vkCmdEndRenderPass(cmd);
     }
 

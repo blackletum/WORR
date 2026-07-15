@@ -54,13 +54,15 @@ static int16_t signed_word(uint16_t value)
 static bool record_kind_valid(uint16_t kind)
 {
     return kind >= WORR_NATIVE_READINESS_RECORD_CHALLENGE &&
-           kind <= WORR_NATIVE_READINESS_RECORD_SERVER_ACTIVE;
+           kind <=
+               WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM;
 }
 
 static bool capabilities_valid(uint32_t capabilities)
 {
     return (capabilities & ~WORR_NET_CAP_KNOWN_MASK) == 0 &&
-           (capabilities & WORR_NET_CAP_NATIVE_ENVELOPE_V1) != 0;
+           (capabilities & WORR_NET_CAP_NATIVE_READINESS_REQUIRED_MASK) ==
+               WORR_NET_CAP_NATIVE_READINESS_REQUIRED_MASK;
 }
 
 static bool record_fields_valid(

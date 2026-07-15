@@ -2175,6 +2175,31 @@ static int load_image_data(image_t *image, imageformat_t fmt, bool need_dimensio
     return ret;
 }
 
+// Glow companions are conventionally named *_glow.pcx. They are separate
+// material data, not a fallback for the base wall, so an absent PCX must not
+// fall through to a same-stem WAL. Preserve the configured truecolour
+// replacement preference, then try the canonical PCX itself.
+static int load_glow_image_data(image_t *image, byte **pic)
+{
+#if USE_PNG || USE_JPG || USE_TGA || USE_STB_PNG || USE_DDS
+    if (need_override_image(image->type, IM_PCX)) {
+        char canonical_name[MAX_QPATH];
+        Q_strlcpy(canonical_name, image->name, sizeof(canonical_name));
+
+        for (int i = 0; i < img_total; i++) {
+            int ret = try_replace_ext(img_search[i], image, pic);
+            if (ret != Q_ERR(ENOENT)) {
+                return ret;
+            }
+        }
+
+        Q_strlcpy(image->name, canonical_name, sizeof(image->name));
+    }
+#endif
+
+    return try_image_format(IM_PCX, image, pic);
+}
+
 static void check_for_glow_map(image_t *image)
 {
     extern cvar_t *gl_shaders;
@@ -2204,7 +2229,7 @@ static void check_for_glow_map(image_t *image)
     // load the pic from disk
     glow_pic = NULL;
 
-    ret = load_image_data(&temporary, IM_PCX, false, &glow_pic);
+    ret = load_glow_image_data(&temporary, &glow_pic);
     if (ret < 0) {
         print_error(temporary.name, -1, ret);
         return;

@@ -1165,6 +1165,28 @@ Worr_NativeCommandShadowJoinObserveV1(
 }
 
 worr_native_command_shadow_join_result_v1
+Worr_NativeCommandShadowJoinRetireComparedV1(
+    worr_native_command_shadow_join_v1 *join,
+    worr_command_id_v1 command_id)
+{
+    int index;
+    if (!Worr_NativeCommandShadowJoinValidateV1(join))
+        return WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_STATE;
+    if (!Worr_CommandIdValidV1(command_id, false))
+        return WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_ARGUMENT;
+    index = join_find_index(join, command_id);
+    if (index < 0)
+        return WORR_NATIVE_COMMAND_SHADOW_JOIN_NOT_FOUND;
+    if ((join->slots[index].state_flags &
+         WORR_NATIVE_COMMAND_SHADOW_JOIN_SLOT_COMPARED) == 0) {
+        return WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_STATE;
+    }
+    memset(&join->slots[index], 0, sizeof(join->slots[index]));
+    --join->occupied_count;
+    return WORR_NATIVE_COMMAND_SHADOW_JOIN_RETIRED;
+}
+
+worr_native_command_shadow_join_result_v1
 Worr_NativeCommandShadowJoinPruneV1(
     worr_native_command_shadow_join_v1 *join,
     uint64_t now_tick,

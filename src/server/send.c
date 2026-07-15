@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.h"
 #include "server/native_shadow.h"
+#include "common/net/legacy_game_event_candidate.h"
 
 #include <limits.h>
 
@@ -545,22 +546,103 @@ static bool check_entity(const client_t *client, int entnum)
     return false;
 }
 
+/*
+ * The native event path observes only audio that the real per-client writer
+ * just accepted. Visible sources keep exact snapshot lineage; an off-frame
+ * source is admitted only when the writer has explicitly forced a position,
+ * which binds the native record to world without inventing entity lineage.
+ */
+static void queue_native_spatial_audio(
+    client_t *client, const q2proto_svc_sound_t *sound_message)
+{
+    q2proto_sound_t sound;
+    worr_event_record_v1 candidate;
+    sv_snapshot_shadow_ref_v1 snapshot_ref;
+
+    if (!client->worr_native_shadow || !client->worr_snapshot_shadow ||
+        client->worr_native_shadow->mode != SV_NATIVE_SHADOW_MODE_EVENT ||
+        !client->csr || client->csr->max_edicts <= 0 ||
+        client->framenum < 0) {
+        return;
+    }
+    if (SV_SnapshotShadowFindWireV1(
+            client->worr_snapshot_shadow, client->framenum,
+            &snapshot_ref) != SV_SNAPSHOT_SHADOW_OK) {
+        return;
+    }
+    q2proto_sound_decode_message(sound_message, &sound);
+    if (SV_SnapshotShadowBuildSpatialAudioCandidateV1(
+            client->worr_snapshot_shadow, snapshot_ref,
+            (uint32_t)client->csr->max_edicts, &sound,
+            &candidate) != SV_SNAPSHOT_EVENT_CANDIDATES_OK) {
+        return;
+    }
+    (void)SV_NativeShadowQueueEventCandidatesV1(
+        client->worr_native_shadow, &candidate, 1, svs.realtime);
+}
+
+/* Game DLL messages have no structured per-carrier slot. Observe only a
+ * bounded mixed temp/muzzle sequence after its complete legacy byte range has
+ * fitted this client's post-snapshot datagram. Native admission is atomic:
+ * mixed known carriers preserve order, while unknown/reliable/old-netchan,
+ * malformed, over-capacity, or non-visible sequences remain legacy-only. */
+static void queue_visible_native_game_events(client_t *client,
+                                             const message_packet_t *msg)
+{
+    worr_legacy_game_event_candidate_carrier_v1
+        carriers[WORR_LEGACY_GAME_EVENT_CANDIDATE_SEQUENCE_MAX];
+    worr_event_record_v1
+        candidates[WORR_LEGACY_GAME_EVENT_CANDIDATE_SEQUENCE_MAX];
+    sv_snapshot_shadow_ref_v1 snapshot_ref;
+    uint32_t carrier_count;
+
+    if (!client || !msg || client->netchan.type != NETCHAN_NEW ||
+        !client->worr_native_shadow || !client->worr_snapshot_shadow ||
+        client->worr_native_shadow->mode != SV_NATIVE_SHADOW_MODE_EVENT ||
+        !client->csr || client->csr->max_edicts <= 0 ||
+        client->framenum < 0 || msg->cursize == SOUND_PACKET ||
+        Worr_LegacyGameEventDecodeRawSequenceV1(
+            msg->data, msg->cursize, carriers, q_countof(carriers),
+            &carrier_count) != WORR_LEGACY_GAME_EVENT_CANDIDATE_OK) {
+        return;
+    }
+    if (SV_SnapshotShadowFindWireV1(
+            client->worr_snapshot_shadow, client->framenum,
+            &snapshot_ref) != SV_SNAPSHOT_SHADOW_OK) {
+        return;
+    }
+    if (SV_SnapshotShadowBuildGameEventCandidatesV1(
+            client->worr_snapshot_shadow, snapshot_ref,
+            (uint32_t)client->csr->max_edicts, carriers, carrier_count,
+            candidates) != SV_SNAPSHOT_EVENT_CANDIDATES_OK) {
+        return;
+    }
+    (void)SV_NativeShadowQueueEventCandidatesV1(
+        client->worr_native_shadow, candidates, carrier_count, svs.realtime);
+}
+
 // sounds relative to entities are handled specially
 static void emit_snd(client_t *client, const message_packet_t *msg)
 {
     int entnum = msg->sound.entity;
     int flags = msg->sound.flags;
+    bool source_in_frame;
+    q2proto_svc_message_t message = {.type = Q2P_SVC_SOUND, .sound = msg->sound};
 
     // check if position needs to be explicitly sent
-    if (!(flags & SND_POS) && !check_entity(client, entnum)) {
+    source_in_frame = entnum > 0 && check_entity(client, entnum);
+    if (!(flags & SND_POS) && !source_in_frame) {
         SV_DPrintf(2, "Forcing position on entity %d for %s\n",
                    entnum, client->name);
         flags |= SND_POS;   // entity is not present in frame
     }
 
-    q2proto_svc_message_t message = {.type = Q2P_SVC_SOUND, .sound = msg->sound};
     message.sound.flags = flags;
-    q2proto_server_write(&client->q2proto_ctx, (uintptr_t)&client->io_data, &message);
+    if (q2proto_server_write(&client->q2proto_ctx,
+                             (uintptr_t)&client->io_data,
+                             &message) == Q2P_ERR_SUCCESS) {
+        queue_native_spatial_audio(client, &message.sound);
+    }
 }
 
 static inline void write_snd(client_t *client, message_packet_t *msg, unsigned maxsize)
@@ -578,6 +660,7 @@ static inline void write_msg(client_t *client, message_packet_t *msg, unsigned m
     // if this msg fits, write it
     if (msg_write.cursize + msg->cursize <= maxsize) {
         MSG_WriteData(msg->data, msg->cursize);
+        queue_visible_native_game_events(client, msg);
     }
     free_msg_packet(client, msg);
 }
@@ -833,7 +916,7 @@ static void write_datagram_new(client_t *client)
     Q_assert(!msg_write.overflowed);
 
     if (client->worr_native_shadow) {
-        (void)SV_NativeShadowAckDueV1(
+        (void)SV_NativeShadowOutputDueV1(
             client->worr_native_shadow, svs.realtime);
     }
 
@@ -922,6 +1005,10 @@ void SV_SendClientMessages(void)
             goto finish;
         }
 
+        /* Expiry is gate-independent: sustained rate or fragment pressure
+         * must not extend the separate pre-start queue bound. */
+        SV_MaintainNativeShadowChallengePending(client);
+
         // don't overrun bandwidth
         if (SV_RateDrop(client))
             goto advance;
@@ -934,7 +1021,7 @@ void SV_SendClientMessages(void)
              * active client this path commonly consumes the fragment before
              * the later async pass can observe it. */
             if (client->worr_native_shadow &&
-                SV_NativeShadowAckEligiblePeekV1(
+                SV_NativeShadowOutputEligiblePeekV1(
                     client->worr_native_shadow, svs.realtime)) {
                 SV_NativeShadowRecordAsyncFragmentDeferralV1(
                     client->worr_native_shadow);
@@ -1028,8 +1115,8 @@ packets synchronously with game DLL ticks.
 void SV_SendAsyncPackets(void)
 {
     bool        retransmit;
-    bool        native_ack_eligible;
-    bool        native_ack_due;
+    bool        native_output_eligible;
+    bool        native_output_due;
     bool        native_async_wake_started;
     client_t    *client;
     netchan_t   *netchan;
@@ -1040,15 +1127,19 @@ void SV_SendAsyncPackets(void)
             continue;
         }
 
+        /* This async pass runs even while the simulation is paused.  Keep the
+         * pending deadline live before every rate/fragment early exit. */
+        SV_MaintainNativeShadowChallengePending(client);
+
         netchan = &client->netchan;
-        native_ack_eligible = client->worr_native_shadow &&
+        native_output_eligible = client->worr_native_shadow &&
             netchan->type == NETCHAN_NEW &&
-            SV_NativeShadowAckEligiblePeekV1(
+            SV_NativeShadowOutputEligiblePeekV1(
                 client->worr_native_shadow, svs.realtime);
 
         // don't overrun bandwidth
         if (svs.realtime - client->send_time < client->send_delta) {
-            if (native_ack_eligible) {
+            if (native_output_eligible) {
                 SV_NativeShadowRecordAsyncRateDeferralV1(
                     client->worr_native_shadow);
             }
@@ -1057,7 +1148,7 @@ void SV_SendAsyncPackets(void)
 
         // make sure all fragments are transmitted first
         if (netchan->fragment_pending) {
-            if (native_ack_eligible) {
+            if (native_output_eligible) {
                 SV_NativeShadowRecordAsyncFragmentDeferralV1(
                     client->worr_native_shadow);
             }
@@ -1066,14 +1157,25 @@ void SV_SendAsyncPackets(void)
             goto calctime;
         }
 
-        native_ack_due = client->worr_native_shadow &&
+        /* A paused active client has no synchronous snapshot pass.  Service
+         * the same clean-boundary transaction here and send the challenge as
+         * its own reliable generation, with no application payload. */
+        if (CLIENT_ACTIVE(client) && SV_PAUSED &&
+            SV_TryQueueNativeShadowChallenge(client)) {
+            cursize = Netchan_Transmit(netchan, 0, NULL, 1);
+            SV_DPrintf(2, "%s: native challenge: %d\n",
+                       client->name, cursize);
+            goto calctime;
+        }
+
+        native_output_due = client->worr_native_shadow &&
             netchan->type == NETCHAN_NEW &&
-            SV_NativeShadowAckDueV1(
+            SV_NativeShadowOutputDueV1(
                 client->worr_native_shadow, svs.realtime);
 
         // spawned clients are handled elsewhere
         if (CLIENT_ACTIVE(client) && !SV_PAUSED) {
-            if (!native_ack_due)
+            if (!native_output_due)
                 continue;
             native_async_wake_started =
                 SV_NativeShadowBeginAsyncWakeV1(
@@ -1083,7 +1185,7 @@ void SV_SendAsyncPackets(void)
                 SV_NativeShadowEndAsyncWakeV1(
                     client->worr_native_shadow);
             }
-            SV_DPrintf(2, "%s: native ack: %d\n",
+            SV_DPrintf(2, "%s: native output: %d\n",
                        client->name, cursize);
             goto calctime;
         }
@@ -1093,7 +1195,7 @@ void SV_SendAsyncPackets(void)
 
         // don't write new reliables if not yet acknowledged
         if (netchan->reliable_length && !retransmit &&
-            !native_ack_due && client->state != cs_zombie) {
+            !native_output_due && client->state != cs_zombie) {
             continue;
         }
 
@@ -1106,14 +1208,14 @@ void SV_SendAsyncPackets(void)
         write_pending_download(client);
 
         if (netchan->message.cursize || netchan->reliable_ack_pending ||
-            netchan->reliable_length || retransmit || native_ack_due) {
-            if (native_ack_due) {
+            netchan->reliable_length || retransmit || native_output_due) {
+            if (native_output_due) {
                 native_async_wake_started =
                     SV_NativeShadowBeginAsyncWakeV1(
                         client->worr_native_shadow);
             }
             cursize = Netchan_Transmit(netchan, 0, NULL, 1);
-            if (native_ack_due && native_async_wake_started) {
+            if (native_output_due && native_async_wake_started) {
                 SV_NativeShadowEndAsyncWakeV1(
                     client->worr_native_shadow);
             }

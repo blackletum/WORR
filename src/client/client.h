@@ -96,6 +96,11 @@ extern centity_t    cl_entities[MAX_EDICTS];
 extern client_state_t   cl;
 extern client_static_t      cls;
 
+// Shared by the legacy cgame menu and the native RmlUi route bridge. The
+// renderer consumes this rectangle before drawing UI, so menu chrome remains
+// sharp while the live world uses the slow-time depth-of-field treatment.
+void CL_SetMenuBlurRect(const clipRect_t *rect);
+
 // variable server FPS
 #define CL_FRAMETIME    cl.frametime.time
 #define CL_1_FRAMETIME  cl.frametime_inv

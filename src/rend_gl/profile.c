@@ -260,6 +260,10 @@ static void GL_ProfileLogTelemetry(void)
                    gl_telemetry.gpu_pending, gl_telemetry.gpu_missed,
                    gl_telemetry.gpu_available_mask);
     }
+
+    // Keep interval telemetry machine-readable so paired capture tooling does
+    // not need to drive a console command once per sampled frame.
+    GL_PrintStats();
 }
 
 void GL_ProfileEndFrame(void)

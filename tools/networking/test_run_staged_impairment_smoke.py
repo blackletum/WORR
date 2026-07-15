@@ -64,6 +64,18 @@ def status_text(
 
 
 class RuntimeStatusGateTests(unittest.TestCase):
+    def test_client_commands_are_headless_and_input_free(self) -> None:
+        for impaired in (False, True):
+            command = SMOKE.client_command(Path("client.exe"), impaired)
+            settings = {
+                command[index + 1]: command[index + 2]
+                for index, value in enumerate(command[:-2])
+                if value == "+set"
+            }
+            self.assertEqual(settings["win_headless"], "1")
+            self.assertEqual(settings["in_enable"], "0")
+            self.assertEqual(settings["in_grab"], "0")
+
     def test_clean_control_passes(self) -> None:
         adaptive, recovery, telemetry, shadow, shadow_telemetry = (
             SMOKE.validate_adapter_status(status_text(enabled=False), False)

@@ -207,6 +207,11 @@ def client_command(
         str(executable),
         "+set", "game", "basew",
         "+set", "developer", "1",
+        # This is a real client/server session, but the client must be a
+        # hidden automation surface and must not initialize mouse input.
+        "+set", "win_headless", "1",
+        "+set", "in_enable", "0",
+        "+set", "in_grab", "0",
         "+set", "r_renderer", "opengl",
         "+set", "r_fullscreen", "0",
         "+set", "r_geometry", "640x480+0+0",

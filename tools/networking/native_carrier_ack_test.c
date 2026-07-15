@@ -195,6 +195,28 @@ static int stage_complete(
     return 0;
 }
 
+static int commit_rx_only(test_fixture *fixture,
+                          const worr_native_rx_message_v1 *message)
+{
+    worr_native_ack_range_v1 acknowledgement;
+
+    memset(&acknowledgement, 0xa5, sizeof(acknowledgement));
+    CHECK(Worr_NativeRxSessionCommitV1(
+              &fixture->session, fixture->slots, TEST_RX_CAPACITY,
+              message->slot_index, message->message_sequence,
+              &acknowledgement) == WORR_NATIVE_RX_COMMITTED);
+    CHECK(Worr_NativeAckRangeValidateV1(&acknowledgement));
+    CHECK(acknowledgement.transport_epoch ==
+              fixture->binding.transport_epoch &&
+          acknowledgement.connection_owner_id ==
+              fixture->binding.connection_owner_id &&
+          acknowledgement.first_message_sequence ==
+              message->message_sequence &&
+          acknowledgement.last_message_sequence ==
+              message->message_sequence);
+    return 0;
+}
+
 static int accept_complete(
     test_fixture *fixture, uint32_t message_sequence, uint8_t record_class,
     uint64_t now_tick, uint8_t *packet_out, size_t *packet_bytes_out)
@@ -256,6 +278,72 @@ static int test_init_layout_epoch_and_owner(void)
           ledger.mutation_generation == 1 && ledger.next_token_id == 1 &&
           ledger.connection_owner_id == TEST_OWNER_A &&
           ledger.proactive_handoffs == 3);
+    return 0;
+}
+
+static int test_semantic_commit_and_repeat_gates(void)
+{
+    static const uint8_t semantic_classes[] = {
+        WORR_NATIVE_RECORD_EVENT_V1,
+        WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1,
+    };
+    test_fixture fixture;
+    test_fixture before;
+    uint8_t packet[WORR_NATIVE_CARRIER_MAX_PACKET_BYTES];
+    size_t packet_bytes;
+    worr_native_rx_message_v1 completed;
+    worr_native_rx_message_v1 output;
+    worr_native_rx_message_v1 output_before;
+    worr_native_rx_result_v1 rx_result;
+    worr_native_rx_result_v1 rx_result_before;
+    size_t index;
+
+    for (index = 0; index < ARRAY_COUNT(semantic_classes); ++index) {
+        CHECK(fixture_init(
+                  &fixture, (uint32_t)(13u + index), 2) == 0);
+        CHECK(stage_complete(
+                  &fixture, 1, semantic_classes[index], 1, packet,
+                  &packet_bytes, &completed) == 0);
+
+        before = fixture;
+        CHECK(Worr_NativeCarrierSessionCommitRetainedV1(
+                  &fixture.session, fixture.slots, TEST_RX_CAPACITY,
+                  completed.slot_index, completed.message_sequence,
+                  &fixture.ledger) ==
+              WORR_NATIVE_RX_SEMANTIC_ADMISSION_REQUIRED);
+        CHECK(memcmp(&fixture, &before, sizeof(fixture)) == 0);
+
+        CHECK(commit_rx_only(&fixture, &completed) == 0);
+        CHECK(fixture.ledger.receipt_count == 0 &&
+              fixture.ledger.telemetry.repeat_refreshes == 0);
+        before = fixture;
+        rx_result = WORR_NATIVE_RX_MESSAGE_CHECKSUM;
+        rx_result_before = rx_result;
+        memset(&output, 0xa5, sizeof(output));
+        output_before = output;
+        CHECK(Worr_NativeCarrierSessionAcceptDataRetainedV1(
+                  &fixture.session, fixture.slots, TEST_RX_CAPACITY,
+                  fixture.arena, sizeof(fixture.arena), 2, packet,
+                  packet_bytes, 0, &fixture.ledger, &rx_result,
+                  &output) ==
+              WORR_NATIVE_CARRIER_SESSION_SEMANTIC_REVALIDATION_REQUIRED);
+        CHECK(memcmp(&fixture, &before, sizeof(fixture)) == 0 &&
+              rx_result == rx_result_before &&
+              memcmp(&output, &output_before, sizeof(output)) == 0);
+    }
+
+    CHECK(fixture_init(&fixture, 15, 2) == 0);
+    CHECK(stage_complete(
+              &fixture, 1, WORR_NATIVE_RECORD_COMMAND_V1, 1, packet,
+              &packet_bytes, &completed) == 0);
+    CHECK(Worr_NativeCarrierSessionCommitRetainedV1(
+              &fixture.session, fixture.slots, TEST_RX_CAPACITY,
+              completed.slot_index, completed.message_sequence,
+              &fixture.ledger) == WORR_NATIVE_RX_COMMITTED);
+    CHECK(fixture.session.history_count == 1 &&
+          fixture.ledger.receipt_count == 1 &&
+          find_receipt(&fixture.ledger, 1) != NULL &&
+          Worr_NativeCarrierAckLedgerValidateV1(&fixture.ledger));
     return 0;
 }
 
@@ -377,6 +465,105 @@ static int test_ack_only_retry_and_combined_repeat(void)
     return 0;
 }
 
+static int test_command_repeat_exact_only_semantic_isolation(void)
+{
+    test_fixture fixture;
+    uint8_t command_packet[WORR_NATIVE_CARRIER_MAX_PACKET_BYTES];
+    uint8_t semantic_packet[WORR_NATIVE_CARRIER_MAX_PACKET_BYTES];
+    size_t command_packet_bytes;
+    size_t semantic_packet_bytes;
+    worr_native_rx_message_v1 completed;
+    worr_native_rx_message_v1 output;
+    worr_native_rx_message_v1 output_before;
+    worr_native_carrier_ack_receipt_v1 descriptor_before;
+    worr_native_carrier_ack_receipt_v1 *command_receipt;
+    worr_native_carrier_ack_receipt_v1 *descriptor_receipt;
+    worr_native_rx_result_v1 rx_result = WORR_NATIVE_RX_INVALID_STATE;
+    uint64_t generation_before;
+    uint64_t reconciled_before;
+    uint64_t repeats_before;
+    uint16_t receipt_count_before;
+    uint16_t index;
+
+    CHECK(fixture_init(&fixture, 22, 2) == 0);
+    CHECK(accept_complete(
+              &fixture, 1, WORR_NATIVE_RECORD_COMMAND_V1, 1,
+              command_packet, &command_packet_bytes) == 0);
+
+    CHECK(stage_complete(
+              &fixture, 2, WORR_NATIVE_RECORD_EVENT_V1, 2,
+              semantic_packet, &semantic_packet_bytes, &completed) == 0);
+    CHECK(commit_rx_only(&fixture, &completed) == 0);
+    CHECK(find_receipt(&fixture.ledger, 2) == NULL);
+
+    CHECK(stage_complete(
+              &fixture, 3,
+              WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1, 3,
+              semantic_packet, &semantic_packet_bytes, &completed) == 0);
+    CHECK(commit_rx_only(&fixture, &completed) == 0);
+
+    for (index = 0;
+         index < WORR_NATIVE_CARRIER_ACK_RECEIPT_CAPACITY; ++index) {
+        if ((fixture.ledger.receipts[index].state_flags &
+             WORR_NATIVE_CARRIER_ACK_RECEIPT_OCCUPIED) == 0) {
+            break;
+        }
+    }
+    CHECK(index < WORR_NATIVE_CARRIER_ACK_RECEIPT_CAPACITY);
+    descriptor_receipt = &fixture.ledger.receipts[index];
+    memset(descriptor_receipt, 0, sizeof(*descriptor_receipt));
+    descriptor_receipt->message_sequence = 3;
+    descriptor_receipt->handoff_attempts = 1;
+    descriptor_receipt->record_class =
+        WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1;
+    descriptor_receipt->state_flags =
+        WORR_NATIVE_CARRIER_ACK_RECEIPT_OCCUPIED;
+    ++fixture.ledger.receipt_count;
+
+    command_receipt = find_receipt(&fixture.ledger, 1);
+    CHECK(command_receipt != NULL);
+    command_receipt->handoffs_remaining = 0;
+    command_receipt->handoff_attempts = 1;
+    command_receipt->state_flags =
+        WORR_NATIVE_CARRIER_ACK_RECEIPT_OCCUPIED;
+    CHECK(Worr_NativeCarrierAckLedgerValidateV1(&fixture.ledger));
+
+    descriptor_before = *descriptor_receipt;
+    receipt_count_before = fixture.ledger.receipt_count;
+    generation_before = fixture.ledger.mutation_generation;
+    reconciled_before = fixture.ledger.telemetry.reconciled_receipts;
+    repeats_before = fixture.ledger.telemetry.repeat_refreshes;
+    memset(&output, 0xa5, sizeof(output));
+    output_before = output;
+    CHECK(Worr_NativeCarrierSessionAcceptDataRetainedV1(
+              &fixture.session, fixture.slots, TEST_RX_CAPACITY,
+              fixture.arena, sizeof(fixture.arena), 4, command_packet,
+              command_packet_bytes, 0, &fixture.ledger, &rx_result,
+              &output) == WORR_NATIVE_CARRIER_SESSION_OK);
+    CHECK(rx_result == WORR_NATIVE_RX_ALREADY_COMMITTED &&
+          memcmp(&output, &output_before, sizeof(output)) == 0);
+
+    command_receipt = find_receipt(&fixture.ledger, 1);
+    descriptor_receipt = find_receipt(&fixture.ledger, 3);
+    CHECK(command_receipt != NULL &&
+          command_receipt->handoffs_remaining ==
+              fixture.ledger.proactive_handoffs &&
+          (command_receipt->state_flags &
+           WORR_NATIVE_CARRIER_ACK_RECEIPT_FORCE_DUE) != 0);
+    CHECK(find_receipt(&fixture.ledger, 2) == NULL &&
+          descriptor_receipt != NULL &&
+          memcmp(descriptor_receipt, &descriptor_before,
+                 sizeof(descriptor_before)) == 0);
+    CHECK(fixture.ledger.receipt_count == receipt_count_before &&
+          fixture.ledger.telemetry.reconciled_receipts ==
+              reconciled_before &&
+          fixture.ledger.telemetry.repeat_refreshes ==
+              repeats_before + 1u &&
+          fixture.ledger.mutation_generation == generation_before + 1u &&
+          Worr_NativeCarrierAckLedgerValidateV1(&fixture.ledger));
+    return 0;
+}
+
 static int test_range_budgets_no_gap_and_fairness(void)
 {
     static const uint32_t sequences[] = {
@@ -399,7 +586,7 @@ static int test_range_budgets_no_gap_and_fairness(void)
     CHECK(fixture_init(&fixture, 31, 3) == 0);
     for (index = 0; index < ARRAY_COUNT(sequences); ++index) {
         CHECK(accept_complete(
-                  &fixture, sequences[index], WORR_NATIVE_RECORD_EVENT_V1,
+                  &fixture, sequences[index], WORR_NATIVE_RECORD_COMMAND_V1,
                   (uint64_t)index + 1u, receipt_packet,
                   &receipt_packet_bytes) == 0);
     }
@@ -889,7 +1076,7 @@ static int test_clock_saturation_and_token_boundary(void)
 
     CHECK(fixture_init(&fixture, 71, 2) == 0);
     CHECK(accept_complete(
-              &fixture, 1, WORR_NATIVE_RECORD_EVENT_V1, 1, data_packet,
+              &fixture, 1, WORR_NATIVE_RECORD_COMMAND_V1, 1, data_packet,
               &data_packet_bytes) == 0);
     CHECK(Worr_NativeCarrierAckPreparePacketV1(
               &fixture.ledger, 100, 10, 48, NULL, 0, ack_packet,
@@ -949,7 +1136,7 @@ static int test_clock_saturation_and_token_boundary(void)
 
     CHECK(fixture_init(&exhausted, 72, 1) == 0);
     CHECK(accept_complete(
-              &exhausted, 1, WORR_NATIVE_RECORD_EVENT_V1, 1,
+              &exhausted, 1, WORR_NATIVE_RECORD_COMMAND_V1, 1,
               data_packet, &data_packet_bytes) == 0);
     exhausted.ledger.next_token_id = UINT64_MAX - 1u;
     CHECK(Worr_NativeCarrierAckLedgerValidateV1(&exhausted.ledger));
@@ -999,7 +1186,7 @@ static int test_uint32_max_and_receipt_retirement(void)
 
     CHECK(fixture_init(&maximum, 81, 1) == 0);
     CHECK(accept_complete(
-              &maximum, UINT32_MAX, WORR_NATIVE_RECORD_EVENT_V1, 1,
+              &maximum, UINT32_MAX, WORR_NATIVE_RECORD_COMMAND_V1, 1,
               data_packet, &data_packet_bytes) == 0);
     CHECK(Worr_NativeCarrierAckPreparePacketV1(
               &maximum.ledger, 2, 1, 53, legacy, sizeof(legacy),
@@ -1035,17 +1222,147 @@ static int test_uint32_max_and_receipt_retirement(void)
     return 0;
 }
 
+static int test_explicit_counted_cancellation(void)
+{
+    test_fixture fixture;
+    test_fixture active;
+    worr_native_carrier_ack_ledger_v1 before;
+    worr_native_carrier_ack_ledger_v1 expected;
+    worr_native_carrier_ack_emit_token_v1 token;
+    worr_native_session_binding_v1 next_binding;
+    uint8_t data_packet[WORR_NATIVE_CARRIER_MAX_PACKET_BYTES];
+    uint8_t ack_packet[WORR_NATIVE_CARRIER_MAX_PACKET_BYTES];
+    size_t data_packet_bytes;
+    size_t ack_packet_bytes;
+    uint32_t cancelled;
+
+    CHECK(fixture_init(&fixture, 91, 3) == 0);
+    before = fixture.ledger;
+    expected = fixture.ledger;
+    expected.state_flags |=
+        WORR_NATIVE_CARRIER_ACK_LEDGER_TERMINAL_CANCELLED;
+    ++expected.mutation_generation;
+    cancelled = UINT32_MAX;
+    CHECK(Worr_NativeCarrierAckCancelAllV1(
+              &fixture.ledger, &cancelled) ==
+          WORR_NATIVE_CARRIER_ACK_OK);
+    CHECK(cancelled == 0 &&
+          memcmp(&fixture.ledger, &expected, sizeof(expected)) == 0);
+    before = fixture.ledger;
+    CHECK(Worr_NativeCarrierAckCancelAllV1(
+              &fixture.ledger, &cancelled) ==
+          WORR_NATIVE_CARRIER_ACK_OK);
+    CHECK(cancelled == 0 &&
+          memcmp(&fixture.ledger, &before, sizeof(before)) == 0);
+    CHECK(fixture_init(&fixture, 91, 3) == 0);
+
+    CHECK(accept_complete(
+              &fixture, 1, WORR_NATIVE_RECORD_COMMAND_V1, 1,
+              data_packet, &data_packet_bytes) == 0);
+    CHECK(accept_complete(
+              &fixture, 3, WORR_NATIVE_RECORD_COMMAND_V1, 2,
+              data_packet, &data_packet_bytes) == 0);
+    CHECK(fixture.ledger.receipt_count == 2);
+
+    before = fixture.ledger;
+    cancelled = UINT32_C(0xa5a5a5a5);
+    CHECK(Worr_NativeCarrierAckCancelAllV1(
+              &fixture.ledger,
+              (uint32_t *)&fixture.ledger.receipts[0]) ==
+          WORR_NATIVE_CARRIER_ACK_INVALID_ARGUMENT);
+    CHECK(memcmp(&fixture.ledger, &before, sizeof(before)) == 0 &&
+          cancelled == UINT32_C(0xa5a5a5a5));
+
+    expected = fixture.ledger;
+    memset(expected.receipts, 0, sizeof(expected.receipts));
+    expected.receipt_count = 0;
+    expected.state_flags |=
+        WORR_NATIVE_CARRIER_ACK_LEDGER_TERMINAL_CANCELLED;
+    ++expected.mutation_generation;
+    CHECK(Worr_NativeCarrierAckCancelAllV1(
+              &fixture.ledger, &cancelled) ==
+          WORR_NATIVE_CARRIER_ACK_OK);
+    CHECK(cancelled == 2 &&
+          memcmp(&fixture.ledger, &expected, sizeof(expected)) == 0 &&
+          fixture.ledger.transport_epoch == 91 &&
+          fixture.ledger.connection_owner_id == TEST_OWNER_A &&
+          Worr_NativeCarrierAckLedgerValidateV1(&fixture.ledger));
+    before = fixture.ledger;
+    CHECK(Worr_NativeCarrierAckPeekDueV1(
+              &fixture.ledger, 3, 100) ==
+          WORR_NATIVE_CARRIER_ACK_INVALID_STATE);
+    {
+        worr_native_rx_result_v1 rx_result = WORR_NATIVE_RX_COMMITTED;
+        worr_native_rx_message_v1 message;
+
+        memset(&message, 0xa5, sizeof(message));
+        CHECK(Worr_NativeCarrierSessionAcceptDataRetainedV1(
+                  &fixture.session, fixture.slots, TEST_RX_CAPACITY,
+                  fixture.arena, sizeof(fixture.arena), 3,
+                  data_packet, data_packet_bytes, 0, &fixture.ledger,
+                  &rx_result, &message) ==
+              WORR_NATIVE_CARRIER_SESSION_INVALID_STATE);
+        CHECK(rx_result == WORR_NATIVE_RX_COMMITTED &&
+              message.struct_size == UINT32_C(0xa5a5a5a5));
+    }
+    CHECK(memcmp(&fixture.ledger, &before, sizeof(before)) == 0);
+    before = fixture.ledger;
+    cancelled = UINT32_MAX;
+    CHECK(Worr_NativeCarrierAckCancelAllV1(
+              &fixture.ledger, &cancelled) ==
+          WORR_NATIVE_CARRIER_ACK_OK);
+    CHECK(cancelled == 0 &&
+          memcmp(&fixture.ledger, &before, sizeof(before)) == 0);
+    next_binding = test_binding(93, TEST_OWNER_A);
+    CHECK(Worr_NativeCarrierAckLedgerAdvanceEpochV1(
+        &fixture.ledger, &next_binding));
+    CHECK(fixture.ledger.transport_epoch == 93 &&
+          fixture.ledger.receipt_count == 0 &&
+          (fixture.ledger.state_flags &
+           WORR_NATIVE_CARRIER_ACK_LEDGER_TERMINAL_CANCELLED) == 0 &&
+          Worr_NativeCarrierAckLedgerValidateV1(&fixture.ledger));
+
+    /* A packet-bound token has an unknown transport outcome.  Cancellation
+     * cannot guess that outcome or revoke its exact receipt. */
+    CHECK(fixture_init(&active, 92, 3) == 0);
+    CHECK(accept_complete(
+              &active, 1, WORR_NATIVE_RECORD_COMMAND_V1, 1,
+              data_packet, &data_packet_bytes) == 0);
+    CHECK(Worr_NativeCarrierAckPreparePacketV1(
+              &active.ledger, 2, 100, 48, NULL, 0,
+              ack_packet, sizeof(ack_packet), &ack_packet_bytes,
+              &token) == WORR_NATIVE_CARRIER_ACK_OK);
+    before = active.ledger;
+    cancelled = UINT32_C(0x5a5a5a5a);
+    CHECK(Worr_NativeCarrierAckCancelAllV1(
+              &active.ledger, &cancelled) ==
+          WORR_NATIVE_CARRIER_ACK_EMIT_ACTIVE);
+    CHECK(cancelled == UINT32_C(0x5a5a5a5a) &&
+          memcmp(&active.ledger, &before, sizeof(before)) == 0);
+    CHECK(Worr_NativeCarrierAckRejectHandoffV1(
+              &active.ledger, &token) == WORR_NATIVE_CARRIER_ACK_OK);
+    CHECK(Worr_NativeCarrierAckCancelAllV1(
+              &active.ledger, &cancelled) ==
+          WORR_NATIVE_CARRIER_ACK_OK);
+    CHECK(cancelled == 1 && active.ledger.receipt_count == 0 &&
+          Worr_NativeCarrierAckLedgerValidateV1(&active.ledger));
+    return 0;
+}
+
 int main(void)
 {
     if (test_init_layout_epoch_and_owner() != 0 ||
+        test_semantic_commit_and_repeat_gates() != 0 ||
         test_ack_only_retry_and_combined_repeat() != 0 ||
+        test_command_repeat_exact_only_semantic_isolation() != 0 ||
         test_range_budgets_no_gap_and_fairness() != 0 ||
         test_bind_exact_packet_and_replay() != 0 ||
         test_emit_lifecycle_and_mutation_serialization() != 0 ||
         test_same_epoch_owner_and_cross_ledger_rejection() != 0 ||
         test_one_way_loss_window_stall_and_recovery() != 0 ||
         test_clock_saturation_and_token_boundary() != 0 ||
-        test_uint32_max_and_receipt_retirement() != 0) {
+        test_uint32_max_and_receipt_retirement() != 0 ||
+        test_explicit_counted_cancellation() != 0) {
         return 1;
     }
     printf("native carrier ACK tests passed\n");

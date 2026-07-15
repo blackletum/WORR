@@ -241,6 +241,10 @@ static bool info_valid(const worr_native_codec_info_v1 *info)
     case WORR_NATIVE_RECORD_EVENT_V1:
         return info->record_schema_version == WORR_EVENT_ABI_VERSION &&
                info->model_revision == WORR_EVENT_MODEL_REVISION;
+    case WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1:
+        return info->record_schema_version ==
+                   WORR_EVENT_STREAM_ABI_VERSION &&
+               info->model_revision == WORR_EVENT_MODEL_REVISION;
     default:
         return false;
     }
@@ -332,6 +336,22 @@ worr_native_codec_result_v1 Worr_NativeCodecInspectV1(
             return WORR_NATIVE_CODEC_MALFORMED;
         }
         break;
+    case WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1:
+        if (info.record_schema_version !=
+                WORR_EVENT_STREAM_ABI_VERSION ||
+            info.model_revision != WORR_EVENT_MODEL_REVISION) {
+            return WORR_NATIVE_CODEC_UNSUPPORTED;
+        }
+        if (info.fixed_body_bytes !=
+                WORR_NATIVE_CODEC_EVENT_STREAM_FIXED_BODY_BYTES ||
+            info.range_counts[0] != 0 || info.range_counts[1] != 0 ||
+            info.range_counts[2] != 0 ||
+            info.encoded_bytes !=
+                WORR_NATIVE_CODEC_WIRE_HEADER_BYTES +
+                    WORR_NATIVE_CODEC_EVENT_STREAM_FIXED_BODY_BYTES) {
+            return WORR_NATIVE_CODEC_MALFORMED;
+        }
+        break;
     case WORR_NATIVE_RECORD_SNAPSHOT_V1:
         if (info.record_schema_version != WORR_SNAPSHOT_ABI_VERSION ||
             info.model_revision != WORR_SNAPSHOT_MODEL_REVISION) {
@@ -385,6 +405,129 @@ bool Worr_NativeCodecInfoRecordRefV1(
         return false;
     *record_out = record;
     return true;
+}
+
+static void write_event_stream_body(
+    byte_writer *writer,
+    const worr_event_stream_descriptor_v1 *descriptor)
+{
+    put_u32(writer, descriptor->event_schema_version);
+    put_u32(writer, descriptor->flags);
+}
+
+static bool read_event_stream_body(
+    byte_reader *reader,
+    const worr_native_codec_info_v1 *info,
+    worr_event_stream_descriptor_v1 *descriptor_out)
+{
+    worr_event_stream_descriptor_v1 descriptor;
+    uint32_t flags;
+
+    memset(&descriptor, 0, sizeof(descriptor));
+    descriptor.struct_size = sizeof(descriptor);
+    descriptor.schema_version = WORR_EVENT_STREAM_ABI_VERSION;
+    descriptor.stream_epoch = info->object_epoch;
+    descriptor.first_sequence = info->object_sequence;
+    descriptor.model_revision = info->model_revision;
+    if (!get_u32(reader, &descriptor.event_schema_version) ||
+        !get_u32(reader, &flags) || flags > UINT16_MAX) {
+        return false;
+    }
+    descriptor.flags = (uint16_t)flags;
+    *descriptor_out = descriptor;
+    return true;
+}
+
+worr_native_codec_result_v1 Worr_NativeCodecEventStreamPreflightV1(
+    const worr_event_stream_descriptor_v1 *descriptor,
+    uint32_t *encoded_bytes_out)
+{
+    const uint32_t encoded_bytes =
+        WORR_NATIVE_CODEC_WIRE_HEADER_BYTES +
+        WORR_NATIVE_CODEC_EVENT_STREAM_FIXED_BODY_BYTES;
+
+    if (descriptor == NULL || encoded_bytes_out == NULL ||
+        ranges_overlap(descriptor, sizeof(*descriptor),
+                       encoded_bytes_out, sizeof(*encoded_bytes_out))) {
+        return WORR_NATIVE_CODEC_INVALID_ARGUMENT;
+    }
+    if (!Worr_EventStreamDescriptorValidateV1(descriptor))
+        return WORR_NATIVE_CODEC_INVALID_RECORD;
+    *encoded_bytes_out = encoded_bytes;
+    return WORR_NATIVE_CODEC_OK;
+}
+
+worr_native_codec_result_v1 Worr_NativeCodecEventStreamEncodeV1(
+    const worr_event_stream_descriptor_v1 *descriptor,
+    void *encoded_out,
+    size_t encoded_capacity,
+    size_t *encoded_bytes_out)
+{
+    uint32_t encoded_bytes;
+    byte_writer writer;
+    worr_native_codec_result_v1 result;
+
+    if (encoded_out == NULL || encoded_bytes_out == NULL)
+        return WORR_NATIVE_CODEC_INVALID_ARGUMENT;
+    result = Worr_NativeCodecEventStreamPreflightV1(
+        descriptor, &encoded_bytes);
+    if (result != WORR_NATIVE_CODEC_OK)
+        return result;
+    if (encoded_capacity < encoded_bytes)
+        return WORR_NATIVE_CODEC_OUTPUT_TOO_SMALL;
+    if (ranges_overlap(descriptor, sizeof(*descriptor), encoded_out,
+                       encoded_bytes) ||
+        ranges_overlap(encoded_bytes_out, sizeof(*encoded_bytes_out),
+                       encoded_out, encoded_bytes) ||
+        ranges_overlap(descriptor, sizeof(*descriptor),
+                       encoded_bytes_out, sizeof(*encoded_bytes_out))) {
+        return WORR_NATIVE_CODEC_INVALID_ARGUMENT;
+    }
+
+    writer.cursor = (uint8_t *)encoded_out;
+    write_header(
+        &writer, WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1,
+        WORR_EVENT_STREAM_ABI_VERSION, descriptor->model_revision,
+        encoded_bytes, WORR_NATIVE_CODEC_EVENT_STREAM_FIXED_BODY_BYTES,
+        0, 0, 0, descriptor->stream_epoch, descriptor->first_sequence);
+    write_event_stream_body(&writer, descriptor);
+    *encoded_bytes_out = encoded_bytes;
+    return WORR_NATIVE_CODEC_OK;
+}
+
+worr_native_codec_result_v1 Worr_NativeCodecEventStreamDecodeV1(
+    const void *encoded,
+    size_t encoded_bytes,
+    worr_event_stream_descriptor_v1 *descriptor_out)
+{
+    worr_native_codec_info_v1 info;
+    worr_event_stream_descriptor_v1 descriptor;
+    byte_reader reader;
+    worr_native_codec_result_v1 result;
+
+    if (descriptor_out == NULL ||
+        ranges_overlap(encoded, encoded_bytes, descriptor_out,
+                       sizeof(*descriptor_out))) {
+        return WORR_NATIVE_CODEC_INVALID_ARGUMENT;
+    }
+    result = Worr_NativeCodecInspectV1(encoded, encoded_bytes, &info);
+    if (result != WORR_NATIVE_CODEC_OK)
+        return result;
+    if (info.record_class !=
+        WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1) {
+        return WORR_NATIVE_CODEC_UNSUPPORTED;
+    }
+    reader.cursor = (const uint8_t *)encoded +
+                    WORR_NATIVE_CODEC_WIRE_HEADER_BYTES;
+    reader.end = (const uint8_t *)encoded + encoded_bytes;
+    if (!read_event_stream_body(&reader, &info, &descriptor) ||
+        reader.cursor != reader.end) {
+        return WORR_NATIVE_CODEC_MALFORMED;
+    }
+    if (!Worr_EventStreamDescriptorValidateV1(&descriptor))
+        return WORR_NATIVE_CODEC_INVALID_RECORD;
+    *descriptor_out = descriptor;
+    return WORR_NATIVE_CODEC_OK;
 }
 
 static void write_command_body(byte_writer *writer,

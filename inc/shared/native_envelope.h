@@ -21,9 +21,9 @@ extern "C" {
  * Native WORR envelope foundation (FR-10-T04).
  *
  * This layer is deliberately only a transport envelope.  It identifies one
- * of the canonical command, snapshot, or event record classes and carries an
- * opaque byte encoding owned by that class.  It never casts the payload and
- * does not define a second gameplay schema.
+ * of the canonical command, snapshot, event, or event-stream control record
+ * classes and carries an opaque byte encoding owned by that class.  It never
+ * casts the payload and does not define a second gameplay schema.
  *
  * Version 1 is not negotiated or emitted by a live network path yet.
  */
@@ -41,6 +41,7 @@ typedef enum worr_native_record_class_v1_e {
     WORR_NATIVE_RECORD_COMMAND_V1 = 1,
     WORR_NATIVE_RECORD_SNAPSHOT_V1 = 2,
     WORR_NATIVE_RECORD_EVENT_V1 = 3,
+    WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1 = 4,
 } worr_native_record_class_v1;
 
 /*

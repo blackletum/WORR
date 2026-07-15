@@ -153,6 +153,8 @@ static worr_event_shadow_submit_result_v1 submit_candidate(
     switch (result) {
     case WORR_EVENT_JOURNAL_INSERTED:
     case WORR_EVENT_JOURNAL_MATCHED:
+    case WORR_EVENT_JOURNAL_CORRECTED:
+    case WORR_EVENT_JOURNAL_CORRECTED_AFTER_PRESENTATION:
     case WORR_EVENT_JOURNAL_COALESCED:
     case WORR_EVENT_JOURNAL_SUPERSEDED:
         shadow.last_id = next_id;

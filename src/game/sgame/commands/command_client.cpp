@@ -1669,6 +1669,10 @@ Toggles the eyecam view when following other players.
 			}
 			return false;
 		}
+		if (ent && ent->client && ent->client->initialMenu.dmJoinActive) {
+			ent->client->ui.voteActive = true;
+			OpenDmJoinMenu(ent);
+		}
 		return true;
 	}
 
@@ -1943,13 +1947,15 @@ Toggles the eyecam view when following other players.
 	void WorrVoteYes(gentity_t* ent, const CommandArgs& args) {
 		(void)args;
 		Vote(ent, CommandArgs{ "vote", "yes" });
-		CloseActiveMenu(ent);
+		if (!ent || !ent->client || !ent->client->initialMenu.dmJoinActive)
+			CloseActiveMenu(ent);
 	}
 
 	void WorrVoteNo(gentity_t* ent, const CommandArgs& args) {
 		(void)args;
 		Vote(ent, CommandArgs{ "vote", "no" });
-		CloseActiveMenu(ent);
+		if (!ent || !ent->client || !ent->client->initialMenu.dmJoinActive)
+			CloseActiveMenu(ent);
 	}
 
 	void WorrVoteClose(gentity_t* ent, const CommandArgs& args) {

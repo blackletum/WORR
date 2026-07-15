@@ -2007,6 +2007,9 @@ struct game_import_t {
 	// get server frame #
 	uint32_t	(*ServerFrame)();
 
+	// authoritative time of the currently live server simulation state.
+	uint64_t	(*ServerSimulationTimeUs)();
+
 	// misc utils
 	void		(*SendToClipBoard)(const char *text);
 

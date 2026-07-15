@@ -20,6 +20,8 @@ server config yet.
 | `cl_adaptive_input` | `0` | Keep the established `cl_maxpackets` and `cl_packetdup` input-delivery policy. |
 | `cl_worr_native_shadow` | `0` | Do not send the client half of the native command-shadow diagnostic. |
 | `sv_worr_native_shadow` | `0` | Do not enable the server half of the native command-shadow diagnostic. |
+| `cl_worr_native_event_shadow` | `0` | Do not receive the client half of the native event-stream diagnostic. |
+| `sv_worr_native_event_shadow` | `0` | Do not emit the server half of the native event-stream diagnostic. |
 | `g_lag_compensation` | `0` | Trace weapon hits against the current server world. |
 | `sg_lag_compensation_debug` | `0` | Do not collect or print rewind diagnostics. |
 | `net_impair_enable` | `0` | Do not deliberately damage or delay network traffic. |
@@ -32,11 +34,11 @@ entity at a time instead of dropping the whole scene.
 
 The following work is still in progress:
 
-- the native progressive wire envelope is limited to the default-off,
-  one-command diagnostic described below; it does not yet carry authoritative
-  gameplay traffic;
-- canonical event records are audited, but live effects and audio are still
-  presented by the established event path;
+- the native progressive wire envelope is limited to the default-off command
+  and event shadows described below; neither is authoritative gameplay
+  traffic;
+- native canonical events can reach the cgame audit runtime, but live effects
+  and audio are still presented by the established event path;
 - client gameplay and weapon prediction are not fully promoted;
 - adaptive input pacing is available only as an opt-in evaluation path for the
   existing batched-command transport, not the future native envelope;
@@ -49,30 +51,41 @@ The following work is still in progress:
 For those reasons, snapshot render promotion and historical hit validation
 remain explicit opt-ins.
 
-## Native Command Shadow (Developer Diagnostic Only)
+## Native Command and Event Shadows (Developer Diagnostic Only)
 
 `cl_worr_native_shadow` and `sv_worr_native_shadow` enable the client and
 server halves of a small native-wire diagnostic. Both default to `0`, and both
 endpoints must opt in before connecting. The diagnostic runs only on compatible
 NEW-netchan connections.
 
-When enabled successfully, WORR observes at most one input command during each
-map or native transport epoch. The normal legacy movement command is still sent,
-received, and used for gameplay. This pilot does not improve ping, bandwidth,
-prediction, or hit registration, and it does not enable the planned full native
-netcode.
+When enabled successfully, WORR sends a bounded, repeated sample of canonical
+input commands beside the normal legacy movement stream and compares both at
+the server. The legacy command is still sent, received, and used for gameplay.
+This pilot does not improve ping, bandwidth, prediction, or hit registration,
+and it does not enable the planned full native netcode.
+
+`cl_worr_native_event_shadow` and `sv_worr_native_event_shadow` add a separate
+server-to-client event-stream test on top of that command shadow. Both event
+controls and both base native-shadow controls must be enabled before connecting.
+The server must also retain its normal snapshot observation
+(`sv_snapshot_shadow 1`). The server copies exact per-client events from final
+snapshot output, retains them until acknowledged, and submits them to the
+client's cgame event audit runtime. Established snapshot events remain in the
+packet and remain responsible for visible effects and audio.
 
 For a controlled local or private test, set the server side before accepting the
 connection:
 
 ```text
 set sv_worr_native_shadow 1
+set sv_worr_native_event_shadow 1
 ```
 
 Set the client side before connecting:
 
 ```text
 set cl_worr_native_shadow 1
+set cl_worr_native_event_shadow 1
 ```
 
 These controls apply when a connection is created. Reconnect after changing
@@ -81,6 +94,26 @@ that connection. If the peer is incompatible or the diagnostic encounters an
 error, it silently drains and falls back while the established command path
 continues. With either control left at its default `0`, normal legacy networking
 and demo behavior are unchanged.
+
+Leave the two event controls at `0` when testing only the command shadow. A
+client and server that select different native modes fail the private test
+safely and continue on established networking; they do not guess a shared
+format.
+
+Use `cl_worr_native_shadow_status` on the client or
+`sv_worr_native_shadow_status` on the server when diagnosing a map transition.
+The `cancelled_through_epoch` value is the newest old test epoch that has been
+closed. The `cancellation_barriers`, `cancelled_*`, and
+`stale_cancelled_carriers` counters show unfinished shadow work that was
+discarded safely or delayed old shadow packets that were ignored. The
+`stale_cancelled_readiness_records` counter separately records valid but late
+shadow handshake messages. These are diagnostic dispositions, not lost legacy
+gameplay commands, snapshots, or visible events. Malformed or corrupt old
+messages still fail the shadow test rather than being accepted as stale.
+On the server, `transport_epoch` is the newest handshake being evaluated, while
+`wire_committed_transport_epoch` is the epoch whose native test-wire state has
+actually crossed its point of no return. They can differ briefly during a map
+change; that is expected and makes the transition explicit.
 
 ## Server Snapshot Observation
 

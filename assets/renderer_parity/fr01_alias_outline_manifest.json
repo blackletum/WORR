@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "task_id": "FR-01-T04",
+  "scenes": [
+    {
+      "id": "alias_outline_md2",
+      "config": "renderer_parity/fr01_alias_outline_md2.cfg",
+      "capture": "fr01_alias_outline_md2.tga",
+      "metrics": {
+        "pixel_threshold": 8
+      },
+      "probes": [
+        {
+          "name": "green_outline",
+          "color": [0, 255, 0],
+          "tolerance": 8,
+          "min_pixels_per_backend": 500,
+          "max_backend_count_delta_percent": 15,
+          "min_backend_intersection_over_union": 0.8
+        }
+      ]
+    },
+    {
+      "id": "alias_outline_md5",
+      "config": "renderer_parity/fr01_alias_outline_md5.cfg",
+      "capture": "fr01_alias_outline_md5.tga",
+      "metrics": {
+        "pixel_threshold": 8
+      },
+      "probes": [
+        {
+          "name": "green_outline",
+          "color": [0, 255, 0],
+          "tolerance": 8,
+          "min_pixels_per_backend": 500,
+          "max_backend_count_delta_percent": 15,
+          "min_backend_intersection_over_union": 0.8
+        }
+      ]
+    }
+  ]
+}

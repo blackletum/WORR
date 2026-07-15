@@ -1,0 +1,10 @@
+{
+"classname" "worldspawn"
+"message" "WORR FR-01-T04 alias outline parity"
+"sky" "unit5_"
+}
+{
+"classname" "info_player_start"
+"origin" "128 -480 -168"
+"angle" "90"
+}

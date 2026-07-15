@@ -5,6 +5,9 @@ client_session_service_impl.cpp implementation.*/
 
 #include "client_session_service_impl.hpp"
 
+#include "../network/local_action_observation.hpp"
+#include "../network/lag_compensation.hpp"
+
 #include "../g_local.hpp"
 #include "../gameplay/g_proball.hpp"
 #include "../gameplay/client_config.hpp"
@@ -1200,6 +1203,12 @@ gentity_t* ent, usercmd_t* ucmd) {
 
 	level.currentEntity = ent;
 	cl = ent->client;
+	// The canonical rail acceptance fixture is deliberately wired at the real
+	// command-to-game boundary. It only observes the active server scope and
+	// prepares an isolated fixture; ordinary weapon dispatch below remains the
+	// sole caller of the configured hitscan weapon callback.
+	LagCompensation_PrepareCanonicalWeaponDamageCommand(ent, ucmd);
+	SG_LocalActionObservationScope localActionObservation(ent);
 
 	//no movement during map or match intermission
 	if (level.timeoutActive > 0_ms) {

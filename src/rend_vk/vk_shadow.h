@@ -26,4 +26,5 @@ void VK_Shadow_EndFrame(void *userdata,
                         const shadow_frontend_stats_t *stats);
 const char *VK_Shadow_DescribeMaterialization(void *userdata);
 
+void VK_Shadow_RecordUploads(VkCommandBuffer cmd);
 void VK_Shadow_Record(VkCommandBuffer cmd);

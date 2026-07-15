@@ -8,6 +8,7 @@ the Free Software Foundation; either version 2 of the License, or
 */
 
 #include "cg_canonical_snapshot_timeline.hpp"
+#include "cg_event_runtime.hpp"
 #include "cg_local.h"
 
 #include <array>
@@ -211,6 +212,8 @@ void reset_consumer(std::uint32_t snapshot_epoch, std::uint32_t reason,
     canonical.reset_host_time_us = host_time_us;
     canonical.pending_clock_reset = canonical.active;
     clear_latest();
+    (void)CG_EventRuntimeResetSnapshot(
+        canonical.active ? snapshot_epoch : 0u);
 }
 
 bool consume_snapshot(const worr_snapshot_projection_view_v2 *view,
@@ -326,6 +329,13 @@ bool consume_snapshot(const worr_snapshot_projection_view_v2 *view,
     canonical.status.last_endpoint_hash = computed.endpoint_hash;
     canonical.status.last_legacy_parity_hash = computed.legacy_parity_hash;
     canonical.status.last_result = WORR_SNAPSHOT_TIMELINE_OK;
+
+    /* The timeline publication above is already committed. Event-runtime
+     * observation feeds authority correctness whenever that domain is active
+     * and feeds legacy comparison only when its audit cvar is enabled. Either
+     * path remains subordinate to immutable snapshot publication. */
+    (void)CG_EventRuntimeObserveSnapshot(
+        view->snapshot, view->event_refs, view->event_ref_count);
 
     /* Publication is already durable at this point.  A terminal clock error
      * is reported without pretending that the copied snapshot was rejected. */

@@ -64,6 +64,7 @@ cvar_t  *sv_qwmod;              // atu QW Physics modificator
 cvar_t  *sv_novis;
 cvar_t  *sv_shadow_strict_replication;
 static cvar_t *sv_worr_native_shadow;
+static cvar_t *sv_worr_native_event_shadow;
 
 cvar_t  *sv_maxclients;
 cvar_t  *sv_reserved_slots;
@@ -7092,8 +7093,14 @@ static void SVC_DirectConnect(void)
         newcl->worr_capabilities_offered ==
             WORR_NET_CAP_LEGACY_STAGE_MASK) {
         sv_native_shadow_peer_v1 *pilot = SV_Mallocz(sizeof(*pilot));
-        if (SV_NativeShadowPeerInitV1(
-                pilot, &newcl->netchan, svs.realtime)) {
+        const sv_native_shadow_mode_v1 native_shadow_mode =
+            sv_worr_native_event_shadow &&
+                    sv_worr_native_event_shadow->integer != 0
+                ? SV_NATIVE_SHADOW_MODE_EVENT
+                : SV_NATIVE_SHADOW_MODE_COMMAND;
+        if (SV_NativeShadowPeerInitModeV1(
+                pilot, &newcl->netchan, svs.realtime,
+                native_shadow_mode)) {
             newcl->worr_native_shadow = pilot;
         } else {
             Z_Free(pilot);
@@ -8242,6 +8249,8 @@ void SV_Init(void)
     sv_novis = Cvar_Get("sv_novis", "0", 0);
     sv_shadow_strict_replication = Cvar_Get("sv_shadow_strict_replication", "0", 0);
     sv_worr_native_shadow = Cvar_Get("sv_worr_native_shadow", "0", 0);
+    sv_worr_native_event_shadow = Cvar_Get(
+        "sv_worr_native_event_shadow", "0", 0);
     sv_downloadserver = Cvar_Get("sv_downloadserver", "", 0);
     sv_redirect_address = Cvar_Get("sv_redirect_address", "", 0);
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import subprocess
 import sys
@@ -51,14 +52,30 @@ def iter_jobs(args: argparse.Namespace) -> Iterable[tuple[str, str, str, int]]:
                     yield renderer, scene, map_name, filter_value
 
 
+def job_home(args: argparse.Namespace, renderer: str, scene: str,
+             filter_value: int) -> pathlib.Path:
+    return args.run_root / renderer / scene / f"filter-{filter_value}"
+
+
+def job_log(args: argparse.Namespace, renderer: str, scene: str,
+            filter_value: int) -> pathlib.Path:
+    return args.run_root / "process-logs" / f"{renderer}-{scene}-f{filter_value}.log"
+
+
 def build_command(args: argparse.Namespace, renderer: str, scene: str,
                   map_name: str, filter_value: int) -> list[str]:
     log_name = f"shadow_{renderer}_{scene}_f{filter_value}"
     command = [
         str(args.exe),
         "+set", "basedir", str(args.install_dir),
+        "+set", "homedir", str(job_home(args, renderer, scene, filter_value)),
         "+set", "r_renderer", renderer,
-        "+set", "vid_fullscreen", "0",
+        "+set", "vid_renderer", renderer,
+        "+set", "r_fullscreen", "0",
+        "+set", "win_headless", "1",
+        "+set", "in_enable", "0",
+        "+set", "in_grab", "0",
+        "+set", "s_enable", "0",
         "+set", "logfile", "1",
         "+set", "logfile_flush", "1",
         "+set", "logfile_name", log_name,
@@ -94,6 +111,8 @@ def main() -> int:
         description="Run WORR shadowmapping repro/smoke scenes from .install.")
     parser.add_argument("--install-dir", default=".install",
                         help="Staged install root")
+    parser.add_argument("--run-root", default=".tmp/shadowmapping-repro",
+                        help="Isolated per-scene runtime root")
     parser.add_argument("--exe", help="Client executable path")
     parser.add_argument("--renderer", action="append",
                         choices=("opengl", "vulkan"),
@@ -107,11 +126,14 @@ def main() -> int:
                         help="Frames to wait after map load before dump/quit")
     parser.add_argument("--debug-draw", type=int, default=0,
                         help="r_shadow_draw_debug bitmask for overlay repros")
+    parser.add_argument("--vulkan-validation", action="store_true",
+                        help="enable VK_LAYER_KHRONOS_validation for Vulkan jobs")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print commands without launching")
     args = parser.parse_args()
 
     args.install_dir = pathlib.Path(args.install_dir).resolve()
+    args.run_root = pathlib.Path(args.run_root).resolve()
     args.exe = pathlib.Path(args.exe).resolve() if args.exe else default_exe(args.install_dir)
     args.renderer = args.renderer or ["opengl", "vulkan"]
 
@@ -125,11 +147,35 @@ def main() -> int:
         print(" ".join(command), flush=True)
         if args.dry_run:
             continue
-        result = subprocess.run(command, cwd=cwd)
+        job_home(args, renderer, scene, filter_value).mkdir(parents=True,
+                                                             exist_ok=True)
+        environment = os.environ.copy()
+        if args.vulkan_validation and renderer == "vulkan":
+            environment["VK_INSTANCE_LAYERS"] = "VK_LAYER_KHRONOS_validation"
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=(getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                           if sys.platform == "win32" else 0),
+        )
+        log_path = job_log(args, renderer, scene, filter_value)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(
+            "COMMAND\n" + subprocess.list2cmdline(command) +
+            "\n\nSTDOUT\n" + result.stdout +
+            "\nSTDERR\n" + result.stderr,
+            encoding="utf-8",
+        )
         if result.returncode != 0:
             failed += 1
             print(f"FAILED {renderer}/{scene}/{map_name}/filter={filter_value}: "
-                  f"{result.returncode}", file=sys.stderr)
+                  f"{result.returncode}; see {log_path}", file=sys.stderr)
 
     return 1 if failed else 0
 

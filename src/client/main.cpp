@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 // cl_main.c  -- client main loop
 
 #include "client.h"
+#include "client/cgame_event_runtime.h"
 #include "client/cgame_event_shadow_runtime.h"
 #include "client/command_identity.h"
 #include "client/consumed_cursor.h"
@@ -754,6 +755,7 @@ CL_ClearState
 */
 void CL_ClearState(void)
 {
+    (void)CL_CGameEventRuntimeQuiesceAuthority();
     CL_EventShadowReset(WORR_CGAME_EVENT_SHADOW_RESET_CLIENT_STATE);
     CL_CommandIdentityShutdown();
     CL_ConsumedCursorShutdown();
@@ -849,6 +851,7 @@ void CL_Disconnect(error_type_t type)
 
     CL_DemoClockShutdown();
     CL_ClearState();
+    (void)CL_CGameEventRuntimeResetConnection();
 
     CL_GTV_Suspend();
 
@@ -3662,7 +3665,10 @@ unsigned CL_Frame(unsigned msec)
     case SYNC_SLEEP_60:
         // run at limited fps if not active
         if (main_extra < main_msec) {
-            return main_msec - main_extra;
+            if (!cl.sendPacketNow) {
+                return main_msec - main_extra;
+            }
+            ref_frame = false;
         }
         break;
     case ASYNC_VIDEO:
@@ -3825,6 +3831,13 @@ bool CL_ProcessEvents(void)
     HTTP_RunDownloads();
 
     CL_GTV_Run();
+
+    /* Native command retries and event receipts are application traffic,
+     * not netchan reliables.  Wake every sync mode until the TX hook records
+     * a successful handoff; the query itself reserves no carrier state. */
+    if (CL_NativeReadinessPilotOutputDue()) {
+        cl.sendPacketNow = true;
+    }
 
     return cl.sendPacketNow;
 }

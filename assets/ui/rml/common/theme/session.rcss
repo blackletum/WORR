@@ -14,6 +14,46 @@
 	min-height: 0px;
 }
 
+/*
+ * Session pages are in-world interfaces: a low-opacity viewport scrim keeps
+ * the surrounding arena readable while the menu itself occupies a centered,
+ * translucent metal frame. Popup routes intentionally restore the full-screen
+ * scrim so destructive choices remain unmistakable.
+ */
+body[data-route-group="session"]
+{
+	background-color: #05030258;
+}
+
+.session-screen
+{
+	top: 32px;
+	right: 40px;
+	bottom: 32px;
+	left: 40px;
+	padding: 12px;
+	background-color: #100d0be8;
+	border-width: 1px;
+	border-color: #765538;
+	border-left-width: 4px;
+	border-left-color: #ed842e;
+	border-radius: 4px;
+	decorator: ninepatch(popup, popup-inner) border-box;
+}
+
+.session-screen.popup-screen,
+body.ui-session-overlay .session-screen.popup-screen
+{
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	left: 0px;
+	padding: 18px;
+	background-color: #080706d8;
+	border-width: 0px;
+	decorator: none;
+}
+
 .session-layout
 {
 	display: flex;
@@ -224,13 +264,30 @@
 
 .match-hub-screen
 {
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	left: 0px;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	padding: 14px;
-	background-color: #050302b8;
+	padding: 32px 40px;
+	background-color: transparent;
+	border-width: 0px;
 	/* No screen backdrop/grime: the hub floats translucent over the game. */
+	decorator: none;
+}
+
+body.ui-session-overlay .match-hub-screen
+{
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	left: 0px;
+	padding: 32px 40px;
+	background-color: transparent;
+	border-width: 0px;
 	decorator: none;
 }
 
@@ -240,8 +297,8 @@
 	flex-direction: column;
 	flex: 0 1 auto;
 	box-sizing: border-box;
-	width: 900px;
-	height: 660px;
+	width: 848px;
+	height: 608px;
 	max-width: 100%;
 	max-height: 100%;
 	min-width: 0px;
@@ -1770,4 +1827,759 @@ button.match-hub-tab:active
 	color: #ffe1b8;
 	border-color: #ffd967;
 	decorator: none;
+}
+
+/*
+ * FR-09-T12 multiplayer hub revision.
+ *
+ * The join hub is a compact in-world instrument panel: the primary route rail
+ * is persistent, unavailable destinations remain visible, focus is distinct
+ * from selection, and a live vote can replace the overview without moving the
+ * participation controls.
+ */
+.match-hub-shell
+{
+	width: 856px;
+	height: 600px;
+	background-color: #0d0b09ed;
+	border-color: #67503b;
+	border-left-width: 1px;
+	border-top-width: 2px;
+	border-top-color: #b4632a;
+}
+
+.match-hub-header
+{
+	min-height: 80px;
+	padding: 6px 12px;
+	background-color: #120e0bea;
+	border-bottom-width: 1px;
+	border-bottom-color: #624027;
+}
+
+.match-hub-brand
+{
+	width: 132px;
+	height: 74px;
+	margin-right: 14px;
+	background-color: transparent;
+	border-right-width: 1px;
+	border-right-color: #493326;
+}
+
+.match-hub-logo
+{
+	width: 96px;
+	height: 72px;
+	margin-left: 4px;
+}
+
+.match-hub-heading h1
+{
+	font-size: 25px;
+	letter-spacing: 1px;
+}
+
+.match-hub-context
+{
+	font-size: 10px;
+	letter-spacing: 2px;
+}
+
+.match-hub-subtitle
+{
+	font-size: 13px;
+}
+
+.match-hub-meta
+{
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 174px;
+	margin-left: 12px;
+}
+
+.match-hub-state
+{
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0px;
+	max-width: none;
+	padding: 6px 9px;
+	margin: 0px;
+	background-color: #201812d9;
+	border-width: 1px;
+	border-color: #63452f;
+	border-left-width: 3px;
+	border-left-color: #ed842e;
+	border-radius: 2px;
+	text-align: left;
+}
+
+.match-hub-state-label
+{
+	display: block;
+	margin-bottom: 2px;
+	color: #967e68;
+	font-family: "WORR Display";
+	font-size: 9px;
+	font-weight: bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+}
+
+.match-hub-state-line
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	min-width: 0px;
+}
+
+.match-hub-state-line strong
+{
+	display: block;
+	min-width: 0px;
+	color: #ffd3a0;
+	font-family: "WORR Mono";
+	font-size: 11px;
+	font-weight: bold;
+	text-transform: uppercase;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.match-hub-state-signal
+{
+	display: block;
+	flex: 0 0 auto;
+	width: 7px;
+	height: 7px;
+	margin-right: 7px;
+	background-color: #ed842e;
+	border-width: 1px;
+	border-color: #ffc176;
+	border-radius: 5px;
+}
+
+.match-hub-clock
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-end;
+	margin-top: 4px;
+	color: #88796b;
+	font-family: "WORR Mono";
+	font-size: 9px;
+	white-space: nowrap;
+}
+
+.match-hub-clock-time
+{
+	display: block;
+	margin-right: 8px;
+	color: #cbb6a2;
+	font-size: 10px;
+	font-weight: bold;
+}
+
+.match-hub-clock-date
+{
+	display: block;
+}
+
+.match-hub-tabs
+{
+	align-items: stretch;
+	min-height: 36px;
+	padding: 0px 14px;
+	background-color: #090807ef;
+	border-bottom-color: #60432e;
+}
+
+.match-hub-tab,
+button.match-hub-tab
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	flex: 1 1 0px;
+	width: auto;
+	min-width: 0px;
+	max-width: none;
+	min-height: 36px;
+	padding: 4px 8px 2px 8px;
+	background-color: transparent;
+	color: #a99786;
+	border-width: 0px;
+	border-right-width: 0px;
+	border-bottom-width: 3px;
+	border-bottom-color: #231a14;
+	font-size: 12px;
+	font-weight: normal;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+}
+
+.match-hub-tab-indicator
+{
+	display: block;
+	flex: 0 0 auto;
+	width: 5px;
+	height: 5px;
+	margin-right: 7px;
+	background-color: #4f4034;
+	border-radius: 3px;
+}
+
+.match-hub-tab.is-active
+{
+	background-color: #1b140fcc;
+	color: #fff1df;
+	border-bottom-color: #ed842e;
+	font-weight: bold;
+	tab-index: auto;
+}
+
+.match-hub-tab.is-active .match-hub-tab-indicator
+{
+	background-color: #ed842e;
+	border-width: 1px;
+	border-color: #ffbd72;
+}
+
+button.match-hub-tab:hover
+{
+	background-color: #1d1712b8;
+	color: #e7c39f;
+	border-bottom-color: #755039;
+}
+
+button.match-hub-tab:focus
+{
+	background-color: #17120ee0;
+	color: #ffd967;
+	border-width: 1px;
+	border-color: #ffd967;
+	border-bottom-width: 3px;
+	border-bottom-color: #80603d;
+}
+
+button.match-hub-tab.is-active:focus
+{
+	background-color: #1b140fcc;
+	color: #fff1df;
+	border-width: 1px;
+	border-color: #ffd967;
+	border-bottom-width: 3px;
+	border-bottom-color: #ed842e;
+}
+
+button.match-hub-tab:disabled,
+button.match-hub-tab[disabled]
+{
+	background-color: transparent;
+	color: #5f574f;
+	border-width: 0px;
+	border-bottom-width: 3px;
+	border-bottom-color: #1b1714;
+	opacity: 0.55;
+}
+
+button.match-hub-tab:disabled .match-hub-tab-indicator,
+button.match-hub-tab[disabled] .match-hub-tab-indicator
+{
+	background-color: #302b27;
+	border-width: 1px;
+	border-color: #514b45;
+}
+
+.match-hub-content
+{
+	padding: 10px;
+	background-color: #0b0908c7;
+}
+
+.match-hub-overview,
+.match-hub-active-vote,
+.match-hub-participation
+{
+	box-sizing: border-box;
+	min-width: 0px;
+	min-height: 0px;
+	padding: 11px;
+	background-color: #15110ee8;
+	border-width: 1px;
+	border-color: #48382c;
+	border-top-width: 2px;
+	border-top-color: #765033;
+	border-radius: 2px;
+}
+
+.match-hub-overview,
+.match-hub-active-vote
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	overflow: hidden;
+}
+
+.match-hub-participation
+{
+	width: 264px;
+	margin-left: 10px;
+	background-color: #18110de8;
+	border-top-color: #d3742c;
+	overflow: hidden;
+}
+
+.match-hub-section-heading
+{
+	margin-bottom: 6px;
+}
+
+.match-hub-section-heading h2
+{
+	font-size: 17px;
+}
+
+.match-hub-map-card
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	min-height: 74px;
+	padding: 8px 10px;
+	margin-bottom: 7px;
+	background-color: #0a0807dc;
+	border-left-width: 3px;
+}
+
+.match-hub-map-copy
+{
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-width: 0px;
+}
+
+.match-hub-map
+{
+	font-size: 21px;
+}
+
+.match-hub-limits
+{
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	flex: 0 0 auto;
+	box-sizing: border-box;
+	width: 154px;
+	min-height: 50px;
+	padding-left: 12px;
+	margin-left: 12px;
+	border-left-width: 1px;
+	border-left-color: #503929;
+}
+
+.match-hub-limits span
+{
+	display: block;
+	margin: 2px 0px;
+	color: #b9a38e;
+	font-family: "WORR Mono";
+	font-size: 10px;
+	text-align: right;
+	white-space: normal;
+}
+
+.match-hub-stat-grid
+{
+	margin-right: -5px;
+	margin-bottom: 1px;
+}
+
+.match-hub-stat
+{
+	flex: 1 1 128px;
+	min-width: 128px;
+	min-height: 38px;
+	padding: 6px 7px;
+	margin-right: 5px;
+	margin-bottom: 5px;
+	background-color: #1d1712cc;
+	border-left-width: 2px;
+}
+
+.match-hub-stat-label
+{
+	width: auto;
+	margin-right: 6px;
+	font-size: 9px;
+	letter-spacing: 1px;
+}
+
+.match-hub-stat-value
+{
+	font-size: 10px;
+}
+
+.match-hub-stat-wide
+{
+	flex: 1 1 100%;
+	border-left-color: #b66731;
+}
+
+.match-hub-motd
+{
+	padding: 6px 8px;
+}
+
+.match-hub-context-actions
+{
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	flex: 0 0 auto;
+	min-height: 0px;
+	margin-top: auto;
+	padding-top: 8px;
+}
+
+.match-hub-context-actions button
+{
+	width: auto;
+	min-width: 92px;
+	min-height: 26px;
+	padding: 3px 8px;
+	margin: 0px 5px 0px 0px;
+	background-color: #19140f;
+	color: #aa9785;
+	border-width: 1px;
+	border-color: #49382a;
+	border-radius: 2px;
+	decorator: none;
+	font-size: 10px;
+}
+
+.match-hub-context-actions button:hover,
+.match-hub-context-actions button:focus
+{
+	background-color: #2a1d14;
+	color: #ffd4a1;
+	border-color: #b86c34;
+	decorator: none;
+}
+
+.match-hub-active-vote
+{
+	justify-content: center;
+	background-color: #15100ded;
+	border-top-color: #e38838;
+}
+
+.match-hub-vote-heading
+{
+	display: flex;
+	flex-direction: row;
+	align-items: flex-start;
+	justify-content: space-between;
+	margin-bottom: 16px;
+}
+
+.match-hub-vote-heading h2
+{
+	margin: 0px;
+	font-size: 23px;
+}
+
+.match-hub-live-badge
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 4px 8px;
+	background-color: #2b1712;
+	color: #ffad66;
+	border-width: 1px;
+	border-color: #864a29;
+	border-radius: 10px;
+	font-family: "WORR Mono";
+	font-size: 9px;
+	font-weight: bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+}
+
+.match-hub-live-badge > span:first-child
+{
+	display: block;
+	width: 6px;
+	height: 6px;
+	margin-right: 5px;
+	background-color: #ff6c45;
+	border-radius: 3px;
+}
+
+.match-hub-vote-caller
+{
+	margin: 0px 0px 7px 0px;
+	color: #9f8e7d;
+	font-size: 11px;
+}
+
+.match-hub-vote-caller strong
+{
+	color: #e5c3a3;
+	font-weight: bold;
+}
+
+.match-hub-vote-caller span
+{
+	margin-left: 4px;
+}
+
+.match-hub-vote-proposal
+{
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	min-height: 94px;
+	padding: 16px;
+	background-color: #090706df;
+	color: #fff1df;
+	border-width: 1px;
+	border-color: #6a4931;
+	border-left-width: 4px;
+	border-left-color: #ed842e;
+	font-family: "WORR Display";
+	font-size: 20px;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.match-hub-vote-proposal > span
+{
+	display: block;
+	width: 100%;
+}
+
+.match-hub-vote-status
+{
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 2px;
+	color: #b6a18d;
+	font-size: 11px;
+}
+
+.match-hub-vote-timer
+{
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+	color: #9d8b7b;
+	font-family: "WORR Mono";
+	font-size: 9px;
+	text-transform: uppercase;
+}
+
+.match-hub-vote-timer strong
+{
+	margin-right: 4px;
+	color: #ffbd72;
+	font-size: 18px;
+}
+
+.match-hub-vote-actions
+{
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+	margin-top: 4px;
+}
+
+.match-hub-vote-actions button
+{
+	flex: 1 1 0px;
+	width: auto;
+	min-width: 0px;
+	min-height: 42px;
+	margin: 0px 6px 0px 0px;
+	background-color: #202018;
+	border-width: 1px;
+	border-color: #65543f;
+	border-left-width: 4px;
+	decorator: none;
+	font-size: 15px;
+}
+
+.match-hub-vote-actions .vote-yes
+{
+	background-color: #162319;
+	border-left-color: #6cb979;
+}
+
+.match-hub-vote-actions .vote-no
+{
+	margin-right: 0px;
+	background-color: #2a1715;
+	border-left-color: #d35f50;
+}
+
+.match-hub-vote-actions button:hover,
+.match-hub-vote-actions button:focus
+{
+	background-color: #34271b;
+	color: #ffd967;
+	border-color: #ffd967;
+	decorator: none;
+}
+
+.match-hub-vote-actions button:disabled,
+.match-hub-vote-actions button[disabled]
+{
+	background-color: #151310;
+	color: #625a53;
+	border-color: #413a33;
+	border-left-color: #4c443c;
+}
+
+.match-hub-footer
+{
+	min-height: 48px;
+	padding: 6px 10px;
+	background-color: #100d0bec;
+	border-top-width: 1px;
+	border-top-color: #563923;
+}
+
+.match-hub-tooltip
+{
+	display: block;
+	flex: 1 1 auto;
+	min-width: 0px;
+	margin: 0px;
+	color: #9d8d7e;
+	font-size: 10px;
+	line-height: 1.2;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.match-hub-tooltip.is-active
+{
+	color: #e4bd96;
+}
+
+.match-hub-footer-actions
+{
+	display: flex;
+	flex-direction: row;
+	flex: 0 1 326px;
+	width: 326px;
+	min-width: 0px;
+	margin-left: 10px;
+}
+
+.match-hub-footer-actions button
+{
+	flex: 0 0 auto;
+	width: auto;
+	min-width: 72px;
+	min-height: 32px;
+	padding: 4px 9px;
+	margin-left: 6px;
+	font-size: 11px;
+}
+
+.match-hub-footer-actions .match-hub-leave
+{
+	min-width: 120px;
+}
+
+.match-hub-join-actions
+{
+	justify-content: center;
+	flex: 1 1 auto;
+}
+
+.match-hub-settings,
+.match-hub-forfeit
+{
+	background-color: #191510;
+	border-color: #59412f;
+}
+
+.match-hub-forfeit
+{
+	color: #dc958a;
+	border-left-width: 3px;
+	border-left-color: #b84c43;
+}
+
+@media (max-width: 760px)
+{
+	.match-hub-brand
+	{
+		width: 104px;
+		height: 62px;
+	}
+
+	.match-hub-logo
+	{
+		width: 92px;
+		height: 62px;
+	}
+
+	.match-hub-meta
+	{
+		width: 142px;
+	}
+
+	.match-hub-tabs
+	{
+		flex-wrap: wrap;
+	}
+
+	.match-hub-tab,
+	button.match-hub-tab
+	{
+		flex: 1 1 118px;
+		min-height: 32px;
+	}
+
+	.match-hub-content
+	{
+		flex-direction: column;
+		overflow: auto;
+	}
+
+	.match-hub-overview,
+	.match-hub-active-vote,
+	.match-hub-participation
+	{
+		flex: 0 0 auto;
+		width: auto;
+		overflow: visible;
+	}
+
+	.match-hub-participation
+	{
+		margin-left: 0px;
+		margin-top: 8px;
+	}
 }

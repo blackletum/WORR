@@ -7,6 +7,13 @@
 #define VK_ENTITY_VERTEX_NO_DLIGHT 16u
 #define VK_ENTITY_VERTEX_INTENSITY 32u
 #define VK_ENTITY_VERTEX_DEFAULT_FLARE 64u
+#define VK_ENTITY_VERTEX_RIMLIGHT 128u
+#define VK_ENTITY_VERTEX_ITEM_COLORIZE 256u
+#define VK_ENTITY_VERTEX_ITEM_COLORIZE_BASE 512u
+#define VK_ENTITY_VERTEX_GLOWMAP 1024u
+#define VK_ENTITY_VERTEX_NO_FOG 2048u
+#define VK_FOG_GLOBAL 1u
+#define VK_FOG_HEIGHT 2u
 #define SHADOW_VISIBILITY_EXPONENT 2.0
 #define VK_SHADOW_MAX_PAGES 64
 #define VK_SHADOW_MAX_DLIGHTS 64
@@ -33,11 +40,18 @@ layout(std140, set = 2, binding = 1) uniform ShadowPages {
     vec4 shadow_global;
     vec4 shadow_sun;
     vec4 shadow_moment_tuning;
+    vec4 shadow_glowmap_tuning;
     vec4 shadow_dlight_count;
+    vec4 view_origin;
+    vec4 shadow_fog_color_density;
+    vec4 shadow_heightfog_start;
+    vec4 shadow_heightfog_end;
+    vec4 shadow_fog_params;
     shadow_page_t shadow_pages[VK_SHADOW_MAX_PAGES];
     shadow_dlight_t shadow_dlights[VK_SHADOW_MAX_DLIGHTS];
 };
 layout(set = 2, binding = 2) uniform sampler2DArray shadow_moments;
+layout(set = 0, binding = 1) uniform sampler2D glow_sampler;
 
 layout(location = 0) in vec2 in_uv;
 layout(location = 1) in vec2 in_lm_uv;
@@ -264,6 +278,39 @@ vec3 calc_dynamic_lights(vec3 world_pos, vec3 normal) {
     return shade;
 }
 
+void apply_fog(inout vec3 diffuse, bool no_fog) {
+    if (no_fog) {
+        return;
+    }
+    uint fog_flags = uint(shadow_fog_params.w + 0.5);
+    float frag_depth = gl_FragCoord.z / max(gl_FragCoord.w, 1e-6);
+    if ((fog_flags & VK_FOG_GLOBAL) != 0u) {
+        float d = shadow_fog_color_density.a * frag_depth;
+        float fog = 1.0 - exp(-(d * d));
+        diffuse = mix(diffuse, shadow_fog_color_density.rgb, fog);
+    }
+    if ((fog_flags & VK_FOG_HEIGHT) != 0u) {
+        float dir_z = normalize(in_world_pos - view_origin.xyz).z;
+        float s = sign(dir_z);
+        dir_z += 0.00001 * (1.0 - s * s);
+        float eye = view_origin.z - shadow_heightfog_start.w;
+        float pos = in_world_pos.z - shadow_heightfog_start.w;
+        float density =
+            (exp(-shadow_fog_params.y * eye) -
+             exp(-shadow_fog_params.y * pos)) /
+            (shadow_fog_params.y * dir_z);
+        float extinction = 1.0 - clamp(exp(-density), 0.0, 1.0);
+        float fraction = clamp((pos - shadow_heightfog_start.w) /
+                                   (shadow_heightfog_end.w -
+                                    shadow_heightfog_start.w),
+                               0.0, 1.0);
+        vec3 fog_color = mix(shadow_heightfog_start.rgb,
+                             shadow_heightfog_end.rgb, fraction) * extinction;
+        float fog = (1.0 - exp(-(shadow_fog_params.x * frag_depth))) * extinction;
+        diffuse = mix(diffuse, fog_color, fog);
+    }
+}
+
 vec3 safe_normal(vec3 normal) {
     float len2 = dot(normal, normal);
     if (len2 <= 0.000001) {
@@ -284,6 +331,42 @@ void main() {
         base.rgb *= in_color.a;
     }
 
+    float texture_intensity = max(shadow_moment_tuning.z, 1.0);
+    vec3 glow_emission = vec3(0.0);
+    if ((in_flags & (VK_ENTITY_VERTEX_LIGHTMAP |
+                     VK_ENTITY_VERTEX_GLOWMAP)) == VK_ENTITY_VERTEX_GLOWMAP) {
+        glow_emission = texture(glow_sampler, in_uv).rgb;
+        if ((in_flags & VK_ENTITY_VERTEX_INTENSITY) != 0u) {
+            glow_emission *= texture_intensity * shadow_glowmap_tuning.x;
+        }
+    }
+    if ((in_flags & (VK_ENTITY_VERTEX_ITEM_COLORIZE |
+                     VK_ENTITY_VERTEX_ITEM_COLORIZE_BASE)) != 0u) {
+        if ((in_flags & VK_ENTITY_VERTEX_INTENSITY) != 0u) {
+            base.rgb *= texture_intensity;
+        }
+        if ((in_flags & VK_ENTITY_VERTEX_ITEM_COLORIZE) != 0u) {
+            float lum = dot(base.rgb, vec3(0.299, 0.587, 0.114));
+            out_color = vec4(lum * in_color.rgb, base.a * in_color.a);
+        } else {
+            // The base pass intentionally ignores entity lighting, tint and
+            // alpha, matching GLS_ITEM_COLORIZE_BASE.
+            out_color = base;
+        }
+        out_color.rgb += glow_emission;
+        apply_fog(out_color.rgb, (in_flags & VK_ENTITY_VERTEX_NO_FOG) != 0u);
+        return;
+    }
+
+    if ((in_flags & VK_ENTITY_VERTEX_RIMLIGHT) != 0u) {
+        vec3 view_dir = normalize(view_origin.xyz - in_world_pos);
+        float rim = 1.0 - max(dot(safe_normal(in_normal), view_dir), 0.0);
+        rim *= rim;
+        out_color = vec4(in_color.rgb * rim, in_color.a * rim);
+        apply_fog(out_color.rgb, (in_flags & VK_ENTITY_VERTEX_NO_FOG) != 0u);
+        return;
+    }
+
     vec3 normal = safe_normal(in_normal);
     bool fullbright = (in_flags & VK_ENTITY_VERTEX_FULLBRIGHT) != 0u;
     bool lightmapped = (in_flags & VK_ENTITY_VERTEX_LIGHTMAP) != 0u;
@@ -299,6 +382,14 @@ void main() {
             // Inline BSP faces follow the world formula:
             // (lm * sun + dlights + add) * modulate.
             lighting = texture(lm_sampler, in_lm_uv).rgb;
+            if ((in_flags & VK_ENTITY_VERTEX_GLOWMAP) != 0u) {
+                float glow_scale = shadow_glowmap_tuning.x;
+                if ((in_flags & VK_ENTITY_VERTEX_INTENSITY) != 0u) {
+                    glow_scale *= texture_intensity;
+                }
+                lighting = mix(lighting, vec3(1.0),
+                               texture(glow_sampler, in_uv).a * glow_scale);
+            }
             modulation = in_color.rgb;
             if ((in_flags & VK_ENTITY_VERTEX_NO_SHADOW) == 0u) {
                 lighting *= shadow_sun_factor(in_world_pos, normal);
@@ -328,6 +419,10 @@ void main() {
     out_color = vec4(base.rgb * lighting * modulation,
                      base.a * in_color.a);
     if ((in_flags & VK_ENTITY_VERTEX_INTENSITY) != 0u) {
-        out_color.rgb *= max(shadow_moment_tuning.z, 1.0);
+        out_color.rgb *= texture_intensity;
     }
+    // Skin glow maps are premultiplied during registration and are added
+    // after the lit base, just as the OpenGL GLS_GLOWMAP_ENABLE path does.
+    out_color.rgb += glow_emission;
+    apply_fog(out_color.rgb, (in_flags & VK_ENTITY_VERTEX_NO_FOG) != 0u);
 }

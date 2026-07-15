@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "task_id": "FR-01-T05",
+  "scenes": [
+    {
+      "id": "sky_side_0",
+      "config": "renderer_parity/fr01_sky_seams_side_0.cfg",
+      "capture": "fr01_sky_seams_side_0.tga",
+      "crop": [400, 80, 350, 220],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [2, 2, 2],
+        "max_pixels_over_threshold_percent": 0.5
+      },
+      "probes": [
+        {
+          "name": "warm_sky_coverage",
+          "min_color": [120, 0, 0],
+          "max_color": [255, 180, 100],
+          "min_pixels_per_backend": 76000,
+          "max_backend_count_delta_percent": 1,
+          "min_backend_intersection_over_union": 0.99
+        }
+      ]
+    },
+    {
+      "id": "sky_side_90",
+      "config": "renderer_parity/fr01_sky_seams_side_90.cfg",
+      "capture": "fr01_sky_seams_side_90.tga",
+      "crop": [400, 20, 300, 60],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [2, 2, 2],
+        "max_pixels_over_threshold_percent": 0.5
+      },
+      "probes": [
+        {
+          "name": "warm_sky_coverage",
+          "min_color": [120, 0, 0],
+          "max_color": [255, 180, 100],
+          "min_pixels_per_backend": 17500,
+          "max_backend_count_delta_percent": 1,
+          "min_backend_intersection_over_union": 0.99
+        }
+      ]
+    },
+    {
+      "id": "sky_side_180",
+      "config": "renderer_parity/fr01_sky_seams_side_180.cfg",
+      "capture": "fr01_sky_seams_side_180.tga",
+      "crop": [260, 0, 60, 35],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [2, 2, 2],
+        "max_pixels_over_threshold_percent": 0.5
+      },
+      "probes": [
+        {
+          "name": "warm_sky_coverage",
+          "min_color": [120, 0, 0],
+          "max_color": [255, 180, 100],
+          "min_pixels_per_backend": 2000,
+          "max_backend_count_delta_percent": 1,
+          "min_backend_intersection_over_union": 0.99
+        }
+      ]
+    },
+    {
+      "id": "sky_side_270",
+      "config": "renderer_parity/fr01_sky_seams_side_270.cfg",
+      "capture": "fr01_sky_seams_side_270.tga",
+      "crop": [300, 0, 250, 120],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [2, 2, 2],
+        "max_pixels_over_threshold_percent": 0.5
+      },
+      "probes": [
+        {
+          "name": "warm_sky_coverage",
+          "min_color": [120, 0, 0],
+          "max_color": [255, 180, 100],
+          "min_pixels_per_backend": 29000,
+          "max_backend_count_delta_percent": 1,
+          "min_backend_intersection_over_union": 0.99
+        }
+      ]
+    },
+    {
+      "id": "sky_top",
+      "config": "renderer_parity/fr01_sky_seams_top.cfg",
+      "capture": "fr01_sky_seams_top.tga",
+      "crop": [400, 350, 350, 180],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [2, 2, 2],
+        "max_pixels_over_threshold_percent": 0.5
+      },
+      "probes": [
+        {
+          "name": "warm_sky_coverage",
+          "min_color": [120, 0, 0],
+          "max_color": [255, 180, 100],
+          "min_pixels_per_backend": 61000,
+          "max_backend_count_delta_percent": 1,
+          "min_backend_intersection_over_union": 0.99
+        }
+      ]
+    },
+    {
+      "id": "sky_bottom_rotated",
+      "config": "renderer_parity/fr01_sky_seams_bottom.cfg",
+      "capture": "fr01_sky_seams_bottom.tga",
+      "crop": [400, 350, 350, 180],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [2, 2, 2],
+        "max_pixels_over_threshold_percent": 0.5
+      },
+      "probes": [
+        {
+          "name": "down_sky_coverage",
+          "min_color": [20, 5, 5],
+          "max_color": [90, 70, 50],
+          "min_pixels_per_backend": 61000,
+          "max_backend_count_delta_percent": 1,
+          "min_backend_intersection_over_union": 0.99
+        }
+      ]
+    }
+  ]
+}

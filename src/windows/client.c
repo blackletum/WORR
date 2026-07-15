@@ -32,6 +32,7 @@ static cvar_t   *win_noresize;
 static cvar_t   *win_notitle;
 static cvar_t   *win_alwaysontop;
 static cvar_t   *win_noborder;
+static cvar_t   *win_headless;
 static UINT     win_char_codepage;
 
 typedef struct {
@@ -142,6 +143,15 @@ static int win_borderless_mode(void)
     return Q_clip(r_borderless->integer, 0, 2);
 }
 
+// A hidden, still-valid native window lets automated renderer probes create a
+// Vulkan/OpenGL presentation surface without claiming a visible client run.
+// It is deliberately Windows-only and non-archived so a one-shot automation
+// cannot leave normal launches invisible.
+static bool win_is_headless(void)
+{
+    return win_headless && win_headless->integer;
+}
+
 /*
 ===============================================================================
 
@@ -216,10 +226,25 @@ static void Win_SetPosition(void)
 
     // set new window style and position
     SetWindowLong(win.wnd, GWL_STYLE, style);
-    SetWindowPos(win.wnd, after, x, y, w, h, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    const UINT position_flags = SWP_FRAMECHANGED |
+        (win_is_headless() ? SWP_NOACTIVATE : SWP_SHOWWINDOW);
+    SetWindowPos(win.wnd, after, x, y, w, h, position_flags);
     UpdateWindow(win.wnd);
-    SetForegroundWindow(win.wnd);
-    SetFocus(win.wnd);
+    if (win_is_headless()) {
+        ShowWindow(win.wnd, SW_HIDE);
+    } else {
+        SetForegroundWindow(win.wnd);
+        SetFocus(win.wnd);
+    }
+
+    /*
+     * A hidden window never receives the normal foreground activation path.
+     * Mark the client active explicitly so capture runs follow the same render
+     * scheduling path as an interactive window without stealing focus.
+     */
+    if (win_is_headless()) {
+        Win_Activate(MAKEWPARAM(WA_ACTIVE, 0));
+    }
 
     if (win.mouse.grabbed) {
         Win_ClipCursor();
@@ -228,7 +253,7 @@ static void Win_SetPosition(void)
 
 static void win_force_activate_adopted_window(void)
 {
-    if (!win.adopted_bootstrap_window)
+    if (!win.adopted_bootstrap_window || win_is_headless())
         return;
     Win_Activate(MAKEWPARAM(WA_ACTIVE, 0));
 }
@@ -710,6 +735,14 @@ Win_SetMode
 */
 void Win_SetMode(void)
 {
+    // A headless capture must never change the user's desktop mode. The
+    // normal windowed geometry still gives both native renderers a concrete
+    // non-zero surface extent for reproducible captures.
+    if (win_is_headless() && r_fullscreen->integer) {
+        Com_WPrintf("win_headless overrides r_fullscreen for capture\n");
+        Cvar_SetByVar(r_fullscreen, "0", FROM_CODE);
+    }
+
     // set full screen mode if requested
     if (r_fullscreen->integer > 0) {
         if (win_span_all_monitors() || !win_fullscreen_exclusive()) {
@@ -860,7 +893,7 @@ static void Win_Activate(WPARAM wParam)
         win_altgr_active = false;
     }
 
-    if (active == ACT_ACTIVATED) {
+    if (active == ACT_ACTIVATED && !win_is_headless()) {
         SetForegroundWindow(win.wnd);
     }
 }
@@ -1793,15 +1826,21 @@ static bool win_try_adopt_bootstrap_window(void)
     win.bootstrap_wndproc = previous_wndproc;
     win.adopted_bootstrap_window = true;
     SetWindowTextA(win.wnd, PRODUCT);
-    ShowWindow(win.wnd, SW_SHOW);
-    SetActiveWindow(win.wnd);
-    SetForegroundWindow(win.wnd);
-    SetFocus(win.wnd);
-    Win_Activate(MAKEWPARAM(WA_ACTIVE, 0));
-    RedrawWindow(win.wnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
-    InvalidateRect(win.wnd, NULL, FALSE);
-    UpdateWindow(win.wnd);
-    Com_Printf("Adopted bootstrap-owned Win32 window.\n");
+    if (win_is_headless()) {
+        ShowWindow(win.wnd, SW_HIDE);
+        Com_Printf("Adopted bootstrap-owned Win32 window for headless capture.\n");
+    } else {
+        ShowWindow(win.wnd, SW_SHOW);
+        SetActiveWindow(win.wnd);
+        SetForegroundWindow(win.wnd);
+        SetFocus(win.wnd);
+        Win_Activate(MAKEWPARAM(WA_ACTIVE, 0));
+        RedrawWindow(win.wnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE |
+                     RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
+        InvalidateRect(win.wnd, NULL, FALSE);
+        UpdateWindow(win.wnd);
+        Com_Printf("Adopted bootstrap-owned Win32 window.\n");
+    }
     return true;
 }
 
@@ -1832,6 +1871,7 @@ void Win_Init(void)
     win_alwaysontop->changed = win_style_changed;
     win_noborder = Cvar_Get("win_noborder", "0", 0);
     win_noborder->changed = win_style_changed;
+    win_headless = Cvar_Get("win_headless", "0", CVAR_NOARCHIVE);
     Cvar_Get("win_fullscreen_capture_friendly", "1", CVAR_ARCHIVE | CVAR_NOARCHIVE);
 
     win_disablewinkey_changed(win_disablewinkey);
@@ -1873,7 +1913,7 @@ void Win_Init(void)
     }
 
     // init gamma ramp
-    if (r_hwgamma->integer) {
+    if (r_hwgamma->integer && !win_is_headless()) {
         if (GetDeviceGammaRamp(win.dc, win.gamma_orig)) {
             Com_DPrintf("...enabling hardware gamma\n");
             win.flags |= QVF_GAMMARAMP;
@@ -1882,6 +1922,8 @@ void Win_Init(void)
             Com_DPrintf("...hardware gamma not supported\n");
             Cvar_Set("r_hwgamma", "0");
         }
+    } else if (r_hwgamma->integer) {
+        Com_DPrintf("...headless capture leaves hardware gamma unchanged\n");
     }
 }
 

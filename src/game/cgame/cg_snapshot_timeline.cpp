@@ -218,6 +218,28 @@ const char *continuity_name(cg_snapshot_continuity_t continuity)
     return "unknown";
 }
 
+const char *prediction_correction_reason_name(
+    cg_prediction_correction_reason_t reason)
+{
+    switch (reason) {
+    case cg_prediction_correction_reason_t::none:
+        return "none";
+    case cg_prediction_correction_reason_t::input_range_invalid:
+        return "input_range_invalid";
+    case cg_prediction_correction_reason_t::retained_state_missing:
+        return "retained_state_missing";
+    case cg_prediction_correction_reason_t::config_discontinuity:
+        return "config_discontinuity";
+    case cg_prediction_correction_reason_t::replay_rejected:
+        return "replay_rejected";
+    case cg_prediction_correction_reason_t::state_divergence:
+        return "state_divergence";
+    case cg_prediction_correction_reason_t::correction_threshold_exceeded:
+        return "correction_threshold_exceeded";
+    }
+    return "unknown";
+}
+
 bool debug_interval_elapsed(std::uint32_t now, std::uint32_t then, bool started)
 {
     return !started || now - then >= DEBUG_INTERVAL_MS;
@@ -318,12 +340,14 @@ void CG_SnapshotTimeline_NotePredictionCorrection(
     std::uint32_t inferred_acked_input_cmd,
     std::uint32_t current_input_cmd,
     float correction_magnitude,
-    bool hard_reset)
+    bool hard_reset,
+    cg_prediction_correction_reason_t reason)
 {
     timeline.prediction.inferred_acked_input_cmd = inferred_acked_input_cmd;
     timeline.prediction.current_input_cmd = current_input_cmd;
     timeline.prediction.correction_magnitude = correction_magnitude;
     ++timeline.prediction.correction_count;
+    timeline.prediction.last_correction_reason = reason;
     timeline.prediction.last_correction_was_hard_reset = hard_reset;
     if (hard_reset)
         ++timeline.prediction.hard_reset_count;
@@ -343,7 +367,7 @@ void CG_SnapshotTimeline_DebugTick(std::uint32_t realtime_ms)
                         "cg_net: epoch=%u snapshot=%d delta=%d continuity=%s "
                         "entities=%u flags=0x%x inferred_ack=%u current=%u "
                         "replay=%u "
-                        "correction=%.3f hard_resets=%u\n",
+                        "correction=%.3f reason=%s hard_resets=%u\n",
                         snapshot->epoch, snapshot->snapshot_id,
                         snapshot->delta_baseline_id,
                         continuity_name(snapshot->continuity), snapshot->entity_count,
@@ -351,6 +375,8 @@ void CG_SnapshotTimeline_DebugTick(std::uint32_t realtime_ms)
                         prediction.inferred_acked_input_cmd,
                         prediction.current_input_cmd, prediction.replay_count,
                         prediction.correction_magnitude,
+                        prediction_correction_reason_name(
+                            prediction.last_correction_reason),
                         prediction.hard_reset_count);
 
             timeline.last_net_debug_time_ms = realtime_ms;

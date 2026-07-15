@@ -17,6 +17,7 @@ bool VK_UI_CreateSwapchainResources(vk_context_t *ctx);
 void VK_UI_DestroySwapchainResources(vk_context_t *ctx);
 void VK_UI_BeginFrame(void);
 void VK_UI_EndFrame(void);
+void VK_UI_RecordUploads(VkCommandBuffer cmd);
 void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent);
 
 float VK_UI_ClampScale(cvar_t *var);
@@ -32,6 +33,19 @@ bool VK_UI_IsImageTransparent(qhandle_t pic);
 imageflags_t VK_UI_GetImageFlags(qhandle_t pic);
 VkDescriptorSetLayout VK_UI_GetDescriptorSetLayout(void);
 VkDescriptorSet VK_UI_GetDescriptorSetForImage(qhandle_t pic);
+bool VK_UI_HasGlowmap(qhandle_t pic);
+VkDescriptorSet VK_UI_CreateExternalImageDescriptor(VkImageView view,
+                                                     VkImageLayout layout);
+VkDescriptorSet VK_UI_CreateExternalImagePairDescriptor(
+    VkImageView first_view, VkImageLayout first_layout,
+    VkImageView second_view, VkImageLayout second_layout);
+VkDescriptorSet VK_UI_CreateExternalImageTripleDescriptor(
+    VkImageView first_view, VkImageLayout first_layout,
+    VkImageView second_view, VkImageLayout second_layout,
+    VkImageView third_view, VkImageLayout third_layout);
+void VK_UI_DestroyExternalImageDescriptor(VkDescriptorSet *set);
+VkImageView VK_UI_GetImageView(qhandle_t pic);
+VkImage VK_UI_GetImage(qhandle_t pic);
 bool VK_UI_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic);
 bool VK_UI_UpdateImageRGBASubRect(qhandle_t handle, int x, int y, int width, int height, const byte *pic);
 void VK_UI_UpdateRawPic(int pic_w, int pic_h, const uint32_t *pic);

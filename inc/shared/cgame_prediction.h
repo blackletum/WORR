@@ -46,6 +46,12 @@ typedef enum worr_cgame_prediction_input_result_v1_e {
     WORR_CGAME_PREDICTION_INPUT_IDENTITY_DISCONTINUITY = 7,
     WORR_CGAME_PREDICTION_INPUT_RANGE_EXHAUSTED = 8,
     WORR_CGAME_PREDICTION_INPUT_COMMAND_INVALID = 9,
+    /* The cgame rejected a locally resolved command while replaying it. */
+    WORR_CGAME_PREDICTION_INPUT_REPLAY_REJECTED = 10,
+    /* No matching retained movement prediction exists for authority. */
+    WORR_CGAME_PREDICTION_INPUT_RETAINED_STATE_MISSING = 11,
+    /* The movement configuration changed across the retained prediction. */
+    WORR_CGAME_PREDICTION_INPUT_CONFIG_DISCONTINUITY = 12,
 } worr_cgame_prediction_input_result_v1;
 
 enum {

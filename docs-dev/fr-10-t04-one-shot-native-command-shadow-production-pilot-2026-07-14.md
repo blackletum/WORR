@@ -10,6 +10,12 @@ transport epoch and returns an exact ACK-only receipt. Legacy
 `MOVE`/`BATCH_MOVE` remains the sole simulation authority. This slice does not
 complete any parent FR-10 task.
 
+Historical scope note: this document remains the implementation record for the
+original one-shot boundary and its compatibility regression. The current pilot
+now reuses the bounded slot as a repeated stop-and-wait sampled stream; see
+`docs-dev/fr-10-t04-repeated-command-shadow-and-mixed-carrier-core-2026-07-14.md`.
+The sections below describe the narrower milestone at the time it was accepted.
+
 ## Outcome and authority boundary
 
 The earlier readiness-only pilot now has the smallest useful native DATA/ACK
@@ -207,25 +213,35 @@ Current Windows Clang validation for this integration slice includes:
 
 - 14/14 focused production-pilot, readiness, session, carrier, ACK,
   command-shadow, usercmd-wire-parity, and netchan-hook tests;
-- all 104 registered networking tests passing in one complete run;
-- three consecutive complete networking runs, 312/312 total;
+- all 105 registered networking tests passing in one complete run;
+- three consecutive complete networking runs, 315/315 total;
 - production-profile strict-warning x86-64 and i686 client adapter/test syntax
   checks, including a fresh post-fix client rerun;
 - ASan/UBSan endpoint pilot runs, including a fresh post-fix client binary with
   `/STACK:8388608`;
 - clean Clang static-analysis passes for both production adapters, with fresh
-  post-fix client adapter/test plists containing zero diagnostics; and
+  post-fix client adapter/test plists containing zero diagnostics;
 - successful post-lifecycle-fix production builds of the client and dedicated
   engines, cgame, sgame, both launchers, and updater;
 - a final refreshed and validated Windows x86-64 `.install/` containing 16 root
   runtime files, one dependency, the 308-asset package, 31 botfiles, and 214
   RmlUi assets;
-  and
 - final staged runtime smoke acceptance of 388/388 default and 386/386 impaired
   comparisons, publications, and consumer accepts with zero snapshot mismatch,
   entity mismatch, frame failure, or consumer rejection. The impaired run
   exercises 7 drops, 7 duplicates, 6 reorders, and 1 throttle event with
-  ordered/reuse queue checks passing.
+  ordered/reuse queue checks passing; and
+- a stable 3/3 staged two-process native-shadow gate over IPv4 UDP. Its
+  low-rate profile delivers 12,800 reliable bytes exactly once and observes
+  positive server rate/fragment deferrals; its distinct zero-delay high-rate
+  profile delivers 6,400 reliable bytes exactly once and records three async
+  wakes plus three async ACK handoffs. Every trial matches and releases one
+  native command without mismatch, rejection, drain, or failure.
+
+The 105/105 and 315/315 figures above are intentionally retained as the exact
+historical baseline for this one-shot slice. Subsequent repeated-carrier and
+cgame event-runtime work raises the current integrated networking baseline to
+113/113 once and 339/339 across three repetitions; see the living FR-10 plan.
 
 The focused harness covers default-off behavior, reliable-queue commitment,
 exact command-range selection, the 818/819 and 976/977 packet boundaries,
@@ -240,7 +256,19 @@ production build, strict/sanitizer/analyzer, stage, and runtime-smoke validation
 all pass after that fix. The final repository check confirms `q2proto/` remains
 unchanged.
 
-Final built/staged SHA-256 identities are:
+The two-process runner uses two fresh auto-joined `base1` connections so the
+fragment owner and asynchronous ACK owner have deterministic, non-racing
+scheduler windows. An earlier design used 1,500 B/s for both windows; a repeat
+exposed nondeterministic async ownership, so that result was superseded. The
+accepted profile keeps 1,500 B/s for fragment/rate pressure and uses
+1,000,000 B/s for zero-delay async admission. Primary and repeat report hashes,
+the final pending/dedicated readiness scheduler, exact counters, staged
+component identities, and limitations are documented in
+`docs-dev/fr-10-t04-native-two-process-async-ack-impairment-gate-2026-07-14.md`.
+
+The earlier integration validation recorded these then-current built/staged
+SHA-256 identities. The newer gate document above is authoritative for the
+staged components used by the two-process acceptance run:
 
 | Artifact | SHA-256 |
 |---|---|
@@ -260,13 +288,14 @@ not completion of `FR-10-T16`. The following remain open:
   authority;
 - mixed DATA-plus-ACK carrier piggyback and its packet-budget policy;
 - native event and snapshot adapters over the same canonical models;
-- complete real-netchan reliable-transfer and asynchronous-ACK-wake end-to-end
-  tests under impairment;
+- directional readiness-packet loss/reorder/duplication and combined-traffic
+  real-netchan evidence beyond the accepted latency/rate/fragment/async gate;
 - dual-adapter input-age, loss-recovery, bandwidth, correction, flood, load,
   soak, demo/spectator, rollback, and supported-platform evidence;
 - capability advertisement and any rollout/default promotion.
 
-The next safe transport step is to prove the real reliable and asynchronous
-receipt paths under deterministic impairment, then add transactional mixed
-DATA/ACK packing without relaxing the one-authority rule. Parent tasks
+The next safe transport step is transactional mixed DATA/ACK packing and
+repeated stop-and-wait command shadowing without relaxing the one-authority
+rule, followed by broader directional impairment and dual-adapter budgets.
+Parent tasks
 `FR-10-T04`, `FR-10-T09`, `FR-10-T14`, and `FR-10-T16` all remain Incomplete.

@@ -33,7 +33,15 @@ def client_status(**overrides: int) -> dict[str, int]:
         "protocol": SMOKE.PROTOCOL,
         "public_mask": SMOKE.PUBLIC_MASK,
         "private_mask": SMOKE.PRIVATE_MASK,
-        "probe_hold": 0,
+        "probe_hold": 1,
+        "cancelled_through_epoch": 0,
+        "cancellation_barriers": 1,
+        "cancelled_transports": 0,
+        "cancelled_command_tx": 0,
+        "cancelled_event_rx": 0,
+        "cancelled_event_receipts": 0,
+        "stale_cancelled_carriers": 0,
+        "stale_cancelled_readiness_records": 0,
         "challenges": 1,
         "client_ready_queued": 1,
         "server_active": 1,
@@ -65,9 +73,11 @@ def server_status(**overrides: int) -> dict[str, int]:
         "readiness_phase": 4,
         "official_epoch": 41,
         "transport_epoch": 73,
+        "cancelled_through_epoch": 0,
         "public_mask": SMOKE.PUBLIC_MASK,
         "private_mask": SMOKE.PRIVATE_MASK,
         "wire_committed": 1,
+        "wire_committed_transport_epoch": 73,
         "challenges_queued": 1,
         "client_ready": 1,
         "server_active": 1,
@@ -91,6 +101,13 @@ def server_status(**overrides: int) -> dict[str, int]:
         "rx_drained": 0,
         "drains": 0,
         "failures": 0,
+        "cancellation_barriers": 1,
+        "cancelled_transports": 0,
+        "cancelled_rx_messages": 0,
+        "cancelled_receipts": 0,
+        "cancelled_event_records": 0,
+        "stale_cancelled_carriers": 0,
+        "stale_cancelled_readiness_records": 0,
         "last_failure": 0,
     }
     values.update(overrides)
@@ -186,7 +203,7 @@ class NativeShadowStatusParserTests(unittest.TestCase):
             server_marker="server_complete",
             port=28017,
         )
-        self.assertEqual(evidence["client_status"]["private_mask"], 0x13)
+        self.assertEqual(evidence["client_status"]["private_mask"], 0x53)
         self.assertEqual(
             evidence["server_status"]["async_ack_handoffs"], 3
         )
@@ -263,6 +280,10 @@ class NativeShadowStatusParserTests(unittest.TestCase):
             SMOKE.validate_server_status(server_status(rx_commits=2))
         with self.assertRaisesRegex(RuntimeError, "command_matches"):
             SMOKE.validate_server_status(server_status(command_matches=2))
+        with self.assertRaisesRegex(RuntimeError, "wire-committed epoch"):
+            SMOKE.validate_server_status(
+                server_status(wire_committed_transport_epoch=72)
+            )
 
     def test_each_trial_requires_only_its_scheduler_evidence(self) -> None:
         for spec in SMOKE.TRIAL_SPECS:
@@ -317,20 +338,57 @@ class NativeShadowStatusParserTests(unittest.TestCase):
             "rx_drained",
             "drains",
             "failures",
+            "cancelled_through_epoch",
+            "cancelled_transports",
+            "cancelled_rx_messages",
+            "cancelled_receipts",
+            "cancelled_event_records",
+            "stale_cancelled_carriers",
+            "stale_cancelled_readiness_records",
             "last_failure",
         ):
             with self.subTest(endpoint="server", field=field):
                 with self.assertRaisesRegex(RuntimeError, field):
                     SMOKE.validate_server_status(server_status(**{field: 1}))
-        for field in ("drains", "failures", "last_failure"):
+        for field in (
+            "drains",
+            "failures",
+            "cancelled_through_epoch",
+            "cancelled_transports",
+            "cancelled_command_tx",
+            "cancelled_event_rx",
+            "cancelled_event_receipts",
+            "stale_cancelled_carriers",
+            "stale_cancelled_readiness_records",
+            "last_failure",
+        ):
             with self.subTest(endpoint="client", field=field):
                 with self.assertRaisesRegex(RuntimeError, field):
                     SMOKE.validate_client_status(client_status(**{field: 1}))
 
+        for endpoint, validator, status in (
+            ("client", SMOKE.validate_client_status, client_status),
+            ("server", SMOKE.validate_server_status, server_status),
+        ):
+            for barrier_count in (0, 2):
+                with self.subTest(
+                    endpoint=endpoint, cancellation_barriers=barrier_count
+                ):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "cancellation_barriers"
+                    ):
+                        validator(
+                            status(cancellation_barriers=barrier_count)
+                        )
+
     def test_status_pair_rejects_epoch_disagreement(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "transport_epoch"):
             SMOKE.validate_status_pair(
-                client_status(), server_status(transport_epoch=74)
+                client_status(),
+                server_status(
+                    transport_epoch=74,
+                    wire_committed_transport_epoch=74,
+                ),
             )
 
     def test_terminal_order_rejects_missing_duplicate_and_late_status(self) -> None:
@@ -488,8 +546,20 @@ class NativeShadowCommandTests(unittest.TestCase):
         }
         self.assertEqual(settings["net_port"], "28017")
         self.assertEqual(settings["net_maxmsglen"], "512")
-        self.assertEqual(settings["sv_min_rate"], "1500")
-        self.assertEqual(settings["sv_max_rate"], "1500")
+        self.assertEqual(settings["deathmatch"], "0")
+        self.assertEqual(settings["coop"], "0")
+        self.assertEqual(settings["maxclients"], "1")
+        self.assertEqual(settings["g_owner_auto_join"], "1")
+        self.assertEqual(settings["match_auto_join"], "1")
+        self.assertEqual(settings["match_force_join"], "1")
+        self.assertEqual(
+            settings["sv_min_rate"],
+            str(SMOKE.FRAGMENT_RATE_BYTES_PER_SECOND),
+        )
+        self.assertEqual(
+            settings["sv_max_rate"],
+            str(SMOKE.FRAGMENT_RATE_BYTES_PER_SECOND),
+        )
         self.assertEqual(settings["sv_lan_force_rate"], "0")
         self.assertEqual(settings["sv_fps"], str(SMOKE.SERVER_FPS))
         self.assertEqual(settings["sv_worr_native_shadow"], "1")
@@ -508,6 +578,7 @@ class NativeShadowCommandTests(unittest.TestCase):
         control = command[command.index("+stuffall") + 1]
         self.assertNotIn("worr_dm_initial_spectate", control)
         self.assertIn("cl_worr_native_shadow_probe_hold 0", control)
+        self.assertIn("cl_worr_native_shadow_probe_hold 1", control)
         self.assertIn("echo client_done", control)
         self.assertLess(
             len(subprocess.list2cmdline(command)),
@@ -516,6 +587,14 @@ class NativeShadowCommandTests(unittest.TestCase):
 
     def test_client_stays_held_until_stuffed_relative_control(self) -> None:
         command = SMOKE.client_command(Path("client.exe"), port=28017)
+        settings = {
+            command[index + 1]: command[index + 2]
+            for index, value in enumerate(command[:-2])
+            if value == "+set"
+        }
+        self.assertEqual(settings["win_headless"], "1")
+        self.assertEqual(settings["in_enable"], "0")
+        self.assertEqual(settings["in_grab"], "0")
         early_hold = [
             index for index, value in enumerate(command[:-2])
             if value == "+set"
@@ -526,12 +605,14 @@ class NativeShadowCommandTests(unittest.TestCase):
         self.assertNotIn("+cl_worr_native_shadow_probe_hold", command)
         control = SMOKE.client_control_payload("client_done")
         release = control.index("cl_worr_native_shadow_probe_hold 0")
+        rehold = control.index("cl_worr_native_shadow_probe_hold 1")
         first_wait = control.index(
             f"wait {SMOKE.FRAGMENT_CLIENT_RELEASE_WAIT_FRAMES}"
         )
         status = control.index("cl_worr_native_shadow_status")
         self.assertLess(first_wait, release)
-        self.assertLess(release, status)
+        self.assertLess(release, rehold)
+        self.assertLess(rehold, status)
 
     def test_async_trial_uses_proven_post_burst_profile(self) -> None:
         command = SMOKE.server_command(
@@ -543,6 +624,31 @@ class NativeShadowCommandTests(unittest.TestCase):
             client_release_wait_frames=(
                 SMOKE.ASYNC_CLIENT_RELEASE_WAIT_FRAMES
             ),
+            rate_bytes_per_second=(
+                SMOKE.ASYNC_RATE_BYTES_PER_SECOND
+            ),
+        )
+        settings = {
+            command[index + 1]: command[index + 2]
+            for index, value in enumerate(command[:-2])
+            if value == "+set"
+        }
+        self.assertEqual(
+            settings["sv_min_rate"],
+            str(SMOKE.ASYNC_RATE_BYTES_PER_SECOND),
+        )
+        self.assertEqual(
+            settings["sv_max_rate"],
+            str(SMOKE.ASYNC_RATE_BYTES_PER_SECOND),
+        )
+        client = SMOKE.client_command(
+            Path("client.exe"),
+            port=28018,
+            rate_bytes_per_second=SMOKE.ASYNC_RATE_BYTES_PER_SECOND,
+        )
+        self.assertEqual(
+            client[client.index("rate") + 1],
+            str(SMOKE.ASYNC_RATE_BYTES_PER_SECOND),
         )
         printed = [
             value for index, value in enumerate(command)
@@ -557,51 +663,82 @@ class NativeShadowReportHashTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
+        self.run_id = "unit-report"
+        self.profile = valid_profile()
         self.runtime_records = []
+        runtime_paths = {}
         for role in SMOKE.RUNTIME_ROLES:
             path = self.root / f"runtime-{role}.bin"
             path.write_bytes(role.encode("ascii"))
             self.runtime_records.append(SMOKE.make_file_record(role, path))
+            runtime_paths[role] = path.resolve()
         self.log_records = []
-        for role in SMOKE.LOG_ROLES:
-            path = self.root / f"{role}.log"
-            path.write_text(role + "\n", encoding="utf-8")
-            self.log_records.append(SMOKE.make_file_record(role, path))
-        client_impair, client_counters = SMOKE.parse_impairment_status(
-            impairment_rows(SMOKE.CLIENT_IMPAIR_SEED)
-        )
-        server_impair, server_counters = SMOKE.parse_impairment_status(
-            impairment_rows(SMOKE.SERVER_IMPAIR_SEED)
-        )
         trials = {}
         for spec in SMOKE.TRIAL_SPECS:
-            delivery_text = "\n".join(
-                SMOKE.reliable_payloads(spec.reliable_record_count)
-            ) + "\n"
+            trial_profile = self.profile["trials"][spec.name]
+            port = trial_profile["port"]
+            client_marker = (
+                f"worr_native_shadow_{spec.name}_client_complete_"
+                f"{self.run_id}"
+            )
+            server_marker = (
+                f"worr_native_shadow_{spec.name}_server_complete_"
+                f"{self.run_id}"
+            )
+            client_text, server_text = runtime_texts(
+                port=port,
+                client_marker=client_marker,
+                server_marker=server_marker,
+                reliable_record_count=spec.reliable_record_count,
+            )
+            for endpoint, stream, text in (
+                ("client", "stdout", client_text),
+                ("client", "stderr", ""),
+                ("server", "stdout", server_text),
+                ("server", "stderr", ""),
+            ):
+                role = f"{spec.name}_{endpoint}_{stream}"
+                path = self.root / f"{role}.log"
+                path.write_text(text, encoding="utf-8")
+                self.log_records.append(SMOKE.make_file_record(role, path))
+            evidence = SMOKE.validate_runtime_text(
+                client_text,
+                server_text,
+                client_marker=client_marker,
+                server_marker=server_marker,
+                port=port,
+                reliable_record_count=spec.reliable_record_count,
+                required_server_evidence=spec.required_server_evidence,
+            )
+            client_argv = SMOKE.client_command(
+                runtime_paths["client_executable"],
+                port=port,
+                rate_bytes_per_second=spec.rate_bytes_per_second,
+            )
+            server_argv = SMOKE.server_command(
+                runtime_paths["dedicated_executable"],
+                port=port,
+                client_completion_marker=client_marker,
+                server_completion_marker=server_marker,
+                reliable_record_count=spec.reliable_record_count,
+                client_release_wait_frames=spec.client_release_wait_frames,
+                rate_bytes_per_second=spec.rate_bytes_per_second,
+            )
             trials[spec.name] = {
                 "statuses": {
-                    "client": client_status(),
-                    "server": server_status(),
+                    "client": evidence["client_status"],
+                    "server": evidence["server_status"],
                 },
-                "reliable_delivery": SMOKE.validate_reliable_delivery(
-                    delivery_text,
-                    reliable_record_count=spec.reliable_record_count,
-                ),
+                "reliable_delivery": evidence["reliable_delivery"],
                 "impairment": {
-                    "client": {
-                        "config": client_impair,
-                        "counters": client_counters,
-                    },
-                    "server": {
-                        "config": server_impair,
-                        "counters": server_counters,
-                    },
+                    "client": evidence["client_impairment"],
+                    "server": evidence["server_impairment"],
                 },
                 "commands": {
-                    "client_argc": 10,
-                    "client_argv_sha256": "1" * 64,
-                    "server_argc": 20,
-                    "server_argv_sha256": "2" * 64,
+                    "client_argc": len(client_argv),
+                    "client_argv_sha256": SMOKE.argv_sha256(client_argv),
+                    "server_argc": len(server_argv),
+                    "server_argv_sha256": SMOKE.argv_sha256(server_argv),
                 },
                 "processes": {
                     "client_terminated_by_harness": True,
@@ -612,7 +749,8 @@ class NativeShadowReportHashTests(unittest.TestCase):
         self.report = {
             "schema": SMOKE.SCHEMA,
             "passed": True,
-            "profile": valid_profile(),
+            "run_id": self.run_id,
+            "profile": self.profile,
             "status_contract": {
                 "client_prefix": SMOKE.CLIENT_STATUS_PREFIX,
                 "client_required_fields": list(SMOKE.CLIENT_STATUS_FIELDS),
@@ -660,6 +798,10 @@ class NativeShadowReportHashTests(unittest.TestCase):
             (("profile", "trials", SMOKE.FRAGMENT_TRIAL, "port"), 0, "port"),
             (("profile", "protocol"), 36, "protocol"),
             (("profile", "rate_bytes_per_second"), 15000, "rate"),
+            (("profile", "trials", SMOKE.ASYNC_TRIAL,
+              "rate_bytes_per_second"), 1500, "rate"),
+            (("profile", "trials", SMOKE.FRAGMENT_TRIAL,
+              "client_rehold_wait_frames"), 3, "rehold"),
             (("profile", "net_maxmsglen"), 1390, "net_maxmsglen"),
         ):
             with self.subTest(path=path):
@@ -709,10 +851,38 @@ class NativeShadowReportHashTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "command SHA-256"):
             SMOKE.validate_report(changed)
         changed = copy.deepcopy(self.report)
+        changed["trials"][SMOKE.FRAGMENT_TRIAL]["commands"][
+            "client_argv_sha256"
+        ] = "0" * 64
+        with self.assertRaisesRegex(RuntimeError, "argv binding"):
+            SMOKE.validate_report(changed)
+        changed = copy.deepcopy(self.report)
         changed["trials"][SMOKE.ASYNC_TRIAL]["processes"][
             "server_terminated_by_harness"
         ] = False
         with self.assertRaisesRegex(RuntimeError, "harness-terminated"):
+            SMOKE.validate_report(changed)
+
+    def test_hashed_logs_are_reparsed_and_bound_to_report_evidence(self) -> None:
+        changed = copy.deepcopy(self.report)
+        role = f"{SMOKE.FRAGMENT_TRIAL}_client_stdout"
+        index = next(
+            index for index, record in enumerate(changed["logs"])
+            if record["role"] == role
+        )
+        path = Path(changed["logs"][index]["path"])
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            text.replace("seen=200", "seen=201"), encoding="utf-8"
+        )
+        changed["logs"][index] = SMOKE.make_file_record(role, path)
+        with self.assertRaisesRegex(RuntimeError, "hashed logs"):
+            SMOKE.validate_report(changed)
+
+    def test_run_id_must_be_a_safe_marker_token(self) -> None:
+        changed = copy.deepcopy(self.report)
+        changed["run_id"] = "unsafe; quit"
+        with self.assertRaisesRegex(RuntimeError, "run ID"):
             SMOKE.validate_report(changed)
 
     def test_previous_pass_and_failure_are_invalidated(self) -> None:

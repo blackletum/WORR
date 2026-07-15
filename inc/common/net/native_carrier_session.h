@@ -127,6 +127,7 @@ typedef enum worr_native_carrier_session_result_v1_e {
     WORR_NATIVE_CARRIER_SESSION_STALE_DISPATCH = 19,
     WORR_NATIVE_CARRIER_SESSION_CLOCK_REGRESSION = 20,
     WORR_NATIVE_CARRIER_SESSION_TOKEN_EXHAUSTED = 21,
+    WORR_NATIVE_CARRIER_SESSION_SEMANTIC_REVALIDATION_REQUIRED = 22,
 } worr_native_carrier_session_result_v1;
 
 /*
@@ -240,6 +241,25 @@ Worr_NativeCarrierSessionDispatchPreparePacketV1(
  */
 worr_native_carrier_session_result_v1
 Worr_NativeCarrierSessionDispatchConfirmPacketV1(
+    worr_native_carrier_tx_gate_v1 *gate,
+    worr_native_tx_session_v1 *session,
+    worr_native_tx_slot_v1 *slots,
+    uint16_t slot_capacity,
+    worr_native_carrier_dispatch_v1 *dispatch,
+    uint64_t handoff_tick,
+    const void *packet,
+    size_t packet_bytes);
+
+/*
+ * Mixed-packet counterpart used by the bounded DATA+ACK coordinator.  It
+ * preserves the exact DATA identity and full-packet checks of ConfirmPacket,
+ * but requires entry zero to be the sole DATA entry and every remaining
+ * entry to be ACK.  ACK authority and exact range identity remain the ACK
+ * ledger's responsibility.  The original ConfirmPacket API continues to
+ * require exactly one DATA entry.
+ */
+worr_native_carrier_session_result_v1
+Worr_NativeCarrierSessionDispatchConfirmMixedPacketV1(
     worr_native_carrier_tx_gate_v1 *gate,
     worr_native_tx_session_v1 *session,
     worr_native_tx_slot_v1 *slots,

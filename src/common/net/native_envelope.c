@@ -108,7 +108,9 @@ static bool record_class_valid(uint8_t record_class)
 {
     return record_class == WORR_NATIVE_RECORD_COMMAND_V1 ||
            record_class == WORR_NATIVE_RECORD_SNAPSHOT_V1 ||
-           record_class == WORR_NATIVE_RECORD_EVENT_V1;
+           record_class == WORR_NATIVE_RECORD_EVENT_V1 ||
+           record_class ==
+               WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1;
 }
 
 bool Worr_NativeEnvelopeRecordRefValidV1(

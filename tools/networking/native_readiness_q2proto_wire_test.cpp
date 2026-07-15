@@ -276,8 +276,7 @@ void run_handshake()
     constexpr uint64_t nonce = UINT64_C(0xfedcba9876543210);
     constexpr uint64_t timeout = 5000;
     constexpr uint32_t capabilities =
-        WORR_NET_CAP_LEGACY_STAGE_MASK |
-        WORR_NET_CAP_NATIVE_ENVELOPE_V1;
+        WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK;
     worr_native_readiness_state_v1 server{};
     worr_native_readiness_state_v1 client{};
     worr_native_readiness_record_v1 challenge{};
@@ -287,14 +286,14 @@ void run_handshake()
     CHECK(Worr_NativeReadinessServerInitV1(
               &server, epoch, capabilities, nonce, 100, timeout,
               &challenge) == WORR_NATIVE_READINESS_OK);
-    CHECK(challenge.record_checksum == UINT32_C(0x7312faf0));
+    CHECK(challenge.record_checksum == UINT32_C(0x5d6c0c0a));
     CHECK(Worr_NativeReadinessClientInitV1(
               &client, epoch, capabilities, 101, timeout) ==
           WORR_NATIVE_READINESS_OK);
 
     write_svc_record(fixture.io, challenge);
     constexpr std::array<uint8_t, 4> challenge_checksum_low_wire{
-        0xf0u, 0xfau, 0xffu, 0xffu};
+        0x0au, 0x0cu, 0x00u, 0x00u};
     CHECK(std::memcmp(fixture.io.data.data() + 10u * 9u + 5u,
                       challenge_checksum_low_wire.data(),
                       challenge_checksum_low_wire.size()) == 0);

@@ -8,6 +8,7 @@ the Free Software Foundation; either version 2 of the License, or
 */
 
 #include "common/net/snapshot_q2proto.h"
+#include "common/net/legacy_entity_event_candidate.h"
 
 #include <array>
 #include <cmath>
@@ -617,64 +618,6 @@ bool apply_player_delta(const worr_snapshot_q2proto_frame_input_v2 &input,
     return to->fov != 0.0f;
 }
 
-bool initialize_legacy_event_record(worr_event_record_v1 *record,
-                                    uint32_t tick, uint64_t time_us,
-                                    uint32_t ordinal,
-                                    worr_event_entity_ref_v1 source,
-                                    uint8_t raw_event)
-{
-    worr_event_payload_legacy_entity_v1 payload{};
-    uint16_t event_type;
-    uint16_t payload_flags;
-    switch (raw_event) {
-    case WORR_EVENT_LEGACY_ENTITY_ITEM_RESPAWN:
-        event_type = WORR_EVENT_TYPE_VISUAL_EFFECT;
-        payload_flags = WORR_EVENT_LEGACY_ENTITY_FLAG_PRESENTATION;
-        break;
-    case WORR_EVENT_LEGACY_ENTITY_FOOTSTEP:
-    case WORR_EVENT_LEGACY_ENTITY_FALL_SHORT:
-    case WORR_EVENT_LEGACY_ENTITY_FALL_MEDIUM:
-    case WORR_EVENT_LEGACY_ENTITY_FALL_FAR:
-    case WORR_EVENT_LEGACY_ENTITY_OTHER_FOOTSTEP:
-    case WORR_EVENT_LEGACY_ENTITY_LADDER_STEP:
-        event_type = WORR_EVENT_TYPE_MOVEMENT_CUE;
-        payload_flags = WORR_EVENT_LEGACY_ENTITY_FLAG_PRESENTATION;
-        break;
-    case WORR_EVENT_LEGACY_ENTITY_PLAYER_TELEPORT:
-        event_type = WORR_EVENT_TYPE_STATE_CHANGE;
-        payload_flags = WORR_EVENT_LEGACY_ENTITY_FLAG_PRESENTATION |
-                        WORR_EVENT_LEGACY_ENTITY_FLAG_DISCONTINUITY;
-        break;
-    case WORR_EVENT_LEGACY_ENTITY_OTHER_TELEPORT:
-        event_type = WORR_EVENT_TYPE_STATE_CHANGE;
-        payload_flags = WORR_EVENT_LEGACY_ENTITY_FLAG_DISCONTINUITY;
-        break;
-    default:
-        return false;
-    }
-    *record = {};
-    payload.raw_event = raw_event;
-    payload.flags = payload_flags;
-    record->struct_size = sizeof(*record);
-    record->schema_version = WORR_EVENT_ABI_VERSION;
-    record->model_revision = WORR_EVENT_MODEL_REVISION;
-    record->flags = WORR_EVENT_FLAG_REPLAY_SAFE |
-                    WORR_EVENT_FLAG_PRESENT_ONCE;
-    record->source_tick = tick;
-    record->source_ordinal = ordinal;
-    record->source_time_us = time_us;
-    record->source_entity = source;
-    record->subject_entity.index = WORR_EVENT_NO_ENTITY;
-    record->event_type = event_type;
-    record->delivery_class = WORR_EVENT_DELIVERY_TRANSIENT;
-    record->prediction_class = WORR_EVENT_PREDICTION_AUTHORITATIVE_ONLY;
-    record->expiry_tick = tick + 1u;
-    record->payload_kind = WORR_EVENT_PAYLOAD_LEGACY_ENTITY_V1;
-    record->payload_size = sizeof(payload);
-    std::memcpy(record->payload, &payload, sizeof(payload));
-    return true;
-}
-
 bool append_event(const worr_snapshot_q2proto_context_v2 *context,
                   const worr_snapshot_entity_v2 &entity, uint8_t raw_event,
                   uint32_t source_ordinal, uint32_t tick, uint64_t time_us,
@@ -686,14 +629,10 @@ bool append_event(const worr_snapshot_q2proto_context_v2 *context,
         return false;
     worr_event_record_v1 record{};
     uint64_t semantic_hash;
-    if (!initialize_legacy_event_record(&record, tick, time_us,
-                                        source_ordinal,
-                                        entity.generation.identity,
-                                        raw_event) ||
-        !Worr_EventRecordCandidateValidateV1(
-            &record, context->profile.max_entities) ||
-        !Worr_EventRecordSemanticHashV1(
-            &record, context->profile.max_entities, &semantic_hash)) {
+    if (!Worr_LegacyEntityEventCandidateBuildV1(
+            tick, time_us, source_ordinal, entity.generation.identity,
+            raw_event, context->profile.max_entities, &record,
+            &semantic_hash)) {
         return false;
     }
     auto &event = context->storage.scratch_event_refs[*event_count];

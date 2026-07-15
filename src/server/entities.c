@@ -18,6 +18,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "server.h"
 #include "common/net/consumed_cursor_sideband.h"
+#include "server/native_shadow.h"
 #include "server/snapshot_shadow.h"
 #include "shared/game3_shared.h"
 
@@ -639,8 +640,18 @@ bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize)
 
     /* Projection failure is observational only.  A successfully encoded
      * packet must retain legacy authority and continue to the network. */
-    (void)SV_SnapshotShadowCommitFrameV1(
-        client->worr_snapshot_shadow, NULL);
+    sv_snapshot_shadow_ref_v1 snapshot_ref;
+    if (SV_SnapshotShadowCommitFrameV1(
+            client->worr_snapshot_shadow, &snapshot_ref) ==
+            SV_SNAPSHOT_SHADOW_OK &&
+        client->worr_native_shadow &&
+        client->worr_native_shadow->mode == SV_NATIVE_SHADOW_MODE_EVENT) {
+        /* The legacy frame is already complete and remains authoritative.
+         * Native queue failure drains only the opt-in event shadow. */
+        (void)SV_NativeShadowQueueSnapshotEventsV1(
+            client->worr_native_shadow, client->worr_snapshot_shadow,
+            snapshot_ref, svs.realtime);
+    }
 
     client->suppress_count = 0;
     client->frameflags = 0;

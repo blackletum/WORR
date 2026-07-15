@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "cg_entity_local.h"
 #include "cg_canonical_snapshot_timeline.hpp"
+#include "cg_event_runtime.hpp"
 #include "cg_event_shadow.hpp"
 #include "cg_snapshot_timeline.hpp"
 
@@ -91,8 +92,14 @@ struct canonical_snapshot_render_frame_t {
 
 cvar_t *cg_snapshot_timeline_render;
 cvar_t *cg_snapshot_timeline_render_epsilon;
+cvar_t *cg_event_runtime_audit;
 canonical_snapshot_render_stats_t canonical_render_stats;
 canonical_snapshot_render_frame_t canonical_render_frame;
+
+void event_runtime_audit_changed(cvar_t *self)
+{
+    CG_EventRuntimeSetAuditEnabled(self && self->integer != 0);
+}
 
 void increment_saturated(std::uint64_t &value)
 {
@@ -192,6 +199,8 @@ worr_snapshot_timeline_result_v1 advance_canonical_render_clock(
 void begin_canonical_snapshot_render_frame()
 {
     canonical_render_frame = {};
+    CG_EventRuntimeSetAuditEnabled(
+        cg_event_runtime_audit && cg_event_runtime_audit->integer != 0);
 
     cg_canonical_snapshot_timeline_diagnostics_v1 diagnostics{};
     if (!CG_CanonicalSnapshotTimelineGetDiagnostics(&diagnostics) ||
@@ -218,8 +227,16 @@ void begin_canonical_snapshot_render_frame()
                  static_cast<int>(CANONICAL_SNAPSHOT_RENDER_PROMOTE))
         : CANONICAL_SNAPSHOT_RENDER_LEGACY;
     canonical_render_frame.mode = static_cast<std::uint32_t>(configured_mode);
-    if (configured_mode == CANONICAL_SNAPSHOT_RENDER_LEGACY)
+    const bool event_runtime_enabled =
+        cg_event_runtime_audit && cg_event_runtime_audit->integer != 0;
+    cg_event_runtime_status_v1 event_status{};
+    const bool authority_runtime_active =
+        CG_EventRuntimeGetStatus(&event_status) &&
+        event_status.authority_epoch != 0;
+    if (configured_mode == CANONICAL_SNAPSHOT_RENDER_LEGACY &&
+        !event_runtime_enabled && !authority_runtime_active) {
         return;
+    }
 
     std::uint64_t desired_time_us = 0;
     if (!canonical_desired_render_time_us(&desired_time_us) ||
@@ -256,17 +273,46 @@ void begin_canonical_snapshot_render_frame()
         canonical_render_frame.pair.mode;
     canonical_render_stats.last_pair_blocks =
         canonical_render_frame.pair.blocking_reasons;
-    canonical_render_frame.pair_valid = true;
+    canonical_render_frame.pair_valid =
+        configured_mode != CANONICAL_SNAPSHOT_RENDER_LEGACY;
 
     std::uint32_t ready_events = 0;
-    const auto event_result = CG_CanonicalEventPresentationAdvanceAudit(
-        canonical_render_frame.pair.target_time_us,
-        WORR_CGAME_EVENT_RANGE_MAX_RECORDS_V2, &ready_events);
+    cg_event_runtime_result_v1 runtime_result = CG_EVENT_RUNTIME_OK;
+    cg_canonical_event_presentation_result_v1 legacy_result =
+        CG_CANONICAL_EVENT_PRESENTATION_OK;
+    const bool used_event_runtime =
+        event_runtime_enabled || authority_runtime_active;
+    if (used_event_runtime) {
+        worr_snapshot_v2 current_snapshot{};
+        if (CG_CanonicalSnapshotTimelineCopySnapshot(
+                canonical_render_frame.pair.current,
+                &current_snapshot) == WORR_SNAPSHOT_TIMELINE_OK) {
+            runtime_result = CG_EventRuntimeAdvanceAudit(
+                canonical_render_frame.pair.target_time_us,
+                current_snapshot.server_tick,
+                WORR_CGAME_EVENT_RANGE_MAX_RECORDS_V2, &ready_events);
+        } else {
+            runtime_result = CG_EVENT_RUNTIME_DEGRADED;
+        }
+    } else {
+        legacy_result = CG_CanonicalEventPresentationAdvanceAudit(
+            canonical_render_frame.pair.target_time_us,
+            WORR_CGAME_EVENT_RANGE_MAX_RECORDS_V2, &ready_events);
+    }
     add_saturated(canonical_render_stats.event_ready_records, ready_events);
-    if (event_result == CG_CANONICAL_EVENT_PRESENTATION_NOT_READY) {
+    if ((used_event_runtime &&
+         runtime_result == CG_EVENT_RUNTIME_NOT_READY) ||
+        (!used_event_runtime &&
+         legacy_result == CG_CANONICAL_EVENT_PRESENTATION_NOT_READY)) {
         increment_saturated(canonical_render_stats.event_future_frames);
-    } else if (event_result != CG_CANONICAL_EVENT_PRESENTATION_OK &&
-               event_result != CG_CANONICAL_EVENT_PRESENTATION_UNINITIALIZED) {
+    } else if ((used_event_runtime &&
+                runtime_result != CG_EVENT_RUNTIME_OK &&
+                runtime_result != CG_EVENT_RUNTIME_EMPTY &&
+                runtime_result != CG_EVENT_RUNTIME_UNINITIALIZED) ||
+               (!used_event_runtime &&
+                legacy_result != CG_CANONICAL_EVENT_PRESENTATION_OK &&
+                legacy_result !=
+                    CG_CANONICAL_EVENT_PRESENTATION_UNINITIALIZED)) {
         increment_saturated(canonical_render_stats.event_audit_failures);
     }
 }
@@ -357,39 +403,75 @@ bool sample_canonical_entity_transform(
 
 void end_canonical_snapshot_render_frame()
 {
-    if (canonical_render_frame.mode == CANONICAL_SNAPSHOT_RENDER_LEGACY ||
+    const bool event_runtime_enabled =
+        cg_event_runtime_audit && cg_event_runtime_audit->integer != 0;
+    if ((canonical_render_frame.mode ==
+             CANONICAL_SNAPSHOT_RENDER_LEGACY &&
+         !event_runtime_enabled) ||
         cls.realtime - canonical_render_stats.last_debug_time_ms < 1000) {
         return;
     }
 
-    Com_LPrintf(
-        PRINT_ALL,
-        "cg_snapshot_timeline_render: epoch=%u mode=%u clock=%llu/%llu "
-        "pair=%llu/%llu align_fail=%llu pair_mode=%u pair_blocks=0x%x "
-        "samples=%llu fail=%llu invisible=%llu discontinuity=%llu "
-        "parity=%llu/%llu promoted=%llu events=%llu/%llu/%llu "
-        "max_error=%.4f/%.4f/%.4f\n",
-        canonical_render_stats.epoch, canonical_render_frame.mode,
-        static_cast<unsigned long long>(canonical_render_stats.clock_frames),
-        static_cast<unsigned long long>(canonical_render_stats.clock_failures),
-        static_cast<unsigned long long>(canonical_render_stats.pair_frames),
-        static_cast<unsigned long long>(canonical_render_stats.pair_failures),
-        static_cast<unsigned long long>(canonical_render_stats.alignment_failures),
-        canonical_render_stats.last_pair_mode,
-        canonical_render_stats.last_pair_blocks,
-        static_cast<unsigned long long>(canonical_render_stats.sample_attempts),
-        static_cast<unsigned long long>(canonical_render_stats.sample_failures),
-        static_cast<unsigned long long>(canonical_render_stats.sample_invisible),
-        static_cast<unsigned long long>(canonical_render_stats.sample_discontinuities),
-        static_cast<unsigned long long>(canonical_render_stats.parity_matches),
-        static_cast<unsigned long long>(canonical_render_stats.parity_mismatches),
-        static_cast<unsigned long long>(canonical_render_stats.promoted_transforms),
-        static_cast<unsigned long long>(canonical_render_stats.event_ready_records),
-        static_cast<unsigned long long>(canonical_render_stats.event_future_frames),
-        static_cast<unsigned long long>(canonical_render_stats.event_audit_failures),
-        canonical_render_stats.max_origin_error,
-        canonical_render_stats.max_old_origin_error,
-        canonical_render_stats.max_angle_error);
+    if (canonical_render_frame.mode !=
+        CANONICAL_SNAPSHOT_RENDER_LEGACY) {
+        Com_LPrintf(
+            PRINT_ALL,
+            "cg_snapshot_timeline_render: epoch=%u mode=%u clock=%llu/%llu "
+            "pair=%llu/%llu align_fail=%llu pair_mode=%u pair_blocks=0x%x "
+            "samples=%llu fail=%llu invisible=%llu discontinuity=%llu "
+            "parity=%llu/%llu promoted=%llu events=%llu/%llu/%llu "
+            "max_error=%.4f/%.4f/%.4f\n",
+            canonical_render_stats.epoch, canonical_render_frame.mode,
+            static_cast<unsigned long long>(canonical_render_stats.clock_frames),
+            static_cast<unsigned long long>(canonical_render_stats.clock_failures),
+            static_cast<unsigned long long>(canonical_render_stats.pair_frames),
+            static_cast<unsigned long long>(canonical_render_stats.pair_failures),
+            static_cast<unsigned long long>(canonical_render_stats.alignment_failures),
+            canonical_render_stats.last_pair_mode,
+            canonical_render_stats.last_pair_blocks,
+            static_cast<unsigned long long>(canonical_render_stats.sample_attempts),
+            static_cast<unsigned long long>(canonical_render_stats.sample_failures),
+            static_cast<unsigned long long>(canonical_render_stats.sample_invisible),
+            static_cast<unsigned long long>(canonical_render_stats.sample_discontinuities),
+            static_cast<unsigned long long>(canonical_render_stats.parity_matches),
+            static_cast<unsigned long long>(canonical_render_stats.parity_mismatches),
+            static_cast<unsigned long long>(canonical_render_stats.promoted_transforms),
+            static_cast<unsigned long long>(canonical_render_stats.event_ready_records),
+            static_cast<unsigned long long>(canonical_render_stats.event_future_frames),
+            static_cast<unsigned long long>(canonical_render_stats.event_audit_failures),
+            canonical_render_stats.max_origin_error,
+            canonical_render_stats.max_old_origin_error,
+            canonical_render_stats.max_angle_error);
+    }
+    if (event_runtime_enabled) {
+        cg_event_runtime_status_v1 status{};
+        if (CG_EventRuntimeGetStatus(&status)) {
+            Com_LPrintf(
+                PRINT_ALL,
+                "cg_event_runtime_audit: epochs=%u/%u/%u degraded=%u "
+                "body/ref/auth=%u/%u/%u joins=%llu/%llu/%llu "
+                "present=%llu/%llu/%llu/%llu correction=%llu/%llu "
+                "stalls=%llu/%llu/%llu future=%llu hash=%016llx\n",
+                status.legacy_epoch, status.authority_epoch,
+                status.snapshot_epoch, status.degraded,
+                status.legacy_body_count, status.reference_count,
+                status.authority_count,
+                static_cast<unsigned long long>(status.authority_ref_body_joins),
+                static_cast<unsigned long long>(status.legacy_ref_before_body_joins),
+                static_cast<unsigned long long>(status.legacy_body_before_ref_joins),
+                static_cast<unsigned long long>(status.predicted_presentations),
+                static_cast<unsigned long long>(status.authoritative_presentations),
+                static_cast<unsigned long long>(status.legacy_entity_presentations),
+                static_cast<unsigned long long>(status.legacy_action_presentations),
+                static_cast<unsigned long long>(status.prediction_corrections),
+                static_cast<unsigned long long>(status.prediction_late_corrections),
+                static_cast<unsigned long long>(status.authority_sequence_stalls),
+                static_cast<unsigned long long>(status.authority_reference_stalls),
+                static_cast<unsigned long long>(status.legacy_reference_stalls),
+                static_cast<unsigned long long>(status.future_time_stalls),
+                static_cast<unsigned long long>(status.presentation_chain_hash));
+        }
+    }
     canonical_render_stats.last_debug_time_ms = cls.realtime;
 }
 
@@ -403,6 +485,12 @@ void CG_CanonicalSnapshotRender_InitCvars(void)
         "cg_snapshot_timeline_render", "0", CVAR_NOARCHIVE);
     cg_snapshot_timeline_render_epsilon = Cvar_Get(
         "cg_snapshot_timeline_render_epsilon", "0.125", CVAR_NOARCHIVE);
+    cg_event_runtime_audit = Cvar_Get(
+        "cg_event_runtime_audit", "0", CVAR_NOARCHIVE);
+    if (cg_event_runtime_audit)
+        cg_event_runtime_audit->changed = event_runtime_audit_changed;
+    CG_EventRuntimeSetAuditEnabled(
+        cg_event_runtime_audit && cg_event_runtime_audit->integer != 0);
 }
 
 static constexpr float FLASHLIGHT_CLASSIC_DISTANCE = 256.0f;

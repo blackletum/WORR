@@ -15,9 +15,17 @@
         }                                                                   \
     } while (0)
 
-#define NATIVE_CAPABILITIES                                                 \
+#define NATIVE_CAPABILITIES WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK
+#define EVENT_NATIVE_CAPABILITIES WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK
+#define COMMAND_WITHOUT_EPOCH_CANCEL                                       \
     ((uint32_t)(WORR_NET_CAP_LEGACY_STAGE_MASK |                           \
                 WORR_NET_CAP_NATIVE_ENVELOPE_V1))
+#define EVENT_WITHOUT_EPOCH_CANCEL                                         \
+    ((uint32_t)(COMMAND_WITHOUT_EPOCH_CANCEL |                            \
+                WORR_NET_CAP_NATIVE_EVENT_STREAM_V1))
+#define CANCEL_WITHOUT_NATIVE_ENVELOPE                                     \
+    ((uint32_t)(WORR_NET_CAP_LEGACY_STAGE_MASK |                           \
+                WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1))
 #define UNKNOWN_CAPABILITY (UINT32_C(1) << 31)
 
 typedef struct readiness_fixture_s {
@@ -111,6 +119,18 @@ static void test_record_validation(void)
     CHECK(!memcmp(&record, &before, sizeof(record)));
     CHECK(!Worr_NativeReadinessRecordInitV1(
         &record, WORR_NATIVE_READINESS_RECORD_CHALLENGE, 7,
+        COMMAND_WITHOUT_EPOCH_CANCEL, UINT64_C(100)));
+    CHECK(!memcmp(&record, &before, sizeof(record)));
+    CHECK(!Worr_NativeReadinessRecordInitV1(
+        &record, WORR_NATIVE_READINESS_RECORD_CHALLENGE, 7,
+        EVENT_WITHOUT_EPOCH_CANCEL, UINT64_C(100)));
+    CHECK(!memcmp(&record, &before, sizeof(record)));
+    CHECK(!Worr_NativeReadinessRecordInitV1(
+        &record, WORR_NATIVE_READINESS_RECORD_CHALLENGE, 7,
+        CANCEL_WITHOUT_NATIVE_ENVELOPE, UINT64_C(100)));
+    CHECK(!memcmp(&record, &before, sizeof(record)));
+    CHECK(!Worr_NativeReadinessRecordInitV1(
+        &record, WORR_NATIVE_READINESS_RECORD_CHALLENGE, 7,
         NATIVE_CAPABILITIES | UNKNOWN_CAPABILITY, UINT64_C(100)));
     CHECK(!memcmp(&record, &before, sizeof(record)));
     CHECK(!Worr_NativeReadinessRecordInitV1(
@@ -141,6 +161,41 @@ static void test_capability_gating(void)
     CHECK(!memcmp(&state, &state_before, sizeof(state)));
     CHECK(!memcmp(&challenge, &challenge_before, sizeof(challenge)));
 
+    CHECK(Worr_NativeReadinessServerInitV1(
+              &state, 7, COMMAND_WITHOUT_EPOCH_CANCEL, UINT64_C(100),
+              UINT64_C(1000), UINT64_C(100), &challenge) ==
+          WORR_NATIVE_READINESS_INVALID_ARGUMENT);
+    CHECK(!memcmp(&state, &state_before, sizeof(state)));
+    CHECK(!memcmp(&challenge, &challenge_before, sizeof(challenge)));
+
+    CHECK(Worr_NativeReadinessServerInitV1(
+              &state, 7, EVENT_WITHOUT_EPOCH_CANCEL, UINT64_C(100),
+              UINT64_C(1000), UINT64_C(100), &challenge) ==
+          WORR_NATIVE_READINESS_INVALID_ARGUMENT);
+    CHECK(!memcmp(&state, &state_before, sizeof(state)));
+    CHECK(!memcmp(&challenge, &challenge_before, sizeof(challenge)));
+
+    CHECK(Worr_NativeReadinessServerInitV1(
+              &state, 7, CANCEL_WITHOUT_NATIVE_ENVELOPE, UINT64_C(100),
+              UINT64_C(1000), UINT64_C(100), &challenge) ==
+          WORR_NATIVE_READINESS_INVALID_ARGUMENT);
+    CHECK(!memcmp(&state, &state_before, sizeof(state)));
+    CHECK(!memcmp(&challenge, &challenge_before, sizeof(challenge)));
+
+    CHECK(Worr_NativeReadinessServerInitV1(
+              &state, 7,
+              WORR_NET_CAP_LEGACY_STAGE_MASK |
+                  WORR_NET_CAP_NATIVE_EVENT_STREAM_V1,
+              UINT64_C(100), UINT64_C(1000), UINT64_C(100), &challenge) ==
+          WORR_NATIVE_READINESS_INVALID_ARGUMENT);
+    CHECK(!memcmp(&state, &state_before, sizeof(state)));
+    CHECK(!memcmp(&challenge, &challenge_before, sizeof(challenge)));
+
+    CHECK(Worr_NativeReadinessClientInitV1(
+              &state, 7, COMMAND_WITHOUT_EPOCH_CANCEL, UINT64_C(1000),
+              UINT64_C(100)) == WORR_NATIVE_READINESS_INVALID_ARGUMENT);
+    CHECK(!memcmp(&state, &state_before, sizeof(state)));
+
     CHECK(Worr_NativeReadinessClientInitV1(
               &state, 7, NATIVE_CAPABILITIES | UNKNOWN_CAPABILITY,
               UINT64_C(1000), UINT64_C(100)) ==
@@ -158,11 +213,23 @@ static void test_capability_gating(void)
     CHECK(!memcmp(&fixture.server, &state_before, sizeof(state_before)));
     CHECK(!memcmp(&challenge, &challenge_before, sizeof(challenge)));
 
+    CHECK(Worr_NativeReadinessServerAdvanceEpochV1(
+              &fixture.server, 8, COMMAND_WITHOUT_EPOCH_CANCEL,
+              UINT64_C(200), UINT64_C(1040), UINT64_C(100), &challenge) ==
+          WORR_NATIVE_READINESS_INVALID_ARGUMENT);
+    CHECK(!memcmp(&fixture.server, &state_before, sizeof(state_before)));
+    CHECK(!memcmp(&challenge, &challenge_before, sizeof(challenge)));
+
     state_before = fixture.client;
     CHECK(Worr_NativeReadinessClientAdvanceEpochV1(
               &fixture.client, 8,
               NATIVE_CAPABILITIES | UNKNOWN_CAPABILITY, UINT64_C(1040),
               UINT64_C(100)) == WORR_NATIVE_READINESS_INVALID_ARGUMENT);
+    CHECK(!memcmp(&fixture.client, &state_before, sizeof(state_before)));
+    CHECK(Worr_NativeReadinessClientAdvanceEpochV1(
+              &fixture.client, 8, COMMAND_WITHOUT_EPOCH_CANCEL,
+              UINT64_C(1040), UINT64_C(100)) ==
+          WORR_NATIVE_READINESS_INVALID_ARGUMENT);
     CHECK(!memcmp(&fixture.client, &state_before, sizeof(state_before)));
 }
 
@@ -178,6 +245,9 @@ static void test_handshake_and_gates(void)
     CHECK(fixture.client.phase ==
           WORR_NATIVE_READINESS_PHASE_CLIENT_WAIT_CHALLENGE);
     CHECK(fixture.server.telemetry.challenges_emitted == 1);
+    CHECK(fixture.challenge.negotiated_capabilities == NATIVE_CAPABILITIES);
+    CHECK((fixture.challenge.negotiated_capabilities &
+           WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1) != 0);
     CHECK(!Worr_NativeReadinessCanReceiveNativeV1(
         &fixture.server, UINT64_C(1000)));
     CHECK(!Worr_NativeReadinessCanTransmitNativeV1(
@@ -202,6 +272,10 @@ static void test_handshake_and_gates(void)
     CHECK(!Worr_NativeReadinessCanTransmitNativeV1(
         &fixture.client, UINT64_C(1010)));
     CHECK(Worr_NativeReadinessRecordValidateV1(&fixture.client_ready));
+    CHECK(fixture.client_ready.negotiated_capabilities ==
+          NATIVE_CAPABILITIES);
+    CHECK((fixture.client_ready.negotiated_capabilities &
+           WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1) != 0);
 
     CHECK(Worr_NativeReadinessServerObserveClientReadyV1(
               &fixture.server, &fixture.client_ready, UINT64_C(1020),
@@ -215,6 +289,8 @@ static void test_handshake_and_gates(void)
     CHECK(Worr_NativeReadinessCanTransmitNativeV1(
         &fixture.server, UINT64_C(1020)));
     CHECK(Worr_NativeReadinessRecordValidateV1(&fixture.server_active));
+    CHECK(fixture.server_active.negotiated_capabilities ==
+          NATIVE_CAPABILITIES);
 
     CHECK(Worr_NativeReadinessClientObserveServerActiveV1(
               &fixture.client, &fixture.server_active, UINT64_C(1030)) ==
@@ -241,6 +317,9 @@ static void test_exact_duplicates(void)
               &fixture.client, &fixture.challenge, UINT64_C(1011),
               &repeated) == WORR_NATIVE_READINESS_EXACT_DUPLICATE);
     CHECK(!memcmp(&repeated, &fixture.client_ready, sizeof(repeated)));
+    CHECK(repeated.negotiated_capabilities == NATIVE_CAPABILITIES);
+    CHECK((repeated.negotiated_capabilities &
+           WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1) != 0);
     CHECK(fixture.client.phase ==
           WORR_NATIVE_READINESS_PHASE_CLIENT_WAIT_SERVER_ACTIVE);
     CHECK(fixture.client.telemetry.exact_duplicates == 1);
@@ -274,6 +353,207 @@ static void test_exact_duplicates(void)
     CHECK(!memcmp(&repeated, &fixture.client_ready, sizeof(repeated)));
     CHECK(fixture.client.phase == WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE);
     CHECK(Worr_NativeReadinessStateValidateV1(&fixture.client));
+}
+
+static void check_failed(worr_native_readiness_state_v1 *state);
+
+static void test_event_stream_active_confirmation_barrier(void)
+{
+    worr_native_readiness_state_v1 server;
+    worr_native_readiness_state_v1 client;
+    worr_native_readiness_state_v1 before;
+    worr_native_readiness_record_v1 challenge;
+    worr_native_readiness_record_v1 client_ready;
+    worr_native_readiness_record_v1 server_active;
+    worr_native_readiness_record_v1 repeated_active;
+    worr_native_readiness_record_v1 client_active_confirm;
+    worr_native_readiness_record_v1 repeated_confirm;
+    worr_native_readiness_record_v1 output;
+    worr_native_readiness_record_v1 output_before;
+
+    CHECK(Worr_NativeReadinessServerInitV1(
+              &server, 17, EVENT_NATIVE_CAPABILITIES, UINT64_C(900),
+              UINT64_C(2000), UINT64_C(100), &challenge) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessClientInitV1(
+              &client, 17, EVENT_NATIVE_CAPABILITIES, UINT64_C(2000),
+              UINT64_C(100)) == WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessClientObserveChallengeV1(
+              &client, &challenge, UINT64_C(2010), &client_ready) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessServerObserveClientReadyV1(
+              &server, &client_ready, UINT64_C(2020), &server_active) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(server.phase ==
+          WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM);
+    CHECK(server.phase_start_tick == UINT64_C(2020));
+    CHECK(server.deadline_tick == UINT64_C(2120));
+    CHECK(Worr_NativeReadinessStateValidateV1(&server));
+    /* RX must open before the legacy parser observes CLIENT_ACTIVE_CONFIRM:
+     * the client application hook may append DATA to that same packet. */
+    CHECK(Worr_NativeReadinessCanReceiveNativeV1(
+        &server, UINT64_C(2020)));
+    CHECK(!Worr_NativeReadinessCanTransmitNativeV1(
+        &server, UINT64_C(2020)));
+
+    /* The legacy three-record API cannot silently activate an event binding. */
+    before = client;
+    CHECK(Worr_NativeReadinessClientObserveServerActiveV1(
+              &client, &server_active, UINT64_C(2030)) ==
+          WORR_NATIVE_READINESS_INVALID_STATE);
+    CHECK(!memcmp(&client, &before, sizeof(before)));
+
+    CHECK(Worr_NativeReadinessClientObserveServerActiveWithConfirmV1(
+              &client, &server_active, UINT64_C(2030),
+              &client_active_confirm) == WORR_NATIVE_READINESS_OK);
+    CHECK(client.phase == WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE);
+    CHECK(client_active_confirm.record_kind ==
+          WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM);
+    CHECK(client_active_confirm.transport_epoch == 17);
+    CHECK(client_active_confirm.negotiated_capabilities ==
+          EVENT_NATIVE_CAPABILITIES);
+    CHECK(client_active_confirm.readiness_nonce == UINT64_C(900));
+    CHECK(Worr_NativeReadinessRecordValidateV1(&client_active_confirm));
+    CHECK(Worr_NativeReadinessCanReceiveNativeV1(
+        &client, UINT64_C(2030)));
+    CHECK(Worr_NativeReadinessCanTransmitNativeV1(
+        &client, UINT64_C(2030)));
+
+    /* Neither client activation nor a repeated CLIENT_READY opens server
+     * native gates; a lost SERVER_ACTIVE can be regenerated exactly. */
+    CHECK(Worr_NativeReadinessCanReceiveNativeV1(
+        &server, UINT64_C(2030)));
+    CHECK(!Worr_NativeReadinessCanTransmitNativeV1(
+        &server, UINT64_C(2030)));
+    CHECK(Worr_NativeReadinessServerObserveClientReadyV1(
+              &server, &client_ready, UINT64_C(2031),
+              &repeated_active) == WORR_NATIVE_READINESS_EXACT_DUPLICATE);
+    CHECK(!memcmp(&server_active, &repeated_active,
+                  sizeof(server_active)));
+    CHECK(server.phase ==
+          WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM);
+    CHECK(server.deadline_tick == UINT64_C(2120));
+
+    CHECK(Worr_NativeReadinessClientObserveServerActiveWithConfirmV1(
+              &client, &repeated_active, UINT64_C(2032),
+              &repeated_confirm) ==
+          WORR_NATIVE_READINESS_EXACT_DUPLICATE);
+    CHECK(!memcmp(&client_active_confirm, &repeated_confirm,
+                  sizeof(client_active_confirm)));
+    CHECK(Worr_NativeReadinessServerObserveClientActiveConfirmV1(
+              &server, &client_active_confirm, UINT64_C(2040)) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(server.phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE);
+    CHECK(server.deadline_tick == 0);
+    CHECK(Worr_NativeReadinessCanReceiveNativeV1(
+        &server, UINT64_C(2040)));
+    CHECK(Worr_NativeReadinessCanTransmitNativeV1(
+        &server, UINT64_C(2040)));
+    CHECK(Worr_NativeReadinessServerObserveClientActiveConfirmV1(
+              &server, &repeated_confirm, UINT64_C(2041)) ==
+          WORR_NATIVE_READINESS_EXACT_DUPLICATE);
+
+    /* CLIENT_ACTIVE_CONFIRM is not valid for the command-only 0x53 binding,
+     * so merely extending the enum cannot broaden command-only pilots. */
+    fill_bytes(&output, sizeof(output), 0x4a);
+    output_before = output;
+    CHECK(!Worr_NativeReadinessRecordInitV1(
+        &output, WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM,
+        17, NATIVE_CAPABILITIES, UINT64_C(900)));
+    CHECK(!memcmp(&output, &output_before, sizeof(output)));
+}
+
+static void test_event_stream_active_confirmation_fail_closed(void)
+{
+    worr_native_readiness_state_v1 server;
+    worr_native_readiness_state_v1 client;
+    worr_native_readiness_state_v1 before;
+    worr_native_readiness_record_v1 challenge;
+    worr_native_readiness_record_v1 client_ready;
+    worr_native_readiness_record_v1 server_active;
+    worr_native_readiness_record_v1 client_active_confirm;
+    worr_native_readiness_record_v1 bad_confirm;
+    worr_native_readiness_record_v1 output;
+    worr_native_readiness_record_v1 output_before;
+
+    CHECK(Worr_NativeReadinessServerInitV1(
+              &server, 18, EVENT_NATIVE_CAPABILITIES, UINT64_C(901),
+              UINT64_C(3000), UINT64_C(100), &challenge) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessClientInitV1(
+              &client, 18, EVENT_NATIVE_CAPABILITIES, UINT64_C(3000),
+              UINT64_C(100)) == WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessClientObserveChallengeV1(
+              &client, &challenge, UINT64_C(3010), &client_ready) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessServerObserveClientReadyV1(
+              &server, &client_ready, UINT64_C(3020), &server_active) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessClientObserveServerActiveWithConfirmV1(
+              &client, &server_active, UINT64_C(3030),
+              &client_active_confirm) == WORR_NATIVE_READINESS_OK);
+
+    bad_confirm = client_active_confirm;
+    CHECK(Worr_NativeReadinessRecordInitV1(
+        &bad_confirm,
+        WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM, 19,
+        EVENT_NATIVE_CAPABILITIES, UINT64_C(901)));
+    CHECK(Worr_NativeReadinessServerObserveClientActiveConfirmV1(
+              &server, &bad_confirm, UINT64_C(3040)) ==
+          WORR_NATIVE_READINESS_BINDING_MISMATCH);
+    CHECK(server.telemetry.binding_mismatches == 1);
+    check_failed(&server);
+
+    /* A missing fourth record remains subject to the reset phase deadline. */
+    CHECK(Worr_NativeReadinessServerInitV1(
+              &server, 18, EVENT_NATIVE_CAPABILITIES, UINT64_C(902),
+              UINT64_C(4000), UINT64_C(100), &challenge) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessClientInitV1(
+              &client, 18, EVENT_NATIVE_CAPABILITIES, UINT64_C(4000),
+              UINT64_C(100)) == WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessClientObserveChallengeV1(
+              &client, &challenge, UINT64_C(4010), &client_ready) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessServerObserveClientReadyV1(
+              &server, &client_ready, UINT64_C(4020), &server_active) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessCheckDeadlineV1(
+              &server, UINT64_C(4120)) ==
+          WORR_NATIVE_READINESS_DEADLINE_EXPIRED);
+    check_failed(&server);
+
+    /* Output aliasing and a legacy binding passed to the event-only entry
+     * point are rejected without mutating state or output. */
+    CHECK(Worr_NativeReadinessClientInitV1(
+              &client, 20, EVENT_NATIVE_CAPABILITIES, UINT64_C(5000),
+              UINT64_C(100)) == WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessRecordInitV1(
+        &challenge, WORR_NATIVE_READINESS_RECORD_CHALLENGE, 20,
+        EVENT_NATIVE_CAPABILITIES, UINT64_C(903)));
+    CHECK(Worr_NativeReadinessClientObserveChallengeV1(
+              &client, &challenge, UINT64_C(5010), &client_ready) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessRecordInitV1(
+        &server_active, WORR_NATIVE_READINESS_RECORD_SERVER_ACTIVE, 20,
+        EVENT_NATIVE_CAPABILITIES, UINT64_C(903)));
+    before = client;
+    CHECK(Worr_NativeReadinessClientObserveServerActiveWithConfirmV1(
+              &client, &server_active, UINT64_C(5020),
+              &server_active) == WORR_NATIVE_READINESS_INVALID_ARGUMENT);
+    CHECK(!memcmp(&client, &before, sizeof(before)));
+
+    CHECK(Worr_NativeReadinessClientInitV1(
+              &client, 20, NATIVE_CAPABILITIES, UINT64_C(5000),
+              UINT64_C(100)) == WORR_NATIVE_READINESS_OK);
+    fill_bytes(&output, sizeof(output), 0x73);
+    output_before = output;
+    before = client;
+    CHECK(Worr_NativeReadinessClientObserveServerActiveWithConfirmV1(
+              &client, &server_active, UINT64_C(5020), &output) ==
+          WORR_NATIVE_READINESS_INVALID_STATE);
+    CHECK(!memcmp(&client, &before, sizeof(before)));
+    CHECK(!memcmp(&output, &output_before, sizeof(output)));
 }
 
 static void check_failed(worr_native_readiness_state_v1 *state)
@@ -360,7 +640,7 @@ static void test_binding_failures(void)
     expect_server_binding_failure(&record);
     CHECK(Worr_NativeReadinessRecordInitV1(
         &record, WORR_NATIVE_READINESS_RECORD_CLIENT_READY, 7,
-        WORR_NET_CAP_NATIVE_ENVELOPE_V1, UINT64_C(100)));
+        EVENT_NATIVE_CAPABILITIES, UINT64_C(100)));
     expect_server_binding_failure(&record);
     CHECK(Worr_NativeReadinessRecordInitV1(
         &record, WORR_NATIVE_READINESS_RECORD_CLIENT_READY, 7,
@@ -810,6 +1090,8 @@ int main(void)
     test_capability_gating();
     test_handshake_and_gates();
     test_exact_duplicates();
+    test_event_stream_active_confirmation_barrier();
+    test_event_stream_active_confirmation_fail_closed();
     test_invalid_order_and_sticky_failure();
     test_binding_failures();
     test_fresh_reconnect_epoch_binding();

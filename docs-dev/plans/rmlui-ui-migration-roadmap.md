@@ -7,7 +7,7 @@ RmlUi.
 
 Primary tasks: `FR-09-T01`, `FR-09-T02`, `FR-09-T03`, `FR-09-T04`,
 `FR-09-T05`, `FR-09-T06`, `FR-09-T07`, `FR-09-T08`, `FR-09-T09`,
-`FR-09-T10`, `FR-03-T08`, `DV-03-T07`, `DV-04-T02`, `DV-07-T02`, and
+`FR-09-T10`, `FR-09-T11`, `FR-09-T12`, `FR-03-T08`, `DV-03-T07`, `DV-04-T02`, `DV-07-T02`, and
 `DV-07-T04`.
 
 Supporting linked tasks: `DV-06-T01`, `FR-07-T01`, and `FR-07-T02`.
@@ -334,6 +334,22 @@ guarded recovery/reference archive, satisfying Gate G4 without keeping a
 second normal presentation runtime. Detailed closeout is recorded in
 `docs-dev/rmlui-runtime-ux-design-parity-2026-07-14.md` and
 `docs-dev/rmlui-native-vulkan-rtx-renderer-parity-2026-07-14.md`.
+Round 80 closes the user-directed presentation pass: a fixed two-choice main
+hero replaces duplicated chrome, every session/live-match child route uses a
+partial-screen frame over the visible arena, and the slowtime focus strength
+is consumed before sharp UI composition on all three native renderer families.
+The current OpenGL evidence gallery contains fresh captures for all 58 routes;
+live-world OpenGL, Vulkan, and RTX/vkpt captures validate the focus ordering.
+Detailed implementation evidence is recorded in
+`docs-dev/rmlui-in-world-session-frame-main-menu-polish-2026-07-14.md`.
+Round 81 revises the multiplayer join hub into an availability-stable match
+control surface. The five primary tabs now remain in fixed positions with
+explicit selected, focused, and disabled states; active votes replace Overview
+in place while participation remains available; the normal WORR wordmark,
+compact phase signal, local clock/date, and hover/focus help remove redundant
+chrome and instructions. The transition reuses the mounted document when a
+vote begins, preventing a route-reload flash. Detailed evidence is recorded in
+`docs-dev/rmlui-multiplayer-join-hub-navigation-revision-2026-07-14.md`.
 
 Strategic parent:
 `docs-dev/proposals/swot-feature-development-roadmap-2026-02-27.md`.
@@ -360,13 +376,15 @@ Status legend:
 | `FR-09-T01` Runtime ownership, inventory, asset layout, and cutover policy | S0, Agent 1 | `Done`: the client-owned RmlUi runtime, route namespace, cgame/sgame provider boundary, asset layout, guarded fallback, and all 58 route owners are accepted. | Contract freeze -> runtime ownership -> 58-route parity -> documented fallback archive -> Gate G0/G4 | Accepted; see the 2026-07-14 runtime UX/design parity record. |
 | `FR-09-T02` RmlUi dependency, Meson/build wiring, and staging | Agent 1 | `Done`: RmlUi 6.2 resolves in the supported renderer targets, runtime DLL/assets package successfully, and the final refresh validated `.install/`. | Dependency audit -> build integration -> package/install refresh -> Gate G1 | Accepted for the menu runtime; unrelated networking symbols still block the aggregate engine link. |
 | `FR-09-T03` Runtime bootstrap and native renderer integration | Agents 1 and 2 | `Done`: all 58 routes render through native OpenGL, Vulkan, and RTX/vkpt; native Vulkan/RTX Player Setup previews and RTX texture/color parity are accepted. | Runtime bootstrap -> native renderer bridges -> 58x3 route sweeps -> Gate G1 | Accepted; see `docs-dev/rmlui-native-vulkan-rtx-renderer-parity-2026-07-14.md`. |
-| `FR-09-T04` Fonts, localization, theme, cursor/audio, and accessibility | Agent 2, Agent 4 consumer | `Done`: rerelease font services, 1,123 localization hooks, responsive theme, cursor/audio, high-contrast, large-text, reduced-motion, keyboard, and gamepad services are live. | Shared UX services -> route consumption -> design/a11y validation -> Gate G2/G4 | Accepted; 14/14 runtime UX services pass. |
+| `FR-09-T04` Fonts, localization, theme, cursor/audio, and accessibility | Agent 2, Agent 4 consumer | `Done`: rerelease font services, 1,123 localization hooks, responsive theme, cursor/audio, high-contrast, large-text, reduced-motion, keyboard, and gamepad services are live. | Shared UX services -> route consumption -> design/a11y validation -> Gate G2/G4 | Accepted; 15/15 runtime UX services pass. |
 | `FR-09-T05` Reusable data-model and controller bridges | Agent 3 | `Done`: typed cvar, command, condition, event, list/table, save/load, keybind, browser, preview, and live session/provider bridges cover all 58 routes. | Shared contracts -> live providers -> route-wide functional validation -> Gate G2 | Accepted by the route contract and provider regression suite. |
 | `FR-09-T06` Shell/settings/single-player menu translation | Agent 4 | `Done`: all Wave A and owned Wave B routes use RmlUi with persistence, responsive layout, localization, and Escape/Back parity. | Document translation -> live bindings -> renderer/design parity -> Gate G3 | Accepted in all three renderer matrices. |
 | `FR-09-T07` Browser, player-config, save/load, keybind, and utility surfaces | Agents 3, 4, and 5 | `Done`: servers, demos, Player Setup, lists, keybinds, Address Book, weapons, and save/load use live providers and pass visual/functional parity checks. | Rich components -> live providers -> native preview -> renderer/design parity -> Gate G3 | Accepted, including native Vulkan and RTX Player Setup previews. |
 | `FR-09-T08` Multiplayer/session/match menu translation | Agent 5 | `Done`: all 25 Wave C routes and the multiplayer hub use live sgame-backed state/actions with safe confirmations and complete renderer/design parity. | Session providers -> connected actions -> 58-route matrix -> Gate G3 | Accepted; existing player workflows remain documented under `docs-user/`. |
 | `FR-09-T09` Migration-specific validation | Agent 5 plus all agents | `Done`: 58 routes are parity-ready with all nine evidence categories complete, 58x3 live renderer sweeps pass, and the complete UI smoke suite is green. | Static inventories -> runtime services -> contact-sheet audit -> parity gate -> Gate G4 | Accepted; durable evidence is recorded in the 2026-07-14 parity documents. |
 | `FR-09-T10` Legacy JSON removal and final docs/staging cleanup | Agent 5 plus all agents | `Done`: the cutover gate is open, final docs/staging are current, and legacy JSON/menu sources are intentionally archived as guarded recovery/reference material rather than a normal runtime. | Parity gate -> archive decision -> docs/install refresh -> Gate G4 | Accepted under Gate G4's documented-archive alternative; physical deletion remains optional cleanup. |
+| `FR-09-T11` Main hero and in-world session presentation polish | UI/renderer integration | `Done`: the main hero is fixed and decluttered; session routes and live-match children use partial frames over the arena; OpenGL, Vulkan, and RTX/vkpt apply native pre-UI focus; 58 current route captures pass and were reviewed. | Design override -> session propagation -> native focus -> full screenshot gallery | Accepted; see the 2026-07-14 in-world session-frame implementation record. |
+| `FR-09-T12` Multiplayer join-hub navigation and active-vote revision | UI/session integration | `Done`: Join and DM Join use the standard wordmark, fixed five-tab availability model, embedded active-vote decision panel, contextual help, local clock/date, and compact live phase signal without disturbing participation controls. | Hub information architecture -> server vote contract -> runtime transition -> focused/live visual evidence | Accepted; see the 2026-07-14 multiplayer join-hub revision record. |
 | `FR-03-T08` Complete engine-side/cgame-side UI ownership split | S0, Agents 1 and 3 | `Done`: presentation is client-owned RmlUi while cgame/sgame publish narrow data and command contracts; all 58 routes are metadata-synchronized. | Ownership audit -> provider boundary -> parity acceptance | Accepted for the menu runtime. |
 | `DV-03-T07` UI automation harness | Agent 5 | `Done`: static inventories, provider checks, runtime UX checks, installed route sweeps, input evidence, screenshots, and renderer matrices cover every registered menu. | Harness foundation -> route/renderer matrices -> parity gate | Accepted; the complete `tools/ui_smoke` suite is the regression gate. |
 | `DV-04-T02` Reduce mixed ownership and refactor risk | Agents 1 and 3 | `Done`: client presentation and cgame/sgame provider responsibilities are explicit, with manifest/metadata drift checks protecting the boundary. | Ownership contract -> live-provider boundary -> metadata sync | Accepted for menu ownership. |

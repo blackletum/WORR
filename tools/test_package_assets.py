@@ -74,6 +74,32 @@ def write_rmlui_fixture(assets_dir: pathlib.Path) -> list[str]:
     return members
 
 
+def write_renderer_parity_fixture(assets_dir: pathlib.Path) -> list[str]:
+    members = [
+        "renderer_parity/fixture.cfg",
+        "renderer_parity/fixture/fact2.ent",
+        "renderer_parity/fixture_manifest.json",
+        "maps/worr_fr01_bmodel_first_frame.bsp",
+        "maps/worr_fr01_bmodel_instances.bsp",
+        "maps/worr_fr01_beam_fog.bsp",
+        "maps/worr_fr01_global_fog.bsp",
+        "maps/worr_fr01_flare_fog.bsp",
+        "maps/worr_fr01_glowmap.bsp",
+        "maps/worr_fr01_model_glowmap.bsp",
+        "maps/worr_fr01_height_fog.bsp",
+        "maps/worr_fr01_sprite_fog.bsp",
+        "maps/worr_fr01_transparent_ordering.bsp",
+        "maps/worr_fr01_transparent_fog.bsp",
+        "maps/worr_fr01_warp_flow.bsp",
+        "maps/worr_fr10_rewind_mover.bsp",
+        "textures/parity/fr01_bm_bg.tga",
+        "textures/parity/fr01_bm_box.tga",
+    ]
+    for member in members:
+        write_text_asset(assets_dir / path_from_member(member), f"// {member}\n")
+    return members
+
+
 def sha256_file(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -149,6 +175,43 @@ class PackageAssetsTest(unittest.TestCase):
                 archive_members = set(archive.namelist())
 
             for member in rmlui_members:
+                source_path = assets_dir / path_from_member(member)
+                loose_path = install_dir / "basew" / path_from_member(member)
+                self.assertIn(member, archive_members)
+                self.assertTrue(loose_path.is_file(), member)
+                self.assertEqual(source_path.read_bytes(), loose_path.read_bytes())
+
+    def test_renderer_parity_assets_are_mirrored_for_no_zlib_runtimes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            assets_dir = root / "assets"
+            install_dir = root / "install"
+            write_botfile_fixture(assets_dir)
+            members = write_renderer_parity_fixture(assets_dir)
+
+            result = self.run_package_assets(assets_dir, install_dir)
+
+            self.assertIn(
+                "Mirrored loose asset paths: botfiles, renderer_parity, "
+                "maps/worr_fr01_bmodel_first_frame.bsp, "
+                "maps/worr_fr01_bmodel_instances.bsp, "
+                "maps/worr_fr01_beam_fog.bsp, "
+                "maps/worr_fr01_global_fog.bsp, "
+                "maps/worr_fr01_flare_fog.bsp, "
+                "maps/worr_fr01_glowmap.bsp, "
+                "maps/worr_fr01_model_glowmap.bsp, "
+                "maps/worr_fr01_height_fog.bsp, "
+                "maps/worr_fr01_sprite_fog.bsp, "
+                "maps/worr_fr01_transparent_ordering.bsp, "
+                "maps/worr_fr01_transparent_fog.bsp, "
+                "maps/worr_fr01_warp_flow.bsp, maps/worr_fr10_rewind_mover.bsp, "
+                "textures/parity",
+                result.stdout,
+            )
+            with zipfile.ZipFile(install_dir / "basew" / "pak0.pkz") as archive:
+                archive_members = set(archive.namelist())
+
+            for member in members:
                 source_path = assets_dir / path_from_member(member)
                 loose_path = install_dir / "basew" / path_from_member(member)
                 self.assertIn(member, archive_members)

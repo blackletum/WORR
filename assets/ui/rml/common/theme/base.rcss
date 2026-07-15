@@ -353,6 +353,45 @@ li
 }
 
 /*
+ * Any standard page opened from a live multiplayer session inherits this
+ * compact in-world shell. The document class is supplied by the runtime from
+ * ui_dm_menu_active, so Settings and other child routes do not flash back to
+ * the opaque front-end presentation.
+ */
+body.ui-session-overlay
+{
+	background-color: #05030258;
+}
+
+body.ui-session-overlay .screen
+{
+	top: 32px;
+	right: 40px;
+	bottom: 32px;
+	left: 40px;
+	padding: 12px;
+	background-color: #100d0be8;
+	border-width: 1px;
+	border-color: #765538;
+	border-left-width: 4px;
+	border-left-color: #ed842e;
+	border-radius: 4px;
+	decorator: ninepatch(popup, popup-inner) border-box;
+}
+
+body.ui-session-overlay .popup-screen
+{
+	top: 0px;
+	right: 0px;
+	bottom: 0px;
+	left: 0px;
+	padding: 18px;
+	background-color: #080706d8;
+	border-width: 0px;
+	decorator: none;
+}
+
+/*
  * The short-canvas (max-height: 640px) fallback lives in accessibility.rcss:
  * that sheet is imported last, so the media rules actually beat the
  * unconditional family styles.

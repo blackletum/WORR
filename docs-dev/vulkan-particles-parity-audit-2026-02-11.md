@@ -1,5 +1,11 @@
 # Vulkan Particles Fix + GL Parity Audit (2026-02-11)
 
+> Historical audit: the feature-status and priority sections below are
+> superseded by the current code-backed matrix in
+> `docs-dev/renderer/vulkan-opengl-parity-checklist-2026-07-14.md`. Keep this
+> document for the original particle diagnosis and provenance; do not use its
+> `PARTIAL`/`MISSING` labels as current renderer status.
+
 ## Scope
 - Fix missing projectile-trail particles in native Vulkan renderer (`worr_vulkan_x86_64.dll`).
 - Audit parity gaps against OpenGL renderer and list concrete implementation work.
@@ -73,7 +79,9 @@ Legend:
   - VK: `PARTIAL` (interpolation path exists but still needs visual parity pass)
 - Inline BSP model (bmodel) movement/state correctness:
   - GL: `OK`
-  - VK: `PARTIAL` (movement updates improved, initial-state artifacts still reported)
+  - VK: `OK` (inline faces are excluded from the static world mesh and the
+    generated transformed first-frame gate is pixel-identical to GL; see
+    `FR-01-T06`)
 - View weapon depth-hack layering:
   - GL: `OK`
   - VK: `PARTIAL` (implemented depthhack pass; requires final visual parity checks)
@@ -128,7 +136,8 @@ P0 (visual correctness blockers):
 1. Finish MD2/MD5 parity fix pass (pose/interpolation/skin correctness).
 2. Resolve remaining particle family gaps (projectile trail variants, muzzle flashes, additive modes).
 3. Fix outstanding sky artifact parity and validate all six faces/UV seams.
-4. Fix bmodel initial-state stale world artifact at first render frame.
+4. Complete (`FR-01-T06`): fix bmodel initial-state stale world artifact at
+   first render frame.
 
 P1 (gameplay-visible fidelity):
 1. Implement Vulkan equivalents for `gl_partstyle` and `gl_beamstyle`.

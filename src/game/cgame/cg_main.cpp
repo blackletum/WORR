@@ -4,6 +4,7 @@
 #include "cg_local.h"
 #include "cg_wheel.h"
 #include "cg_event_shadow.hpp"
+#include "cg_event_runtime.hpp"
 #include "cg_canonical_snapshot_timeline.hpp"
 #include "client/cgame_entity_ext.h"
 #include "client/cgame_ui_ext.h"
@@ -43,6 +44,8 @@ static void *CG_GetExtension(const char *name)
 		return (void *)CG_GetEventShadowAPI();
 	if (!strcmp(name, WORR_CGAME_EVENT_RANGE_EXPORT_V2))
 		return (void *)CG_GetEventRangeAPIv2();
+	if (!strcmp(name, WORR_CGAME_EVENT_RUNTIME_EXPORT_V1))
+		return (void *)CG_GetEventRuntimeAPI();
 	if (!strcmp(name, WORR_CGAME_SNAPSHOT_TIMELINE_EXPORT_V1))
 		return (void *)CG_GetCanonicalSnapshotTimelineAPI();
 

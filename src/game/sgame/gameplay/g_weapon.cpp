@@ -1688,6 +1688,10 @@ bool fire_thunderbolt(gentity_t *self, const Vector3 &start,
              DamageFlags::Energy | DamageFlags::StatOnce,
              ModID::Thunderbolt_Discharge);
     }
+    // This is a no-op outside the console-only acceptance fixture. It records
+    // that the actual production underwater branch ran after its authority
+    // damage, without changing the branch's combat behavior.
+    LagCompensation_ObserveThunderboltUnderwaterDischarge(self);
 
     gi.WriteByte(svc_temp_entity);
     gi.WriteByte(TE_ELECTRIC_SPARKS);

@@ -2167,11 +2167,18 @@ double GetRealTimeSeconds() {
 Vote_Menu_Active
 =============
 */
-bool Vote_Menu_Active(gentity_t *ent) {
+bool Vote_Session_Active() {
   if (level.vote.time <= 0_sec)
     return false;
 
-  if (!level.vote.client)
+  if (!level.vote.client || !level.vote.cmd)
+    return false;
+
+  return true;
+}
+
+bool Vote_Menu_Active(gentity_t *ent) {
+  if (!ent || !ent->client || !Vote_Session_Active())
     return false;
 
   if (ent->client->pers.voted)

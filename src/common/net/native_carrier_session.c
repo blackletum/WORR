@@ -747,8 +747,29 @@ static void dispatch_clear_pending(
            sizeof(dispatch->pending_fragmenter));
 }
 
-worr_native_carrier_session_result_v1
-Worr_NativeCarrierSessionDispatchConfirmPacketV1(
+static bool confirm_entry_shape_valid(
+    const worr_native_carrier_view_v1 *view,
+    bool allow_ack_tail)
+{
+    uint16_t index;
+
+    if (view->entry_count == 0 ||
+        view->entries[0].entry_type !=
+            WORR_NATIVE_CARRIER_ENTRY_DATA_V1) {
+        return false;
+    }
+    if (!allow_ack_tail)
+        return view->entry_count == 1;
+    for (index = 1; index < view->entry_count; ++index) {
+        if (view->entries[index].entry_type !=
+            WORR_NATIVE_CARRIER_ENTRY_ACK_V1) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static worr_native_carrier_session_result_v1 dispatch_confirm_packet(
     worr_native_carrier_tx_gate_v1 *gate,
     worr_native_tx_session_v1 *session,
     worr_native_tx_slot_v1 *slots,
@@ -756,7 +777,8 @@ Worr_NativeCarrierSessionDispatchConfirmPacketV1(
     worr_native_carrier_dispatch_v1 *dispatch,
     uint64_t handoff_tick,
     const void *packet,
-    size_t packet_bytes)
+    size_t packet_bytes,
+    bool allow_ack_tail)
 {
     const size_t slots_bytes = (size_t)slot_capacity * sizeof(*slots);
     worr_native_carrier_tx_gate_v1 staged_gate;
@@ -809,8 +831,7 @@ Worr_NativeCarrierSessionDispatchConfirmPacketV1(
     if (Worr_NativeCarrierDecodeV1(packet, packet_bytes, &view) !=
             WORR_NATIVE_CARRIER_OK ||
         view.transport_epoch != dispatch->transport_epoch ||
-        view.entry_count != 1 ||
-        view.entries[0].entry_type != WORR_NATIVE_CARRIER_ENTRY_DATA_V1 ||
+        !confirm_entry_shape_valid(&view, allow_ack_tail) ||
         Worr_NativeEnvelopeDecodeV1(
             (const uint8_t *)packet + view.entries[0].data_offset,
             view.entries[0].data_bytes, &info) !=
@@ -891,6 +912,38 @@ Worr_NativeCarrierSessionDispatchConfirmPacketV1(
     *gate = staged_gate;
     *dispatch = staged_dispatch;
     return WORR_NATIVE_CARRIER_SESSION_DISPATCH_COMMITTED;
+}
+
+worr_native_carrier_session_result_v1
+Worr_NativeCarrierSessionDispatchConfirmPacketV1(
+    worr_native_carrier_tx_gate_v1 *gate,
+    worr_native_tx_session_v1 *session,
+    worr_native_tx_slot_v1 *slots,
+    uint16_t slot_capacity,
+    worr_native_carrier_dispatch_v1 *dispatch,
+    uint64_t handoff_tick,
+    const void *packet,
+    size_t packet_bytes)
+{
+    return dispatch_confirm_packet(
+        gate, session, slots, slot_capacity, dispatch, handoff_tick,
+        packet, packet_bytes, false);
+}
+
+worr_native_carrier_session_result_v1
+Worr_NativeCarrierSessionDispatchConfirmMixedPacketV1(
+    worr_native_carrier_tx_gate_v1 *gate,
+    worr_native_tx_session_v1 *session,
+    worr_native_tx_slot_v1 *slots,
+    uint16_t slot_capacity,
+    worr_native_carrier_dispatch_v1 *dispatch,
+    uint64_t handoff_tick,
+    const void *packet,
+    size_t packet_bytes)
+{
+    return dispatch_confirm_packet(
+        gate, session, slots, slot_capacity, dispatch, handoff_tick,
+        packet, packet_bytes, true);
 }
 
 worr_native_carrier_session_result_v1

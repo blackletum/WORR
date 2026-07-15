@@ -170,6 +170,12 @@ def validate_runtime_ux_services(
             "overlay_render_pass", "VK_ATTACHMENT_LOAD_OP_LOAD",
             "VK_Entity_IsNoWorldSubview", "VK_Entity_Record",
         )),
+        "vulkan_menu_soft_focus_native": all(token in vulkan_main for token in (
+            "VK_SoftFocus_Record", "vk_soft_focus_strength",
+            "VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL",
+            "VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL", "VK_FILTER_LINEAR",
+            "ui_overlay_info.renderPass = ctx->overlay_render_pass",
+        )),
         "rtx_player_preview_native_overlay": (
             all(token in rtx_main for token in (
                 "MATERIAL_FLAG_FULLBRIGHT", "vkpt_final_blit_rect",
@@ -208,6 +214,7 @@ def validate_runtime_ux_services(
         "dynamic_image_fallback_active": "dynamic menu images do not preserve authored fallbacks when runtime assets are absent",
         "rtx_player_preview_debug_state_initialized": "RTX debug-line state is not initialized before the player preview's first no-world frame",
         "vulkan_player_preview_native_overlay": "Vulkan does not preserve and overlay the no-world player-preview subview natively",
+        "vulkan_menu_soft_focus_native": "Vulkan does not apply menu soft focus before its native UI overlay",
         "rtx_player_preview_native_overlay": "RTX does not preserve fullbright player materials and composite the no-world preview rectangle natively",
         "rtx_rmlui_repeat_textures_native": "RTX does not honor repeat sampling for native RmlUi decorator textures",
         "rmlui_source_textures_srgb": "authored RmlUi source textures are not registered with their sRGB color-space contract",

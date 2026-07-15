@@ -8,6 +8,7 @@ the Free Software Foundation; either version 2 of the License, or
 */
 
 #include "cg_event_shadow.hpp"
+#include "cg_event_runtime.hpp"
 
 #include <array>
 #include <cstring>
@@ -146,6 +147,7 @@ void ensure_serial_capacity(std::uint32_t incoming_count)
     presentation.audit_ready_records = audit_ready_records;
     presentation.audit_future_stalls = audit_future_stalls;
     presentation.audit_overrun_recoveries = audit_overrun_recoveries;
+    (void)CG_EventRuntimeResetLegacy(stream_epoch);
 }
 
 void reset_v1(uint32_t stream_epoch, uint32_t)
@@ -177,6 +179,7 @@ void reset_v2(uint32_t stream_epoch, uint32_t)
 {
     Worr_CGameEventRangeAuditResetV2(&audit_v2, stream_epoch);
     reset_presentation(stream_epoch);
+    (void)CG_EventRuntimeResetLegacy(stream_epoch);
 }
 
 void consume_v2(const worr_cgame_event_range_v2 *range)
@@ -246,6 +249,9 @@ void consume_v2(const worr_cgame_event_range_v2 *range)
             ++presentation.retained_count;
         }
         increment_saturated(presentation.accepted_records);
+        /* The runtime retains only this entry's join metadata. The value-owned
+         * body remains solely in the presentation history above. */
+        (void)CG_EventRuntimeObserveLegacyEntry(&entry);
     }
 }
 

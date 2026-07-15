@@ -3,6 +3,11 @@
 When you connect to a WORR multiplayer match, the session menu gives you the
 important match information and asks how you want to enter.
 
+The arena remains visible around the menu's partial-screen frame. WORR softly
+defocuses the live view while keeping menu text and controls sharp, then eases
+back to the clear game view when you close the menu. This visual transition
+does not slow or alter the match.
+
 ## Joining a match
 
 On most WORR deathmatch servers, the menu opens automatically after the map is
@@ -40,9 +45,19 @@ The Overview page includes:
 - ruleset, score limit, and time limit;
 - your current team, playing, queued, or spectator status.
 
-The tabs and Match Tools area provide the options that the current server and
-match allow, such as Vote, Server, Match Details, Stats, Settings, MyMap,
-Tournament information, Forfeit, Ready Up, and Admin.
+Five tabs always appear in the same order: **Overview**, **Server Info**,
+**Voting**, **MyMap**, and **Admin**. The current page has an orange underline.
+Features the server does not provide remain visible but dimmed and cannot be
+selected, so the tab positions never jump around.
+
+Overview keeps occasional destinations such as Match Details, Stats, and
+Tournament information in a small context-action row. Settings, Resume Match,
+Leave Match, and Forfeit appear only when they apply. Hover a control with the
+mouse or focus it with the keyboard/controller to see a short explanation in
+the lower-left help area.
+
+The upper-right status cluster presents the current match phase as a live
+signal. The small clock and date below it use your computer's local time.
 
 ## Reviewing your match stats
 
@@ -57,11 +72,12 @@ session menu.
 
 ## Voting
 
-When a vote is active, open **Vote** to read the proposal and its remaining
-time. A short **Get Ready to Vote** countdown may appear before **Yes** and
-**No** become available. Choosing either answer closes the vote page after
-submitting your choice. If no vote is active, the page says so and does not
-show stale vote actions.
+Open **Voting** to call a new vote when the server allows it. If any player
+starts a vote while the session hub is open, the live proposal replaces the
+Overview block automatically. It shows who called it, the proposal, remaining
+time, and your eligibility without moving the join/spectate controls. A short
+get-ready countdown may appear before **Yes** and **No** become available.
+After you answer, the hub records your choice and remains open.
 
 Use **Call a Vote** to propose a new vote. The server decides which choices
 are currently allowed, so the list can vary by gametype and server settings.
@@ -124,12 +140,15 @@ confirmation that explains the match will end and count as a loss. **Yes**
 submits the server-managed forfeit action; **No** returns to the session menu
 without changing the match.
 
-## Why it may look different between renderers
+## Adjusting the background focus
 
-OpenGL can display the current RmlUi match hub. Native Vulkan and RTX/vkpt use
-the matching built-in menu while their native RmlUi renderer bridges are still
-being completed. This is expected: the commands and live server information
-are the same, and Vulkan/RTX are not redirected through OpenGL.
+OpenGL, Vulkan, and RTX/vkpt all draw the current RmlUi session menu through
+their native renderer paths. The exact focus character varies slightly by
+renderer, but the arena stays behind the same frame and all controls behave the
+same way.
+
+To change the focus strength, set `cl_menu_bokeh_blur` to a value from `0` to
+`1` in the console. The default is `0.85`; use `0` to keep the world sharp.
 
 ## Server option: immediate auto-join
 

@@ -1251,11 +1251,55 @@ static int test_prediction_matching(void)
     mismatch = authorize(mismatch, 13, 1);
     CHECK(Worr_EventJournalInsertAuthoritativeV1(
               &journal, &mismatch, &authority_slot) ==
-          WORR_EVENT_JOURNAL_CONFLICT);
+          WORR_EVENT_JOURNAL_CORRECTED);
+    CHECK(authority_slot.index == predicted_slot.index &&
+          authority_slot.generation == predicted_slot.generation);
     resolved = Worr_EventJournalResolveV1(&journal, predicted_slot);
-    CHECK(resolved && (resolved->state & WORR_EVENT_SLOT_RECEIVED) == 0);
+    CHECK(resolved &&
+          (resolved->state & (WORR_EVENT_SLOT_RECEIVED |
+                              WORR_EVENT_SLOT_PREDICTED |
+                              WORR_EVENT_SLOT_CORRECTED)) ==
+              (WORR_EVENT_SLOT_RECEIVED | WORR_EVENT_SLOT_PREDICTED |
+               WORR_EVENT_SLOT_CORRECTED));
+    CHECK((resolved->state & (WORR_EVENT_SLOT_MATCHED |
+                              WORR_EVENT_SLOT_PRESENTED |
+                              WORR_EVENT_SLOT_CANCELED |
+                              WORR_EVENT_SLOT_EXPIRED)) == 0);
+    CHECK(resolved->record.payload[0] == mismatch.payload[0]);
+    CHECK(Worr_EventReceiptContainsV1(&journal.receipt, mismatch.event_id));
+    CHECK(Worr_EventJournalNeedsPresentationV1(
+        &journal, authority_slot, mismatch.source_tick));
+    CHECK(Worr_EventJournalMarkPresentedV1(&journal, authority_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
 
     CHECK(Worr_EventJournalAdvanceEpochV1(&journal, 14));
+    predicted = make_event(false, 0, 0, 1,
+                           WORR_EVENT_DELIVERY_COSMETIC,
+                           WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 500);
+    mismatch = predicted;
+    mismatch.payload[0] ^= 1;
+    mismatch = authorize(mismatch, 14, 1);
+    CHECK(Worr_EventJournalInsertPredictedV1(
+              &journal, &predicted, &predicted_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalMarkPresentedV1(&journal, predicted_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &mismatch, &authority_slot) ==
+          WORR_EVENT_JOURNAL_CORRECTED_AFTER_PRESENTATION);
+    resolved = Worr_EventJournalResolveV1(&journal, authority_slot);
+    CHECK(resolved &&
+          (resolved->state & (WORR_EVENT_SLOT_RECEIVED |
+                              WORR_EVENT_SLOT_PREDICTED |
+                              WORR_EVENT_SLOT_PRESENTED |
+                              WORR_EVENT_SLOT_CORRECTED)) ==
+              (WORR_EVENT_SLOT_RECEIVED | WORR_EVENT_SLOT_PREDICTED |
+               WORR_EVENT_SLOT_PRESENTED | WORR_EVENT_SLOT_CORRECTED));
+    CHECK(!Worr_EventJournalNeedsPresentationV1(
+        &journal, authority_slot, mismatch.source_tick));
+    CHECK(Worr_EventReceiptContainsV1(&journal.receipt, mismatch.event_id));
+
+    CHECK(Worr_EventJournalAdvanceEpochV1(&journal, 15));
     predicted = make_event(false, 0, 0, 5, WORR_EVENT_DELIVERY_COSMETIC,
                            WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 999);
     repeated = predicted;
@@ -1269,10 +1313,10 @@ static int test_prediction_matching(void)
           WORR_EVENT_JOURNAL_INSERTED);
     CHECK(predicted_slot.index != authority_slot.index);
 
-    CHECK(Worr_EventJournalAdvanceEpochV1(&journal, 15));
+    CHECK(Worr_EventJournalAdvanceEpochV1(&journal, 16));
     predicted = make_event(false, 0, 0, 1, WORR_EVENT_DELIVERY_TRANSIENT,
                            WORR_EVENT_PREDICTION_COMMAND_DEFERRED, 1, 4);
-    authority = authorize(predicted, 15, 1);
+    authority = authorize(predicted, 16, 1);
     CHECK(Worr_EventJournalInsertPredictedV1(
               &journal, &predicted, &predicted_slot) ==
           WORR_EVENT_JOURNAL_INSERTED);
@@ -1283,6 +1327,249 @@ static int test_prediction_matching(void)
           WORR_EVENT_JOURNAL_MATCHED);
     CHECK(Worr_EventJournalNeedsPresentationV1(
         &journal, authority_slot, authority.source_tick));
+
+    CHECK(Worr_EventJournalAdvanceEpochV1(&journal, 17));
+    predicted = make_event(false, 0, 0, 1,
+                           WORR_EVENT_DELIVERY_COSMETIC,
+                           WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 700);
+    authority = predicted;
+    authority.payload[0] ^= 1;
+    authority = authorize(authority, 17, 1);
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &authority, &authority_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalInsertPredictedV1(
+              &journal, &predicted, &predicted_slot) ==
+          WORR_EVENT_JOURNAL_CORRECTED);
+    CHECK(predicted_slot.index == authority_slot.index);
+    resolved = Worr_EventJournalResolveV1(&journal, predicted_slot);
+    CHECK(resolved && resolved->record.payload[0] == authority.payload[0]);
+    CHECK((resolved->state & WORR_EVENT_SLOT_CORRECTED) != 0);
+    CHECK(Worr_EventJournalNeedsPresentationV1(
+        &journal, predicted_slot, authority.source_tick));
+    CHECK(Worr_EventJournalMarkPresentedV1(&journal, predicted_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalInsertPredictedV1(
+              &journal, &predicted, &predicted_slot) ==
+          WORR_EVENT_JOURNAL_CORRECTED_AFTER_PRESENTATION);
+    CHECK(!Worr_EventJournalNeedsPresentationV1(
+        &journal, predicted_slot, authority.source_tick));
+
+    CHECK(Worr_EventJournalAdvanceEpochV1(&journal, 18));
+    predicted = make_event(false, 0, 0, 1,
+                           WORR_EVENT_DELIVERY_COSMETIC,
+                           WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 800);
+    authority = authorize(predicted, 18, 1);
+    CHECK(Worr_EventJournalInsertPredictedV1(
+              &journal, &predicted, &predicted_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalCancelV1(&journal, predicted_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &authority, &authority_slot) ==
+          WORR_EVENT_JOURNAL_MATCHED);
+    resolved = Worr_EventJournalResolveV1(&journal, authority_slot);
+    CHECK(resolved &&
+          (resolved->state & (WORR_EVENT_SLOT_CANCELED |
+                              WORR_EVENT_SLOT_EXPIRED)) == 0);
+    CHECK(Worr_EventJournalNeedsPresentationV1(
+        &journal, authority_slot, authority.source_tick));
+
+    CHECK(Worr_EventJournalAdvanceEpochV1(&journal, 19));
+    predicted = make_event(false, 0, 0, 1,
+                           WORR_EVENT_DELIVERY_TRANSIENT,
+                           WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 900);
+    authority = authorize(predicted, 19, 1);
+    CHECK(Worr_EventJournalInsertPredictedV1(
+              &journal, &predicted, &predicted_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalExpireV1(&journal, predicted.expiry_tick) == 1);
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &authority, &authority_slot) ==
+          WORR_EVENT_JOURNAL_MATCHED);
+    resolved = Worr_EventJournalResolveV1(&journal, authority_slot);
+    CHECK(resolved && (resolved->state & WORR_EVENT_SLOT_EXPIRED) == 0);
+    CHECK(Worr_EventJournalNeedsPresentationV1(
+        &journal, authority_slot, authority.source_tick));
+
+    CHECK(Worr_EventJournalAdvanceEpochV1(&journal, 20));
+    predicted = make_event(false, 0, 0, 1,
+                           WORR_EVENT_DELIVERY_COSMETIC,
+                           WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 1000);
+    predicted.event_type = WORR_EVENT_TYPE_MOVEMENT_CUE;
+    predicted.payload_kind = WORR_EVENT_PAYLOAD_VEC3;
+    predicted.payload_size = sizeof(worr_event_payload_vec3_v1);
+    memset(predicted.payload, 0, sizeof(predicted.payload));
+    authority = authorize(predicted, 20, 1);
+    {
+        worr_event_payload_vec3_v1 signed_zero = {{-0.0f, 0.0f, 0.0f}};
+        memcpy(authority.payload, &signed_zero, sizeof(signed_zero));
+    }
+    CHECK(Worr_EventJournalInsertPredictedV1(
+              &journal, &predicted, &predicted_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &authority, &authority_slot) ==
+          WORR_EVENT_JOURNAL_MATCHED);
+    resolved = Worr_EventJournalResolveV1(&journal, authority_slot);
+    CHECK(resolved && (resolved->state & WORR_EVENT_SLOT_MATCHED) != 0);
+    CHECK((resolved->state & WORR_EVENT_SLOT_CORRECTED) == 0);
+    return 0;
+}
+
+static int test_prediction_correction_receipt_edges(void)
+{
+    worr_event_journal_v1 journal;
+    worr_event_journal_slot_v1 storage[4];
+    worr_event_journal_slot_v1 single_storage[1];
+    worr_event_slot_ref_v1 predicted_slot;
+    worr_event_slot_ref_v1 corrected_slot;
+    worr_event_slot_ref_v1 retransmit_slot;
+    worr_event_slot_ref_v1 sequence2_slot;
+    worr_event_slot_ref_v1 sequence3_slot;
+    worr_event_record_v1 predicted;
+    worr_event_record_v1 corrected;
+    worr_event_record_v1 changed;
+    worr_event_record_v1 sequence2;
+    worr_event_record_v1 sequence3;
+    const worr_event_journal_slot_v1 *resolved;
+
+    CHECK(Worr_EventJournalInitV1(&journal, storage, 4,
+                                  TEST_MAX_ENTITIES, 31));
+    predicted = make_event(false, 0, 0, 1,
+                           WORR_EVENT_DELIVERY_RELIABLE_ORDERED,
+                           WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 1101);
+    corrected = predicted;
+    corrected.payload[0] ^= 1;
+    corrected = authorize(corrected, 31, 1);
+    sequence2 = make_event(true, 31, 2, 2,
+                           WORR_EVENT_DELIVERY_RELIABLE_ORDERED,
+                           WORR_EVENT_PREDICTION_AUTHORITATIVE_ONLY, 1, 1102);
+    sequence3 = make_event(true, 31, 3, 3,
+                           WORR_EVENT_DELIVERY_RELIABLE_ORDERED,
+                           WORR_EVENT_PREDICTION_AUTHORITATIVE_ONLY, 1, 1103);
+
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &sequence2, &sequence2_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &sequence3, &sequence3_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(journal.receipt.highest_contiguous == 0 &&
+          journal.receipt.selective_mask == 6);
+    CHECK(!Worr_EventJournalNeedsPresentationV1(
+        &journal, sequence2_slot, sequence2.source_tick));
+    CHECK(Worr_EventJournalMarkPresentedV1(&journal, sequence2_slot) ==
+          WORR_EVENT_JOURNAL_NOT_READY);
+
+    CHECK(Worr_EventJournalInsertPredictedV1(
+              &journal, &predicted, &predicted_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &corrected, &corrected_slot) ==
+          WORR_EVENT_JOURNAL_CORRECTED);
+    CHECK(corrected_slot.index == predicted_slot.index &&
+          corrected_slot.generation == predicted_slot.generation);
+    CHECK(journal.receipt.highest_contiguous == 3 &&
+          journal.receipt.selective_mask == 0);
+    CHECK(Worr_EventReceiptContainsV1(&journal.receipt, corrected.event_id));
+    CHECK(Worr_EventJournalNeedsPresentationV1(
+        &journal, sequence2_slot, sequence2.source_tick));
+
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &corrected, &retransmit_slot) ==
+          WORR_EVENT_JOURNAL_DUPLICATE);
+    CHECK(retransmit_slot.index == corrected_slot.index &&
+          retransmit_slot.generation == corrected_slot.generation);
+
+    changed = corrected;
+    changed.payload[1] ^= 1;
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &changed, &retransmit_slot) ==
+          WORR_EVENT_JOURNAL_CONFLICT);
+    CHECK(retransmit_slot.index == corrected_slot.index &&
+          retransmit_slot.generation == corrected_slot.generation);
+    resolved = Worr_EventJournalResolveV1(&journal, corrected_slot);
+    CHECK(resolved && resolved->record.payload[0] == corrected.payload[0] &&
+          resolved->record.payload[1] == corrected.payload[1]);
+    CHECK(journal.receipt.highest_contiguous == 3 &&
+          journal.receipt.selective_mask == 0);
+
+    CHECK(Worr_EventJournalInitV1(&journal, single_storage, 1,
+                                  TEST_MAX_ENTITIES, 32));
+    predicted = make_event(false, 0, 0, 1,
+                           WORR_EVENT_DELIVERY_RELIABLE_ORDERED,
+                           WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 1201);
+    corrected = predicted;
+    corrected.payload[0] ^= 1;
+    corrected = authorize(corrected, 32, 1);
+    CHECK(Worr_EventJournalInsertPredictedV1(
+              &journal, &predicted, &predicted_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &corrected, &corrected_slot) ==
+          WORR_EVENT_JOURNAL_CORRECTED);
+    CHECK(corrected_slot.index == predicted_slot.index &&
+          corrected_slot.generation == predicted_slot.generation);
+    CHECK(journal.occupied == 1 &&
+          journal.receipt.highest_contiguous == 1);
+    CHECK(Worr_EventJournalMarkPresentedV1(&journal, corrected_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+
+    sequence2 = make_event(true, 32, 2, 2,
+                           WORR_EVENT_DELIVERY_RELIABLE_ORDERED,
+                           WORR_EVENT_PREDICTION_AUTHORITATIVE_ONLY, 1, 1202);
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &sequence2, &sequence2_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(!Worr_EventJournalResolveV1(&journal, corrected_slot));
+    CHECK(sequence2_slot.index == corrected_slot.index &&
+          sequence2_slot.generation != corrected_slot.generation);
+    CHECK(journal.occupied == 1 &&
+          journal.receipt.highest_contiguous == 2);
+    return 0;
+}
+
+static int test_predicted_cosmetic_cannot_coalesce_authority(void)
+{
+    worr_event_journal_v1 journal;
+    worr_event_journal_slot_v1 storage[1];
+    worr_event_slot_ref_v1 authority_slot;
+    worr_event_slot_ref_v1 predicted_slot;
+    worr_event_record_v1 authority_candidate;
+    worr_event_record_v1 authority;
+    worr_event_record_v1 predicted;
+    const worr_event_journal_slot_v1 *resolved;
+
+    CHECK(Worr_EventJournalInitV1(&journal, storage, 1,
+                                  TEST_MAX_ENTITIES, 33));
+    authority_candidate =
+        make_event(false, 0, 0, 1, WORR_EVENT_DELIVERY_COSMETIC,
+                   WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 1301);
+    authority = authorize(authority_candidate, 33, 1);
+    predicted = make_event(false, 0, 0, 2,
+                           WORR_EVENT_DELIVERY_COSMETIC,
+                           WORR_EVENT_PREDICTION_COMMAND_IMMEDIATE, 1, 1302);
+
+    CHECK(Worr_EventJournalInsertAuthoritativeV1(
+              &journal, &authority, &authority_slot) ==
+          WORR_EVENT_JOURNAL_INSERTED);
+    CHECK(Worr_EventJournalInsertPredictedV1(
+              &journal, &predicted, &predicted_slot) ==
+          WORR_EVENT_JOURNAL_DROPPED_OVERFLOW);
+    CHECK(predicted_slot.index == WORR_EVENT_SLOT_INVALID &&
+          predicted_slot.generation == 0);
+    resolved = Worr_EventJournalResolveV1(&journal, authority_slot);
+    CHECK(resolved &&
+          (resolved->state & WORR_EVENT_SLOT_RECEIVED) != 0 &&
+          (resolved->state & WORR_EVENT_SLOT_PREDICTED) == 0);
+    CHECK(resolved->record.event_id.stream_epoch == 33 &&
+          resolved->record.event_id.sequence == 1 &&
+          resolved->record.source_ordinal == authority.source_ordinal &&
+          memcmp(resolved->record.payload, authority.payload,
+                 authority.payload_size) == 0);
+    CHECK(journal.occupied == 1 &&
+          journal.receipt.highest_contiguous == 1);
     return 0;
 }
 
@@ -1441,6 +1728,8 @@ int main(void)
     CHECK(test_muzzle_and_spatial_audio_catalog() == 0);
     CHECK(test_receipts_order_loss_and_wrap() == 0);
     CHECK(test_prediction_matching() == 0);
+    CHECK(test_prediction_correction_receipt_edges() == 0);
+    CHECK(test_predicted_cosmetic_cannot_coalesce_authority() == 0);
     CHECK(test_generation_capacity_and_terminal_states() == 0);
     printf("event journal: all deterministic ABI/journal checks passed\n");
     return 0;

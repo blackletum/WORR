@@ -273,10 +273,10 @@ static bool test_binding_and_ack_validation(void)
 static bool test_binding_from_active_readiness(void)
 {
     const uint32_t production_private_mask =
-        WORR_NET_CAP_LEGACY_STAGE_MASK |
-        WORR_NET_CAP_NATIVE_ENVELOPE_V1;
+        WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK;
     const uint32_t future_known_mask =
         WORR_NET_CAP_NATIVE_ENVELOPE_V1 |
+        WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1 |
         WORR_NET_CAP_CANONICAL_SNAPSHOT_V2 |
         WORR_NET_CAP_TYPED_EVENT_RANGE_V2;
     worr_native_readiness_state_v1 server;
@@ -294,7 +294,7 @@ static bool test_binding_from_active_readiness(void)
     worr_net_capability_state_v1 public_capability;
     worr_net_capability_confirm_v1 public_confirm;
 
-    CHECK(production_private_mask == UINT32_C(0x13));
+    CHECK(production_private_mask == UINT32_C(0x53));
     CHECK(make_active_readiness_pair(
         70, production_private_mask, &server, &client));
 
@@ -419,6 +419,74 @@ static bool test_binding_from_active_readiness(void)
             ((uint8_t *)&alias_state + 8),
         &alias_state, TEST_CONNECTION_OWNER_ID));
     CHECK(memcmp(&alias_state, &alias_before, sizeof(alias_state)) == 0);
+    return true;
+}
+
+static bool test_receive_binding_during_event_confirmation(void)
+{
+    const uint32_t event_private_mask =
+        WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK;
+    worr_native_readiness_state_v1 server;
+    worr_native_readiness_state_v1 client;
+    worr_native_readiness_state_v1 server_before;
+    worr_native_readiness_record_v1 challenge;
+    worr_native_readiness_record_v1 client_ready;
+    worr_native_readiness_record_v1 server_active;
+    worr_native_readiness_record_v1 client_confirm;
+    worr_native_session_binding_v1 binding;
+    worr_native_session_binding_v1 before;
+
+    CHECK(event_private_mask == UINT32_C(0x73));
+    CHECK(Worr_NativeReadinessServerInitV1(
+              &server, 73, event_private_mask, UINT64_C(0x7300),
+              10, 100, &challenge) == WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessClientInitV1(
+              &client, 73, event_private_mask, 10, 100) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessClientObserveChallengeV1(
+              &client, &challenge, 11, &client_ready) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessServerObserveClientReadyV1(
+              &server, &client_ready, 12, &server_active) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(server.phase ==
+          WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM);
+
+    /* The old API stays final-phase-only.  The receive-specific API admits
+     * exactly this event-confirmation barrier without mutating its deadline. */
+    memset(&binding, 0xa5, sizeof(binding));
+    before = binding;
+    CHECK(!Worr_NativeSessionBindingInitFromReadinessV1(
+        &binding, &server, TEST_CONNECTION_OWNER_ID));
+    CHECK(memcmp(&binding, &before, sizeof(binding)) == 0);
+    server_before = server;
+    CHECK(Worr_NativeSessionBindingInitReceiveFromReadinessV1(
+        &binding, &server, TEST_CONNECTION_OWNER_ID, 12));
+    CHECK(memcmp(&server, &server_before, sizeof(server)) == 0);
+    CHECK(binding.transport_epoch == 73 &&
+          binding.negotiated_capabilities == event_private_mask &&
+          binding.connection_owner_id == TEST_CONNECTION_OWNER_ID);
+
+    memset(&binding, 0x5a, sizeof(binding));
+    before = binding;
+    CHECK(!Worr_NativeSessionBindingInitReceiveFromReadinessV1(
+        &binding, &server, TEST_CONNECTION_OWNER_ID, 112));
+    CHECK(memcmp(&binding, &before, sizeof(binding)) == 0);
+    CHECK(!Worr_NativeSessionBindingInitReceiveFromReadinessV1(
+        &binding, &client, TEST_CONNECTION_OWNER_ID, 12));
+    CHECK(memcmp(&binding, &before, sizeof(binding)) == 0);
+
+    CHECK(Worr_NativeReadinessClientObserveServerActiveWithConfirmV1(
+              &client, &server_active, 13, &client_confirm) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(Worr_NativeReadinessServerObserveClientActiveConfirmV1(
+              &server, &client_confirm, 14) == WORR_NATIVE_READINESS_OK);
+    CHECK(server.phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE &&
+          client.phase == WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE);
+    CHECK(Worr_NativeSessionBindingInitReceiveFromReadinessV1(
+        &binding, &server, TEST_CONNECTION_OWNER_ID, 14));
+    CHECK(Worr_NativeSessionBindingInitFromReadinessV1(
+        &binding, &client, TEST_OTHER_CONNECTION_OWNER_ID));
     return true;
 }
 
@@ -2137,10 +2205,221 @@ static bool test_rx_epoch_advance(void)
     return true;
 }
 
+static bool test_explicit_tx_and_rx_cancellation(void)
+{
+    worr_native_session_binding_v1 binding;
+    worr_native_session_binding_v1 next_binding;
+    worr_native_tx_session_v1 tx;
+    worr_native_tx_session_v1 tx_before;
+    worr_native_tx_session_v1 tx_expected;
+    worr_native_tx_slot_v1 tx_slots[TEST_TX_CAPACITY];
+    worr_native_tx_slot_v1 tx_slots_before[TEST_TX_CAPACITY];
+    worr_native_tx_send_ticket_v1 ticket;
+    worr_native_rx_session_v1 rx;
+    worr_native_rx_session_v1 rx_before;
+    worr_native_rx_session_v1 rx_expected;
+    worr_native_rx_slot_v1 rx_slots[TEST_RX_CAPACITY];
+    worr_native_rx_slot_v1 rx_slots_before[TEST_RX_CAPACITY];
+    worr_native_rx_cancel_report_v1 report;
+    worr_native_rx_message_v1 message;
+    uint16_t fragment_count;
+    uint32_t sequence;
+    uint32_t cancelled;
+
+    CHECK(make_binding(59, &binding));
+    CHECK(make_binding(60, &next_binding));
+    CHECK(Worr_NativeTxSessionInitV1(
+        &tx, tx_slots, TEST_TX_CAPACITY, &binding));
+
+    /* Empty cancellation is successful, counted, and enters a terminal state
+     * whose second cancellation is byte-idempotent. */
+    tx_before = tx;
+    memcpy(tx_slots_before, tx_slots, sizeof(tx_slots));
+    tx_expected = tx;
+    tx_expected.state_flags |= WORR_NATIVE_TX_TERMINAL_CANCELLED;
+    cancelled = UINT32_MAX;
+    CHECK(Worr_NativeTxSessionCancelRetainedV1(
+              &tx, tx_slots, TEST_TX_CAPACITY, &cancelled) ==
+          WORR_NATIVE_TX_CANCELLED);
+    CHECK(cancelled == 0 &&
+          memcmp(&tx, &tx_expected, sizeof(tx)) == 0 &&
+          memcmp(tx_slots, tx_slots_before, sizeof(tx_slots)) == 0);
+    tx_before = tx;
+    CHECK(Worr_NativeTxSessionCancelRetainedV1(
+              &tx, tx_slots, TEST_TX_CAPACITY, &cancelled) ==
+          WORR_NATIVE_TX_CANCELLED);
+    CHECK(cancelled == 0 && memcmp(&tx, &tx_before, sizeof(tx)) == 0);
+    CHECK(Worr_NativeTxSessionAdvanceEpochV1(
+        &tx, tx_slots, TEST_TX_CAPACITY, &next_binding));
+    CHECK(tx.transport_epoch == 60 && tx.retained_count == 0 &&
+          tx.next_message_sequence == 1 &&
+          (tx.state_flags & WORR_NATIVE_TX_TERMINAL_CANCELLED) == 0);
+    CHECK(Worr_NativeTxSessionInitV1(
+        &tx, tx_slots, TEST_TX_CAPACITY, &binding));
+
+    CHECK(Worr_NativeTxSessionEnqueueV1(
+              &tx, tx_slots, TEST_TX_CAPACITY,
+              make_record(WORR_NATIVE_RECORD_COMMAND_V1, 59, 1),
+              2, 101, 80, 700, 10, &sequence) ==
+          WORR_NATIVE_TX_RETAINED);
+    CHECK(Worr_NativeTxSessionEnqueueV1(
+              &tx, tx_slots, TEST_TX_CAPACITY,
+              make_record(WORR_NATIVE_RECORD_SNAPSHOT_V1, 59, 2),
+              3, 102, 96, 700, 11, &sequence) ==
+          WORR_NATIVE_TX_RETAINED);
+    CHECK(Worr_NativeTxSessionEnqueueV1(
+              &tx, tx_slots, TEST_TX_CAPACITY,
+              make_record(WORR_NATIVE_RECORD_EVENT_V1, 59, 3),
+              1, 103, 112, 700, 12, &sequence) ==
+          WORR_NATIVE_TX_RETAINED);
+    CHECK(tx.retained_count == 3 && tx.next_message_sequence == 4 &&
+          tx.latest_snapshot_epoch == 59 &&
+          tx.latest_snapshot_sequence == 2);
+    CHECK(Worr_NativeTxSessionPrepareDueV1(
+              &tx, tx_slots, TEST_TX_CAPACITY, 12, 100, &ticket) ==
+          WORR_NATIVE_TX_SELECTED);
+
+    /* Aliasing is rejected without touching retained storage or output. */
+    tx_before = tx;
+    memcpy(tx_slots_before, tx_slots, sizeof(tx_slots));
+    CHECK(Worr_NativeTxSessionCancelRetainedV1(
+              &tx, tx_slots, TEST_TX_CAPACITY,
+              (uint32_t *)&tx_slots[0]) ==
+          WORR_NATIVE_TX_INVALID_ARGUMENT);
+    CHECK(memcmp(&tx, &tx_before, sizeof(tx)) == 0 &&
+          memcmp(tx_slots, tx_slots_before, sizeof(tx_slots)) == 0);
+
+    tx_expected = tx;
+    tx_expected.retained_count = 0;
+    tx_expected.state_flags |= WORR_NATIVE_TX_TERMINAL_CANCELLED;
+    cancelled = UINT32_MAX;
+    CHECK(Worr_NativeTxSessionCancelRetainedV1(
+              &tx, tx_slots, TEST_TX_CAPACITY, &cancelled) ==
+          WORR_NATIVE_TX_CANCELLED);
+    CHECK(cancelled == 3 &&
+          memcmp(&tx, &tx_expected, sizeof(tx)) == 0 &&
+          memory_is_zero(tx_slots, sizeof(tx_slots)) &&
+          Worr_NativeTxSessionValidateV1(
+              &tx, tx_slots, TEST_TX_CAPACITY));
+    /* Prepare tickets are non-mutating proofs, not unknown transport
+     * outcomes.  Cancellation makes every copied ticket stale. */
+    CHECK(!Worr_NativeTxSessionPreparedValidateV1(
+        &tx, tx_slots, TEST_TX_CAPACITY, &ticket));
+    tx_before = tx;
+    sequence = UINT32_MAX;
+    CHECK(Worr_NativeTxSessionEnqueueV1(
+              &tx, tx_slots, TEST_TX_CAPACITY,
+              make_record(WORR_NATIVE_RECORD_EVENT_V1, 59, 4),
+              1, 104, 64, 700, 13, &sequence) ==
+          WORR_NATIVE_TX_INVALID_STATE);
+    CHECK(sequence == UINT32_MAX &&
+          memcmp(&tx, &tx_before, sizeof(tx)) == 0);
+    tx_before = tx;
+    cancelled = UINT32_MAX;
+    CHECK(Worr_NativeTxSessionCancelRetainedV1(
+              &tx, tx_slots, TEST_TX_CAPACITY, &cancelled) ==
+          WORR_NATIVE_TX_CANCELLED);
+    CHECK(cancelled == 0 && memcmp(&tx, &tx_before, sizeof(tx)) == 0);
+
+    CHECK(Worr_NativeRxSessionInitV1(
+        &rx, rx_slots, TEST_RX_CAPACITY, TEST_PAYLOAD_STRIDE,
+        5, 9, &binding));
+    memset(&report, 0xa5, sizeof(report));
+    rx_before = rx;
+    rx_expected = rx;
+    rx_expected.state_flags |= WORR_NATIVE_RX_TERMINAL_CANCELLED;
+    CHECK(Worr_NativeRxSessionCancelPendingV1(
+              &rx, rx_slots, TEST_RX_CAPACITY, &report) ==
+          WORR_NATIVE_RX_CANCELLED);
+    CHECK(report.incomplete_messages == 0 &&
+          report.complete_messages == 0 &&
+          memcmp(&rx, &rx_expected, sizeof(rx)) == 0);
+    rx_before = rx;
+    CHECK(Worr_NativeRxSessionCancelPendingV1(
+              &rx, rx_slots, TEST_RX_CAPACITY, &report) ==
+          WORR_NATIVE_RX_CANCELLED);
+    CHECK(report.incomplete_messages == 0 &&
+          report.complete_messages == 0 &&
+          memcmp(&rx, &rx_before, sizeof(rx)) == 0);
+    CHECK(Worr_NativeRxSessionInitV1(
+        &rx, rx_slots, TEST_RX_CAPACITY, TEST_PAYLOAD_STRIDE,
+        5, 9, &binding));
+
+    /* Preserve committed replay and semantic high-water state while
+     * disposing one incomplete and one complete-but-uncommitted message. */
+    CHECK(rx_commit_single(
+        &rx, rx_slots, TEST_RX_CAPACITY, 1, 1, 1));
+    fill_payload(1000, 2);
+    CHECK(encode_message(
+        59, 2, make_record(WORR_NATIVE_RECORD_EVENT_V1, 59, 2),
+        1000, 300, 2, &fragment_count));
+    CHECK(fragment_count > 1);
+    CHECK(Worr_NativeRxSessionAcceptV1(
+              &rx, rx_slots, TEST_RX_CAPACITY, arena, sizeof(arena), 2,
+              datagrams[0], datagram_bytes[0], &message, &repeat_ack) ==
+          WORR_NATIVE_RX_FRAGMENT_ACCEPTED);
+    fill_payload(48, 3);
+    CHECK(encode_message(
+        59, 3, make_record(WORR_NATIVE_RECORD_EVENT_V1, 59, 3),
+        48, 700, 1, &fragment_count));
+    CHECK(fragment_count == 1);
+    CHECK(Worr_NativeRxSessionAcceptV1(
+              &rx, rx_slots, TEST_RX_CAPACITY, arena, sizeof(arena), 3,
+              datagrams[0], datagram_bytes[0], &message, &repeat_ack) ==
+          WORR_NATIVE_RX_MESSAGE_COMPLETE);
+    CHECK(rx.occupied_count == 2 && rx.highest_committed_sequence == 1 &&
+          rx.history_count == 1 && rx.receipt_mask == UINT64_C(1));
+
+    rx_before = rx;
+    memcpy(rx_slots_before, rx_slots, sizeof(rx_slots));
+    CHECK(Worr_NativeRxSessionCancelPendingV1(
+              &rx, rx_slots, TEST_RX_CAPACITY,
+              (worr_native_rx_cancel_report_v1 *)&rx_slots[0]) ==
+          WORR_NATIVE_RX_INVALID_ARGUMENT);
+    CHECK(memcmp(&rx, &rx_before, sizeof(rx)) == 0 &&
+          memcmp(rx_slots, rx_slots_before, sizeof(rx_slots)) == 0);
+
+    rx_expected = rx;
+    rx_expected.occupied_count = 0;
+    rx_expected.state_flags |= WORR_NATIVE_RX_TERMINAL_CANCELLED;
+    memset(&report, 0xa5, sizeof(report));
+    CHECK(Worr_NativeRxSessionCancelPendingV1(
+              &rx, rx_slots, TEST_RX_CAPACITY, &report) ==
+          WORR_NATIVE_RX_CANCELLED);
+    CHECK(report.incomplete_messages == 1 &&
+          report.complete_messages == 1 &&
+          memcmp(&rx, &rx_expected, sizeof(rx)) == 0 &&
+          memory_is_zero(rx_slots, sizeof(rx_slots)) &&
+          rx.highest_committed_sequence == 1 && rx.history_count == 1 &&
+          rx.receipt_mask == UINT64_C(1) &&
+          Worr_NativeRxSessionValidateV1(
+              &rx, rx_slots, TEST_RX_CAPACITY));
+    rx_before = rx;
+    CHECK(Worr_NativeRxSessionAcceptV1(
+              &rx, rx_slots, TEST_RX_CAPACITY, arena, sizeof(arena), 4,
+              datagrams[0], datagram_bytes[0], &message, &repeat_ack) ==
+          WORR_NATIVE_RX_INVALID_STATE);
+    CHECK(memcmp(&rx, &rx_before, sizeof(rx)) == 0);
+    rx_before = rx;
+    CHECK(Worr_NativeRxSessionCancelPendingV1(
+              &rx, rx_slots, TEST_RX_CAPACITY, &report) ==
+          WORR_NATIVE_RX_CANCELLED);
+    CHECK(report.incomplete_messages == 0 &&
+          report.complete_messages == 0 &&
+          memcmp(&rx, &rx_before, sizeof(rx)) == 0);
+    CHECK(Worr_NativeRxSessionAdvanceEpochV1(
+        &rx, rx_slots, TEST_RX_CAPACITY, &next_binding));
+    CHECK(rx.transport_epoch == 60 && rx.occupied_count == 0 &&
+          rx.history_count == 0 && rx.highest_committed_sequence == 0 &&
+          (rx.state_flags & WORR_NATIVE_RX_TERMINAL_CANCELLED) == 0);
+    return true;
+}
+
 int main(void)
 {
     if (!test_binding_and_ack_validation() ||
         !test_binding_from_active_readiness() ||
+        !test_receive_binding_during_event_confirmation() ||
         !test_tx_retention_supersession_and_ack() ||
         !test_tx_capacity_exhaustion_and_epoch_reset() ||
         !test_tx_receipt_window_and_scheduler_aging() ||
@@ -2154,6 +2433,7 @@ int main(void)
         !test_rx_snapshot_tombstone_pressure() ||
         !test_rx_timeout_discard_and_capacity() ||
         !test_rx_malformed_alias_and_epoch_transactionality() ||
+        !test_explicit_tx_and_rx_cancellation() ||
         !test_rx_epoch_advance()) {
         return 1;
     }

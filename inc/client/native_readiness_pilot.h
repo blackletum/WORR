@@ -60,6 +60,16 @@ void CL_NativeReadinessPilotObserveEncodedCommandRange(
     uint32_t first_legacy_command_number,
     uint32_t command_count);
 
+/*
+ * Non-mutating scheduler query for an outer client send loop.  True means a
+ * zero-unreliable-prefix Netchan_Transmit would give the pilot an immediately
+ * due command retry or event receipt.  It never reserves a native dispatch or
+ * ACK token and remains false for demos and disabled pilots.  During a
+ * map-quiesced DRAIN it may report only an already-authorized event ACK;
+ * client DATA remains ineligible.
+ */
+bool CL_NativeReadinessPilotOutputDue(void);
+
 /* Private readiness carrier settings must not enter demos or GTV streams. */
 bool CL_NativeReadinessPilotIsCarrierSetting(int32_t index);
 
@@ -88,7 +98,7 @@ typedef struct cl_native_readiness_pilot_status_v1_s {
     uint32_t public_mask;
     uint32_t private_mask;
     uint32_t probe_hold;
-    uint32_t reserved_counters;
+    uint32_t cancelled_through_transport_epoch;
     uint64_t challenges;
     uint64_t client_ready_queued;
     uint64_t server_active;
@@ -103,23 +113,30 @@ typedef struct cl_native_readiness_pilot_status_v1_s {
     uint64_t acknowledged_reliable;
     uint64_t drains;
     uint64_t failures;
+    uint64_t cancellation_barriers;
+    uint64_t cancelled_transports;
+    uint64_t cancelled_command_tx;
+    uint64_t cancelled_event_rx;
+    uint64_t cancelled_event_receipts;
+    uint64_t stale_cancelled_carriers;
+    uint64_t stale_cancelled_readiness_records;
     uint32_t last_failure;
     uint32_t reserved1;
 } cl_native_readiness_pilot_status_v1;
 
 #if defined(__cplusplus)
-static_assert(sizeof(cl_native_readiness_pilot_status_v1) == 176,
+static_assert(sizeof(cl_native_readiness_pilot_status_v1) == 232,
               "client native readiness status V1 layout changed");
 static_assert(offsetof(cl_native_readiness_pilot_status_v1, challenges) == 56,
               "client native readiness status V1 counter offset changed");
-static_assert(offsetof(cl_native_readiness_pilot_status_v1, last_failure) == 168,
+static_assert(offsetof(cl_native_readiness_pilot_status_v1, last_failure) == 224,
               "client native readiness status V1 tail offset changed");
 #else
-_Static_assert(sizeof(cl_native_readiness_pilot_status_v1) == 176,
+_Static_assert(sizeof(cl_native_readiness_pilot_status_v1) == 232,
                "client native readiness status V1 layout changed");
 _Static_assert(offsetof(cl_native_readiness_pilot_status_v1, challenges) == 56,
                "client native readiness status V1 counter offset changed");
-_Static_assert(offsetof(cl_native_readiness_pilot_status_v1, last_failure) == 168,
+_Static_assert(offsetof(cl_native_readiness_pilot_status_v1, last_failure) == 224,
                "client native readiness status V1 tail offset changed");
 #endif
 
@@ -137,10 +154,28 @@ typedef struct cl_native_readiness_pilot_test_state_s {
     uint32_t message_sequence_highwater;
     uint32_t selected_send_attempts;
     uint32_t mode;
+    uint32_t private_capabilities;
+    uint32_t event_rx_occupied;
+    uint32_t event_ack_receipts;
+    uint32_t retired_event_rx_occupied;
+    uint32_t retired_event_ack_receipts;
+    uint32_t event_owner_flags;
+    uint32_t event_owner_epoch_high_water;
+    uint32_t ack_next_bank;
+    uint32_t cancelled_through_transport_epoch;
+    uint64_t cancellation_barriers;
+    uint64_t cancelled_transports;
+    uint64_t cancelled_commands;
+    uint64_t cancelled_event_rx;
+    uint64_t cancelled_event_receipts;
+    uint64_t stale_cancelled_carriers;
+    uint64_t stale_cancelled_readiness_records;
     bool hooks_installed;
     bool readiness_committed;
     bool proof_enqueued_once;
     bool carrier_traffic_seen;
+    bool event_enabled;
+    bool client_active_confirm_queued;
 } cl_native_readiness_pilot_test_state_t;
 
 bool CL_NativeReadinessPilotGetTestState(

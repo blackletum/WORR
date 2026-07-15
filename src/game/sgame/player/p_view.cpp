@@ -50,17 +50,32 @@ void UpdateCgameUiMenus(gentity_t* ent) {
 		cl->initialMenu.nextUpdate = level.time + kDmJoinUpdateInterval;
 	}
 
-	const bool voteActive = Vote_Menu_Active(ent);
-	if (!voteActive) {
-		if (cl->ui.voteActive) {
-			CloseActiveMenu(ent);
+	const bool voteSessionActive = Vote_Session_Active();
+	if (cl->initialMenu.dmJoinActive) {
+		// The match hub owns active-vote presentation while it is open. Keep the
+		// current Rml document mounted so a vote beginning on the Overview route
+		// transitions in place without a route reload or a visible layout flash.
+		// Votes launched from a nested route explicitly return through the command
+		// handler, after which this branch keeps the embedded panel current.
+		if (!voteSessionActive) {
+			cl->ui.voteActive = false;
+		} else if (!cl->ui.voteActive) {
+			cl->ui.voteActive = true;
+			RefreshDmJoinMenu(ent);
 		}
 	} else {
-		if (!cl->ui.voteActive) {
-			OpenVoteMenu(ent);
-		} else if (cl->ui.voteNextUpdate <= level.time) {
-			RefreshVoteMenu(ent);
-			cl->ui.voteNextUpdate = level.time + kVoteMenuUpdateInterval;
+		const bool voteActive = Vote_Menu_Active(ent);
+		if (!voteActive) {
+			if (cl->ui.voteActive) {
+				CloseActiveMenu(ent);
+			}
+		} else {
+			if (!cl->ui.voteActive) {
+				OpenVoteMenu(ent);
+			} else if (cl->ui.voteNextUpdate <= level.time) {
+				RefreshVoteMenu(ent);
+				cl->ui.voteNextUpdate = level.time + kVoteMenuUpdateInterval;
+			}
 		}
 	}
 

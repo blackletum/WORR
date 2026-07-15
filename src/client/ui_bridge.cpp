@@ -16,6 +16,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
+#include "client.h"
 #include "client/cgame_ui.h"
 #include "client/sound/sound.h"
 #include "client/ui.h"
@@ -169,12 +170,22 @@ void UI_MouseEvent(int x, int y)
 
 bool UI_IsTransparent(void)
 {
-    // The multiplayer match hub and its child routes are translucent gameplay
-    // overlays even though they do not occupy the cgame menu stack. Scope the
-    // override to the server-published session marker so unrelated RmlUi pages
-    // retain their existing opaque-menu rendering behavior.
-    if (UI_Rml_IsRouteActive() && Cvar_VariableInteger("ui_dm_menu_active"))
+    // Session routes and pages opened from the live match are translucent
+    // gameplay overlays even though they do not occupy the cgame menu stack.
+    // Reuse the slow-time DOF pipeline across the full world view; RmlUi is
+    // rendered afterwards and therefore remains crisp.
+    if (UI_Rml_IsRouteActive() &&
+        (UI_Rml_IsSessionRouteActive() ||
+         Cvar_VariableInteger("ui_dm_menu_active"))) {
+        clipRect_t blur_rect = {};
+        blur_rect.right = r_config.width;
+        blur_rect.bottom = r_config.height;
+        CL_SetMenuBlurRect(&blur_rect);
         return true;
+    }
+
+    if (UI_Rml_IsRouteActive())
+        CL_SetMenuBlurRect(nullptr);
 
     const cgame_ui_export_t *api = UI_GetAPI();
     if (api && api->IsTransparent)

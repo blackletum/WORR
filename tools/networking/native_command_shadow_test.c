@@ -823,6 +823,141 @@ static int test_join_deep_validation(void)
     return 0;
 }
 
+static int test_join_retire_compared(void)
+{
+    worr_native_command_shadow_join_v1 join;
+    worr_native_command_shadow_join_v1 before;
+    worr_native_command_shadow_join_v1 expected;
+    worr_command_record_v1 incomplete_record;
+    worr_command_record_v1 survivor_record;
+    worr_command_record_v1 survivor_legacy;
+    worr_command_record_v1 target_record;
+    worr_command_record_v1 target_legacy;
+    worr_native_command_shadow_join_slot_v1 survivor_slot;
+    worr_native_command_shadow_join_slot_v1 incomplete_slot;
+    worr_command_id_v1 missing_id = {73, 65};
+    uint32_t index;
+    uint32_t target_index = UINT32_MAX;
+
+    CHECK(Worr_NativeCommandShadowJoinRetireComparedV1(
+              NULL, missing_id) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_STATE);
+    memset(&join, 0, sizeof(join));
+    before = join;
+    CHECK(Worr_NativeCommandShadowJoinRetireComparedV1(
+              &join, missing_id) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_STATE);
+    CHECK(memcmp(&join, &before, sizeof(join)) == 0);
+
+    CHECK(Worr_NativeCommandShadowJoinInitV1(
+        &join, WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS, 100));
+    before = join;
+    CHECK(Worr_NativeCommandShadowJoinRetireComparedV1(
+              &join, (worr_command_id_v1){0, 0}) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_ARGUMENT);
+    CHECK(Worr_NativeCommandShadowJoinRetireComparedV1(
+              &join, (worr_command_id_v1){71, 0}) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_ARGUMENT);
+    CHECK(Worr_NativeCommandShadowJoinRetireComparedV1(
+              &join, (worr_command_id_v1){0, 65}) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_ARGUMENT);
+    CHECK(Worr_NativeCommandShadowJoinRetireComparedV1(
+              &join, missing_id) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_NOT_FOUND);
+    CHECK(memcmp(&join, &before, sizeof(join)) == 0);
+
+    /*
+     * The incomplete record shares the target sequence in another epoch.
+     * The survivor shares its epoch and sequence modulo the table capacity.
+     */
+    incomplete_record = make_native_record(72, 65, 1, 3, 65000);
+    CHECK(Worr_NativeCommandShadowJoinObserveV1(
+              &join, WORR_NATIVE_COMMAND_SHADOW_JOIN_NATIVE,
+              &incomplete_record, 1, NULL) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_STORED_NATIVE);
+    before = join;
+    CHECK(Worr_NativeCommandShadowJoinRetireComparedV1(
+              &join, incomplete_record.command_id) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_STATE);
+    CHECK(memcmp(&join, &before, sizeof(join)) == 0);
+
+    target_record = make_native_record(71, 65, 1, 5, 65000);
+    target_legacy = make_legacy_record(&target_record, 75000, 65);
+    CHECK(Worr_NativeCommandShadowJoinObserveV1(
+              &join, WORR_NATIVE_COMMAND_SHADOW_JOIN_NATIVE,
+              &target_record, 2, NULL) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_STORED_NATIVE);
+    CHECK(Worr_NativeCommandShadowJoinObserveV1(
+              &join, WORR_NATIVE_COMMAND_SHADOW_JOIN_LEGACY,
+              &target_legacy, 3, NULL) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_MATCHED_WATERMARK_UNVERIFIED);
+
+    survivor_record = make_native_record(71, 1, 1, 4, 1000);
+    survivor_legacy = make_legacy_record(&survivor_record, 11000, 1);
+    CHECK(Worr_NativeCommandShadowJoinObserveV1(
+              &join, WORR_NATIVE_COMMAND_SHADOW_JOIN_NATIVE,
+              &survivor_record, 4, NULL) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_STORED_NATIVE);
+    CHECK(Worr_NativeCommandShadowJoinObserveV1(
+              &join, WORR_NATIVE_COMMAND_SHADOW_JOIN_LEGACY,
+              &survivor_legacy, 5, NULL) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_MATCHED_WATERMARK_UNVERIFIED);
+    CHECK(join.occupied_count == 3 &&
+          Worr_NativeCommandShadowJoinValidateV1(&join));
+
+    CHECK(Worr_NativeCommandShadowJoinFindV1(
+              &join, survivor_record.command_id, &survivor_slot) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_FOUND);
+    CHECK(Worr_NativeCommandShadowJoinFindV1(
+              &join, incomplete_record.command_id, &incomplete_slot) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_FOUND);
+    for (index = 0; index < join.capacity; ++index) {
+        if (join.slots[index].command_id.epoch ==
+                target_record.command_id.epoch &&
+            join.slots[index].command_id.sequence ==
+                target_record.command_id.sequence) {
+            target_index = index;
+            break;
+        }
+    }
+    CHECK(target_index != UINT32_MAX);
+
+    before = join;
+    expected = before;
+    memset(&expected.slots[target_index], 0,
+           sizeof(expected.slots[target_index]));
+    --expected.occupied_count;
+    CHECK(Worr_NativeCommandShadowJoinRetireComparedV1(
+              &join, target_record.command_id) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_RETIRED);
+    CHECK(memcmp(&join, &expected, sizeof(join)) == 0);
+    CHECK(join.occupied_count == 2 &&
+          Worr_NativeCommandShadowJoinValidateV1(&join));
+    CHECK(Worr_NativeCommandShadowJoinFindV1(
+              &join, target_record.command_id,
+              &expected.slots[target_index]) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_NOT_FOUND);
+    CHECK(Worr_NativeCommandShadowJoinFindV1(
+              &join, survivor_record.command_id,
+              &expected.slots[target_index]) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_FOUND);
+    CHECK(memcmp(&expected.slots[target_index], &survivor_slot,
+                 sizeof(survivor_slot)) == 0);
+    CHECK(Worr_NativeCommandShadowJoinFindV1(
+              &join, incomplete_record.command_id,
+              &expected.slots[target_index]) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_FOUND);
+    CHECK(memcmp(&expected.slots[target_index], &incomplete_slot,
+                 sizeof(incomplete_slot)) == 0);
+
+    before = join;
+    CHECK(Worr_NativeCommandShadowJoinRetireComparedV1(
+              &join, target_record.command_id) ==
+          WORR_NATIVE_COMMAND_SHADOW_JOIN_NOT_FOUND);
+    CHECK(memcmp(&join, &before, sizeof(join)) == 0);
+    return 0;
+}
+
 static int test_join_capacity_and_expiry(void)
 {
     worr_native_command_shadow_join_v1 join;
@@ -888,6 +1023,7 @@ int main(void)
         test_comparator() != 0 ||
         test_join_orders_conflicts_and_prune() != 0 ||
         test_join_deep_validation() != 0 ||
+        test_join_retire_compared() != 0 ||
         test_join_capacity_and_expiry() != 0) {
         return 1;
     }

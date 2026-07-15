@@ -71,10 +71,11 @@ not create a private epoch, emit `CHALLENGE`, or start the private deadline at
 that point. The client will accept readiness only after the real capability
 parser confirms the exact legacy-only tuple. The server waits for the later,
 accepted post-bootstrap `SV_Begin` before recording a pending private challenge
-request. That request does not create an epoch or deadline until the send path
-reaches a clean reliable boundary. This prevents the hidden pilot from widening
-the live protocol contract or timing out behind bootstrap traffic the client
-has not yet observed.
+request and its request time. `SV_Begin` never calls the readiness epoch core.
+The request does not create an epoch or deadline until the send path reaches a
+clean reliable boundary. This prevents the hidden pilot from widening the live
+protocol contract or timing out behind bootstrap traffic the client has not yet
+observed.
 
 The server allocates its peer only for an exact legacy-stage client offer, a
 supported setting-bearing protocol (Q2PRO, R1Q2, or Rerelease), and a valid new
@@ -101,16 +102,21 @@ word into the existing 32-bit SVC setting fields. The client uses the existing
 q2proto CLC setting writer; production parsing in both directions continues to
 use the existing q2proto readers.
 
-The timeout is 10,000 milliseconds. Accepted `SV_Begin` records only a pending
-challenge request. Its server-side clock starts later, when the first clean
-reliable boundary allows the server to create and atomically queue `CHALLENGE`
-for immediate transmission. The deadline therefore measures an observable
-readiness exchange and its bounded queueing delay, not time spent delivering
-`SERVERDATA`, the gamestate, bootstrap fragments, or an older in-flight
-reliable. Both adapters extend their existing 32-bit engine clocks into checked
-64-bit monotonic time. A normal 32-bit wrap is accepted under the half-range
-rule; a regression, ambiguous half-range gap, or 64-bit exhaustion disables the
-pilot.
+The readiness timeout is 10,000 milliseconds. Accepted `SV_Begin` records only
+a pending challenge request and its request time; it does not call
+`SV_NativeShadowBeginEpochV1()`. The server-side readiness clock starts later,
+immediately before the clean-boundary send path hands the newly created and
+atomically queued `CHALLENGE` to netchan. The deadline therefore measures an
+observable readiness exchange, not time spent delivering `SERVERDATA`, the
+gamestate, bootstrap fragments, or an older in-flight reliable.
+
+The distinct pre-start queue wait is bounded to 60,000 milliseconds from the
+accepted begin request. If no clean handoff boundary appears in that interval,
+the optional pilot fails closed with `SV_NATIVE_SHADOW_FAILURE_QUEUE`; the
+legacy connection and simulation continue unaffected. Both adapters extend
+their existing 32-bit engine clocks into checked 64-bit monotonic time. A normal
+32-bit wrap is accepted under the half-range rule; a regression, ambiguous
+half-range gap, or 64-bit exhaustion disables the pilot.
 
 Exact duplicate readiness records do not repeat a state transition and may
 reproduce the expected reply. A different role, epoch, nonce, capability
@@ -129,15 +135,29 @@ is covered: 64 free bytes produces no partial output and disables the pilot;
 65 free bytes commits the complete record.
 
 On the server, each SVC record is staged into an exact 117-byte buffer and
-appended once. Accepted `SV_Begin` creates a pending challenge request, then
-attempts the clean-boundary transaction. A queued, in-flight, or fragmented
-reliable is expected backpressure: the request remains pending, the server does
-not create an epoch or deadline, and the private pilot is not disabled.
-`SV_SendClientMessages` retries only after the client passes rate admission and
-after any pending fragment has been completed. At the first clean boundary,
-`CHALLENGE` capacity is reserved, the readiness epoch and its 10-second deadline
-are created, and the fully staged record is copied atomically into the empty
-reliable queue for immediate transmission.
+appended once. Accepted `SV_Begin` only creates a pending challenge request and
+records its request time. A queued, in-flight, or fragmented reliable is
+expected backpressure: the request remains pending, the server does not create
+an epoch or readiness deadline, and the private pilot is not disabled.
+`SV_SendClientMessages` is the normal service point. It examines the request
+only after the client passes rate admission and after any pending fragment has
+been completed. A paused active client has no synchronous snapshot pass, so
+`SV_SendAsyncPackets` services the same pending transaction while `SV_PAUSED`,
+again only after its rate and fragment gates.
+
+At the first clean boundary, `CHALLENGE` capacity is reserved. In the same send
+transaction, the readiness core creates the epoch, nonce, record, and 10-second
+deadline; the fully staged record is copied atomically into the empty reliable
+queue; and the owning send path immediately calls `Netchan_Transmit` with zero
+frame payload. The deadline therefore starts immediately before the netchan
+handoff. This makes the 117-byte `CHALLENGE` a dedicated reliable generation.
+The synchronous path suppresses that client's one snapshot frame; the paused
+asynchronous path has no snapshot to suppress. No game frame payload or later
+game-start output can precede the challenge in that generation.
+
+The pending pre-start state may wait for a clean boundary for at most 60
+seconds. Reaching that bound retires the optional pilot with the typed `QUEUE`
+failure and leaves legacy traffic untouched.
 
 An invalid official binding, insufficient capacity at that clean boundary, or
 an invalid readiness-core state still fails closed for the private pilot.
@@ -180,16 +200,23 @@ map-local readiness epoch:
    The private epoch has not started yet.
 4. After the client consumes the complete join/bootstrap stream and sends
    `begin`, the server accepts `SV_Begin`, transitions the client to spawned,
-   and records a pending challenge request. No private epoch or deadline exists
+   and records a pending challenge request plus its request time. It does not
+   call the readiness epoch core; no private epoch or readiness deadline exists
    yet.
 5. If an older reliable is queued, in flight, or fragmented, the request is
    deferred without disabling the pilot. The normal send scheduler retries it
-   only after rate admission and fragment completion.
+   only after rate admission and fragment completion; while the simulation is
+   paused, the asynchronous pass provides the equivalent clean-boundary
+   service. If this pre-start wait reaches 60 seconds, the optional pilot fails
+   closed with `QUEUE` while the legacy connection continues.
 6. At the first clean reliable boundary, the server allocates a process-unique
-   private transport epoch and nonce, atomically queues `CHALLENGE`, and sends
-   it immediately as the first clean post-bootstrap reliable. Only this commit
-   creates the 10-second readiness deadline. Invalid binding, capacity, or core
-   state still retires the private pilot.
+   private transport epoch and nonce, starts the 10-second readiness deadline,
+   atomically queues `CHALLENGE`, and immediately calls `Netchan_Transmit` with
+   zero frame payload in the same send transaction. The timer starts
+   immediately before this handoff. This dedicated 117-byte reliable generation
+   is sent immediately. The synchronous owner suppresses one snapshot frame;
+   the paused asynchronous owner has no snapshot frame. Invalid binding,
+   capacity, or core state still retires the private pilot.
 7. `SERVERDATA` and the public confirmation therefore never share a reliable
    transaction with the next private `CHALLENGE`; bootstrap and older reliable
    delivery consume none of the readiness deadline.
@@ -235,7 +262,8 @@ and continue decoding the rest of the packet through normal legacy paths. This
 includes:
 
 - a non-exact official capability binding;
-- timeout, clock regression, or identity exhaustion;
+- the 60-second pre-start queue bound or 10-second readiness timeout;
+- clock regression or identity exhaustion;
 - malformed readiness order, checksum, commit, role, epoch, or nonce;
 - an interrupted or dangling packet-scoped tuple;
 - hook installation or lifecycle failure; and
@@ -271,10 +299,26 @@ capacity, server queue-failure retirement, parser
 interruption/dangling/double-begin cases, deadline, clock wrap/regression,
 occupied hooks, owner non-reuse, and teardown clearing.
 
-The full registered networking suite passes 104/104 and three consecutive
-runs pass 312/312. The client and dedicated engine DLLs link with the production
+The full registered networking suite passes 105/105 and three consecutive
+runs pass 315/315. The client and dedicated engine DLLs link with the production
 adapters; the complete client engine, dedicated engine, cgame, sgame, client
 launcher, and dedicated launcher production set also builds.
+
+Those figures are the exact readiness-pilot baseline. The current integrated
+baseline after repeated-carrier and cgame event-runtime follow-ups is 113/113
+once and 339/339 across three complete repetitions.
+
+The later production integration now also passes the stable two-process native
+shadow gate three times. Each fresh staged `base1` connection completes the
+private readiness proof under 25 ms deterministic latency before one
+observational command is admitted. The low-rate profile uses 1,500 B/s and a
+512-byte netchan ceiling while delivering 12,800 reliable bytes exactly once;
+the separate 1,000,000 B/s zero-delay profile deterministically admits three
+asynchronous ACK wakes and three handoffs while delivering 6,400 reliable bytes
+exactly once. All three complete gates retain one command and release it after
+one server match with no pilot failure. Detailed report hashes, counters,
+scheduler-stability correction, and limitations are recorded in
+`docs-dev/fr-10-t04-native-two-process-async-ack-impairment-gate-2026-07-14.md`.
 
 Current focused validation also passes:
 
@@ -327,5 +371,7 @@ validation record; its statements that production hooks are BYPASS-only or
 carry no DATA/ACK are superseded by
 `docs-dev/fr-10-t04-one-shot-native-command-shadow-production-pilot-2026-07-14.md`.
 Public masks remain `0x03`, private readiness remains `0x13`, and legacy
-`MOVE`/`BATCH_MOVE` remains the sole authority. Full impairment/load/platform
-and promotion gates remain open.
+`MOVE`/`BATCH_MOVE` remains the sole authority. The stable two-process gate now
+proves the narrow readiness, low-rate reliable/fragment, and high-rate async-ACK
+paths described above. Directional readiness-packet loss/reorder/duplication,
+load, multi-client, supported-platform, and promotion gates remain open.

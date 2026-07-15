@@ -8,11 +8,15 @@ the Free Software Foundation; either version 2 of the License, or
 */
 
 #include "client.h"
+#include "client/cgame_event_runtime.h"
 #include "client/native_readiness_pilot.h"
 
 #include "common/net/native_carrier.h"
+#include "common/net/native_carrier_ack.h"
+#include "common/net/native_carrier_mixed.h"
 #include "common/net/native_carrier_session.h"
 #include "common/net/native_command_shadow.h"
+#include "common/net/native_event_admission.h"
 #include "common/net/native_readiness.h"
 #include "common/net/native_readiness_sideband.h"
 #include "common/net/native_session.h"
@@ -25,14 +29,22 @@ the Free Software Foundation; either version 2 of the License, or
 
 namespace {
 
-constexpr uint32_t kPrivateCapabilities =
-    WORR_NET_CAP_LEGACY_STAGE_MASK | WORR_NET_CAP_NATIVE_ENVELOPE_V1;
+constexpr uint32_t kCommandPrivateCapabilities =
+    WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK;
+constexpr uint32_t kEventPrivateCapabilities =
+    WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK;
 /* The server starts CHALLENGE after bootstrap.  This timeout covers the
  * bounded private readiness exchange only; authoritative legacy continues
  * independently if the default-off pilot fails closed. */
 constexpr uint64_t kReadinessTimeoutMilliseconds = UINT64_C(10000);
 constexpr uint32_t kResendIntervalMilliseconds = UINT32_C(100);
+constexpr uint32_t kAckRetryIntervalMilliseconds = UINT32_C(100);
+constexpr uint32_t kRxFragmentTimeoutMilliseconds = UINT32_C(1000);
+constexpr uint32_t kRxCompleteTimeoutMilliseconds = UINT32_C(1000);
 constexpr uint16_t kTxSlotCapacity = 1;
+constexpr uint16_t kEventRxSlotCapacity =
+    WORR_NATIVE_SESSION_MAX_RX_SLOTS;
+constexpr uint8_t kAckProactiveHandoffs = 3;
 constexpr uint8_t kProofPriority = 0;
 constexpr uint16_t kCommandPayloadBytes =
     WORR_NATIVE_COMMAND_SHADOW_ENCODED_BYTES;
@@ -44,21 +56,40 @@ constexpr uint16_t kCommandCarrierOverhead =
 constexpr size_t kEncodedClientReadyBytes =
     WORR_NATIVE_READINESS_SIDEBAND_PAIR_COUNT * 5u;
 constexpr size_t kScratchBytes = 128u;
+constexpr uint32_t kEventPayloadStride =
+    WORR_NATIVE_CODEC_MAX_EVENT_ENCODED_BYTES;
+constexpr size_t kEventPayloadArenaBytes =
+    static_cast<size_t>(kEventRxSlotCapacity) * kEventPayloadStride;
 
 static_assert(WORR_NET_CAP_LEGACY_STAGE_MASK == UINT32_C(3));
-static_assert(kPrivateCapabilities == UINT32_C(0x13));
+static_assert(kCommandPrivateCapabilities == UINT32_C(0x53));
+static_assert(kEventPrivateCapabilities == UINT32_C(0x73));
 static_assert(kEncodedClientReadyBytes == 65u);
 static_assert(kCommandPayloadBytes == 110u);
 static_assert(kCommandDatagramBytes == 166u);
 static_assert(kCommandCarrierOverhead == 206u);
 static_assert(818u + kCommandCarrierOverhead == 1024u);
 static_assert(819u + kCommandCarrierOverhead > 1024u);
+static_assert(kEventPayloadStride == 192u);
+static_assert(kEventPayloadArenaBytes == 3072u);
 static_assert((CMD_BACKUP & (CMD_BACKUP - 1u)) == 0u);
 
 enum class pilot_mode_t : uint32_t {
     arming = 1,
     active = 2,
     drain = 3,
+};
+
+enum class tx_packet_kind_t : uint32_t {
+    none = 0,
+    command_mixed = 1,
+    ack_current = 2,
+    ack_retired = 3,
+};
+
+enum class event_ack_bank_t : uint32_t {
+    current = 1,
+    retired = 2,
 };
 
 struct checked_tick_extender_t {
@@ -87,11 +118,19 @@ struct client_native_readiness_telemetry_t {
     uint64_t acknowledged_reliable{};
     uint64_t drains{};
     uint64_t failures{};
+    uint64_t cancellation_barriers{};
+    uint64_t cancelled_transports{};
+    uint64_t cancelled_commands{};
+    uint64_t cancelled_event_rx{};
+    uint64_t cancelled_event_receipts{};
+    uint64_t stale_cancelled_carriers{};
+    uint64_t stale_cancelled_readiness_records{};
     uint32_t last_failure{};
 };
 
 struct client_native_readiness_pilot_t {
     bool enabled{};
+    bool event_enabled{};
     bool tx_hook_registered{};
     bool rx_hook_registered{};
     bool capability_confirmed{};
@@ -100,12 +139,22 @@ struct client_native_readiness_pilot_t {
     bool session_initialized{};
     bool retired_session_initialized{};
     bool builder_initialized{};
-    bool proof_enqueued_once{};
+    bool last_enqueued_command_valid{};
     bool readiness_committed{};
     bool carrier_traffic_seen{};
+    bool client_active_confirm_queued{};
     pilot_mode_t mode{pilot_mode_t::arming};
+    tx_packet_kind_t tx_packet_kind{tx_packet_kind_t::none};
+    event_ack_bank_t ack_next_bank{event_ack_bank_t::current};
     netchan_t *channel{};
     uint64_t connection_owner_id{};
+    uint32_t private_capabilities{};
+    uint32_t cancelled_through_transport_epoch{};
+    uint64_t next_completion_token{};
+    uint64_t active_completion_token{};
+    uint32_t prepared_application_bytes{};
+    std::array<byte, WORR_NATIVE_CARRIER_MAX_PACKET_BYTES>
+        prepared_application{};
     checked_tick_extender_t clock{};
     worr_native_readiness_sideband_parser_v1 parser{};
     worr_native_readiness_state_v1 readiness{};
@@ -118,11 +167,56 @@ struct client_native_readiness_pilot_t {
     worr_native_tx_session_v1 retired_tx{};
     std::array<worr_native_tx_slot_v1, kTxSlotCapacity> retired_tx_slots{};
     worr_native_command_shadow_payload_registry_v1 retired_payload_registry{};
+    worr_native_carrier_mixed_token_v1 mixed_token{};
+    worr_native_carrier_ack_emit_token_v1 ack_emit_token{};
+    worr_native_rx_session_v1 event_rx{};
+    std::array<worr_native_rx_slot_v1, kEventRxSlotCapacity>
+        event_rx_slots{};
+    std::array<byte, kEventPayloadArenaBytes> event_payload_arena{};
+    worr_native_carrier_ack_ledger_v1 event_ack_ledger{};
+    worr_native_rx_session_v1 retired_event_rx{};
+    std::array<worr_native_rx_slot_v1, kEventRxSlotCapacity>
+        retired_event_rx_slots{};
+    std::array<byte, kEventPayloadArenaBytes>
+        retired_event_payload_arena{};
+    worr_native_carrier_ack_ledger_v1 retired_event_ack_ledger{};
+    worr_event_stream_owner_v1 event_owner{};
+    worr_native_event_consumer_v1 event_consumer{};
     worr_native_command_shadow_builder_v1 builder{};
+    worr_command_id_v1 last_enqueued_command_id{};
     std::array<command_ring_entry_t, CMD_BACKUP> command_ring{};
 };
 
+struct client_native_cancellation_stage_t {
+    bool current_initialized{};
+    bool retired_initialized{};
+    uint32_t cancelled_through_transport_epoch{};
+    uint32_t cancelled_transports{};
+    uint32_t cancelled_commands{};
+    uint32_t cancelled_event_rx{};
+    uint32_t cancelled_event_receipts{};
+    worr_native_tx_session_v1 tx{};
+    std::array<worr_native_tx_slot_v1, kTxSlotCapacity> tx_slots{};
+    worr_native_carrier_tx_gate_v1 tx_gate{};
+    worr_native_carrier_dispatch_v1 dispatch{};
+    worr_native_command_shadow_payload_registry_v1 payload_registry{};
+    worr_native_rx_session_v1 event_rx{};
+    std::array<worr_native_rx_slot_v1, kEventRxSlotCapacity>
+        event_rx_slots{};
+    worr_native_carrier_ack_ledger_v1 event_ack_ledger{};
+    worr_native_tx_session_v1 retired_tx{};
+    std::array<worr_native_tx_slot_v1, kTxSlotCapacity>
+        retired_tx_slots{};
+    worr_native_command_shadow_payload_registry_v1
+        retired_payload_registry{};
+    worr_native_rx_session_v1 retired_event_rx{};
+    std::array<worr_native_rx_slot_v1, kEventRxSlotCapacity>
+        retired_event_rx_slots{};
+    worr_native_carrier_ack_ledger_v1 retired_event_ack_ledger{};
+};
+
 cvar_t *cl_worr_native_shadow{};
+cvar_t *cl_worr_native_event_shadow{};
 cvar_t *cl_worr_native_shadow_probe_hold{};
 client_native_readiness_pilot_t pilot{};
 client_native_readiness_telemetry_t telemetry{};
@@ -169,6 +263,13 @@ bool current_tick(uint64_t &tick_out)
                        tick_out);
 }
 
+bool projected_tick(uint64_t &tick_out)
+{
+    checked_tick_extender_t projected = pilot.clock;
+    return extend_tick(projected, static_cast<uint32_t>(com_localTime),
+                       tick_out);
+}
+
 bool allocate_connection_owner(uint64_t &owner_out)
 {
     if (next_connection_owner_id == 0)
@@ -187,9 +288,302 @@ void counter_increment(uint64_t &counter)
         ++counter;
 }
 
+void counter_add(uint64_t &counter, uint64_t amount)
+{
+    if (amount > UINT64_MAX - counter)
+        counter = UINT64_MAX;
+    else
+        counter += amount;
+}
+
+bool cancel_staged_command_bank(
+    worr_native_tx_session_v1 &tx,
+    std::array<worr_native_tx_slot_v1, kTxSlotCapacity> &slots,
+    worr_native_command_shadow_payload_registry_v1 &registry,
+    uint32_t &cancelled_out)
+{
+    if (!Worr_NativeTxSessionValidateV1(
+            &tx, slots.data(), kTxSlotCapacity) ||
+        !Worr_NativeCommandShadowPayloadRegistryValidateV1(&registry) ||
+        registry.occupied_count != tx.retained_count) {
+        return false;
+    }
+
+    std::array<uint32_t, kTxSlotCapacity> handles{};
+    uint16_t handle_count = 0;
+    for (const auto &slot : slots) {
+        if (slot.state_flags != 0)
+            handles[handle_count++] = slot.payload_handle;
+    }
+
+    uint32_t cancelled = 0;
+    if (Worr_NativeTxSessionCancelRetainedV1(
+            &tx, slots.data(), kTxSlotCapacity, &cancelled) !=
+            WORR_NATIVE_TX_CANCELLED ||
+        cancelled != handle_count) {
+        return false;
+    }
+    for (uint16_t index = 0; index < handle_count; ++index) {
+        if (Worr_NativeCommandShadowPayloadReleaseV1(
+                &registry, handles[index]) !=
+            WORR_NATIVE_COMMAND_SHADOW_PAYLOAD_RELEASED) {
+            return false;
+        }
+    }
+    if (!Worr_NativeTxSessionValidateV1(
+            &tx, slots.data(), kTxSlotCapacity) ||
+        !Worr_NativeCommandShadowPayloadRegistryValidateV1(&registry) ||
+        tx.retained_count != 0 || registry.occupied_count != 0) {
+        return false;
+    }
+    cancelled_out = cancelled;
+    return true;
+}
+
+bool cancel_staged_event_bank(
+    worr_native_rx_session_v1 &rx,
+    std::array<worr_native_rx_slot_v1, kEventRxSlotCapacity> &slots,
+    worr_native_carrier_ack_ledger_v1 &ledger,
+    uint32_t &cancelled_rx_out, uint32_t &cancelled_receipts_out)
+{
+    if (!Worr_NativeRxSessionValidateV1(
+            &rx, slots.data(), kEventRxSlotCapacity) ||
+        !Worr_NativeCarrierAckLedgerValidateV1(&ledger)) {
+        return false;
+    }
+    worr_native_rx_cancel_report_v1 rx_report{};
+    uint32_t receipts = 0;
+    if (Worr_NativeRxSessionCancelPendingV1(
+            &rx, slots.data(), kEventRxSlotCapacity, &rx_report) !=
+            WORR_NATIVE_RX_CANCELLED ||
+        Worr_NativeCarrierAckCancelAllV1(&ledger, &receipts) !=
+            WORR_NATIVE_CARRIER_ACK_OK ||
+        !Worr_NativeRxSessionValidateV1(
+            &rx, slots.data(), kEventRxSlotCapacity) ||
+        !Worr_NativeCarrierAckLedgerValidateV1(&ledger) ||
+        rx.occupied_count != 0 || ledger.receipt_count != 0) {
+        return false;
+    }
+    cancelled_rx_out = rx_report.incomplete_messages +
+                       rx_report.complete_messages;
+    cancelled_receipts_out = receipts;
+    return true;
+}
+
+bool stage_prior_native_epoch_cancellation(
+    uint32_t new_transport_epoch,
+    client_native_cancellation_stage_t &stage)
+{
+    if (new_transport_epoch == 0 ||
+        new_transport_epoch <=
+            pilot.cancelled_through_transport_epoch ||
+        pilot.tx_packet_kind != tx_packet_kind_t::none ||
+        pilot.active_completion_token != 0 ||
+        (pilot.retired_session_initialized &&
+         !pilot.session_initialized)) {
+        return false;
+    }
+
+    stage = {};
+    stage.cancelled_through_transport_epoch =
+        pilot.cancelled_through_transport_epoch;
+    if (pilot.readiness_initialized) {
+        if (!Worr_NativeReadinessStateValidateV1(&pilot.readiness) ||
+            pilot.readiness.transport_epoch >= new_transport_epoch) {
+            return false;
+        }
+        if (stage.cancelled_through_transport_epoch <
+            pilot.readiness.transport_epoch) {
+            stage.cancelled_through_transport_epoch =
+                pilot.readiness.transport_epoch;
+        }
+    }
+    if (pilot.session_initialized) {
+        if (!Worr_NativeSessionBindingValidateV1(&pilot.binding) ||
+            pilot.binding.transport_epoch >= new_transport_epoch ||
+            !Worr_NativeCarrierTxGateValidateV1(&pilot.tx_gate) ||
+            pilot.tx.transport_epoch != pilot.binding.transport_epoch ||
+            pilot.tx_gate.transport_epoch !=
+                pilot.binding.transport_epoch ||
+            (pilot.tx_gate.state_flags &
+             WORR_NATIVE_CARRIER_TX_GATE_PACKET_PENDING) != 0) {
+            return false;
+        }
+        stage.current_initialized = true;
+        stage.tx = pilot.tx;
+        stage.tx_slots = pilot.tx_slots;
+        stage.tx_gate = pilot.tx_gate;
+        stage.dispatch = pilot.dispatch;
+        stage.payload_registry = pilot.payload_registry;
+        if ((stage.tx_gate.state_flags &
+             WORR_NATIVE_CARRIER_TX_GATE_ACTIVE) != 0 &&
+            Worr_NativeCarrierSessionDispatchAbortV1(
+                &stage.tx_gate, &stage.dispatch) !=
+                WORR_NATIVE_CARRIER_SESSION_OK) {
+            return false;
+        }
+        if ((stage.tx_gate.state_flags &
+             WORR_NATIVE_CARRIER_TX_GATE_ACTIVE) != 0 ||
+            !cancel_staged_command_bank(
+                stage.tx, stage.tx_slots, stage.payload_registry,
+                stage.cancelled_commands)) {
+            return false;
+        }
+        if (pilot.event_enabled) {
+            if (pilot.event_rx.transport_epoch !=
+                    pilot.binding.transport_epoch ||
+                pilot.event_ack_ledger.transport_epoch !=
+                    pilot.binding.transport_epoch) {
+                return false;
+            }
+            stage.event_rx = pilot.event_rx;
+            stage.event_rx_slots = pilot.event_rx_slots;
+            stage.event_ack_ledger = pilot.event_ack_ledger;
+            uint32_t rx = 0;
+            uint32_t receipts = 0;
+            if (!cancel_staged_event_bank(
+                    stage.event_rx, stage.event_rx_slots,
+                    stage.event_ack_ledger, rx, receipts)) {
+                return false;
+            }
+            stage.cancelled_event_rx += rx;
+            stage.cancelled_event_receipts += receipts;
+        }
+        stage.cancelled_through_transport_epoch =
+            pilot.binding.transport_epoch;
+        ++stage.cancelled_transports;
+    }
+
+    if (pilot.retired_session_initialized) {
+        if (pilot.retired_tx.transport_epoch >= new_transport_epoch ||
+            (pilot.session_initialized &&
+             pilot.retired_tx.transport_epoch >=
+                 pilot.tx.transport_epoch)) {
+            return false;
+        }
+        stage.retired_initialized = true;
+        stage.retired_tx = pilot.retired_tx;
+        stage.retired_tx_slots = pilot.retired_tx_slots;
+        stage.retired_payload_registry =
+            pilot.retired_payload_registry;
+        uint32_t commands = 0;
+        if (!cancel_staged_command_bank(
+                stage.retired_tx, stage.retired_tx_slots,
+                stage.retired_payload_registry, commands)) {
+            return false;
+        }
+        stage.cancelled_commands += commands;
+        if (pilot.event_enabled) {
+            if (pilot.retired_event_rx.transport_epoch !=
+                    pilot.retired_tx.transport_epoch ||
+                pilot.retired_event_ack_ledger.transport_epoch !=
+                    pilot.retired_tx.transport_epoch) {
+                return false;
+            }
+            stage.retired_event_rx = pilot.retired_event_rx;
+            stage.retired_event_rx_slots =
+                pilot.retired_event_rx_slots;
+            stage.retired_event_ack_ledger =
+                pilot.retired_event_ack_ledger;
+            uint32_t rx = 0;
+            uint32_t receipts = 0;
+            if (!cancel_staged_event_bank(
+                    stage.retired_event_rx,
+                    stage.retired_event_rx_slots,
+                    stage.retired_event_ack_ledger, rx, receipts)) {
+                return false;
+            }
+            stage.cancelled_event_rx += rx;
+            stage.cancelled_event_receipts += receipts;
+        }
+        if (stage.cancelled_through_transport_epoch <
+            pilot.retired_tx.transport_epoch) {
+            stage.cancelled_through_transport_epoch =
+                pilot.retired_tx.transport_epoch;
+        }
+        ++stage.cancelled_transports;
+    }
+    return stage.cancelled_through_transport_epoch <
+           new_transport_epoch;
+}
+
+void commit_prior_native_epoch_cancellation(
+    const client_native_cancellation_stage_t &stage)
+{
+    /* Publish the prevalidated terminal dispositions only after CLIENT_READY
+     * is durably resident in the reliable queue.  The enclosing transport
+     * storage can then be reset without manufacturing a second retired bank. */
+    if (stage.current_initialized) {
+        pilot.tx = stage.tx;
+        pilot.tx_slots = stage.tx_slots;
+        pilot.tx_gate = stage.tx_gate;
+        pilot.dispatch = stage.dispatch;
+        pilot.payload_registry = stage.payload_registry;
+        if (pilot.event_enabled) {
+            pilot.event_rx = stage.event_rx;
+            pilot.event_rx_slots = stage.event_rx_slots;
+            pilot.event_ack_ledger = stage.event_ack_ledger;
+        }
+    }
+    if (stage.retired_initialized) {
+        pilot.retired_tx = stage.retired_tx;
+        pilot.retired_tx_slots = stage.retired_tx_slots;
+        pilot.retired_payload_registry =
+            stage.retired_payload_registry;
+        if (pilot.event_enabled) {
+            pilot.retired_event_rx = stage.retired_event_rx;
+            pilot.retired_event_rx_slots =
+                stage.retired_event_rx_slots;
+            pilot.retired_event_ack_ledger =
+                stage.retired_event_ack_ledger;
+        }
+    }
+
+    pilot.binding = {};
+    pilot.tx = {};
+    pilot.tx_slots = {};
+    pilot.tx_gate = {};
+    pilot.dispatch = {};
+    pilot.payload_registry = {};
+    pilot.retired_tx = {};
+    pilot.retired_tx_slots = {};
+    pilot.retired_payload_registry = {};
+    pilot.event_rx = {};
+    pilot.event_rx_slots = {};
+    pilot.event_payload_arena = {};
+    pilot.event_ack_ledger = {};
+    pilot.retired_event_rx = {};
+    pilot.retired_event_rx_slots = {};
+    pilot.retired_event_payload_arena = {};
+    pilot.retired_event_ack_ledger = {};
+    pilot.session_initialized = false;
+    pilot.retired_session_initialized = false;
+    pilot.last_enqueued_command_valid = false;
+    pilot.last_enqueued_command_id = {};
+    pilot.tx_packet_kind = tx_packet_kind_t::none;
+    pilot.ack_next_bank = event_ack_bank_t::current;
+    pilot.active_completion_token = 0;
+    pilot.prepared_application_bytes = 0;
+    pilot.prepared_application = {};
+    pilot.mixed_token = {};
+    pilot.ack_emit_token = {};
+    pilot.cancelled_through_transport_epoch =
+        stage.cancelled_through_transport_epoch;
+    counter_increment(telemetry.cancellation_barriers);
+    counter_add(telemetry.cancelled_transports,
+                stage.cancelled_transports);
+    counter_add(telemetry.cancelled_commands,
+                stage.cancelled_commands);
+    counter_add(telemetry.cancelled_event_rx,
+                stage.cancelled_event_rx);
+    counter_add(telemetry.cancelled_event_receipts,
+                stage.cancelled_event_receipts);
+}
+
 void disable_pilot()
 {
     netchan_t *const channel = pilot.channel;
+    const bool reset_event_connection = pilot.event_enabled;
     if (channel && pilot.rx_hook_registered &&
         channel->app_rx == pilot_rx &&
         channel->app_rx_opaque == &pilot) {
@@ -203,6 +597,8 @@ void disable_pilot()
             channel, nullptr, nullptr, nullptr);
     }
     pilot = {};
+    if (reset_event_connection)
+        (void)CL_CGameEventRuntimeResetConnection();
 }
 
 bool hooks_attached_exact()
@@ -240,7 +636,15 @@ void enter_drain(bool diagnostic_failure = true)
         return;
     if (diagnostic_failure && pilot.mode != pilot_mode_t::drain)
         counter_increment(telemetry.drains);
+    const bool first_entry = pilot.mode != pilot_mode_t::drain;
     pilot.mode = pilot_mode_t::drain;
+
+    if (first_entry && pilot.event_enabled) {
+        if (pilot.event_owner.epoch_high_water != 0)
+            (void)Worr_EventStreamOwnerRequireResyncV1(
+                &pilot.event_owner);
+        (void)CL_CGameEventRuntimeQuiesceAuthority();
+    }
 
     /* No callback is re-entrant on this netchan.  A non-pending dispatch can
      * therefore be abandoned immediately; a pending accepted outcome stays
@@ -276,13 +680,18 @@ bool capability_is_exact_legacy_confirmation(
            state->negotiated == WORR_NET_CAP_LEGACY_STAGE_MASK;
 }
 
-bool queue_client_ready(
-    const worr_native_readiness_record_v1 &client_ready)
+bool queue_readiness_record(
+    const worr_native_readiness_record_v1 &record)
 {
+    if (record.record_kind != WORR_NATIVE_READINESS_RECORD_CLIENT_READY &&
+        record.record_kind !=
+            WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM) {
+        return false;
+    }
     std::array<worr_native_readiness_setting_pair_v1,
                WORR_NATIVE_READINESS_SIDEBAND_PAIR_COUNT> pairs{};
     if (!Worr_NativeReadinessSidebandEncodeV1(
-            &client_ready, pairs.data(),
+            &record, pairs.data(),
             static_cast<uint32_t>(pairs.size()))) {
         return false;
     }
@@ -320,7 +729,12 @@ bool queue_client_ready(
     /* One preflighted append is the atomic reliable-queue commit. */
     SZ_Write(&channel->message, scratch.data, scratch.cursize);
     pilot.readiness_committed = true;
-    counter_increment(telemetry.client_ready_queued);
+    if (record.record_kind == WORR_NATIVE_READINESS_RECORD_CLIENT_READY) {
+        counter_increment(telemetry.client_ready_queued);
+    } else if (record.record_kind ==
+               WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM) {
+        pilot.client_active_confirm_queued = true;
+    }
     return true;
 }
 
@@ -328,10 +742,13 @@ bool observe_challenge(
     const worr_native_readiness_record_v1 &challenge, uint64_t now)
 {
     const bool starts_fresh_map_epoch = pilot.map_quiesced;
+    const bool fresh_challenge_expected =
+        !pilot.readiness_initialized || starts_fresh_map_epoch;
     worr_native_readiness_state_v1 next{};
     if (!pilot.readiness_initialized) {
         if (Worr_NativeReadinessClientInitV1(
-                &next, challenge.transport_epoch, kPrivateCapabilities,
+                &next, challenge.transport_epoch,
+                pilot.private_capabilities,
                 now, kReadinessTimeoutMilliseconds) !=
             WORR_NATIVE_READINESS_OK) {
             return false;
@@ -341,7 +758,7 @@ bool observe_challenge(
         if (pilot.map_quiesced) {
             if (Worr_NativeReadinessClientAdvanceEpochV1(
                     &next, challenge.transport_epoch,
-                    kPrivateCapabilities, now,
+                    pilot.private_capabilities, now,
                     kReadinessTimeoutMilliseconds) !=
                 WORR_NATIVE_READINESS_OK) {
                 return false;
@@ -349,6 +766,13 @@ bool observe_challenge(
         } else if (challenge.transport_epoch != next.transport_epoch) {
             return false;
         }
+    }
+
+    client_native_cancellation_stage_t cancellation{};
+    if (fresh_challenge_expected &&
+        !stage_prior_native_epoch_cancellation(
+            challenge.transport_epoch, cancellation)) {
+        return false;
     }
 
     worr_native_readiness_record_v1 client_ready{};
@@ -359,8 +783,19 @@ bool observe_challenge(
         result != WORR_NATIVE_READINESS_EXACT_DUPLICATE) {
         return false;
     }
-    if (!queue_client_ready(client_ready))
+    if (fresh_challenge_expected !=
+        (result == WORR_NATIVE_READINESS_OK)) {
         return false;
+    }
+
+    /* queue_readiness_record preflights and stages the complete reliable
+     * append.  Its successful append is the transaction's point of no return;
+     * every cancellation below was already proven on isolated copies. */
+    if (!queue_readiness_record(client_ready))
+        return false;
+
+    if (result == WORR_NATIVE_READINESS_OK)
+        commit_prior_native_epoch_cancellation(cancellation);
 
     if (result == WORR_NATIVE_READINESS_OK)
         counter_increment(telemetry.challenges);
@@ -381,10 +816,15 @@ bool activate_native_session(
     std::array<worr_native_tx_slot_v1, kTxSlotCapacity> next_slots{};
     worr_native_carrier_tx_gate_v1 next_gate{};
     worr_native_command_shadow_payload_registry_v1 next_registry{};
+    worr_native_rx_session_v1 next_event_rx{};
+    std::array<worr_native_rx_slot_v1, kEventRxSlotCapacity>
+        next_event_slots{};
+    std::array<byte, kEventPayloadArenaBytes> next_event_arena{};
+    worr_native_carrier_ack_ledger_v1 next_event_ledger{};
 
     if (!Worr_NativeSessionBindingInitFromReadinessV1(
             &binding, &readiness, pilot.connection_owner_id) ||
-        binding.negotiated_capabilities != kPrivateCapabilities ||
+        binding.negotiated_capabilities != pilot.private_capabilities ||
         !Worr_NativeCommandShadowPayloadRegistryInitV1(
             &next_registry, WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS)) {
         return false;
@@ -414,6 +854,48 @@ bool activate_native_session(
         }
     }
 
+    if (pilot.event_enabled) {
+        if (!Worr_EventStreamOwnerValidateV1(&pilot.event_owner) ||
+            pilot.event_owner.connection_owner_id !=
+                pilot.connection_owner_id ||
+            pilot.event_consumer.struct_size !=
+                sizeof(pilot.event_consumer) ||
+            pilot.event_consumer.schema_version !=
+                WORR_NATIVE_EVENT_ADMISSION_ABI_VERSION) {
+            return false;
+        }
+        if (!pilot.session_initialized) {
+            if (!Worr_NativeRxSessionInitV1(
+                    &next_event_rx, next_event_slots.data(),
+                    kEventRxSlotCapacity, kEventPayloadStride,
+                    kRxFragmentTimeoutMilliseconds,
+                    kRxCompleteTimeoutMilliseconds, &binding) ||
+                !Worr_NativeCarrierAckLedgerInitV1(
+                    &next_event_ledger, &binding,
+                    kAckProactiveHandoffs)) {
+                return false;
+            }
+        } else {
+            if (!Worr_NativeRxSessionValidateV1(
+                    &pilot.event_rx, pilot.event_rx_slots.data(),
+                    kEventRxSlotCapacity) ||
+                !Worr_NativeCarrierAckLedgerValidateV1(
+                    &pilot.event_ack_ledger)) {
+                return false;
+            }
+            next_event_rx = pilot.event_rx;
+            next_event_slots = pilot.event_rx_slots;
+            next_event_ledger = pilot.event_ack_ledger;
+            if (!Worr_NativeRxSessionAdvanceEpochV1(
+                    &next_event_rx, next_event_slots.data(),
+                    kEventRxSlotCapacity, &binding) ||
+                !Worr_NativeCarrierAckLedgerAdvanceEpochV1(
+                    &next_event_ledger, &binding)) {
+                return false;
+            }
+        }
+    }
+
     if (pilot.session_initialized) {
         /* Preserve exactly the immediately preceding transport bank so an
          * ACK already in flight may release its retained command handle after
@@ -421,6 +903,13 @@ bool activate_native_session(
         pilot.retired_tx = pilot.tx;
         pilot.retired_tx_slots = pilot.tx_slots;
         pilot.retired_payload_registry = pilot.payload_registry;
+        if (pilot.event_enabled) {
+            pilot.retired_event_rx = pilot.event_rx;
+            pilot.retired_event_rx_slots = pilot.event_rx_slots;
+            pilot.retired_event_payload_arena =
+                pilot.event_payload_arena;
+            pilot.retired_event_ack_ledger = pilot.event_ack_ledger;
+        }
         pilot.retired_session_initialized = true;
     }
     pilot.binding = binding;
@@ -429,8 +918,19 @@ bool activate_native_session(
     pilot.tx_gate = next_gate;
     pilot.dispatch = {};
     pilot.payload_registry = next_registry;
+    if (pilot.event_enabled) {
+        pilot.event_rx = next_event_rx;
+        pilot.event_rx_slots = next_event_slots;
+        pilot.event_payload_arena = next_event_arena;
+        pilot.event_ack_ledger = next_event_ledger;
+    }
     pilot.session_initialized = true;
-    pilot.proof_enqueued_once = false;
+    pilot.last_enqueued_command_valid = false;
+    pilot.last_enqueued_command_id = {};
+    pilot.tx_packet_kind = tx_packet_kind_t::none;
+    pilot.active_completion_token = 0;
+    pilot.mixed_token = {};
+    pilot.ack_emit_token = {};
     pilot.mode = pilot_mode_t::active;
     return true;
 }
@@ -444,9 +944,12 @@ bool observe_server_active(
     if (!pilot.readiness_initialized || pilot.mode == pilot_mode_t::drain)
         return false;
     worr_native_readiness_state_v1 next = pilot.readiness;
-    const worr_native_readiness_result_v1 result =
-        Worr_NativeReadinessClientObserveServerActiveV1(
-            &next, &server_active, now);
+    worr_native_readiness_record_v1 client_active_confirm{};
+    const worr_native_readiness_result_v1 result = pilot.event_enabled
+        ? Worr_NativeReadinessClientObserveServerActiveWithConfirmV1(
+              &next, &server_active, now, &client_active_confirm)
+        : Worr_NativeReadinessClientObserveServerActiveV1(
+              &next, &server_active, now);
     if (result != WORR_NATIVE_READINESS_OK &&
         result != WORR_NATIVE_READINESS_EXACT_DUPLICATE) {
         return false;
@@ -455,9 +958,11 @@ bool observe_server_active(
     /* An old SERVER_ACTIVE duplicate must never resurrect a map-quiesced
      * epoch.  Only the state machine's fresh transition installs a session. */
     if (result == WORR_NATIVE_READINESS_OK &&
-        !activate_native_session(next)) {
+        !activate_native_session(next))
         return false;
-    }
+    if (pilot.event_enabled &&
+        !queue_readiness_record(client_active_confirm))
+        return false;
     if (result == WORR_NATIVE_READINESS_OK)
         counter_increment(telemetry.server_active);
     pilot.readiness = next;
@@ -466,9 +971,25 @@ bool observe_server_active(
 
 bool observe_record(const worr_native_readiness_record_v1 &record)
 {
-    if (!pilot.capability_confirmed ||
-        record.negotiated_capabilities != kPrivateCapabilities) {
+    if (!Worr_NativeReadinessRecordValidateV1(&record) ||
+        (record.record_kind !=
+             WORR_NATIVE_READINESS_RECORD_CHALLENGE &&
+         record.record_kind !=
+             WORR_NATIVE_READINESS_RECORD_SERVER_ACTIVE) ||
+        !pilot.capability_confirmed ||
+        record.negotiated_capabilities != pilot.private_capabilities) {
         return false;
+    }
+
+    /* A fully validated readiness declaration from an epoch explicitly
+     * canceled by a later CHALLENGE cannot rearm the old lifecycle.  Keep its
+     * sideband carrier consumed and count it separately from stale WTC DATA
+     * so reliable reordering across the map boundary remains harmless. */
+    if (pilot.cancelled_through_transport_epoch != 0 &&
+        record.transport_epoch <=
+            pilot.cancelled_through_transport_epoch) {
+        counter_increment(telemetry.stale_cancelled_readiness_records);
+        return true;
     }
 
     uint64_t now;
@@ -520,7 +1041,7 @@ void abort_dispatch_if_active()
         &pilot.tx_gate, &pilot.dispatch);
 }
 
-netchan_app_tx_prepare_result_t pilot_tx_prepare(
+netchan_app_tx_prepare_result_t pilot_tx_prepare_command_only(
     void *opaque, const netchan_app_tx_prepare_info_v1_t *info,
     const byte *legacy_application, byte *candidate_application,
     netchan_app_tx_prepare_output_v1_t *output)
@@ -528,7 +1049,7 @@ netchan_app_tx_prepare_result_t pilot_tx_prepare(
     if (opaque != &pilot || !live_pilot())
         return NETCHAN_APP_TX_PREPARE_BYPASS;
     if (pilot.mode != pilot_mode_t::active ||
-        !pilot.session_initialized || !pilot.proof_enqueued_once ||
+        !pilot.session_initialized ||
         pilot.tx.retained_count == 0) {
         return NETCHAN_APP_TX_PREPARE_BYPASS;
     }
@@ -637,7 +1158,7 @@ netchan_app_tx_prepare_result_t pilot_tx_prepare(
     return NETCHAN_APP_TX_PREPARE_PREPARED;
 }
 
-void pilot_tx_completion(
+void pilot_tx_completion_command_only(
     void *opaque, const netchan_app_tx_completion_info_v1_t *info,
     const byte *application)
 {
@@ -691,6 +1212,394 @@ void pilot_tx_completion(
     pilot_failure();
 }
 
+void clear_event_tx_packet()
+{
+    pilot.tx_packet_kind = tx_packet_kind_t::none;
+    pilot.active_completion_token = 0;
+    pilot.prepared_application_bytes = 0;
+    pilot.mixed_token = {};
+    pilot.ack_emit_token = {};
+}
+
+bool allocate_completion_token(uint64_t &token_out)
+{
+    if (pilot.next_completion_token == UINT64_MAX)
+        return false;
+    token_out = ++pilot.next_completion_token;
+    return token_out != 0;
+}
+
+bool event_ack_due(const worr_native_carrier_ack_ledger_v1 &ledger,
+                   uint64_t now, bool &due_out)
+{
+    const auto result = Worr_NativeCarrierAckPeekDueV1(
+        &ledger, now, kAckRetryIntervalMilliseconds);
+    if (result != WORR_NATIVE_CARRIER_ACK_OK &&
+        result != WORR_NATIVE_CARRIER_ACK_NOT_DUE) {
+        return false;
+    }
+    due_out = result == WORR_NATIVE_CARRIER_ACK_OK;
+    return true;
+}
+
+bool map_drain_ack_service_active()
+{
+    /* Map quiesce freezes all native DATA, but receipts already authorized
+     * by semantic admission remain valid release information for the peer.
+     * Keep this exception narrower than generic fail-closed DRAIN so a
+     * protocol/semantic failure cannot continue emitting native traffic. */
+    return pilot.event_enabled && pilot.session_initialized &&
+           pilot.mode == pilot_mode_t::drain && pilot.map_quiesced;
+}
+
+netchan_app_tx_prepare_result_t prepare_event_ack_only(
+    const byte *legacy_application, byte *candidate_application,
+    netchan_app_tx_prepare_output_v1_t *output, uint64_t now,
+    uint16_t application_budget, uint16_t legacy_bytes)
+{
+    bool current_due = false;
+    bool retired_due = false;
+    if (!event_ack_due(pilot.event_ack_ledger, now, current_due) ||
+        (pilot.retired_session_initialized &&
+         !event_ack_due(pilot.retired_event_ack_ledger, now,
+                        retired_due))) {
+        pilot_failure();
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    }
+    if (!current_due && !retired_due)
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+
+    event_ack_bank_t bank;
+    if (current_due && retired_due)
+        bank = pilot.ack_next_bank;
+    else
+        bank = current_due ? event_ack_bank_t::current
+                           : event_ack_bank_t::retired;
+
+    auto *const live_ledger = bank == event_ack_bank_t::current
+        ? &pilot.event_ack_ledger
+        : &pilot.retired_event_ack_ledger;
+    auto staged_ledger = *live_ledger;
+    worr_native_carrier_ack_emit_token_v1 token{};
+    size_t packet_bytes = 0;
+    const auto prepared = Worr_NativeCarrierAckPreparePacketV1(
+        &staged_ledger, now, kAckRetryIntervalMilliseconds,
+        application_budget, legacy_application, legacy_bytes,
+        candidate_application, application_budget, &packet_bytes, &token);
+    if (prepared == WORR_NATIVE_CARRIER_ACK_NOT_DUE ||
+        prepared == WORR_NATIVE_CARRIER_ACK_LIMIT ||
+        prepared == WORR_NATIVE_CARRIER_ACK_OUTPUT_TOO_SMALL) {
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    }
+    if (prepared != WORR_NATIVE_CARRIER_ACK_OK || packet_bytes == 0 ||
+        packet_bytes > application_budget || packet_bytes > UINT32_MAX) {
+        pilot_failure();
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    }
+
+    uint64_t completion_token = 0;
+    if (!allocate_completion_token(completion_token)) {
+        (void)Worr_NativeCarrierAckRejectHandoffV1(
+            &staged_ledger, &token);
+        pilot_failure();
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    }
+
+    *live_ledger = staged_ledger;
+    pilot.ack_emit_token = token;
+    pilot.tx_packet_kind = bank == event_ack_bank_t::current
+        ? tx_packet_kind_t::ack_current
+        : tx_packet_kind_t::ack_retired;
+    pilot.ack_next_bank = bank == event_ack_bank_t::current
+        ? event_ack_bank_t::retired
+        : event_ack_bank_t::current;
+    pilot.active_completion_token = completion_token;
+    pilot.prepared_application_bytes =
+        static_cast<uint32_t>(packet_bytes);
+    std::memcpy(pilot.prepared_application.data(), candidate_application,
+                packet_bytes);
+
+    *output = {};
+    output->abi_version = NETCHAN_APP_TX_HOOK_ABI_V1;
+    output->struct_size = sizeof(*output);
+    output->application_bytes = static_cast<uint32_t>(packet_bytes);
+    output->token = completion_token;
+    return NETCHAN_APP_TX_PREPARE_PREPARED;
+}
+
+netchan_app_tx_prepare_result_t pilot_tx_prepare_event(
+    void *opaque, const netchan_app_tx_prepare_info_v1_t *info,
+    const byte *legacy_application, byte *candidate_application,
+    netchan_app_tx_prepare_output_v1_t *output)
+{
+    if (opaque != &pilot || !live_pilot())
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    const bool active_traffic =
+        pilot.mode == pilot_mode_t::active && !pilot.map_quiesced;
+    const bool drain_ack_service = map_drain_ack_service_active();
+    if ((!active_traffic && !drain_ack_service) ||
+        !pilot.session_initialized || !pilot.event_enabled)
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    if (!info || !output || !candidate_application ||
+        info->abi_version != NETCHAN_APP_TX_HOOK_ABI_V1 ||
+        info->struct_size != sizeof(*info) ||
+        info->reliable_bytes > UINT32_MAX - info->unreliable_bytes ||
+        info->reliable_bytes + info->unreliable_bytes !=
+            info->legacy_application_bytes ||
+        info->legacy_application_bytes > info->max_application_bytes ||
+        info->legacy_application_bytes > UINT16_MAX ||
+        (info->legacy_application_bytes != 0 && !legacy_application) ||
+        pilot.tx_packet_kind != tx_packet_kind_t::none) {
+        pilot_failure();
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    }
+
+    const uint16_t application_budget = static_cast<uint16_t>(
+        info->max_application_bytes > WORR_NATIVE_CARRIER_MAX_PACKET_BYTES
+            ? WORR_NATIVE_CARRIER_MAX_PACKET_BYTES
+            : info->max_application_bytes);
+    const uint16_t legacy_bytes =
+        static_cast<uint16_t>(info->legacy_application_bytes);
+    if (application_budget == 0 || legacy_bytes > application_budget)
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+
+    uint64_t now = 0;
+    if (!current_tick(now)) {
+        pilot_failure();
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    }
+    if (drain_ack_service) {
+        return prepare_event_ack_only(
+            legacy_application, candidate_application, output, now,
+            application_budget, legacy_bytes);
+    }
+    if (!Worr_NativeReadinessCanTransmitNativeV1(
+            &pilot.readiness, now)) {
+        pilot_failure();
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    }
+    const bool continuing_dispatch =
+        (pilot.tx_gate.state_flags &
+         WORR_NATIVE_CARRIER_TX_GATE_ACTIVE) != 0;
+    if (continuing_dispatch &&
+        (pilot.tx_gate.state_flags &
+         WORR_NATIVE_CARRIER_TX_GATE_PACKET_PENDING) != 0) {
+        pilot_failure();
+        return NETCHAN_APP_TX_PREPARE_BYPASS;
+    }
+
+    bool data_due = continuing_dispatch;
+    if (!continuing_dispatch && pilot.tx.retained_count != 0) {
+        const auto begun = Worr_NativeCarrierMixedBeginV1(
+            &pilot.tx_gate, &pilot.tx, pilot.tx_slots.data(),
+            kTxSlotCapacity, now, kResendIntervalMilliseconds,
+            application_budget, legacy_bytes, &pilot.dispatch);
+        data_due = begun == WORR_NATIVE_CARRIER_MIXED_OK;
+        if (!data_due &&
+            begun != WORR_NATIVE_CARRIER_MIXED_NOT_DUE &&
+            begun != WORR_NATIVE_CARRIER_MIXED_LIMIT) {
+            pilot_failure();
+            return NETCHAN_APP_TX_PREPARE_BYPASS;
+        }
+    }
+    if (data_due) {
+        const uint32_t handle =
+            pilot.dispatch.send_ticket.pre_send_slot.payload_handle;
+        std::array<byte, kCommandPayloadBytes> payload{};
+        size_t payload_bytes = 0;
+        worr_command_id_v1 payload_command_id{};
+        if (Worr_NativeCommandShadowPayloadCopyV1(
+                &pilot.payload_registry, handle, payload.data(),
+                payload.size(), &payload_bytes,
+                &payload_command_id) !=
+                WORR_NATIVE_COMMAND_SHADOW_PAYLOAD_COPIED ||
+            payload_bytes != kCommandPayloadBytes ||
+            payload_command_id.epoch !=
+                pilot.dispatch.send_ticket.pre_send_slot.record
+                    .object_epoch ||
+            payload_command_id.sequence !=
+                pilot.dispatch.send_ticket.pre_send_slot.record
+                    .object_sequence ||
+            (!continuing_dispatch &&
+             Worr_NativeCarrierSessionDispatchBindPayloadV1(
+                 &pilot.tx_gate, &pilot.dispatch, handle,
+                 payload.data(),
+                 static_cast<uint32_t>(payload_bytes)) !=
+                 WORR_NATIVE_CARRIER_SESSION_OK)) {
+            (void)Worr_NativeCarrierMixedAbortV1(
+                &pilot.tx_gate, &pilot.dispatch,
+                &pilot.event_ack_ledger);
+            pilot_failure();
+            return NETCHAN_APP_TX_PREPARE_BYPASS;
+        }
+
+        size_t packet_bytes = 0;
+        worr_native_carrier_mixed_token_v1 token{};
+        const auto prepared = Worr_NativeCarrierMixedPreparePacketV1(
+            &pilot.tx_gate, &pilot.tx, pilot.tx_slots.data(),
+            kTxSlotCapacity, &pilot.dispatch,
+            &pilot.event_ack_ledger, now,
+            kAckRetryIntervalMilliseconds, handle, payload.data(),
+            static_cast<uint32_t>(payload_bytes), legacy_application,
+            legacy_bytes, candidate_application, application_budget,
+            &packet_bytes, &token);
+        if (prepared != WORR_NATIVE_CARRIER_MIXED_OK) {
+            (void)Worr_NativeCarrierMixedAbortV1(
+                &pilot.tx_gate, &pilot.dispatch,
+                &pilot.event_ack_ledger);
+            if (prepared != WORR_NATIVE_CARRIER_MIXED_LIMIT &&
+                prepared !=
+                    WORR_NATIVE_CARRIER_MIXED_OUTPUT_TOO_SMALL) {
+                pilot_failure();
+            }
+            return NETCHAN_APP_TX_PREPARE_BYPASS;
+        }
+
+        uint64_t completion_token = 0;
+        if (packet_bytes == 0 || packet_bytes > application_budget ||
+            packet_bytes > UINT32_MAX ||
+            !allocate_completion_token(completion_token)) {
+            (void)Worr_NativeCarrierMixedAbortPacketV1(
+                &pilot.tx_gate, &pilot.dispatch,
+                &pilot.event_ack_ledger, &token,
+                candidate_application, packet_bytes);
+            pilot_failure();
+            return NETCHAN_APP_TX_PREPARE_BYPASS;
+        }
+
+        pilot.mixed_token = token;
+        pilot.tx_packet_kind = tx_packet_kind_t::command_mixed;
+        pilot.active_completion_token = completion_token;
+        pilot.prepared_application_bytes =
+            static_cast<uint32_t>(packet_bytes);
+        std::memcpy(pilot.prepared_application.data(),
+                    candidate_application, packet_bytes);
+        *output = {};
+        output->abi_version = NETCHAN_APP_TX_HOOK_ABI_V1;
+        output->struct_size = sizeof(*output);
+        output->application_bytes =
+            static_cast<uint32_t>(packet_bytes);
+        output->token = completion_token;
+        return NETCHAN_APP_TX_PREPARE_PREPARED;
+    }
+
+    return prepare_event_ack_only(
+        legacy_application, candidate_application, output, now,
+        application_budget, legacy_bytes);
+}
+
+void pilot_tx_completion_event(
+    void *opaque, const netchan_app_tx_completion_info_v1_t *info,
+    const byte *application)
+{
+    if (opaque != &pilot || !live_pilot())
+        return;
+    if (pilot.tx_packet_kind == tx_packet_kind_t::none)
+        return;
+
+    const bool info_valid = info &&
+        info->abi_version == NETCHAN_APP_TX_HOOK_ABI_V1 &&
+        info->struct_size == sizeof(*info) &&
+        info->token == pilot.active_completion_token;
+    const bool accepted = info_valid &&
+        info->result == NETCHAN_APP_TX_COMPLETION_ACCEPTED &&
+        info->packet_copies != 0 && info->accepted_copies != 0 &&
+        info->accepted_copies <= info->packet_copies && application &&
+        info->application_bytes == pilot.prepared_application_bytes;
+    const bool rejected = info_valid &&
+        (info->result == NETCHAN_APP_TX_COMPLETION_NOT_ACCEPTED ||
+         info->result == NETCHAN_APP_TX_COMPLETION_PREPARE_INVALID);
+    bool terminal_ok = false;
+
+    if (pilot.tx_packet_kind == tx_packet_kind_t::command_mixed) {
+        const bool retry =
+            pilot.dispatch.send_ticket.pre_send_slot.send_attempts != 0;
+        if (accepted) {
+            uint64_t now = 0;
+            const auto result = current_tick(now)
+                ? Worr_NativeCarrierMixedConfirmPacketV1(
+                      &pilot.tx_gate, &pilot.tx, pilot.tx_slots.data(),
+                      kTxSlotCapacity, &pilot.dispatch,
+                      &pilot.event_ack_ledger, &pilot.mixed_token, now,
+                      application, info->application_bytes)
+                : WORR_NATIVE_CARRIER_MIXED_CLOCK_REGRESSION;
+            terminal_ok =
+                result == WORR_NATIVE_CARRIER_MIXED_OK ||
+                result ==
+                    WORR_NATIVE_CARRIER_MIXED_DISPATCH_COMMITTED ||
+                result == WORR_NATIVE_CARRIER_MIXED_DISPATCH_RETIRED;
+            if (terminal_ok) {
+                pilot.carrier_traffic_seen = true;
+                counter_increment(telemetry.tx_handoffs);
+                counter_increment(retry ? telemetry.tx_retries
+                                        : telemetry.tx_first_sends);
+            }
+        } else if (rejected) {
+            const auto reject_result =
+                Worr_NativeCarrierMixedRejectPacketV1(
+                    &pilot.tx_gate, &pilot.dispatch,
+                    &pilot.event_ack_ledger, &pilot.mixed_token,
+                    pilot.prepared_application.data(),
+                    pilot.prepared_application_bytes);
+            const auto abort_result = reject_result ==
+                    WORR_NATIVE_CARRIER_MIXED_OK
+                ? Worr_NativeCarrierMixedAbortV1(
+                      &pilot.tx_gate, &pilot.dispatch,
+                      &pilot.event_ack_ledger)
+                : WORR_NATIVE_CARRIER_MIXED_INVALID_STATE;
+            terminal_ok = reject_result == WORR_NATIVE_CARRIER_MIXED_OK &&
+                          abort_result == WORR_NATIVE_CARRIER_MIXED_OK;
+        }
+    } else {
+        auto *const ledger =
+            pilot.tx_packet_kind == tx_packet_kind_t::ack_current
+            ? &pilot.event_ack_ledger
+            : &pilot.retired_event_ack_ledger;
+        if (accepted) {
+            uint64_t now = 0;
+            terminal_ok = current_tick(now) &&
+                Worr_NativeCarrierAckCommitHandoffV1(
+                    ledger, &pilot.ack_emit_token, now, application,
+                    info->application_bytes) ==
+                    WORR_NATIVE_CARRIER_ACK_OK;
+            if (terminal_ok)
+                pilot.carrier_traffic_seen = true;
+        } else if (rejected) {
+            terminal_ok = Worr_NativeCarrierAckRejectHandoffV1(
+                              ledger, &pilot.ack_emit_token) ==
+                          WORR_NATIVE_CARRIER_ACK_OK;
+        }
+    }
+
+    clear_event_tx_packet();
+    if (!terminal_ok)
+        pilot_failure();
+}
+
+netchan_app_tx_prepare_result_t pilot_tx_prepare(
+    void *opaque, const netchan_app_tx_prepare_info_v1_t *info,
+    const byte *legacy_application, byte *candidate_application,
+    netchan_app_tx_prepare_output_v1_t *output)
+{
+    return pilot.event_enabled
+        ? pilot_tx_prepare_event(
+              opaque, info, legacy_application, candidate_application,
+              output)
+        : pilot_tx_prepare_command_only(
+              opaque, info, legacy_application, candidate_application,
+              output);
+}
+
+void pilot_tx_completion(
+    void *opaque, const netchan_app_tx_completion_info_v1_t *info,
+    const byte *application)
+{
+    if (pilot.event_enabled)
+        pilot_tx_completion_event(opaque, info, application);
+    else
+        pilot_tx_completion_command_only(opaque, info, application);
+}
+
 bool apply_ack_to_bank(
     worr_native_tx_session_v1 &tx,
     std::array<worr_native_tx_slot_v1, kTxSlotCapacity> &slots,
@@ -736,7 +1645,16 @@ bool apply_ack_to_bank(
     return true;
 }
 
-netchan_app_rx_result_t pilot_rx(
+void expose_legacy(netchan_app_rx_output_v1_t *output,
+                   uint32_t legacy_bytes)
+{
+    *output = {};
+    output->abi_version = NETCHAN_APP_RX_HOOK_ABI_V1;
+    output->struct_size = sizeof(*output);
+    output->legacy_bytes = legacy_bytes;
+}
+
+netchan_app_rx_result_t pilot_rx_command_only(
     void *opaque, const netchan_app_rx_info_v1_t *info,
     const byte *application, netchan_app_rx_output_v1_t *output)
 {
@@ -756,15 +1674,35 @@ netchan_app_rx_result_t pilot_rx(
     if (decoded == WORR_NATIVE_CARRIER_NO_CARRIER)
         return NETCHAN_APP_RX_BYPASS;
 
-    /* A terminal WTC marker makes this native traffic even when corrupt. */
+    if (decoded != WORR_NATIVE_CARRIER_OK) {
+        /* A terminal WTC marker makes corrupt bytes native traffic. */
+        pilot.carrier_traffic_seen = true;
+        enter_drain(true);
+        return NETCHAN_APP_RX_REJECT;
+    }
+    bool ack_only = view.entry_count != 0;
+    for (uint16_t index = 0; ack_only && index < view.entry_count;
+         ++index) {
+        ack_only = view.entries[index].entry_type ==
+            WORR_NATIVE_CARRIER_ENTRY_ACK_V1;
+    }
+    if (!ack_only) {
+        pilot.carrier_traffic_seen = true;
+        enter_drain(true);
+        return NETCHAN_APP_RX_REJECT;
+    }
+    if (pilot.cancelled_through_transport_epoch != 0 &&
+        view.transport_epoch <=
+            pilot.cancelled_through_transport_epoch) {
+        counter_increment(telemetry.stale_cancelled_carriers);
+        expose_legacy(output, view.legacy_bytes);
+        return NETCHAN_APP_RX_EXPOSE_LEGACY;
+    }
+
     pilot.carrier_traffic_seen = true;
-    if (decoded != WORR_NATIVE_CARRIER_OK ||
-        !pilot.session_initialized ||
+    if (!pilot.session_initialized ||
         (pilot.mode != pilot_mode_t::active &&
-         pilot.mode != pilot_mode_t::drain) ||
-        view.entry_count != 1 ||
-        view.entries[0].entry_type !=
-            WORR_NATIVE_CARRIER_ENTRY_ACK_V1) {
+         pilot.mode != pilot_mode_t::drain)) {
         enter_drain(true);
         return NETCHAN_APP_RX_REJECT;
     }
@@ -812,11 +1750,285 @@ netchan_app_rx_result_t pilot_rx(
     return NETCHAN_APP_RX_EXPOSE_LEGACY;
 }
 
+enum class event_data_admission_t {
+    accepted,
+    retry_later,
+    rejected,
+};
+
+bool event_admission_committed(
+    worr_native_event_admission_result_v1 result)
+{
+    return result ==
+               WORR_NATIVE_EVENT_ADMISSION_DESCRIPTOR_ACTIVATED ||
+           result ==
+               WORR_NATIVE_EVENT_ADMISSION_DESCRIPTOR_DUPLICATE ||
+           result == WORR_NATIVE_EVENT_ADMISSION_EVENT_ACCEPTED ||
+           result == WORR_NATIVE_EVENT_ADMISSION_EVENT_DUPLICATE ||
+           result == WORR_NATIVE_EVENT_ADMISSION_EVENT_DEGRADED;
+}
+
+bool event_repeat_revalidated(
+    worr_native_event_admission_result_v1 result)
+{
+    return result ==
+               WORR_NATIVE_EVENT_ADMISSION_DESCRIPTOR_REPEAT_REVALIDATED ||
+           result ==
+               WORR_NATIVE_EVENT_ADMISSION_EVENT_REPEAT_REVALIDATED;
+}
+
+event_data_admission_t admit_current_event_data(
+    const byte *application, size_t application_bytes,
+    uint16_t entry_index, uint64_t now)
+{
+    worr_native_rx_session_v1 staged_session = pilot.event_rx;
+    auto staged_slots = pilot.event_rx_slots;
+    auto staged_arena = pilot.event_payload_arena;
+    worr_native_rx_result_v1 rx_result{};
+    worr_native_rx_message_v1 message{};
+    worr_native_ack_range_v1 repeat_acknowledgement{};
+    const auto bridge = Worr_NativeCarrierSessionAcceptDataV1(
+        &staged_session, staged_slots.data(), kEventRxSlotCapacity,
+        staged_arena.data(), staged_arena.size(), now, application,
+        application_bytes, entry_index, &rx_result, &message,
+        &repeat_acknowledgement);
+    if (bridge != WORR_NATIVE_CARRIER_SESSION_OK)
+        return event_data_admission_t::rejected;
+
+    if (rx_result == WORR_NATIVE_RX_ALREADY_COMMITTED) {
+        const auto repeated =
+            Worr_NativeEventAdmissionRevalidateCommittedRepeatV1(
+                &pilot.event_owner, &pilot.binding, &pilot.event_rx,
+                pilot.event_rx_slots.data(), kEventRxSlotCapacity,
+                pilot.event_payload_arena.data(),
+                pilot.event_payload_arena.size(), now, application,
+                application_bytes, entry_index,
+                &pilot.event_ack_ledger, &pilot.event_consumer);
+        return event_repeat_revalidated(repeated)
+            ? event_data_admission_t::accepted
+            : event_data_admission_t::rejected;
+    }
+
+    if (rx_result == WORR_NATIVE_RX_MESSAGE_COMPLETE) {
+        const auto admitted = Worr_NativeEventAdmissionCommitCompletedV1(
+            &pilot.event_owner, &pilot.binding, &staged_session,
+            staged_slots.data(), kEventRxSlotCapacity,
+            staged_arena.data(), staged_arena.size(),
+            &pilot.event_ack_ledger, &message, &pilot.event_consumer);
+        if (!event_admission_committed(admitted))
+            return admitted == WORR_NATIVE_EVENT_ADMISSION_RETRY_UNCOMMITTED
+                ? event_data_admission_t::retry_later
+                : event_data_admission_t::rejected;
+        pilot.event_rx = staged_session;
+        pilot.event_rx_slots = staged_slots;
+        pilot.event_payload_arena = staged_arena;
+        return event_data_admission_t::accepted;
+    }
+
+    if (rx_result == WORR_NATIVE_RX_FRAGMENT_ACCEPTED ||
+        rx_result == WORR_NATIVE_RX_FRAGMENT_DUPLICATE ||
+        rx_result == WORR_NATIVE_RX_CAPACITY ||
+        rx_result == WORR_NATIVE_RX_STORAGE_CAPACITY) {
+        pilot.event_rx = staged_session;
+        pilot.event_rx_slots = staged_slots;
+        pilot.event_payload_arena = staged_arena;
+        return rx_result == WORR_NATIVE_RX_CAPACITY ||
+                       rx_result == WORR_NATIVE_RX_STORAGE_CAPACITY
+            ? event_data_admission_t::retry_later
+            : event_data_admission_t::accepted;
+    }
+    return event_data_admission_t::rejected;
+}
+
+bool event_data_entry_shape_valid(
+    const byte *application, const worr_native_carrier_view_v1 &view,
+    uint16_t entry_index)
+{
+    if (!application || entry_index >= view.entry_count)
+        return false;
+    const auto &entry = view.entries[entry_index];
+    if (entry.entry_type != WORR_NATIVE_CARRIER_ENTRY_DATA_V1 ||
+        entry.data_offset > view.packet_bytes ||
+        entry.data_bytes > view.packet_bytes - entry.data_offset) {
+        return false;
+    }
+    worr_native_envelope_frame_info_v1 frame{};
+    if (Worr_NativeEnvelopeDecodeV1(
+            application + entry.data_offset, entry.data_bytes, &frame) !=
+            WORR_NATIVE_ENVELOPE_DECODE_OK ||
+        frame.transport_epoch != view.transport_epoch ||
+        frame.record.reserved0 != 0) {
+        return false;
+    }
+    return (frame.record.record_class == WORR_NATIVE_RECORD_EVENT_V1 &&
+            frame.record.record_schema_version ==
+                WORR_EVENT_ABI_VERSION) ||
+           (frame.record.record_class ==
+                WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1 &&
+            frame.record.record_schema_version ==
+                WORR_EVENT_STREAM_ABI_VERSION);
+}
+
+netchan_app_rx_result_t pilot_rx_event(
+    void *opaque, const netchan_app_rx_info_v1_t *info,
+    const byte *application, netchan_app_rx_output_v1_t *output)
+{
+    if (opaque != &pilot || !live_pilot())
+        return NETCHAN_APP_RX_BYPASS;
+    if (!info || !output || !application ||
+        info->abi_version != NETCHAN_APP_RX_HOOK_ABI_V1 ||
+        info->struct_size != sizeof(*info)) {
+        pilot_failure();
+        return NETCHAN_APP_RX_REJECT;
+    }
+
+    worr_native_carrier_view_v1 view{};
+    const auto decoded = Worr_NativeCarrierDecodeV1(
+        application, info->application_bytes, &view);
+    if (decoded == WORR_NATIVE_CARRIER_NO_CARRIER)
+        return NETCHAN_APP_RX_BYPASS;
+
+    if (decoded != WORR_NATIVE_CARRIER_OK) {
+        pilot.carrier_traffic_seen = true;
+        enter_drain(true);
+        return NETCHAN_APP_RX_REJECT;
+    }
+
+    uint16_t data_count = 0;
+    uint16_t data_index = 0;
+    bool has_ack = false;
+    for (uint16_t index = 0; index < view.entry_count; ++index) {
+        if (view.entries[index].entry_type ==
+            WORR_NATIVE_CARRIER_ENTRY_DATA_V1) {
+            data_index = index;
+            ++data_count;
+        } else if (view.entries[index].entry_type ==
+                   WORR_NATIVE_CARRIER_ENTRY_ACK_V1) {
+            has_ack = true;
+        } else {
+            pilot.carrier_traffic_seen = true;
+            enter_drain(true);
+            return NETCHAN_APP_RX_REJECT;
+        }
+    }
+    if (data_count > 1) {
+        pilot.carrier_traffic_seen = true;
+        enter_drain(true);
+        return NETCHAN_APP_RX_REJECT;
+    }
+    if (data_count != 0 &&
+        !event_data_entry_shape_valid(
+            application, view, data_index)) {
+        pilot.carrier_traffic_seen = true;
+        enter_drain(true);
+        return NETCHAN_APP_RX_REJECT;
+    }
+    if (pilot.cancelled_through_transport_epoch != 0 &&
+        view.transport_epoch <=
+            pilot.cancelled_through_transport_epoch) {
+        counter_increment(telemetry.stale_cancelled_carriers);
+        expose_legacy(output, view.legacy_bytes);
+        return NETCHAN_APP_RX_EXPOSE_LEGACY;
+    }
+
+    pilot.carrier_traffic_seen = true;
+    if (!pilot.session_initialized ||
+        (pilot.mode != pilot_mode_t::active &&
+         pilot.mode != pilot_mode_t::drain)) {
+        enter_drain(true);
+        return NETCHAN_APP_RX_REJECT;
+    }
+
+    const bool current_epoch =
+        view.transport_epoch == pilot.binding.transport_epoch;
+    const bool retired_epoch = pilot.retired_session_initialized &&
+        view.transport_epoch == pilot.retired_tx.transport_epoch;
+    if (current_epoch == retired_epoch ||
+        (retired_epoch && data_count != 0) ||
+        (pilot.mode == pilot_mode_t::drain && data_count != 0)) {
+        enter_drain(true);
+        return NETCHAN_APP_RX_REJECT;
+    }
+
+    if (current_epoch && pilot.mode == pilot_mode_t::active) {
+        uint64_t gate_now = 0;
+        if (!current_tick(gate_now) ||
+            !Worr_NativeReadinessCanReceiveNativeV1(
+                &pilot.readiness, gate_now)) {
+            enter_drain(true);
+            return NETCHAN_APP_RX_REJECT;
+        }
+    }
+
+    worr_native_tx_session_v1 staged_tx = current_epoch
+        ? pilot.tx
+        : pilot.retired_tx;
+    auto staged_slots = current_epoch
+        ? pilot.tx_slots
+        : pilot.retired_tx_slots;
+    auto staged_registry = current_epoch
+        ? pilot.payload_registry
+        : pilot.retired_payload_registry;
+    uint32_t acknowledged = 0;
+    if (has_ack &&
+        !apply_ack_to_bank(
+            staged_tx, staged_slots, staged_registry, application,
+            info->application_bytes, acknowledged)) {
+        enter_drain(true);
+        return NETCHAN_APP_RX_REJECT;
+    }
+
+    if (data_count != 0) {
+        uint64_t now = 0;
+        if (!current_tick(now)) {
+            enter_drain(true);
+            return NETCHAN_APP_RX_REJECT;
+        }
+        const auto admitted = admit_current_event_data(
+            application, info->application_bytes, data_index, now);
+        if (admitted == event_data_admission_t::rejected) {
+            enter_drain(true);
+            return NETCHAN_APP_RX_REJECT;
+        }
+    }
+
+    if (has_ack) {
+        if (current_epoch) {
+            pilot.tx = staged_tx;
+            pilot.tx_slots = staged_slots;
+            pilot.payload_registry = staged_registry;
+        } else {
+            pilot.retired_tx = staged_tx;
+            pilot.retired_tx_slots = staged_slots;
+            pilot.retired_payload_registry = staged_registry;
+        }
+        counter_increment(telemetry.ack_carriers);
+        if (acknowledged != 0) {
+            counter_increment(telemetry.retained_releases);
+            counter_increment(telemetry.acknowledged_reliable);
+        }
+    }
+
+    expose_legacy(output, view.legacy_bytes);
+    return NETCHAN_APP_RX_EXPOSE_LEGACY;
+}
+
+netchan_app_rx_result_t pilot_rx(
+    void *opaque, const netchan_app_rx_info_v1_t *info,
+    const byte *application, netchan_app_rx_output_v1_t *output)
+{
+    return pilot.event_enabled
+        ? pilot_rx_event(opaque, info, application, output)
+        : pilot_rx_command_only(opaque, info, application, output);
+}
+
 } // namespace
 
 extern "C" void CL_NativeReadinessPilotRegisterCvar(void)
 {
     cl_worr_native_shadow = Cvar_Get("cl_worr_native_shadow", "0", 0);
+    cl_worr_native_event_shadow = Cvar_Get(
+        "cl_worr_native_event_shadow", "0", 0);
     cl_worr_native_shadow_probe_hold = Cvar_Get(
         "cl_worr_native_shadow_probe_hold", "0", CVAR_NOARCHIVE);
 }
@@ -842,13 +2054,29 @@ extern "C" bool CL_NativeReadinessPilotBeginConnection(netchan_t *channel)
     if (!allocate_connection_owner(owner))
         return false;
     pilot.enabled = true;
+    pilot.event_enabled = cl_worr_native_event_shadow &&
+                          cl_worr_native_event_shadow->integer;
     pilot.channel = channel;
     pilot.connection_owner_id = owner;
+    pilot.private_capabilities = pilot.event_enabled
+        ? kEventPrivateCapabilities
+        : kCommandPrivateCapabilities;
     pilot.map_quiesced = true;
     pilot.mode = pilot_mode_t::arming;
+    pilot.ack_next_bank = event_ack_bank_t::current;
     uint64_t ignored_tick;
     if (!current_tick(ignored_tick) ||
         !Worr_NativeReadinessSidebandParserInitV1(&pilot.parser)) {
+        disable_pilot();
+        return false;
+    }
+    if (pilot.event_enabled &&
+        (!Worr_EventStreamOwnerInitV1(
+             &pilot.event_owner, pilot.connection_owner_id) ||
+         !CL_CGameEventRuntimeGetNativeConsumerV1(
+             &pilot.event_consumer) ||
+         CL_CGameEventRuntimeResetConnection() !=
+             WORR_CGAME_EVENT_RUNTIME_OK)) {
         disable_pilot();
         return false;
     }
@@ -1029,7 +2257,15 @@ extern "C" void CL_NativeReadinessPilotObserveEncodedCommandRange(
     uint32_t first_legacy_command_number, uint32_t command_count)
 {
     if (!live_pilot() || pilot.mode != pilot_mode_t::active ||
-        !pilot.session_initialized || pilot.proof_enqueued_once)
+        !pilot.session_initialized)
+        return;
+    if (pilot.tx.retained_count > kTxSlotCapacity) {
+        pilot_failure();
+        return;
+    }
+    /* The pilot is deliberately stop-and-wait.  Legacy command encoding is
+     * never stalled while the one retained native sample awaits its receipt. */
+    if (pilot.tx.retained_count != 0)
         return;
     if (first_legacy_command_number == 0 || command_count == 0 ||
         command_count - 1u >
@@ -1044,6 +2280,24 @@ extern "C" void CL_NativeReadinessPilotObserveEncodedCommandRange(
     if (!entry.valid || entry.legacy_command_number != latest) {
         pilot_failure();
         return;
+    }
+    const worr_command_id_v1 command_id = entry.record.command_id;
+    if (!Worr_CommandIdValidV1(command_id, false)) {
+        pilot_failure();
+        return;
+    }
+    if (pilot.last_enqueued_command_valid) {
+        if (command_id.epoch != pilot.last_enqueued_command_id.epoch) {
+            pilot_failure();
+            return;
+        }
+        /* Repeated MOVE/BATCH range notifications and older ring entries are
+         * observational no-ops.  A later sample may skip commands that passed
+         * while stop-and-wait was occupied; legacy remains authoritative. */
+        if (command_id.sequence <=
+            pilot.last_enqueued_command_id.sequence) {
+            return;
+        }
     }
     if (cl_worr_native_shadow_probe_hold &&
         cl_worr_native_shadow_probe_hold->integer) {
@@ -1082,7 +2336,7 @@ extern "C" void CL_NativeReadinessPilotObserveEncodedCommandRange(
         enqueued == WORR_NATIVE_TX_RECEIPT_WINDOW) {
         return;
     }
-    if (enqueued != WORR_NATIVE_TX_RETAINED || message_sequence != 1 ||
+    if (enqueued != WORR_NATIVE_TX_RETAINED || message_sequence == 0 ||
         next_tx.retained_count != 1 ||
         next_registry.occupied_count != 1) {
         pilot_failure();
@@ -1092,7 +2346,8 @@ extern "C" void CL_NativeReadinessPilotObserveEncodedCommandRange(
     pilot.payload_registry = next_registry;
     pilot.tx = next_tx;
     pilot.tx_slots = next_slots;
-    pilot.proof_enqueued_once = true;
+    pilot.last_enqueued_command_id = command_id;
+    pilot.last_enqueued_command_valid = true;
     counter_increment(telemetry.proof_enqueued);
     const uint64_t retained_total = next_tx.retained_count +
         (pilot.retired_session_initialized
@@ -1100,6 +2355,79 @@ extern "C" void CL_NativeReadinessPilotObserveEncodedCommandRange(
              : 0u);
     if (telemetry.retained_highwater < retained_total)
         telemetry.retained_highwater = retained_total;
+}
+
+extern "C" bool CL_NativeReadinessPilotOutputDue(void)
+{
+    const bool active_traffic = pilot.mode == pilot_mode_t::active &&
+                                !pilot.map_quiesced;
+    const bool drain_ack_service = map_drain_ack_service_active();
+    if (!pilot.enabled || (!active_traffic && !drain_ack_service) ||
+        !pilot.session_initialized ||
+        cls.demo.playback || cls.demo.seeking ||
+        !hooks_attached_exact() || !pilot.channel ||
+        pilot.channel->maxpacketlen == 0)
+        return false;
+
+    uint64_t now = 0;
+    if (!projected_tick(now))
+        return false;
+    if (active_traffic) {
+        auto readiness = pilot.readiness;
+        if (!Worr_NativeReadinessCanTransmitNativeV1(
+                &readiness, now)) {
+            return false;
+        }
+    }
+
+    if (pilot.event_enabled) {
+        bool due = false;
+        if (!event_ack_due(pilot.event_ack_ledger, now, due))
+            return false;
+        if (due)
+            return true;
+        if (pilot.retired_session_initialized) {
+            if (!event_ack_due(
+                    pilot.retired_event_ack_ledger, now, due))
+                return false;
+            if (due)
+                return true;
+        }
+    }
+
+    /* The quiesced exception above services only pre-authorized ACK ledgers.
+     * It must never fall through to current command DATA scheduling. */
+    if (drain_ack_service)
+        return false;
+
+    if (pilot.tx.retained_count == 0)
+        return false;
+    if ((pilot.tx_gate.state_flags &
+         WORR_NATIVE_CARRIER_TX_GATE_PACKET_PENDING) != 0)
+        return false;
+    if ((pilot.tx_gate.state_flags &
+         WORR_NATIVE_CARRIER_TX_GATE_ACTIVE) != 0)
+        return true;
+
+    const uint16_t application_budget = static_cast<uint16_t>(
+        pilot.channel->maxpacketlen > WORR_NATIVE_CARRIER_MAX_PACKET_BYTES
+            ? WORR_NATIVE_CARRIER_MAX_PACKET_BYTES
+            : pilot.channel->maxpacketlen);
+    if (application_budget == 0)
+        return false;
+    auto gate = pilot.tx_gate;
+    worr_native_carrier_dispatch_v1 dispatch{};
+    if (pilot.event_enabled) {
+        return Worr_NativeCarrierMixedBeginV1(
+                   &gate, &pilot.tx, pilot.tx_slots.data(),
+                   kTxSlotCapacity, now, kResendIntervalMilliseconds,
+                   application_budget, 0, &dispatch) ==
+               WORR_NATIVE_CARRIER_MIXED_OK;
+    }
+    return Worr_NativeCarrierSessionDispatchBeginV1(
+               &gate, &pilot.tx, pilot.tx_slots.data(), kTxSlotCapacity,
+               now, kResendIntervalMilliseconds, application_budget, 0,
+               &dispatch) == WORR_NATIVE_CARRIER_SESSION_OK;
 }
 
 extern "C" bool CL_NativeReadinessPilotIsCarrierSetting(int32_t index)
@@ -1131,11 +2459,15 @@ extern "C" bool CL_NativeReadinessPilotGetStatusV1(
                                  : 0u;
     status.protocol = static_cast<uint32_t>(cls.serverProtocol);
     status.public_mask = WORR_NET_CAP_LEGACY_STAGE_MASK;
-    status.private_mask = kPrivateCapabilities;
+    status.private_mask = pilot.enabled
+                              ? pilot.private_capabilities
+                              : kCommandPrivateCapabilities;
     status.probe_hold = cl_worr_native_shadow_probe_hold &&
                                 cl_worr_native_shadow_probe_hold->integer
                             ? 1u
                             : 0u;
+    status.cancelled_through_transport_epoch =
+        pilot.cancelled_through_transport_epoch;
     status.challenges = telemetry.challenges;
     status.client_ready_queued = telemetry.client_ready_queued;
     status.server_active = telemetry.server_active;
@@ -1154,6 +2486,16 @@ extern "C" bool CL_NativeReadinessPilotGetStatusV1(
     status.acknowledged_reliable = telemetry.acknowledged_reliable;
     status.drains = telemetry.drains;
     status.failures = telemetry.failures;
+    status.cancellation_barriers = telemetry.cancellation_barriers;
+    status.cancelled_transports = telemetry.cancelled_transports;
+    status.cancelled_command_tx = telemetry.cancelled_commands;
+    status.cancelled_event_rx = telemetry.cancelled_event_rx;
+    status.cancelled_event_receipts =
+        telemetry.cancelled_event_receipts;
+    status.stale_cancelled_carriers =
+        telemetry.stale_cancelled_carriers;
+    status.stale_cancelled_readiness_records =
+        telemetry.stale_cancelled_readiness_records;
     status.last_failure = telemetry.last_failure;
     *status_out = status;
     return true;
@@ -1195,11 +2537,56 @@ extern "C" bool CL_NativeReadinessPilotGetTestState(
             ? pilot.tx_slots[0].send_attempts
             : 0;
     state.mode = static_cast<uint32_t>(pilot.mode);
+    state.private_capabilities = pilot.private_capabilities;
+    state.event_rx_occupied =
+        pilot.event_enabled && pilot.session_initialized
+            ? pilot.event_rx.occupied_count
+            : 0;
+    state.event_ack_receipts =
+        pilot.event_enabled && pilot.session_initialized
+            ? pilot.event_ack_ledger.receipt_count
+            : 0;
+    state.retired_event_rx_occupied =
+        pilot.event_enabled && pilot.retired_session_initialized
+            ? pilot.retired_event_rx.occupied_count
+            : 0;
+    state.retired_event_ack_receipts =
+        pilot.event_enabled && pilot.retired_session_initialized
+            ? pilot.retired_event_ack_ledger.receipt_count
+            : 0;
+    state.event_owner_flags = pilot.event_enabled
+                                  ? pilot.event_owner.state_flags
+                                  : 0;
+    state.event_owner_epoch_high_water = pilot.event_enabled
+                                             ? pilot.event_owner
+                                                   .epoch_high_water
+                                             : 0;
+    state.ack_next_bank = pilot.event_enabled
+                              ? static_cast<uint32_t>(pilot.ack_next_bank)
+                              : 0;
+    state.cancelled_through_transport_epoch =
+        pilot.cancelled_through_transport_epoch;
+    state.cancellation_barriers = telemetry.cancellation_barriers;
+    state.cancelled_transports = telemetry.cancelled_transports;
+    state.cancelled_commands = telemetry.cancelled_commands;
+    state.cancelled_event_rx = telemetry.cancelled_event_rx;
+    state.cancelled_event_receipts =
+        telemetry.cancelled_event_receipts;
+    state.stale_cancelled_carriers =
+        telemetry.stale_cancelled_carriers;
+    state.stale_cancelled_readiness_records =
+        telemetry.stale_cancelled_readiness_records;
     state.hooks_installed =
         pilot.tx_hook_registered && pilot.rx_hook_registered;
     state.readiness_committed = pilot.readiness_committed;
-    state.proof_enqueued_once = pilot.proof_enqueued_once;
+    /* Retain the testing field name for source compatibility with the
+     * original one-command pilot; it now means that this transport epoch has
+     * successfully enqueued at least one native command. */
+    state.proof_enqueued_once = pilot.last_enqueued_command_valid;
     state.carrier_traffic_seen = pilot.carrier_traffic_seen;
+    state.event_enabled = pilot.event_enabled;
+    state.client_active_confirm_queued =
+        pilot.client_active_confirm_queued;
     *state_out = state;
     return true;
 }

@@ -31,6 +31,14 @@ enum {
     WORR_NET_CAP_TYPED_EVENT_RANGE_V2 = UINT32_C(1) << 3,
     /* Reserved until FR-10-T04's separate packet envelope is integrated. */
     WORR_NET_CAP_NATIVE_ENVELOPE_V1 = UINT32_C(1) << 4,
+    /* Reserved until the retained event descriptor/DATA path is promoted. */
+    WORR_NET_CAP_NATIVE_EVENT_STREAM_V1 = UINT32_C(1) << 5,
+    /*
+     * Private readiness binding for the epoch-cancellation barrier.  This bit
+     * is carried by CHALLENGE/CLIENT_READY records and is not part of the
+     * public legacy-stage offer.
+     */
+    WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1 = UINT32_C(1) << 6,
 };
 
 #define WORR_NET_CAP_KNOWN_MASK                                      \
@@ -38,13 +46,28 @@ enum {
                 WORR_NET_CAP_CONSUMED_COMMAND_CURSOR_V1 |           \
                 WORR_NET_CAP_CANONICAL_SNAPSHOT_V2 |                \
                 WORR_NET_CAP_TYPED_EVENT_RANGE_V2 |                 \
-                WORR_NET_CAP_NATIVE_ENVELOPE_V1))
+                WORR_NET_CAP_NATIVE_ENVELOPE_V1 |                   \
+                WORR_NET_CAP_NATIVE_EVENT_STREAM_V1 |               \
+                WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1))
 
 /* Capabilities proven end-to-end in the current live legacy-shadow stage.
  * Expand this mask only when both peers have production consumers. */
 #define WORR_NET_CAP_LEGACY_STAGE_MASK                               \
     ((uint32_t)(WORR_NET_CAP_LEGACY_COMMAND_SIDEBAND_V1 |           \
                 WORR_NET_CAP_CONSUMED_COMMAND_CURSOR_V1))
+
+/* Every private native readiness binding requires these two capabilities. */
+#define WORR_NET_CAP_NATIVE_READINESS_REQUIRED_MASK                  \
+    ((uint32_t)(WORR_NET_CAP_NATIVE_ENVELOPE_V1 |                   \
+                WORR_NET_CAP_NATIVE_EPOCH_CANCEL_V1))
+
+/* Exact private bindings; neither mask is part of the public 0x03 offer. */
+#define WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK                     \
+    ((uint32_t)(WORR_NET_CAP_LEGACY_STAGE_MASK |                    \
+                WORR_NET_CAP_NATIVE_READINESS_REQUIRED_MASK))
+#define WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK                       \
+    ((uint32_t)(WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK |          \
+                WORR_NET_CAP_NATIVE_EVENT_STREAM_V1))
 
 typedef enum worr_net_capability_phase_v1_e {
     WORR_NET_CAPABILITY_RESET = 0,

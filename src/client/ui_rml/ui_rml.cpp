@@ -1596,6 +1596,20 @@ bool UI_Rml_IsRouteActive(void)
 #endif
 }
 
+bool UI_Rml_IsSessionRouteActive(void)
+{
+#if UI_RML_HAS_RUNTIME
+    if (!ui_rml_route_active || !ui_rml_active_route[0]) {
+        return false;
+    }
+
+    const ui_rml_route_t *route = UI_Rml_FindRoute(ui_rml_active_route);
+    return route && !strncmp(route->document, "session/", strlen("session/"));
+#else
+    return false;
+#endif
+}
+
 void UI_Rml_ModeChanged(void)
 {
 #if UI_RML_HAS_RUNTIME

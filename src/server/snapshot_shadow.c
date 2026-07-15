@@ -8,6 +8,9 @@ the Free Software Foundation; either version 2 of the License, or
 */
 
 #include "server/snapshot_shadow.h"
+#include "snapshot_event_candidates_internal.h"
+
+#include "common/net/legacy_entity_event_candidate.h"
 
 #include <limits.h>
 #include <stdlib.h>
@@ -20,12 +23,15 @@ struct sv_snapshot_shadow_peer_v1_s {
     worr_snapshot_entity_v2 *entities;
     uint8_t *area_bytes;
     worr_snapshot_event_ref_v2 *event_refs;
+    sv_snapshot_event_candidate_source_v1 *event_candidate_sources;
+    uint32_t *event_candidate_counts;
     worr_snapshot_q2proto_lineage_v2 *lineages;
     worr_snapshot_entity_v2 *baselines;
     uint8_t *baseline_present;
     worr_snapshot_entity_v2 *scratch_entities;
     uint8_t *scratch_area_bytes;
     worr_snapshot_event_ref_v2 *scratch_event_refs;
+    sv_snapshot_event_candidate_source_v1 *scratch_event_candidate_sources;
     worr_snapshot_q2proto_lineage_v2 *scratch_lineage;
     q2proto_svc_frame_entity_delta_t *pending_deltas;
     uint8_t *pending_area_bytes;
@@ -91,12 +97,15 @@ static void destroy_storage(sv_snapshot_shadow_peer_v1 *peer)
     free(peer->entities);
     free(peer->area_bytes);
     free(peer->event_refs);
+    free(peer->event_candidate_sources);
+    free(peer->event_candidate_counts);
     free(peer->lineages);
     free(peer->baselines);
     free(peer->baseline_present);
     free(peer->scratch_entities);
     free(peer->scratch_area_bytes);
     free(peer->scratch_event_refs);
+    free(peer->scratch_event_candidate_sources);
     free(peer->scratch_lineage);
     free(peer->pending_deltas);
     free(peer->pending_area_bytes);
@@ -165,6 +174,9 @@ sv_snapshot_shadow_peer_v1 *SV_SnapshotShadowCreateV1(
     ALLOCATE(entities, worr_snapshot_entity_v2, entity_total);
     ALLOCATE(area_bytes, uint8_t, area_total);
     ALLOCATE(event_refs, worr_snapshot_event_ref_v2, event_total);
+    ALLOCATE(event_candidate_sources,
+             sv_snapshot_event_candidate_source_v1, event_total);
+    ALLOCATE(event_candidate_counts, uint32_t, config->slot_capacity);
     ALLOCATE(lineages, worr_snapshot_q2proto_lineage_v2, lineage_total);
     ALLOCATE(baselines, worr_snapshot_entity_v2, config->max_entities);
     ALLOCATE(baseline_present, uint8_t, config->max_entities);
@@ -172,6 +184,9 @@ sv_snapshot_shadow_peer_v1 *SV_SnapshotShadowCreateV1(
              config->entities_per_slot);
     ALLOCATE(scratch_area_bytes, uint8_t, config->area_bytes_per_slot);
     ALLOCATE(scratch_event_refs, worr_snapshot_event_ref_v2,
+             config->entities_per_slot);
+    ALLOCATE(scratch_event_candidate_sources,
+             sv_snapshot_event_candidate_source_v1,
              config->entities_per_slot);
     ALLOCATE(scratch_lineage, worr_snapshot_q2proto_lineage_v2,
              config->max_entities);
@@ -420,9 +435,11 @@ sv_snapshot_shadow_result_v1 SV_SnapshotShadowCommitFrameV1(
     sv_snapshot_shadow_ref_v1 committed_ref;
     sv_snapshot_shadow_sent_v1 record;
     worr_snapshot_q2proto_result_v2 project_result;
+    sv_snapshot_event_candidates_result_v1 candidate_result;
     uint32_t target_slot;
     uint32_t target_generation;
     uint32_t input_flags;
+    uint32_t event_candidate_count;
 
     if (!peer) {
         return SV_SNAPSHOT_SHADOW_INVALID_ARGUMENT;
@@ -525,6 +542,19 @@ sv_snapshot_shadow_result_v1 SV_SnapshotShadowCommitFrameV1(
         set_result(peer, SV_SNAPSHOT_SHADOW_PROJECT_FAILED);
         return SV_SNAPSHOT_SHADOW_PROJECT_FAILED;
     }
+    candidate_result =
+        SV_SnapshotEventCandidatesBuildFinalEmissionInternalV1(
+            &projected_view, peer->pending_deltas,
+            peer->pending_delta_count, peer->config.max_entities,
+            peer->scratch_event_candidate_sources,
+            peer->config.entities_per_slot, &event_candidate_count);
+    if (candidate_result != SV_SNAPSHOT_EVENT_CANDIDATES_OK ||
+        event_candidate_count != projected_view.event_ref_count) {
+        increment_saturating(&peer->status.project_failures);
+        abort_frame(peer, true);
+        set_result(peer, SV_SNAPSHOT_SHADOW_PROJECT_FAILED);
+        return SV_SNAPSHOT_SHADOW_PROJECT_FAILED;
+    }
 
     memset(&record, 0, sizeof(record));
     record.struct_size = sizeof(record);
@@ -585,6 +615,15 @@ sv_snapshot_shadow_result_v1 SV_SnapshotShadowCommitFrameV1(
     }
     record.hashes = adjusted_hashes;
 
+    if (event_candidate_count != 0) {
+        const size_t candidate_offset =
+            (size_t)target_slot * peer->config.entities_per_slot;
+        memcpy(peer->event_candidate_sources + candidate_offset,
+               peer->scratch_event_candidate_sources,
+               sizeof(*peer->event_candidate_sources) *
+                   event_candidate_count);
+    }
+    peer->event_candidate_counts[target_slot] = event_candidate_count;
     peer->sent[target_slot] = record;
     if (peer->status.retained_count < peer->config.slot_capacity)
         ++peer->status.retained_count;
@@ -689,4 +728,95 @@ bool SV_SnapshotShadowGetStatusV1(
         return false;
     *status_out = peer->status;
     return true;
+}
+
+sv_snapshot_event_candidates_result_v1
+SV_SnapshotShadowCopyEventCandidatesV1(
+    const sv_snapshot_shadow_peer_v1 *peer,
+    sv_snapshot_shadow_ref_v1 ref,
+    worr_event_record_v1 *candidates_out,
+    uint32_t candidate_capacity,
+    uint32_t *candidate_count_out)
+{
+    const sv_snapshot_shadow_sent_v1 *sent;
+    worr_snapshot_projection_view_v2 view;
+    worr_snapshot_projection_hashes_v2 hashes;
+    const sv_snapshot_event_candidate_source_v1 *sources;
+    uint32_t candidate_count;
+    uint32_t candidate_index;
+
+    if (!peer || !candidate_count_out ||
+        (candidate_capacity != 0 && !candidates_out)) {
+        return SV_SNAPSHOT_EVENT_CANDIDATES_INVALID_ARGUMENT;
+    }
+    sent = resolve_sent(peer, ref);
+    if (!sent)
+        return SV_SNAPSHOT_EVENT_CANDIDATES_STALE_REF;
+
+    memset(&view, 0, sizeof(view));
+    memset(&hashes, 0, sizeof(hashes));
+    if (Worr_SnapshotQ2ProtoViewV2(
+            &peer->context, sent->projection_ref, &view,
+            &hashes) != WORR_SNAPSHOT_Q2PROTO_OK) {
+        return SV_SNAPSHOT_EVENT_CANDIDATES_STALE_REF;
+    }
+
+    candidate_count = peer->event_candidate_counts[ref.slot];
+    if (candidate_count > peer->config.entities_per_slot ||
+        candidate_count != view.event_ref_count ||
+        view.snapshot->server_tick != sent->wire_snapshot_number ||
+        view.snapshot->server_time_us != sent->snapshot.server_time_us) {
+        return SV_SNAPSHOT_EVENT_CANDIDATES_INVALID_PROJECTION;
+    }
+    if (candidate_count > candidate_capacity) {
+        *candidate_count_out = candidate_count;
+        return SV_SNAPSHOT_EVENT_CANDIDATES_CAPACITY;
+    }
+    sources = peer->event_candidate_sources +
+              (size_t)ref.slot * peer->config.entities_per_slot;
+    for (candidate_index = 0; candidate_index < candidate_count;
+         ++candidate_index) {
+        const sv_snapshot_event_candidate_source_v1 *source =
+            &sources[candidate_index];
+        worr_event_record_v1 candidate;
+        uint64_t semantic_hash;
+
+        if (source->reserved0 != 0 ||
+            source->source_ordinal >= view.entity_count ||
+            source->source_entity.index !=
+                view.entities[source->source_ordinal]
+                    .generation.identity.index ||
+            source->source_entity.generation !=
+                view.entities[source->source_ordinal]
+                    .generation.identity.generation ||
+            !Worr_LegacyEntityEventCandidateBuildV1(
+                view.snapshot->server_tick,
+                view.snapshot->server_time_us,
+                source->source_ordinal, source->source_entity,
+                source->raw_event, peer->config.max_entities,
+                &candidate, &semantic_hash) ||
+            semantic_hash !=
+                view.event_refs[candidate_index].semantic_hash) {
+            return SV_SNAPSHOT_EVENT_CANDIDATES_SEMANTIC_MISMATCH;
+        }
+    }
+    for (candidate_index = 0; candidate_index < candidate_count;
+         ++candidate_index) {
+        const sv_snapshot_event_candidate_source_v1 *source =
+            &sources[candidate_index];
+        worr_event_record_v1 candidate;
+        uint64_t semantic_hash;
+
+        if (!Worr_LegacyEntityEventCandidateBuildV1(
+                view.snapshot->server_tick,
+                view.snapshot->server_time_us,
+                source->source_ordinal, source->source_entity,
+                source->raw_event, peer->config.max_entities,
+                &candidate, &semantic_hash)) {
+            return SV_SNAPSHOT_EVENT_CANDIDATES_SEMANTIC_MISMATCH;
+        }
+        candidates_out[candidate_index] = candidate;
+    }
+    *candidate_count_out = candidate_count;
+    return SV_SNAPSHOT_EVENT_CANDIDATES_OK;
 }

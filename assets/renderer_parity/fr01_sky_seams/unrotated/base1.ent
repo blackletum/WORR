@@ -1,0 +1,12 @@
+{
+"classname" "worldspawn"
+"message" "WORR FR-01-T05 six-face sky parity"
+"sky" "unit1_"
+"skyAxis" "1 0 0"
+"skyRotate" "0"
+}
+{
+"classname" "info_player_start"
+"origin" "128 -320 32"
+"angle" "0"
+}

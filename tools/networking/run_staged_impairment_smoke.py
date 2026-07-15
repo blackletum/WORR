@@ -109,10 +109,17 @@ def terminate(process: subprocess.Popen[object]) -> bool:
 
 
 def client_command(executable: Path, impaired: bool) -> list[str]:
+    """Build a hidden, input-free client command for automated evidence."""
     command = [
         str(executable),
         "+set", "game", "basew",
         "+set", "developer", "1",
+        # The Windows client keeps a valid hidden presentation surface for
+        # automated engine work. Disable input before startup so it never
+        # initializes or captures the user's mouse.
+        "+set", "win_headless", "1",
+        "+set", "in_enable", "0",
+        "+set", "in_grab", "0",
         "+set", "vid_renderer", "opengl",
         "+set", "vid_fullscreen", "0",
         "+set", "vid_geometry", "640x480+0+0",
@@ -165,6 +172,7 @@ def run_client(
         process = subprocess.Popen(
             command,
             cwd=working_dir,
+            stdin=subprocess.DEVNULL,
             stdout=stdout_file,
             stderr=stderr_file,
             creationflags=creation_flags,
@@ -365,6 +373,7 @@ def main() -> int:
             "+quit",
         ],
         cwd=args.working_dir,
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         timeout=20,

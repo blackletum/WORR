@@ -145,9 +145,13 @@ runtime smoke also passed after `.install/` was refreshed and validated.
 
 ## Remaining scope
 
-This slice freezes player bounds poses. Brush-model/mover pose capture,
-mover-relative reconstruction, weapon-by-weapon fairness scenarios, load
-profiles, projectile/melee/beam/splash policies, and the release acceptance
-matrix remain open under `FR-10-T10` through `FR-10-T15`. The legacy path is
-retained only for callbacks that are explicitly outside canonical command
-scope.
+This slice freezes player bounds poses. The subsequent dedicated
+`fire_rail` acceptance gate now proves one real legacy-ack weapon/damage
+fairness case, including invalid-ack uncompensated fallback and post-query
+current-authority damage; see
+`docs-dev/fr-10-t11-headless-railgun-damage-fairness-gate-2026-07-15.md`.
+Brush-model/mover weapon scenarios, remaining weapon-by-weapon fairness cases,
+load profiles, projectile/melee/beam/splash policies, and the release
+acceptance matrix remain open under `FR-10-T10` through `FR-10-T15`. The
+legacy path is retained only for callbacks that are explicitly outside
+canonical command scope.

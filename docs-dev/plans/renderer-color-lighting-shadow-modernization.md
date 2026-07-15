@@ -2,7 +2,7 @@
 
 Date: 2026-07-10
 
-Status: Phase 0 complete; Phases 1-4 planned
+Status: Phases 0 and 2 complete; Phases 1, 3, and 4 planned
 
 Roadmap tasks: `FR-01-T09`, `FR-02-T12`, `FR-02-T13`, `FR-02-T14`,
 `FR-02-T15`, `FR-03-T11`, `DV-02-T07`, and `DV-03-T08`.
@@ -49,9 +49,9 @@ rendering through OpenGL, and it does not modify `q2proto/`.
 - Much of legacy raster lighting is evaluated in gamma-encoded texture space.
   This produces incorrect addition, attenuation, interpolation, and blending.
 - Visual cvars (`r_gamma`, intensity/modulate, fullbright, dynamic lights) can
-  influence `R_LightPoint`, which is also used to produce the gameplay
-  `lightlevel` byte. Phase 0 prevents non-finite conversion and wraparound, but
-  the query is still renderer-dependent.
+  influence visual `R_LightPoint` implementations. `FR-01-T09` now keeps the
+  gameplay `lightlevel` byte on a separate client-engine static BSP query, so
+  those presentation controls cannot affect game state.
 - Native Vulkan previously omitted `r_intensity`; Phase 0 adds shader-side
   parity with the OpenGL surface/model eligibility rules.
 - Non-uniform/reflected entity transforms previously used the model matrix for
@@ -136,11 +136,13 @@ and renderer-neutral cvars.
 
 ### Gameplay light query
 
-`FR-01-T09` will add a renderer-neutral query that returns a finite linear or
-clearly documented legacy luminance from BSP lightmaps/lightgrid only. It will
-not include visual fullbright, exposure/gamma, entity intensity/modulate, or
-transient dlights unless a gameplay API explicitly requests them. The network
-byte conversion remains saturating and deterministic.
+`FR-01-T09` added a renderer-neutral query that returns a documented
+normalized legacy authored-light sample from BSP lightmaps/lightgrid only. It
+does not include visual fullbright, exposure/gamma, entity
+intensity/modulate, or transient dlights. It preserves lightstyles and inline
+BSP-model tracing, while the network-byte conversion remains saturating and
+deterministic. See
+`docs-dev/renderer/gameplay-light-query-parity-2026-07-14.md`.
 
 ### Shadow resource model
 
@@ -189,16 +191,20 @@ Gate: an 18% gray patch, grayscale ramp, saturated color chart, additive-light
 chart, and 50% alpha blend produce expected linearized values and match GL/VK
 within agreed tolerances.
 
-### Phase 2: renderer-neutral light query (`FR-01-T09`, P0)
+### Phase 2: renderer-neutral light query — complete (`FR-01-T09`, P0)
 
-- Move static light sampling semantics behind a shared/query contract.
-- Remove visual cvar and backend feature dependence.
-- Add finite, boundary, 1xN/Nx1, missing-style, and extreme-value tests.
-- Verify the serialized byte for inputs below zero, NaN/Inf, nominal values,
-  and values above the protocol range.
+- Static light sampling now has an engine-owned query contract.
+- Visual cvar and renderer backend dependencies were removed from the
+  gameplay lightlevel path.
+- Focused tests cover finite, boundary, `1xN`/`Nx1`, missing-style, and
+  extreme-value cases.
+- Protocol-byte tests cover below-zero, NaN/Inf, nominal, and above-range
+  values.
 
-Gate: identical maps/positions produce identical gameplay lightlevel bytes in
-OpenGL, native Vulkan, and headless/reference test paths.
+Gate: satisfied by the single client-engine query path used before rendering;
+the renderer-free regression target and the linked client engine prove the
+same map position/lightstyles produce the same byte for OpenGL, native Vulkan,
+and headless/reference execution.
 
 ### Phase 3: scalable/material-aware shadows (`FR-02-T14`, P1)
 

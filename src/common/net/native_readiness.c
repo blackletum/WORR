@@ -46,20 +46,41 @@ static bool role_valid(uint16_t role)
 static bool record_kind_valid(uint16_t record_kind)
 {
     return record_kind >= WORR_NATIVE_READINESS_RECORD_CHALLENGE &&
-           record_kind <= WORR_NATIVE_READINESS_RECORD_SERVER_ACTIVE;
+           record_kind <=
+               WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM;
 }
 
 static bool capability_mask_valid(uint32_t capabilities)
 {
     return (capabilities & ~WORR_NET_CAP_KNOWN_MASK) == 0 &&
-           (capabilities & WORR_NET_CAP_NATIVE_ENVELOPE_V1) != 0;
+           (capabilities & WORR_NET_CAP_NATIVE_READINESS_REQUIRED_MASK) ==
+               WORR_NET_CAP_NATIVE_READINESS_REQUIRED_MASK;
+}
+
+static bool active_confirm_required(uint32_t capabilities)
+{
+    const uint32_t required =
+        WORR_NET_CAP_NATIVE_READINESS_REQUIRED_MASK |
+        WORR_NET_CAP_NATIVE_EVENT_STREAM_V1;
+
+    return (capabilities & required) == required;
+}
+
+static bool record_kind_binding_valid(uint16_t record_kind,
+                                      uint32_t capabilities)
+{
+    return record_kind !=
+               WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM ||
+           active_confirm_required(capabilities);
 }
 
 static bool phase_waiting(uint16_t phase)
 {
     return phase == WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_READY ||
            phase == WORR_NATIVE_READINESS_PHASE_CLIENT_WAIT_CHALLENGE ||
-           phase == WORR_NATIVE_READINESS_PHASE_CLIENT_WAIT_SERVER_ACTIVE;
+           phase == WORR_NATIVE_READINESS_PHASE_CLIENT_WAIT_SERVER_ACTIVE ||
+           phase ==
+               WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM;
 }
 
 static bool phase_valid_for_role(uint16_t role, uint16_t phase)
@@ -69,6 +90,8 @@ static bool phase_valid_for_role(uint16_t role, uint16_t phase)
     if (role == WORR_NATIVE_READINESS_ROLE_SERVER) {
         return phase ==
                    WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_READY ||
+               phase ==
+                   WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM ||
                phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE;
     }
     if (role == WORR_NATIVE_READINESS_ROLE_CLIENT) {
@@ -144,6 +167,8 @@ static bool record_init_local(worr_native_readiness_record_v1 *record_out,
     if (record_out == NULL || !record_kind_valid(record_kind) ||
         transport_epoch == 0 ||
         !capability_mask_valid(negotiated_capabilities) ||
+        !record_kind_binding_valid(record_kind,
+                                   negotiated_capabilities) ||
         readiness_nonce == 0) {
         return false;
     }
@@ -183,6 +208,8 @@ bool Worr_NativeReadinessRecordValidateV1(
            record_kind_valid(record->record_kind) &&
            record->transport_epoch != 0 &&
            capability_mask_valid(record->negotiated_capabilities) &&
+           record_kind_binding_valid(record->record_kind,
+                                     record->negotiated_capabilities) &&
            record->readiness_nonce != 0 && record->reserved0 == 0 &&
            record->record_checksum == record_checksum(record);
 }
@@ -217,6 +244,11 @@ bool Worr_NativeReadinessStateValidateV1(
         return state->role == WORR_NATIVE_READINESS_ROLE_CLIENT &&
                state->readiness_nonce == 0 &&
                state->nonce_floor != UINT64_MAX;
+    }
+    if (state->phase ==
+            WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM &&
+        !active_confirm_required(state->negotiated_capabilities)) {
+        return false;
     }
     if (state->readiness_nonce != 0 &&
         state->readiness_nonce <= state->nonce_floor) {
@@ -630,6 +662,7 @@ Worr_NativeReadinessServerObserveClientReadyV1(
     worr_native_readiness_record_v1 response;
     worr_native_readiness_result_v1 result;
     bool duplicate = false;
+    uint64_t deadline = 0;
 
     if (state == NULL || client_ready == NULL || server_active_out == NULL ||
         ranges_overlap(state, sizeof(*state), client_ready,
@@ -659,11 +692,24 @@ Worr_NativeReadinessServerObserveClientReadyV1(
     }
     if (updated.phase ==
         WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_READY) {
-        updated.phase = WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE;
+        if (active_confirm_required(updated.negotiated_capabilities)) {
+            if (!deadline_make(now_tick, updated.timeout_ticks, &deadline)) {
+                state_fail(&updated, NULL);
+                *state = updated;
+                return WORR_NATIVE_READINESS_DEADLINE_OVERFLOW;
+            }
+            updated.phase =
+                WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM;
+            updated.deadline_tick = deadline;
+        } else {
+            updated.phase = WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE;
+            updated.deadline_tick = 0;
+        }
         updated.phase_start_tick = now_tick;
-        updated.deadline_tick = 0;
         counter_increment(&updated.telemetry.client_ready_accepted);
-    } else if (updated.phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE) {
+    } else if (updated.phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE ||
+               updated.phase ==
+                   WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM) {
         duplicate = true;
         counter_increment(&updated.telemetry.exact_duplicates);
     } else {
@@ -687,15 +733,18 @@ Worr_NativeReadinessServerObserveClientReadyV1(
                      : WORR_NATIVE_READINESS_OK;
 }
 
+static worr_native_readiness_result_v1
+client_observe_server_active(
+    worr_native_readiness_state_v1 *updated,
+    const worr_native_readiness_record_v1 *server_active,
+    uint64_t now_tick);
+
 worr_native_readiness_result_v1
 Worr_NativeReadinessClientObserveServerActiveV1(
     worr_native_readiness_state_v1 *state,
     const worr_native_readiness_record_v1 *server_active,
     uint64_t now_tick)
 {
-    worr_native_readiness_state_v1 updated;
-    worr_native_readiness_result_v1 result;
-
     if (state == NULL || server_active == NULL ||
         ranges_overlap(state, sizeof(*state), server_active,
                        sizeof(*server_active))) {
@@ -705,29 +754,144 @@ Worr_NativeReadinessClientObserveServerActiveV1(
         state->phase == WORR_NATIVE_READINESS_PHASE_FAILED) {
         return WORR_NATIVE_READINESS_INVALID_STATE;
     }
+    if (active_confirm_required(state->negotiated_capabilities))
+        return WORR_NATIVE_READINESS_INVALID_STATE;
+
+    {
+        worr_native_readiness_state_v1 updated = *state;
+        const worr_native_readiness_result_v1 result =
+            client_observe_server_active(
+                &updated, server_active, now_tick);
+        *state = updated;
+        return result;
+    }
+}
+
+static worr_native_readiness_result_v1
+client_observe_server_active(
+    worr_native_readiness_state_v1 *updated,
+    const worr_native_readiness_record_v1 *server_active,
+    uint64_t now_tick)
+{
+    worr_native_readiness_result_v1 result;
+
+    result = observe_preamble(
+        updated, server_active, WORR_NATIVE_READINESS_ROLE_CLIENT,
+        WORR_NATIVE_READINESS_RECORD_SERVER_ACTIVE, now_tick);
+    if (result != WORR_NATIVE_READINESS_OK)
+        return result;
+    if (!record_binding_equal(updated, server_active)) {
+        state_fail(updated, &updated->telemetry.binding_mismatches);
+        return WORR_NATIVE_READINESS_BINDING_MISMATCH;
+    }
+    if (updated->phase ==
+        WORR_NATIVE_READINESS_PHASE_CLIENT_WAIT_SERVER_ACTIVE) {
+        updated->phase = WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE;
+        updated->phase_start_tick = now_tick;
+        updated->deadline_tick = 0;
+        counter_increment(&updated->telemetry.server_active_accepted);
+        return WORR_NATIVE_READINESS_OK;
+    }
+    if (updated->phase == WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE) {
+        counter_increment(&updated->telemetry.exact_duplicates);
+        return WORR_NATIVE_READINESS_EXACT_DUPLICATE;
+    }
+    state_fail(updated, &updated->telemetry.order_failures);
+    return WORR_NATIVE_READINESS_WRONG_ORDER;
+}
+
+worr_native_readiness_result_v1
+Worr_NativeReadinessClientObserveServerActiveWithConfirmV1(
+    worr_native_readiness_state_v1 *state,
+    const worr_native_readiness_record_v1 *server_active,
+    uint64_t now_tick,
+    worr_native_readiness_record_v1 *client_active_confirm_out)
+{
+    worr_native_readiness_state_v1 updated;
+    worr_native_readiness_record_v1 response;
+    worr_native_readiness_result_v1 result;
+
+    if (state == NULL || server_active == NULL ||
+        client_active_confirm_out == NULL ||
+        ranges_overlap(state, sizeof(*state), server_active,
+                       sizeof(*server_active)) ||
+        ranges_overlap(state, sizeof(*state), client_active_confirm_out,
+                       sizeof(*client_active_confirm_out)) ||
+        ranges_overlap(server_active, sizeof(*server_active),
+                       client_active_confirm_out,
+                       sizeof(*client_active_confirm_out))) {
+        return WORR_NATIVE_READINESS_INVALID_ARGUMENT;
+    }
+    if (!Worr_NativeReadinessStateValidateV1(state) ||
+        state->phase == WORR_NATIVE_READINESS_PHASE_FAILED ||
+        !active_confirm_required(state->negotiated_capabilities)) {
+        return WORR_NATIVE_READINESS_INVALID_STATE;
+    }
+
+    updated = *state;
+    result = client_observe_server_active(
+        &updated, server_active, now_tick);
+    if (result != WORR_NATIVE_READINESS_OK &&
+        result != WORR_NATIVE_READINESS_EXACT_DUPLICATE) {
+        *state = updated;
+        return result;
+    }
+    if (!record_init_local(
+            &response,
+            WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM,
+            updated.transport_epoch, updated.negotiated_capabilities,
+            updated.readiness_nonce)) {
+        state_fail(&updated, NULL);
+        *state = updated;
+        return WORR_NATIVE_READINESS_INVALID_STATE;
+    }
+    *state = updated;
+    *client_active_confirm_out = response;
+    return result;
+}
+
+worr_native_readiness_result_v1
+Worr_NativeReadinessServerObserveClientActiveConfirmV1(
+    worr_native_readiness_state_v1 *state,
+    const worr_native_readiness_record_v1 *client_active_confirm,
+    uint64_t now_tick)
+{
+    worr_native_readiness_state_v1 updated;
+    worr_native_readiness_result_v1 result;
+
+    if (state == NULL || client_active_confirm == NULL ||
+        ranges_overlap(state, sizeof(*state), client_active_confirm,
+                       sizeof(*client_active_confirm))) {
+        return WORR_NATIVE_READINESS_INVALID_ARGUMENT;
+    }
+    if (!Worr_NativeReadinessStateValidateV1(state) ||
+        state->phase == WORR_NATIVE_READINESS_PHASE_FAILED ||
+        !active_confirm_required(state->negotiated_capabilities)) {
+        return WORR_NATIVE_READINESS_INVALID_STATE;
+    }
     updated = *state;
     result = observe_preamble(
-        &updated, server_active, WORR_NATIVE_READINESS_ROLE_CLIENT,
-        WORR_NATIVE_READINESS_RECORD_SERVER_ACTIVE, now_tick);
+        &updated, client_active_confirm,
+        WORR_NATIVE_READINESS_ROLE_SERVER,
+        WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM, now_tick);
     if (result != WORR_NATIVE_READINESS_OK) {
         *state = updated;
         return result;
     }
-    if (!record_binding_equal(&updated, server_active)) {
+    if (!record_binding_equal(&updated, client_active_confirm)) {
         state_fail(&updated, &updated.telemetry.binding_mismatches);
         *state = updated;
         return WORR_NATIVE_READINESS_BINDING_MISMATCH;
     }
     if (updated.phase ==
-        WORR_NATIVE_READINESS_PHASE_CLIENT_WAIT_SERVER_ACTIVE) {
-        updated.phase = WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE;
+        WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM) {
+        updated.phase = WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE;
         updated.phase_start_tick = now_tick;
         updated.deadline_tick = 0;
-        counter_increment(&updated.telemetry.server_active_accepted);
         *state = updated;
         return WORR_NATIVE_READINESS_OK;
     }
-    if (updated.phase == WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE) {
+    if (updated.phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE) {
         counter_increment(&updated.telemetry.exact_duplicates);
         *state = updated;
         return WORR_NATIVE_READINESS_EXACT_DUPLICATE;
@@ -779,7 +943,10 @@ bool Worr_NativeReadinessCanReceiveNativeV1(
     if (!state_gate_time(state, now_tick))
         return false;
     if (state->role == WORR_NATIVE_READINESS_ROLE_SERVER)
-        return state->phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE;
+        return state->phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE ||
+               (state->phase ==
+                    WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM &&
+                active_confirm_required(state->negotiated_capabilities));
     return state->phase ==
                WORR_NATIVE_READINESS_PHASE_CLIENT_WAIT_SERVER_ACTIVE ||
            state->phase == WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE;

@@ -20,7 +20,25 @@ BOTFILE_SUPPORT_MEMBERS = (
 BOTFILE_PROFILE_SUFFIXES = ('_c.c', '_i.c', '_t.c', '_w.c')
 BOTFILE_CHARACTER_SUFFIX = '_c.c'
 BOTFILE_SCRIPT_SUFFIX = '_s.c'
-DEFAULT_LOOSE_ASSET_PATHS = ('botfiles', 'ui/rml')
+DEFAULT_LOOSE_ASSET_PATHS = (
+    'botfiles',
+    'ui/rml',
+    'renderer_parity',
+    'maps/worr_fr01_bmodel_first_frame.bsp',
+    'maps/worr_fr01_bmodel_instances.bsp',
+    'maps/worr_fr01_beam_fog.bsp',
+    'maps/worr_fr01_global_fog.bsp',
+    'maps/worr_fr01_flare_fog.bsp',
+    'maps/worr_fr01_glowmap.bsp',
+    'maps/worr_fr01_model_glowmap.bsp',
+    'maps/worr_fr01_height_fog.bsp',
+    'maps/worr_fr01_sprite_fog.bsp',
+    'maps/worr_fr01_transparent_ordering.bsp',
+    'maps/worr_fr01_transparent_fog.bsp',
+    'maps/worr_fr01_warp_flow.bsp',
+    'maps/worr_fr10_rewind_mover.bsp',
+    'textures/parity',
+)
 RMLUI_LOOSE_ASSET_ROOT = 'ui/rml'
 Q2AAS_TOOL_BINARY_STEMS = ('worr_q2aas', 'q2aas', 'bspc')
 Q2AAS_TOOL_BINARY_EXTENSIONS = ('', '.exe', '.pdb', '.dll', '.so', '.dylib')

@@ -26,6 +26,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/video.h"
 #include "renderer/renderer.h"
 
+#include <stdint.h>
+
 #if defined(RENDERER_DLL)
 #include "renderer/renderer_api.h"
 #endif
@@ -49,6 +51,29 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <vulkan/vulkan.h>
 #endif
 
+#define VK_MAX_FRAMES_IN_FLIGHT 2
+#define VK_INVALID_FRAME_SLOT UINT32_MAX
+
+typedef struct vk_frame_context_s {
+    VkCommandBuffer command_buffer;
+    VkSemaphore image_available;
+    VkFence in_flight_fence;
+    VkImage depth_image;
+    VkDeviceMemory depth_memory;
+    VkImageView depth_view;
+    // A depth-only view is kept separate from the framebuffer's combined
+    // depth/stencil view so native post-process passes can sample depth
+    // without exposing stencil data.
+    VkImageView depth_sample_view;
+    VkFramebuffer *framebuffers;
+    VkImage liquid_scene_image;
+    VkDeviceMemory liquid_scene_memory;
+    VkImageView liquid_scene_view;
+    VkDescriptorSet liquid_scene_descriptor_set;
+    bool liquid_scene_initialized;
+    bool submitted;
+} vk_frame_context_t;
+
 typedef struct vk_swapchain_s {
     VkSwapchainKHR handle;
     VkFormat format;
@@ -56,11 +81,8 @@ typedef struct vk_swapchain_s {
     VkExtent2D extent;
     VkImage *images;
     VkImageView *views;
-    VkImage depth_image;
-    VkDeviceMemory depth_memory;
-    VkImageView depth_view;
-    VkFramebuffer *framebuffers;
-    VkCommandBuffer *command_buffers;
+    VkSemaphore *render_finished;
+    uint32_t *image_frame_slots;
     uint32_t image_count;
 } vk_swapchain_t;
 
@@ -73,11 +95,11 @@ typedef struct vk_context_s {
     VkSurfaceKHR surface;
     VkRenderPass render_pass;
     VkRenderPass overlay_render_pass;
+    VkRenderPass liquid_render_pass;
     VkCommandPool command_pool;
-    VkSemaphore image_available;
-    VkSemaphore render_finished;
-    VkFence in_flight_fence;
-    bool frame_submitted;
+    vk_frame_context_t frames[VK_MAX_FRAMES_IN_FLIGHT];
+    uint32_t frame_count;
+    uint32_t current_frame;
     vk_swapchain_t swapchain;
 } vk_context_t;
 

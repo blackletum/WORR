@@ -22,6 +22,7 @@ global game rules.*/
 #include "../monsters/m_actor.hpp"
 #include "../network/event_shadow.hpp"
 #include "../network/lag_compensation.hpp"
+#include "../network/local_action_observation.hpp"
 #include "g_headhunters.hpp"
 #include "g_proball.hpp"
 #include "g_statusbar.hpp"
@@ -2149,6 +2150,7 @@ parsing textual entity definitions out of an ent file.
 void SpawnEntities(const char *mapName, const char *entities,
                    const char *spawnPoint) {
   SG_EventShadowResetMap();
+  SG_LocalActionObservationResetMap();
   LagCompensation_ResetMap();
 
   std::string entityStringStorage;

@@ -172,6 +172,50 @@ bool Worr_NativeSessionBindingInitFromReadinessV1(
         readiness->negotiated_capabilities, connection_owner_id);
 }
 
+bool Worr_NativeSessionBindingInitReceiveFromReadinessV1(
+    worr_native_session_binding_v1 *binding_out,
+    const worr_native_readiness_state_v1 *readiness,
+    uint64_t connection_owner_id,
+    uint64_t now_tick)
+{
+    worr_native_readiness_state_v1 checked;
+    const uint32_t event_caps =
+        WORR_NET_CAP_NATIVE_ENVELOPE_V1 |
+        WORR_NET_CAP_NATIVE_EVENT_STREAM_V1;
+    bool receive_phase;
+
+    if (binding_out == NULL || readiness == NULL ||
+        connection_owner_id == 0 ||
+        ranges_overlap(binding_out, sizeof(*binding_out),
+                       readiness, sizeof(*readiness)) ||
+        !Worr_NativeReadinessStateValidateV1(readiness)) {
+        return false;
+    }
+
+    receive_phase =
+        (readiness->role == WORR_NATIVE_READINESS_ROLE_SERVER &&
+         (readiness->phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE ||
+          (readiness->phase ==
+               WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM &&
+           (readiness->negotiated_capabilities & event_caps) == event_caps))) ||
+        (readiness->role == WORR_NATIVE_READINESS_ROLE_CLIENT &&
+         readiness->phase == WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE);
+    if (!receive_phase || readiness->transport_epoch == 0 ||
+        (readiness->negotiated_capabilities &
+         ~WORR_NET_CAP_KNOWN_MASK) != 0 ||
+        (readiness->negotiated_capabilities &
+         WORR_NET_CAP_NATIVE_ENVELOPE_V1) == 0) {
+        return false;
+    }
+
+    checked = *readiness;
+    if (!Worr_NativeReadinessCanReceiveNativeV1(&checked, now_tick))
+        return false;
+    return binding_initialize_local(
+        binding_out, readiness->transport_epoch,
+        readiness->negotiated_capabilities, connection_owner_id);
+}
+
 bool Worr_NativeAckRangeValidateV1(
     const worr_native_ack_range_v1 *acknowledgement)
 {
@@ -227,6 +271,12 @@ static bool tx_slot_valid(const worr_native_tx_session_v1 *session,
            slot->last_send_tick <= session->last_tick;
 }
 
+static bool tx_terminal_cancelled(
+    const worr_native_tx_session_v1 *session)
+{
+    return (session->state_flags & WORR_NATIVE_TX_TERMINAL_CANCELLED) != 0;
+}
+
 bool Worr_NativeTxSessionValidateV1(
     const worr_native_tx_session_v1 *session,
     const worr_native_tx_slot_v1 *slots,
@@ -245,12 +295,14 @@ bool Worr_NativeTxSessionValidateV1(
         session->schema_version != WORR_NATIVE_SESSION_ABI_VERSION ||
         (session->state_flags &
          ~(WORR_NATIVE_TX_INITIALIZED |
-           WORR_NATIVE_TX_SEQUENCE_EXHAUSTED)) != 0 ||
+           WORR_NATIVE_TX_SEQUENCE_EXHAUSTED |
+           WORR_NATIVE_TX_TERMINAL_CANCELLED)) != 0 ||
         (session->state_flags & WORR_NATIVE_TX_INITIALIZED) == 0 ||
         session->transport_epoch == 0 ||
         session->connection_owner_id == 0 ||
         session->slot_capacity != slot_capacity ||
         session->retained_count > slot_capacity ||
+        (tx_terminal_cancelled(session) && session->retained_count != 0) ||
         session->next_message_sequence == 0 || session->reserved0 != 0 ||
         ((session->latest_snapshot_epoch == 0) !=
          (session->latest_snapshot_sequence == 0))) {
@@ -422,7 +474,8 @@ worr_native_tx_result_v1 Worr_NativeTxSessionEnqueueV1(
         fragment_count > WORR_NATIVE_ENVELOPE_MAX_FRAGMENTS) {
         return WORR_NATIVE_TX_INVALID_ARGUMENT;
     }
-    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity))
+    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity) ||
+        tx_terminal_cancelled(session))
         return WORR_NATIVE_TX_INVALID_STATE;
     if (now_tick < session->last_tick) {
         counter_increment(&session->telemetry.clock_regressions);
@@ -651,7 +704,8 @@ worr_native_tx_result_v1 Worr_NativeTxSessionSelectDueV1(
                             slot_out, sizeof(*slot_out))) {
         return WORR_NATIVE_TX_INVALID_ARGUMENT;
     }
-    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity))
+    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity) ||
+        tx_terminal_cancelled(session))
         return WORR_NATIVE_TX_INVALID_STATE;
     if (now_tick < session->last_tick) {
         counter_increment(&session->telemetry.clock_regressions);
@@ -729,7 +783,8 @@ worr_native_tx_result_v1 Worr_NativeTxSessionPrepareDueV1(
                             ticket_out, sizeof(*ticket_out))) {
         return WORR_NATIVE_TX_INVALID_ARGUMENT;
     }
-    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity))
+    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity) ||
+        tx_terminal_cancelled(session))
         return WORR_NATIVE_TX_INVALID_STATE;
     if (now_tick < session->last_tick)
         return WORR_NATIVE_TX_CLOCK_REGRESSION;
@@ -773,6 +828,7 @@ bool Worr_NativeTxSessionPreparedValidateV1(
            tx_prepared_storage_distinct(session, slots, slot_capacity,
                                         ticket) &&
            Worr_NativeTxSessionValidateV1(session, slots, slot_capacity) &&
+           !tx_terminal_cancelled(session) &&
            tx_send_ticket_header_valid(ticket) &&
            ticket->transport_epoch == session->transport_epoch &&
            ticket->connection_owner_id == session->connection_owner_id &&
@@ -800,7 +856,8 @@ worr_native_tx_result_v1 Worr_NativeTxSessionConfirmPreparedV1(
     }
     if (!tx_send_ticket_header_valid(ticket))
         return WORR_NATIVE_TX_INVALID_ARGUMENT;
-    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity))
+    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity) ||
+        tx_terminal_cancelled(session))
         return WORR_NATIVE_TX_INVALID_STATE;
     if (ticket->transport_epoch != session->transport_epoch) {
         counter_increment(&session->telemetry.wrong_epoch);
@@ -872,7 +929,8 @@ worr_native_tx_result_v1 Worr_NativeTxSessionApplyAckV1(
         !Worr_NativeAckRangeValidateV1(acknowledgement)) {
         return WORR_NATIVE_TX_INVALID_ARGUMENT;
     }
-    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity))
+    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity) ||
+        tx_terminal_cancelled(session))
         return WORR_NATIVE_TX_INVALID_STATE;
     if (acknowledgement->connection_owner_id !=
         session->connection_owner_id) {
@@ -917,6 +975,46 @@ worr_native_tx_result_v1 Worr_NativeTxSessionApplyAckV1(
         return WORR_NATIVE_TX_ACKNOWLEDGEMENT_EMPTY;
     }
     return WORR_NATIVE_TX_ACKNOWLEDGED;
+}
+
+worr_native_tx_result_v1 Worr_NativeTxSessionCancelRetainedV1(
+    worr_native_tx_session_v1 *session,
+    worr_native_tx_slot_v1 *slots,
+    uint16_t slot_capacity,
+    uint32_t *cancelled_count_out)
+{
+    worr_native_tx_session_v1 staged_session;
+    worr_native_tx_slot_v1 staged_slots[WORR_NATIVE_SESSION_MAX_TX_SLOTS];
+    const size_t slots_bytes = (size_t)slot_capacity * sizeof(*slots);
+    uint32_t cancelled;
+
+    if (session == NULL || slots == NULL || cancelled_count_out == NULL ||
+        !tx_output_distinct(session, slots, slot_capacity,
+                            cancelled_count_out,
+                            sizeof(*cancelled_count_out))) {
+        return WORR_NATIVE_TX_INVALID_ARGUMENT;
+    }
+    if (!Worr_NativeTxSessionValidateV1(session, slots, slot_capacity))
+        return WORR_NATIVE_TX_INVALID_STATE;
+
+    if (tx_terminal_cancelled(session)) {
+        *cancelled_count_out = 0;
+        return WORR_NATIVE_TX_CANCELLED;
+    }
+
+    cancelled = session->retained_count;
+    staged_session = *session;
+    staged_session.retained_count = 0;
+    staged_session.state_flags |= WORR_NATIVE_TX_TERMINAL_CANCELLED;
+    memset(staged_slots, 0, sizeof(staged_slots));
+    if (!Worr_NativeTxSessionValidateV1(
+            &staged_session, staged_slots, slot_capacity)) {
+        return WORR_NATIVE_TX_INVALID_STATE;
+    }
+    *session = staged_session;
+    memcpy(slots, staged_slots, slots_bytes);
+    *cancelled_count_out = cancelled;
+    return WORR_NATIVE_TX_CANCELLED;
 }
 
 static uint16_t bitmap_count(uint64_t value)
@@ -1263,11 +1361,16 @@ bool Worr_NativeRxSessionValidateV1(
         !rx_slot_storage_distinct(session, slots, slot_capacity) ||
         session->struct_size != sizeof(*session) ||
         session->schema_version != WORR_NATIVE_SESSION_ABI_VERSION ||
-        session->state_flags != WORR_NATIVE_RX_INITIALIZED ||
+        (session->state_flags &
+         ~(WORR_NATIVE_RX_INITIALIZED |
+           WORR_NATIVE_RX_TERMINAL_CANCELLED)) != 0 ||
+        (session->state_flags & WORR_NATIVE_RX_INITIALIZED) == 0 ||
         session->transport_epoch == 0 ||
         session->connection_owner_id == 0 ||
         session->slot_capacity != slot_capacity ||
         session->occupied_count > slot_capacity ||
+        ((session->state_flags & WORR_NATIVE_RX_TERMINAL_CANCELLED) != 0 &&
+         session->occupied_count != 0) ||
         session->payload_stride == 0 ||
         session->payload_stride > WORR_NATIVE_ENVELOPE_MAX_PAYLOAD_BYTES ||
         session->fragment_timeout_ticks == 0 ||
@@ -1507,6 +1610,57 @@ bool Worr_NativeRxSessionValidateV1(
     return occupied == session->occupied_count;
 }
 
+worr_native_rx_result_v1 Worr_NativeRxSessionCancelPendingV1(
+    worr_native_rx_session_v1 *session,
+    worr_native_rx_slot_v1 *slots,
+    uint16_t slot_capacity,
+    worr_native_rx_cancel_report_v1 *report_out)
+{
+    worr_native_rx_session_v1 staged_session;
+    worr_native_rx_slot_v1 staged_slots[WORR_NATIVE_SESSION_MAX_RX_SLOTS];
+    worr_native_rx_cancel_report_v1 report;
+    const size_t slots_bytes = (size_t)slot_capacity * sizeof(*slots);
+    uint16_t index;
+
+    if (session == NULL || slots == NULL || report_out == NULL ||
+        ranges_overlap(report_out, sizeof(*report_out),
+                       session, sizeof(*session)) ||
+        ranges_overlap(report_out, sizeof(*report_out),
+                       slots, slots_bytes)) {
+        return WORR_NATIVE_RX_INVALID_ARGUMENT;
+    }
+    if (!Worr_NativeRxSessionValidateV1(session, slots, slot_capacity))
+        return WORR_NATIVE_RX_INVALID_STATE;
+
+    if ((session->state_flags & WORR_NATIVE_RX_TERMINAL_CANCELLED) != 0) {
+        memset(&report, 0, sizeof(report));
+        *report_out = report;
+        return WORR_NATIVE_RX_CANCELLED;
+    }
+
+    memset(&report, 0, sizeof(report));
+    for (index = 0; index < slot_capacity; ++index) {
+        if ((slots[index].state_flags & WORR_NATIVE_RX_SLOT_OCCUPIED) == 0)
+            continue;
+        if ((slots[index].state_flags & WORR_NATIVE_RX_SLOT_COMPLETE) != 0)
+            ++report.complete_messages;
+        else
+            ++report.incomplete_messages;
+    }
+    staged_session = *session;
+    staged_session.occupied_count = 0;
+    staged_session.state_flags |= WORR_NATIVE_RX_TERMINAL_CANCELLED;
+    memset(staged_slots, 0, sizeof(staged_slots));
+    if (!Worr_NativeRxSessionValidateV1(
+            &staged_session, staged_slots, slot_capacity)) {
+        return WORR_NATIVE_RX_INVALID_STATE;
+    }
+    *session = staged_session;
+    memcpy(slots, staged_slots, slots_bytes);
+    *report_out = report;
+    return WORR_NATIVE_RX_CANCELLED;
+}
+
 static bool rx_init_arguments_valid(
     worr_native_rx_session_v1 *session,
     worr_native_rx_slot_v1 *slots,
@@ -1735,7 +1889,8 @@ worr_native_rx_result_v1 Worr_NativeRxSessionAcceptV1(
         datagram == NULL || message_out == NULL ||
         repeat_acknowledgement_out == NULL)
         return WORR_NATIVE_RX_INVALID_ARGUMENT;
-    if (!Worr_NativeRxSessionValidateV1(session, slots, slot_capacity))
+    if (!Worr_NativeRxSessionValidateV1(session, slots, slot_capacity) ||
+        (session->state_flags & WORR_NATIVE_RX_TERMINAL_CANCELLED) != 0)
         return WORR_NATIVE_RX_INVALID_STATE;
     slots_bytes = (size_t)slot_capacity * sizeof(*slots);
     arena_required = (size_t)slot_capacity * session->payload_stride;
@@ -2131,7 +2286,8 @@ worr_native_rx_result_v1 Worr_NativeRxSessionCommitV1(
                        slots, slots_bytes)) {
         return WORR_NATIVE_RX_INVALID_ARGUMENT;
     }
-    if (!Worr_NativeRxSessionValidateV1(session, slots, slot_capacity))
+    if (!Worr_NativeRxSessionValidateV1(session, slots, slot_capacity) ||
+        (session->state_flags & WORR_NATIVE_RX_TERMINAL_CANCELLED) != 0)
         return WORR_NATIVE_RX_INVALID_STATE;
     if (slots[slot_index].state_flags == 0 ||
         slots[slot_index].reassembly.message_sequence != message_sequence)
@@ -2237,7 +2393,8 @@ worr_native_rx_result_v1 Worr_NativeRxSessionDiscardV1(
     if (session == NULL || slots == NULL || slot_index >= slot_capacity ||
         message_sequence == 0)
         return WORR_NATIVE_RX_INVALID_ARGUMENT;
-    if (!Worr_NativeRxSessionValidateV1(session, slots, slot_capacity))
+    if (!Worr_NativeRxSessionValidateV1(session, slots, slot_capacity) ||
+        (session->state_flags & WORR_NATIVE_RX_TERMINAL_CANCELLED) != 0)
         return WORR_NATIVE_RX_INVALID_STATE;
     if (slots[slot_index].state_flags == 0 ||
         slots[slot_index].reassembly.message_sequence != message_sequence)
@@ -2273,7 +2430,8 @@ worr_native_rx_result_v1 Worr_NativeRxSessionExpireV1(
                        slots, (size_t)slot_capacity * sizeof(*slots))) {
         return WORR_NATIVE_RX_INVALID_ARGUMENT;
     }
-    if (!Worr_NativeRxSessionValidateV1(session, slots, slot_capacity))
+    if (!Worr_NativeRxSessionValidateV1(session, slots, slot_capacity) ||
+        (session->state_flags & WORR_NATIVE_RX_TERMINAL_CANCELLED) != 0)
         return WORR_NATIVE_RX_INVALID_STATE;
     if (now_tick < session->last_tick) {
         counter_increment(&session->telemetry.clock_regressions);

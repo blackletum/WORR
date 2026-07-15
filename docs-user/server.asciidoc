@@ -85,13 +85,23 @@ sv_worr_native_shadow::
     Enables the server half of a developer-only native command-shadow
     diagnostic. Default value is 0 (disabled). A client must also enable
     `cl_worr_native_shadow`, and the connection must support the compatible
-    NEW-netchan path. The diagnostic observes at most one input command per map
-    or native transport epoch while the established movement command remains
-    authoritative. It is not a server-performance option and does not enable
-    full native netcode. Set it before clients connect and have existing clients
-    reconnect after changing it. An unsupported peer or diagnostic failure
+    NEW-netchan path. The diagnostic compares a bounded repeated sample of
+    canonical input commands with the established movement stream, which
+    remains authoritative. It is not a server-performance option and does not
+    enable full native netcode. Set it before clients connect and have existing
+    clients reconnect after changing it. An unsupported peer or diagnostic failure
     silently falls back to the normal path. When disabled, legacy connections
     and demo behavior are unchanged. See
+    link:progressive-networking-controls.md[Progressive Networking Controls].
+
+sv_worr_native_event_shadow::
+    Adds the server half of the developer-only per-client native event-stream
+    diagnostic to `sv_worr_native_shadow`. Default value is 0 (disabled). The
+    client and server must enable both base native-shadow controls and both
+    event-shadow controls before connecting, and `sv_snapshot_shadow` must be
+    enabled to supply final per-client event observations. Established snapshot
+    delivery remains authoritative if native queueing, acknowledgement, or
+    admission fails. Reconnect clients after changing it. See
     link:progressive-networking-controls.md[Progressive Networking Controls].
 
 Generic

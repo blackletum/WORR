@@ -705,6 +705,8 @@ void SV_ClientCommand(client_t *cl, const char *fmt, ...) q_printf(2, 3);
 void SV_BroadcastCommand(const char *fmt, ...) q_printf(1, 2);
 void SV_ClientAddMessage(client_t *client, int flags);
 bool SV_TryQueueNativeShadowChallenge(client_t *client);
+/* Validates and expires a pending request without queueing or transmitting. */
+bool SV_MaintainNativeShadowChallengePending(client_t *client);
 void SV_ShutdownClientSend(client_t *client);
 void SV_InitClientSend(client_t *newcl);
 
@@ -799,6 +801,8 @@ void SV_New_f(void);
 void SV_Begin_f(void);
 void SV_ExecuteClientMessage(client_t *cl);
 void SV_CloseDownload(client_t *client);
+/* Headless operator regression for the production large-gap recovery path. */
+void SV_WorrCommandGapSelfTest_f(void);
 #if USE_FPS
 void SV_AlignKeyFrames(client_t *client);
 #else

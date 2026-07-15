@@ -586,7 +586,8 @@ int main(int argc, char **argv)
     }
     CHECK(sv.cm.cache != NULL);
     CHECK(sv.cm.cache->nummodels == 3);
-    CHECK(sv.cm.cache->numbrushes == 2);
+    /* One world-water brush plus the solid and water inline model brushes. */
+    CHECK(sv.cm.cache->numbrushes == 3);
     CHECK(sv.cm.cache->numtexinfo == 2);
 
     sv.state = ss_game;

@@ -102,6 +102,9 @@ static cvar_t *ui_rml_high_visibility;
 static cvar_t *ui_rml_reduced_motion;
 static cvar_t *ui_rml_large_text;
 static cvar_t *ui_rml_localization_language;
+static cvar_t *ui_rml_local_time;
+static cvar_t *ui_rml_local_date;
+static unsigned ui_rml_local_clock_next_update;
 static int ui_rml_localization_modified_count = -1;
 static Rml::Element *ui_rml_keybind_capture_element;
 static Rml::String ui_rml_keybind_capture_command;
@@ -2754,6 +2757,51 @@ public:
 
 static UI_Rml_AudioEventListener ui_rml_audio_event_listener;
 
+class UI_Rml_TooltipEventListener final : public Rml::EventListener {
+public:
+    void ProcessEvent(Rml::Event &event) override
+    {
+        if (!ui_rml_document) {
+            return;
+        }
+
+        const Rml::EventId event_id = event.GetId();
+        const bool show = event_id == Rml::EventId::Mouseover ||
+                          event_id == Rml::EventId::Focus;
+        const bool reset = event_id == Rml::EventId::Mouseout ||
+                           event_id == Rml::EventId::Blur;
+        if (!show && !reset) {
+            return;
+        }
+
+        Rml::Element *region =
+            ui_rml_document->QuerySelector("[data-tooltip-region]");
+        if (!region) {
+            return;
+        }
+
+        Rml::Element *source = event.GetTargetElement();
+        while (source && source != ui_rml_document &&
+               !source->HasAttribute("data-tooltip")) {
+            source = source->GetParentNode();
+        }
+
+        Rml::String text;
+        if (show && source && source->HasAttribute("data-tooltip")) {
+            text = source->GetAttribute<Rml::String>("data-tooltip", "");
+        } else {
+            text = region->GetAttribute<Rml::String>("data-tooltip-default", "");
+        }
+
+        if (!text.empty()) {
+            region->SetInnerRML(UI_Rml_EscapeTextForInnerRml(text.c_str()));
+        }
+        region->SetClass("is-active", show && !text.empty());
+    }
+};
+
+static UI_Rml_TooltipEventListener ui_rml_tooltip_event_listener;
+
 static void UI_Rml_AttachElementAudioListeners(Rml::Element *element)
 {
     if (!element) {
@@ -2827,6 +2875,29 @@ static void UI_Rml_SetKeybindKeyText(Rml::Element *element, const char *text)
 
     if (Rml::Element *key_span = element->QuerySelector(".bind-key")) {
         UI_Rml_SetElementInnerText(key_span, text);
+    }
+}
+
+static void UI_Rml_AttachElementTooltipListeners(Rml::Element *element)
+{
+    if (!element) {
+        return;
+    }
+
+    if (element->HasAttribute("data-tooltip")) {
+        element->AddEventListener(Rml::EventId::Mouseover,
+                                  &ui_rml_tooltip_event_listener);
+        element->AddEventListener(Rml::EventId::Mouseout,
+                                  &ui_rml_tooltip_event_listener);
+        element->AddEventListener(Rml::EventId::Focus,
+                                  &ui_rml_tooltip_event_listener);
+        element->AddEventListener(Rml::EventId::Blur,
+                                  &ui_rml_tooltip_event_listener);
+    }
+
+    const int num_children = element->GetNumChildren();
+    for (int child_index = 0; child_index < num_children; child_index++) {
+        UI_Rml_AttachElementTooltipListeners(element->GetChild(child_index));
     }
 }
 
@@ -3556,6 +3627,32 @@ static const char *UI_Rml_CompiledRuntimeName(void)
     return runtime_name;
 }
 
+static void UI_Rml_UpdateLocalClock(unsigned realtime, bool force)
+{
+    if (!ui_rml_local_time || !ui_rml_local_date ||
+        (!force && realtime < ui_rml_local_clock_next_update)) {
+        return;
+    }
+
+    const time_t now = time(nullptr);
+    const struct tm *local_now = localtime(&now);
+    char local_time[32] = "--:--:--";
+    char local_date[64] = "---";
+
+    if (local_now) {
+        if (!strftime(local_time, sizeof(local_time), "%H:%M:%S", local_now)) {
+            Q_strlcpy(local_time, "--:--:--", sizeof(local_time));
+        }
+        if (!strftime(local_date, sizeof(local_date), "%a %d %b %Y", local_now)) {
+            Q_strlcpy(local_date, "---", sizeof(local_date));
+        }
+    }
+
+    Cvar_Set(ui_rml_local_time->name, local_time);
+    Cvar_Set(ui_rml_local_date->name, local_date);
+    ui_rml_local_clock_next_update = realtime + 1000u;
+}
+
 static bool UI_Rml_CompiledRuntimeInit(void)
 {
     if (ui_rml_core_initialized) {
@@ -3572,6 +3669,10 @@ static bool UI_Rml_CompiledRuntimeInit(void)
         Cvar_Get("ui_rml_large_text", "0", CVAR_ARCHIVE);
     ui_rml_localization_language =
         Cvar_Get("loc_language", "auto", CVAR_ARCHIVE);
+    ui_rml_local_time = Cvar_Get("ui_local_time", "--:--:--", CVAR_ROM);
+    ui_rml_local_date = Cvar_Get("ui_local_date", "---", CVAR_ROM);
+    ui_rml_local_clock_next_update = 0;
+    UI_Rml_UpdateLocalClock(Sys_Milliseconds(), true);
     ui_rml_localization_modified_count = -1;
 
     UI_Rml_InstallCoreInterfaces();
@@ -6258,14 +6359,18 @@ static void UI_Rml_ApplyAccessibilityClasses(Rml::ElementDocument *document)
         ui_rml_reduced_motion && ui_rml_reduced_motion->integer != 0;
     const bool large_text =
         ui_rml_large_text && ui_rml_large_text->integer != 0;
+    const bool session_overlay =
+        Cvar_VariableInteger("ui_dm_menu_active") != 0;
 
     document->SetClass("ui-high-visibility", high_visibility);
     document->SetClass("ui-reduced-motion", reduced_motion);
     document->SetClass("ui-a11y-large-text", large_text);
+    document->SetClass("ui-session-overlay", session_overlay);
     if (Rml::Element *body = UI_Rml_DocumentBody(document)) {
         body->SetClass("ui-high-visibility", high_visibility);
         body->SetClass("ui-reduced-motion", reduced_motion);
         body->SetClass("ui-a11y-large-text", large_text);
+        body->SetClass("ui-session-overlay", session_overlay);
     }
 }
 
@@ -6286,6 +6391,12 @@ static void UI_Rml_ApplyPreloadAccessibilityClasses(Rml::String &contents)
             classes += " ";
         }
         classes += "ui-a11y-large-text";
+    }
+    if (Cvar_VariableInteger("ui_dm_menu_active") != 0) {
+        if (!classes.empty()) {
+            classes += " ";
+        }
+        classes += "ui-session-overlay";
     }
     if (classes.empty()) {
         return;
@@ -6414,6 +6525,9 @@ static void UI_Rml_CompiledRuntimeShutdown(void)
     ui_rml_reduced_motion = NULL;
     ui_rml_large_text = NULL;
     ui_rml_localization_language = NULL;
+    ui_rml_local_time = NULL;
+    ui_rml_local_date = NULL;
+    ui_rml_local_clock_next_update = 0;
     ui_rml_localization_modified_count = -1;
 }
 
@@ -6530,6 +6644,7 @@ static bool UI_Rml_CompiledRuntimeOpenRoute(const char *route_id, const char *do
 
     UI_Rml_AttachElementCvarListeners(ui_rml_document);
     UI_Rml_AttachElementAudioListeners(ui_rml_document);
+    UI_Rml_AttachElementTooltipListeners(ui_rml_document);
     UI_Rml_ApplyDocumentAudioHints(route_id, ui_rml_document);
 
     if (Cvar_VariableInteger("ui_rml_debug")) {
@@ -6595,6 +6710,7 @@ static bool UI_Rml_CompiledRuntimeUpdate(int width, int height, unsigned realtim
 
     UI_Rml_AdvancePlayerPreview(realtime);
     UI_Rml_AdvanceServerRefresh(realtime);
+    UI_Rml_UpdateLocalClock(realtime, false);
 
     if (ui_rml_keybind_capture_element &&
         Sys_Milliseconds() - ui_rml_keybind_capture_started >= 8000u) {

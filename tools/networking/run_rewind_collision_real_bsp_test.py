@@ -13,7 +13,7 @@ from pathlib import Path
 from generate_rewind_collision_bsp_fixture import build_fixture
 
 
-EXPECTED_SHA256 = "e2bb2511bc17d637ee60ba08c9c51133bba97bb6c3ca7a9930b2d3f8d5c82ca6"
+EXPECTED_SHA256 = "bdc1a88bd7c83ddc7e52bd674856594113b2f09e798d2401522c06b33d404d53"
 
 
 def main() -> int:

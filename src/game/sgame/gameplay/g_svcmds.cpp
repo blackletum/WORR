@@ -11,6 +11,7 @@ G_FilterPacket(): packet gate using configured filters*/
 #include "../commands/command_registration.hpp"
 #include "../commands/command_system.hpp"
 #include "../commands/command_voting.hpp"
+#include "../network/lag_compensation.hpp"
 
 #include <array>
 #include <vector>
@@ -4132,6 +4133,233 @@ bool G_FilterPacket(const char* from)
 		return !anyMatch;     // no match => blocked
 }
 
+// Exercises the real sgame mover capture/scene/trace path against the packaged
+// bmodel fixture. It is intentionally console-scoped so ordinary gameplay and
+// network clients cannot select a synthetic rewind context.
+static void SVCmd_RewindMoverSelfTest_f()
+{
+	LagCompensationHistoricalBrushRuntimeProbe probe{};
+	const bool passed = LagCompensation_RunHistoricalBrushRuntimeProbe(&probe);
+	gi.Com_PrintFmt(
+		"worr_rewind_mover_selftest: status={} setup={} scene={} rotation={} rider_setup={} rider_continuity={} rider_frame_scene={} rider_provenance={} reference={} "
+		"rotation_control={} baseline={} dispatched={} historical={} authority={} candidates={} rider_samples={} baseline_fraction={:.6f} "
+		"historical_fraction={:.6f}\n",
+		passed ? "pass" : "fail", probe.setup_ready ? 1u : 0u,
+		probe.scene_ready ? 1u : 0u,
+		probe.rotation_applied ? 1u : 0u,
+		probe.rider_setup ? 1u : 0u,
+		probe.rider_frame_continuity ? 1u : 0u,
+		probe.rider_frame_scene_sealed ? 1u : 0u,
+		probe.rider_provenance_sealed ? 1u : 0u,
+		probe.fixture_reference_blocked ? 1u : 0u,
+		probe.rotation_control_unblocked ? 1u : 0u,
+		probe.baseline_unblocked ? 1u : 0u,
+		probe.historical_dispatched ? 1u : 0u,
+		probe.historical_blocked ? 1u : 0u,
+		probe.authority_unchanged ? 1u : 0u, probe.candidate_count,
+		probe.rider_continuity_samples,
+		probe.baseline_fraction, probe.historical_fraction);
+}
+
+// Arms the dedicated collision fixture before normal server frames execute.
+// The subsequent self-test consumes only poses captured by those normal frames.
+static void SVCmd_RewindMoverArmRider_f()
+{
+	const bool armed = LagCompensation_ArmHistoricalBrushRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_mover_arm_rider: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Runs the real fire_rail/pierce_trace/Damage acceptance probe on a dedicated
+// fixture with two engine bots. The probe itself restores its scoped player
+// state before return and is never exposed through player commands.
+static void SVCmd_RewindRailDamageSelfTest_f()
+{
+	LagCompensationRailDamageRuntimeProbe probe{};
+	const bool passed = LagCompensation_RunRailDamageRuntimeProbe(&probe);
+	gi.Com_PrintFmt(
+		"worr_rewind_rail_damage_selftest: status={} setup={} history={} current_miss={} rejected_fallback={} rejected_no_damage={} legacy={} policy={} near_hit={} bounded_hit={} capped_hit={} damage={} geometry={} authority={} candidates={} damage_amount={} current_fraction={:.6f} near_fraction={:.6f} bounded_fraction={:.6f} capped_fraction={:.6f}\n",
+		passed ? "pass" : "fail", probe.setup_ready ? 1u : 0u,
+		probe.history_ready ? 1u : 0u,
+		probe.current_world_miss ? 1u : 0u,
+		probe.rejected_current_fallback ? 1u : 0u,
+		probe.rejected_no_damage ? 1u : 0u,
+		probe.legacy_rewind_selected ? 1u : 0u,
+		probe.rail_policy_observed ? 1u : 0u,
+		probe.near_latency_hit ? 1u : 0u,
+		probe.bounded_latency_hit ? 1u : 0u,
+		probe.capped_latency_hit ? 1u : 0u,
+		probe.damage_applied ? 1u : 0u,
+		probe.geometry_unchanged ? 1u : 0u,
+		probe.query_authority_unchanged ? 1u : 0u,
+		probe.candidate_count, probe.damage_amount, probe.current_fraction,
+		probe.near_latency_fraction, probe.bounded_latency_fraction,
+		probe.capped_latency_fraction);
+}
+
+static void SVCmd_RewindRailDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmRailDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_rail_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms only the fixture state for the two-process canonical-command gate.
+// The next real, negotiated client command must enter ClientThink and invoke
+// the ordinary Railgun weapon callback; no console command can provide that
+// authority or fire the weapon directly.
+static void SVCmd_RewindCanonicalRailDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalRailDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_rail_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms only the machinegun variant of the real-command fixture. As with the
+// Railgun command, server console authority cannot construct a user command,
+// choose a rewind target, or call a weapon callback.
+static void SVCmd_RewindCanonicalMachinegunDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalMachinegunDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_machinegun_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms only the Chaingun variant of the real-command fixture. Its three-round
+// burst remains entirely inside normal Item::weaponThink dispatch.
+static void SVCmd_RewindCanonicalChaingunDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalChaingunDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_chaingun_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms only the Super Shotgun variant. Both barrels and all pellet traces stay
+// in the ordinary weapon callback reached by the received attack command.
+static void SVCmd_RewindCanonicalSuperShotgunDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalSuperShotgunDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_super_shotgun_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms only the Disruptor convergence variant. The received command still
+// reaches the normal projectile and delayed damage-daemon lifecycle.
+static void SVCmd_RewindCanonicalDisruptorDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalDisruptorDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_disruptor_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms only the first normal Plasma Beam tick from a real held attack. The
+// repeating state machine and fire_beams path remain production-owned.
+static void SVCmd_RewindCanonicalPlasmaBeamDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalPlasmaBeamDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_plasma_beam_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms a bounded held-command Plasma Beam cadence fixture. Ordinary repeating
+// weapon frames must reach its exact three-tick damage contract.
+static void SVCmd_RewindCanonicalPlasmaBeamHeldDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalPlasmaBeamHeldDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_plasma_beam_held_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms a bounded long-held Plasma Beam fixture. The real held command must
+// sustain the ordinary repeater through the complete supplied-cell budget.
+static void SVCmd_RewindCanonicalPlasmaBeamSustainedDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalPlasmaBeamSustainedDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_plasma_beam_sustained_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms the bounded Plasma Beam release contract. The client must first reach
+// three ordinary ticks, then deliver a real no-attack command.
+static void SVCmd_RewindCanonicalPlasmaBeamReleaseDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalPlasmaBeamReleaseDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_plasma_beam_release_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms a real Plasma Beam water crossing. The production beam path owns the
+// water hit, retrace, and halved current-authority damage.
+static void SVCmd_RewindCanonicalPlasmaBeamWaterRetraceDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalPlasmaBeamWaterRetraceDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_plasma_beam_water_retrace_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms only the first normal dry-world Thunderbolt tick from a real held
+// attack. Main/side-ray resolution and damage de-duplication stay production-owned.
+static void SVCmd_RewindCanonicalThunderboltDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalThunderboltDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_thunderbolt_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms a bounded held-command dry-world Thunderbolt cadence fixture. The
+// normal main/side-ray path must retain per-tick target de-duplication.
+static void SVCmd_RewindCanonicalThunderboltHeldDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalThunderboltHeldDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_thunderbolt_held_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms a bounded long-held Thunderbolt fixture. Its normal complete beam
+// footprint must retain target de-duplication through the supplied-cell budget.
+static void SVCmd_RewindCanonicalThunderboltSustainedDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalThunderboltSustainedDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_thunderbolt_sustained_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms the bounded dry-world Thunderbolt release contract. Its regular
+// main/side-ray footprint must stop after a real no-attack command.
+static void SVCmd_RewindCanonicalThunderboltReleaseDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalThunderboltReleaseDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_thunderbolt_release_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms a dry-shooter Thunderbolt water crossing. The production path owns
+// water contact, retrace, the side rays, and target de-duplication.
+static void SVCmd_RewindCanonicalThunderboltWaterRetraceDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalThunderboltWaterRetraceDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_thunderbolt_water_retrace_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms the current-authority underwater Thunderbolt discharge policy. A real
+// client command must consume its cells and take the normal self damage.
+static void SVCmd_RewindCanonicalThunderboltDischargeDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalThunderboltDischargeDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_thunderbolt_discharge_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
+// Arms only the shotgun variant of the real-command fixture. The received
+// attack must still reach the ordinary multi-pellet weapon callback.
+static void SVCmd_RewindCanonicalShotgunDamageArm_f()
+{
+	const bool armed = LagCompensation_ArmCanonicalShotgunDamageRuntimeProbe();
+	gi.Com_PrintFmt("worr_rewind_canonical_shotgun_damage_arm: status={}\n",
+		armed ? "pass" : "fail");
+}
+
 /*
 ===============
 ServerCommand
@@ -4149,6 +4377,69 @@ void ServerCommand()
 
 	if (Q_strcasecmp(cmd, "test") == 0) {
 		Svcmd_Test_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_mover_selftest") == 0) {
+		SVCmd_RewindMoverSelfTest_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_mover_arm_rider") == 0) {
+		SVCmd_RewindMoverArmRider_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_rail_damage_selftest") == 0) {
+		SVCmd_RewindRailDamageSelfTest_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_rail_damage_arm") == 0) {
+		SVCmd_RewindRailDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_rail_damage_arm") == 0) {
+		SVCmd_RewindCanonicalRailDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_machinegun_damage_arm") == 0) {
+		SVCmd_RewindCanonicalMachinegunDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_chaingun_damage_arm") == 0) {
+		SVCmd_RewindCanonicalChaingunDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_super_shotgun_damage_arm") == 0) {
+		SVCmd_RewindCanonicalSuperShotgunDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_disruptor_damage_arm") == 0) {
+		SVCmd_RewindCanonicalDisruptorDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_plasma_beam_damage_arm") == 0) {
+		SVCmd_RewindCanonicalPlasmaBeamDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_plasma_beam_held_damage_arm") == 0) {
+		SVCmd_RewindCanonicalPlasmaBeamHeldDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_plasma_beam_sustained_damage_arm") == 0) {
+		SVCmd_RewindCanonicalPlasmaBeamSustainedDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_plasma_beam_release_damage_arm") == 0) {
+		SVCmd_RewindCanonicalPlasmaBeamReleaseDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_plasma_beam_water_retrace_damage_arm") == 0) {
+		SVCmd_RewindCanonicalPlasmaBeamWaterRetraceDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_thunderbolt_damage_arm") == 0) {
+		SVCmd_RewindCanonicalThunderboltDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_thunderbolt_held_damage_arm") == 0) {
+		SVCmd_RewindCanonicalThunderboltHeldDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_thunderbolt_sustained_damage_arm") == 0) {
+		SVCmd_RewindCanonicalThunderboltSustainedDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_thunderbolt_release_damage_arm") == 0) {
+		SVCmd_RewindCanonicalThunderboltReleaseDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_thunderbolt_water_retrace_damage_arm") == 0) {
+		SVCmd_RewindCanonicalThunderboltWaterRetraceDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_thunderbolt_discharge_damage_arm") == 0) {
+		SVCmd_RewindCanonicalThunderboltDischargeDamageArm_f();
+	}
+	else if (Q_strcasecmp(cmd, "worr_rewind_canonical_shotgun_damage_arm") == 0) {
+		SVCmd_RewindCanonicalShotgunDamageArm_f();
 	}
 	else if (Q_strcasecmp(cmd, "addip") == 0) {
 		SVCmd_AddIP_f();

@@ -93,12 +93,22 @@ cl_worr_native_shadow::
     Enables the client half of a developer-only native command-shadow
     diagnostic. Default value is 0 (disabled). The server must also enable
     `sv_worr_native_shadow`, and the connection must support the compatible
-    NEW-netchan path. The diagnostic observes at most one input command per map
-    or native transport epoch; the established movement command remains in
-    charge of gameplay. It is not a performance option and does not enable full
-    native netcode. Set it before connecting and reconnect after changing it.
+    NEW-netchan path. The diagnostic sends a bounded repeated sample of
+    canonical input commands beside the established movement stream, which
+    remains in charge of gameplay. It is not a performance option and does not
+    enable full native netcode. Set it before connecting and reconnect after changing it.
     An unsupported peer or diagnostic failure silently falls back to the normal
     path. When disabled, normal networking and demo behavior are unchanged.
+
+cl_worr_native_event_shadow::
+    Adds the client half of the developer-only native event-stream diagnostic
+    to `cl_worr_native_shadow`. Default value is 0 (disabled). The client and
+    server must enable both base native-shadow controls and both event-shadow
+    controls before connecting. Canonical events are acknowledged only after
+    the cgame audit runtime accepts them; established snapshot events still
+    produce visible effects and audio. This is not a performance or gameplay
+    authority option. Reconnect after changing it. See
+    link:progressive-networking-controls.md[Progressive Networking Controls].
 
 cl_snapshot_recovery::
     Enables an experimental recovery policy that can request a full snapshot

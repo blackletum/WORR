@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "task_id": "FR-01-T06",
+  "scenes": [
+    {
+      "id": "bmodel_transformed_first_frame",
+      "config": "renderer_parity/fr01_bmodel_first_frame_transformed.cfg",
+      "capture": "fr01_bmodel_first_frame_transformed.tga",
+      "crop": [250, 190, 500, 340],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [2, 2, 2],
+        "max_pixels_over_threshold_percent": 0.5
+      },
+      "probes": [
+        {
+          "name": "initial_transformed_bmodel_without_authored_ghost",
+          "min_color": [24, 160, 48],
+          "max_color": [96, 255, 144],
+          "min_pixels_per_backend": 10000,
+          "max_backend_count_delta_percent": 1,
+          "min_backend_intersection_over_union": 0.99
+        }
+      ]
+    },
+    {
+      "id": "legacy_lightmapped_world",
+      "config": "renderer_parity/fr01_bmodel_first_frame_lightmapped.cfg",
+      "capture": "fr01_bmodel_first_frame_lightmapped.tga",
+      "crop": [250, 190, 100, 340],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [2, 2, 2],
+        "max_pixels_over_threshold_percent": 0.5
+      },
+      "probes": [
+        {
+          "name": "authored_dark_legacy_lightmap",
+          "min_color": [1, 1, 1],
+          "max_color": [24, 32, 48],
+          "min_pixels_per_backend": 30000,
+          "max_backend_count_delta_percent": 1,
+          "min_backend_intersection_over_union": 0.99
+        }
+      ]
+    }
+  ]
+}

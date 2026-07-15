@@ -8,6 +8,7 @@ the Free Software Foundation; either version 2 of the License, or
 */
 
 #include "vk_ui.h"
+#include "vk_debug.h"
 
 #include "renderer/ui_scale.h"
 #include "renderer/dds.h"
@@ -37,6 +38,10 @@ typedef struct {
 typedef struct {
     bool in_use;
     bool transparent;
+    // Internal glow images share the normal image registry so descriptor
+    // lifetime stays with Vulkan UI. They are owned by their base image and
+    // are never selected for ordinary UI drawing.
+    bool internal_glowmap;
     imagetype_t type;
     imageflags_t flags;
     int width;
@@ -47,6 +52,7 @@ typedef struct {
     VkDeviceMemory image_memory;
     VkImageView view;
     VkDescriptorSet descriptor_set;
+    qhandle_t glow_image;
 } vk_ui_image_t;
 
 typedef struct {
@@ -55,6 +61,23 @@ typedef struct {
     VkDescriptorSet descriptor_set;
     VkRect2D scissor;
 } vk_ui_draw_t;
+
+typedef struct {
+    VkBuffer vertex_buffer;
+    VkDeviceMemory vertex_memory;
+    size_t vertex_buffer_bytes;
+    VkBuffer vertex_staging_buffer;
+    VkDeviceMemory vertex_staging_memory;
+    void *vertex_staging_mapped;
+    size_t vertex_upload_bytes;
+    VkBuffer index_buffer;
+    VkDeviceMemory index_memory;
+    size_t index_buffer_bytes;
+    VkBuffer index_staging_buffer;
+    VkDeviceMemory index_staging_memory;
+    void *index_staging_mapped;
+    size_t index_upload_bytes;
+} vk_ui_frame_buffers_t;
 
 typedef struct {
     vk_context_t *ctx;
@@ -81,20 +104,14 @@ typedef struct {
 
     VkSampler sampler_repeat;
     VkSampler sampler_clamp;
+    VkSampler sampler_nearest_repeat;
+    VkSampler sampler_nearest_clamp;
     VkDescriptorSetLayout descriptor_set_layout;
     VkDescriptorPool descriptor_pool;
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
 
-    VkBuffer vertex_buffer;
-    VkDeviceMemory vertex_memory;
-    void *vertex_mapped;
-    size_t vertex_buffer_bytes;
-
-    VkBuffer index_buffer;
-    VkDeviceMemory index_memory;
-    void *index_mapped;
-    size_t index_buffer_bytes;
+    vk_ui_frame_buffers_t frame_buffers[VK_MAX_FRAMES_IN_FLIGHT];
 
     vk_ui_vertex_t *vertices;
     uint32_t vertex_count;
@@ -110,6 +127,10 @@ typedef struct {
 } vk_ui_state_t;
 
 static vk_ui_state_t vk_ui;
+static cvar_t *vk_r_glowmaps;
+static cvar_t *vk_bilerp_chars;
+static cvar_t *vk_bilerp_pics;
+static cvar_t *vk_bilerp_skies;
 extern uint32_t d_8to24table[256];
 
 static inline bool VK_UI_Check(VkResult result, const char *what)
@@ -214,6 +235,15 @@ static bool VK_UI_TextureByteSize(int width, int height, size_t bytes_per_pixel,
 static inline VkDevice VK_UI_Device(void)
 {
     return vk_ui.ctx ? vk_ui.ctx->device : VK_NULL_HANDLE;
+}
+
+static vk_ui_frame_buffers_t *VK_UI_CurrentFrameBuffers(void)
+{
+    if (!vk_ui.ctx || !vk_ui.ctx->frame_count ||
+        vk_ui.ctx->current_frame >= vk_ui.ctx->frame_count) {
+        return NULL;
+    }
+    return &vk_ui.frame_buffers[vk_ui.ctx->current_frame];
 }
 
 static void VK_UI_RefreshVirtualMetrics(void)
@@ -420,8 +450,12 @@ static bool VK_UI_EnsureHostBuffers(void)
     return true;
 }
 
-static bool VK_UI_EnsureGpuBuffers(void)
+static bool VK_UI_EnsureGpuBuffers(vk_ui_frame_buffers_t *frame)
 {
+    if (!frame) {
+        Com_SetLastError("Vulkan UI: active frame buffers are unavailable");
+        return false;
+    }
     size_t needed_vertex_bytes;
     size_t needed_index_bytes;
     if (!VK_UI_ArrayBytes(sizeof(*vk_ui.vertices), vk_ui.vertex_capacity,
@@ -431,36 +465,74 @@ static bool VK_UI_EnsureGpuBuffers(void)
         return false;
     }
 
-    if (needed_vertex_bytes > vk_ui.vertex_buffer_bytes) {
-        VK_UI_DestroyBuffer(&vk_ui.vertex_buffer, &vk_ui.vertex_memory, &vk_ui.vertex_mapped);
+    if (!frame->vertex_buffer || !frame->vertex_memory ||
+        !frame->vertex_staging_buffer || !frame->vertex_staging_memory ||
+        !frame->vertex_staging_mapped ||
+        needed_vertex_bytes > frame->vertex_buffer_bytes) {
+        VK_UI_DestroyBuffer(&frame->vertex_staging_buffer,
+                            &frame->vertex_staging_memory,
+                            &frame->vertex_staging_mapped);
+        VK_UI_DestroyBuffer(&frame->vertex_buffer, &frame->vertex_memory,
+                            NULL);
 
         if (!VK_UI_CreateBuffer(needed_vertex_bytes,
-                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                &frame->vertex_buffer,
+                                &frame->vertex_memory,
+                                NULL) ||
+            !VK_UI_CreateBuffer(needed_vertex_bytes,
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                &vk_ui.vertex_buffer,
-                                &vk_ui.vertex_memory,
-                                &vk_ui.vertex_mapped)) {
+                                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                &frame->vertex_staging_buffer,
+                                &frame->vertex_staging_memory,
+                                &frame->vertex_staging_mapped)) {
+            VK_UI_DestroyBuffer(&frame->vertex_staging_buffer,
+                                &frame->vertex_staging_memory,
+                                &frame->vertex_staging_mapped);
+            VK_UI_DestroyBuffer(&frame->vertex_buffer, &frame->vertex_memory,
+                                NULL);
             return false;
         }
 
-        vk_ui.vertex_buffer_bytes = needed_vertex_bytes;
+        frame->vertex_buffer_bytes = needed_vertex_bytes;
     }
 
-    if (needed_index_bytes > vk_ui.index_buffer_bytes) {
-        VK_UI_DestroyBuffer(&vk_ui.index_buffer, &vk_ui.index_memory, &vk_ui.index_mapped);
+    if (!frame->index_buffer || !frame->index_memory ||
+        !frame->index_staging_buffer || !frame->index_staging_memory ||
+        !frame->index_staging_mapped ||
+        needed_index_bytes > frame->index_buffer_bytes) {
+        VK_UI_DestroyBuffer(&frame->index_staging_buffer,
+                            &frame->index_staging_memory,
+                            &frame->index_staging_mapped);
+        VK_UI_DestroyBuffer(&frame->index_buffer, &frame->index_memory,
+                            NULL);
 
         if (!VK_UI_CreateBuffer(needed_index_bytes,
-                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                &frame->index_buffer,
+                                &frame->index_memory,
+                                NULL) ||
+            !VK_UI_CreateBuffer(needed_index_bytes,
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                &vk_ui.index_buffer,
-                                &vk_ui.index_memory,
-                                &vk_ui.index_mapped)) {
+                                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                &frame->index_staging_buffer,
+                                &frame->index_staging_memory,
+                                &frame->index_staging_mapped)) {
+            VK_UI_DestroyBuffer(&frame->index_staging_buffer,
+                                &frame->index_staging_memory,
+                                &frame->index_staging_mapped);
+            VK_UI_DestroyBuffer(&frame->index_buffer, &frame->index_memory,
+                                NULL);
             return false;
         }
 
-        vk_ui.index_buffer_bytes = needed_index_bytes;
+        frame->index_buffer_bytes = needed_index_bytes;
     }
 
     return true;
@@ -676,7 +748,8 @@ static bool VK_UI_CreateImageStorage(vk_ui_image_t *image, int width, int height
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        .usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                 VK_IMAGE_USAGE_SAMPLED_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
@@ -768,6 +841,102 @@ static bool VK_UI_AllocDescriptorSet(vk_ui_image_t *image)
     return true;
 }
 
+VkDescriptorSet VK_UI_CreateExternalImageDescriptor(VkImageView view,
+                                                     VkImageLayout layout)
+{
+    return VK_UI_CreateExternalImageTripleDescriptor(
+        view, layout, view, layout, view, layout);
+}
+
+VkDescriptorSet VK_UI_CreateExternalImagePairDescriptor(
+    VkImageView first_view, VkImageLayout first_layout,
+    VkImageView second_view, VkImageLayout second_layout)
+{
+    return VK_UI_CreateExternalImageTripleDescriptor(
+        first_view, first_layout, second_view, second_layout,
+        second_view, second_layout);
+}
+
+VkDescriptorSet VK_UI_CreateExternalImageTripleDescriptor(
+    VkImageView first_view, VkImageLayout first_layout,
+    VkImageView second_view, VkImageLayout second_layout,
+    VkImageView third_view, VkImageLayout third_layout)
+{
+    if (!vk_ui.initialized || !vk_ui.ctx || !vk_ui.ctx->device || !first_view ||
+        !second_view || !third_view ||
+        !vk_ui.descriptor_pool || !vk_ui.descriptor_set_layout ||
+        !vk_ui.sampler_clamp) {
+        return VK_NULL_HANDLE;
+    }
+
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    VkDescriptorSetAllocateInfo alloc_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = vk_ui.descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &vk_ui.descriptor_set_layout,
+    };
+    if (!VK_UI_Check(vkAllocateDescriptorSets(vk_ui.ctx->device, &alloc_info,
+                                              &set),
+                     "vkAllocateDescriptorSets(external image)")) {
+        return VK_NULL_HANDLE;
+    }
+
+    VkDescriptorImageInfo first_info = {
+        .sampler = vk_ui.sampler_clamp,
+        .imageView = first_view,
+        .imageLayout = first_layout,
+    };
+    VkDescriptorImageInfo second_info = {
+        .sampler = vk_ui.sampler_clamp,
+        .imageView = second_view,
+        .imageLayout = second_layout,
+    };
+    VkDescriptorImageInfo third_info = {
+        .sampler = vk_ui.sampler_clamp,
+        .imageView = third_view,
+        .imageLayout = third_layout,
+    };
+    VkWriteDescriptorSet writes[3] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &first_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &second_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = 2,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &third_info,
+        },
+    };
+    vkUpdateDescriptorSets(vk_ui.ctx->device, q_countof(writes), writes, 0, NULL);
+    return set;
+}
+
+void VK_UI_DestroyExternalImageDescriptor(VkDescriptorSet *set)
+{
+    if (!set || !*set || !vk_ui.initialized || !vk_ui.ctx ||
+        !vk_ui.ctx->device || !vk_ui.descriptor_pool) {
+        return;
+    }
+    vkFreeDescriptorSets(vk_ui.ctx->device, vk_ui.descriptor_pool, 1, set);
+    *set = VK_NULL_HANDLE;
+}
+
 static void VK_UI_UpdateDescriptorSet(vk_ui_image_t *image)
 {
     // Match GL_SetFilterAndRepeat: walls and skins always wrap (rerelease MD5
@@ -775,23 +944,78 @@ static void VK_UI_UpdateDescriptorSet(vk_ui_image_t *image)
     // IF_REPEAT is set.
     bool repeat = image->type == IT_WALL || image->type == IT_SKIN ||
                   (image->flags & IF_REPEAT);
-    VkSampler sampler = repeat ? vk_ui.sampler_repeat : vk_ui.sampler_clamp;
+    bool nearest = (image->flags & IF_NEAREST) != 0;
+    if (!nearest && image->type == IT_FONT) {
+        nearest = !vk_bilerp_chars || vk_bilerp_chars->integer == 0;
+    } else if (!nearest && image->type == IT_PIC) {
+        int bilerp_pics = vk_bilerp_pics ? vk_bilerp_pics->integer : 0;
+        nearest = (image->flags & IF_SCRAP) ? bilerp_pics <= 1 : bilerp_pics == 0;
+    } else if (!nearest && image->type == IT_SKY) {
+        nearest = !vk_bilerp_skies || vk_bilerp_skies->integer == 0;
+    }
+    VkSampler sampler = nearest
+        ? (repeat ? vk_ui.sampler_nearest_repeat : vk_ui.sampler_nearest_clamp)
+        : (repeat ? vk_ui.sampler_repeat : vk_ui.sampler_clamp);
     VkDescriptorImageInfo image_info = {
         .sampler = sampler,
         .imageView = image->view,
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
+    VkDescriptorImageInfo glow_info = image_info;
+    vk_ui_image_t *glow = VK_UI_ImageForHandle(image->glow_image);
+    if (glow && glow->view) {
+        glow_info.imageView = glow->view;
+    } else {
+        vk_ui_image_t *fallback = VK_UI_ImageForHandle(vk_ui.white_image);
+        // During creation of the white fallback itself, it is the only valid
+        // image to use for both material bindings.
+        glow_info.imageView = fallback && fallback->view
+            ? fallback->view : image->view;
+    }
 
-    VkWriteDescriptorSet write = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = image->descriptor_set,
-        .dstBinding = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .pImageInfo = &image_info,
+    VkWriteDescriptorSet writes[2] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = image->descriptor_set,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &image_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = image->descriptor_set,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &glow_info,
+        },
     };
 
-    vkUpdateDescriptorSets(vk_ui.ctx->device, 1, &write, 0, NULL);
+    vkUpdateDescriptorSets(vk_ui.ctx->device, q_countof(writes), writes, 0, NULL);
+}
+
+static void VK_UI_BilerpChanged(cvar_t *self)
+{
+    (void)self;
+    if (!vk_ui.initialized || !vk_ui.ctx || !vk_ui.ctx->device) {
+        return;
+    }
+
+    // Descriptor-bound samplers may be referenced by an in-flight frame. This
+    // is a rare user preference change, so drain safely before rebinding every
+    // resident native UI image to its newly selected sampler.
+    if (!VK_UI_Check(vkDeviceWaitIdle(vk_ui.ctx->device),
+                     "vkDeviceWaitIdle(filter update)")) {
+        return;
+    }
+
+    for (uint32_t i = 1; i < vk_ui.image_capacity; ++i) {
+        vk_ui_image_t *image = &vk_ui.images[i];
+        if (image->in_use && image->view && image->descriptor_set) {
+            VK_UI_UpdateDescriptorSet(image);
+        }
+    }
 }
 
 static bool VK_UI_UploadImageData(vk_ui_image_t *image, int width, int height,
@@ -1074,7 +1298,9 @@ static bool VK_UI_SetImagePixels(vk_ui_image_t *image, int width, int height, co
         return false;
     }
 
-    VK_UI_UpdateDescriptorSet(image);
+    // The image view and sampler bindings did not change. Rewriting a
+    // descriptor already bound by another frame is invalid, so retain the
+    // existing set for ordinary pixel updates.
     return true;
 }
 
@@ -1472,6 +1698,28 @@ static bool VK_UI_LoadImageData(const char *normalized_name,
     return false;
 }
 
+// Glow companions have a canonical PCX name. Keep the default truecolour
+// replacement preference but do not use the generic image fallback list: a
+// same-stem WAL is the base wall material, never emission data.
+static bool VK_UI_LoadGlowmapData(const char *canonical_name,
+                                  int *out_w, int *out_h, byte **out_rgba)
+{
+    static const char *const override_exts[] = { ".png", ".tga", ".dds" };
+    char candidate[MAX_QPATH];
+
+    for (size_t i = 0; i < q_countof(override_exts); ++i) {
+        Q_strlcpy(candidate, canonical_name, sizeof(candidate));
+        if (!VK_UI_ReplaceExtension(candidate, sizeof(candidate), override_exts[i])) {
+            continue;
+        }
+        if (VK_UI_LoadRgbaFromFile(candidate, out_w, out_h, out_rgba)) {
+            return true;
+        }
+    }
+
+    return VK_UI_LoadRgbaFromFile(canonical_name, out_w, out_h, out_rgba);
+}
+
 static qhandle_t VK_UI_CreateImage(const char *name, imagetype_t type, imageflags_t flags,
                                    int width, int height, const byte *rgba)
 {
@@ -1506,6 +1754,77 @@ static qhandle_t VK_UI_CreateImage(const char *name, imagetype_t type, imageflag
     }
 
     return handle;
+}
+
+// OpenGL discovers glow replacements from the base image name and always
+// reads an exact *_glow.pcx file. Keep that data relationship in Vulkan's
+// image registry rather than treating it as a second UI draw texture. Walls
+// consume glow alpha in the lightmap path; skins consume premultiplied RGB in
+// the entity emission path.
+static void VK_UI_AssociateGlowmap(qhandle_t base_handle)
+{
+    vk_ui_image_t *base = VK_UI_ImageForHandle(base_handle);
+    if (!base || base->internal_glowmap || base->glow_image ||
+        (base->flags & IF_SPECIAL) || !vk_r_glowmaps ||
+        !vk_r_glowmaps->integer ||
+        (base->type != IT_WALL && base->type != IT_SKIN)) {
+        return;
+    }
+
+    char glow_name[MAX_QPATH];
+    Q_strlcpy(glow_name, base->name, sizeof(glow_name));
+    if (!VK_UI_ReplaceExtension(glow_name, sizeof(glow_name), "_glow.pcx")) {
+        return;
+    }
+
+    int width = 0;
+    int height = 0;
+    byte *rgba = NULL;
+    // Glow companions preserve the default truecolour sibling preference,
+    // then use the exact *_glow.pcx file. This is native Vulkan texture
+    // registration and never uses a same-stem base WAL as glow data.
+    if (!VK_UI_LoadGlowmapData(glow_name, &width, &height, &rgba)) {
+        return;
+    }
+
+    if (base->type == IT_SKIN) {
+        size_t pixel_count;
+        if (VK_UI_TexturePixelCount(width, height, &pixel_count)) {
+            for (size_t i = 0; i < pixel_count; ++i) {
+                byte *pixel = &rgba[i * 4];
+                const float alpha = pixel[3] * (1.0f / 255.0f);
+                pixel[0] = (byte)(pixel[0] * alpha);
+                pixel[1] = (byte)(pixel[1] * alpha);
+                pixel[2] = (byte)(pixel[2] * alpha);
+            }
+        }
+    }
+
+    // Creating an image can grow the registry, so don't retain `base` across
+    // the allocation. Reuse its material flags/type for matching sampler
+    // wrapping, as OpenGL does for a paired skin or wall texture.
+    const imagetype_t type = base->type;
+    const imageflags_t flags = base->flags;
+    qhandle_t glow_handle = VK_UI_CreateImage(glow_name, type, flags,
+                                              width, height, rgba);
+    free(rgba);
+    if (!glow_handle) {
+        return;
+    }
+
+    vk_ui_image_t *glow = VK_UI_ImageForHandle(glow_handle);
+    base = VK_UI_ImageForHandle(base_handle);
+    if (!base || !glow) {
+        return;
+    }
+
+    glow->internal_glowmap = true;
+    base->glow_image = glow_handle;
+    // A base texture may have been bound by a queued frame while registration
+    // discovers its paired glow map. This update changes binding 1, so retire
+    // those uses before rewriting the existing descriptor set.
+    vkDeviceWaitIdle(vk_ui.ctx->device);
+    VK_UI_UpdateDescriptorSet(base);
 }
 
 static void VK_UI_EnsureDefaultImages(void)
@@ -1991,6 +2310,17 @@ bool VK_UI_Init(vk_context_t *ctx)
     vk_ui.initialized = true;
     vk_ui.scale = 1.0f;
     vk_ui.registration_sequence = 1;
+    // This is shared renderer material policy, not an OpenGL route. Mark it
+    // CVAR_FILES like OpenGL so image registrations refresh after a toggle.
+    vk_r_glowmaps = Cvar_Get("r_glowmaps", "1", CVAR_FILES);
+    // Match the native OpenGL 2D filtering defaults with Vulkan-owned cvars.
+    // These apply to existing descriptors as well as newly registered images.
+    vk_bilerp_chars = Cvar_Get("vk_bilerp_chars", "0", CVAR_ARCHIVE);
+    vk_bilerp_chars->changed = VK_UI_BilerpChanged;
+    vk_bilerp_pics = Cvar_Get("vk_bilerp_pics", "0", CVAR_ARCHIVE);
+    vk_bilerp_pics->changed = VK_UI_BilerpChanged;
+    vk_bilerp_skies = Cvar_Get("vk_bilerp_skies", "1", CVAR_ARCHIVE);
+    vk_bilerp_skies->changed = VK_UI_BilerpChanged;
 
     if (!VK_UI_EnsureImageCapacity(VK_UI_INITIAL_IMAGE_CAPACITY)) {
         goto fail;
@@ -2032,17 +2362,52 @@ bool VK_UI_Init(vk_context_t *ctx)
         goto fail;
     }
 
-    VkDescriptorSetLayoutBinding binding = {
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+    sampler_info.magFilter = VK_FILTER_NEAREST;
+    sampler_info.minFilter = VK_FILTER_NEAREST;
+    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    if (!VK_UI_Check(vkCreateSampler(ctx->device, &sampler_info, NULL,
+                                     &vk_ui.sampler_nearest_repeat),
+                     "vkCreateSampler(nearest repeat)")) {
+        goto fail;
+    }
+
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    if (!VK_UI_Check(vkCreateSampler(ctx->device, &sampler_info, NULL,
+                                     &vk_ui.sampler_nearest_clamp),
+                     "vkCreateSampler(nearest clamp)")) {
+        goto fail;
+    }
+
+    VkDescriptorSetLayoutBinding bindings[3] = {
+        {
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        },
+        {
+            .binding = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        },
+        {
+            .binding = 2,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        },
     };
 
     VkDescriptorSetLayoutCreateInfo layout_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
-        .pBindings = &binding,
+        .bindingCount = q_countof(bindings),
+        .pBindings = bindings,
     };
 
     if (!VK_UI_Check(vkCreateDescriptorSetLayout(ctx->device, &layout_info, NULL,
@@ -2053,7 +2418,7 @@ bool VK_UI_Init(vk_context_t *ctx)
 
     VkDescriptorPoolSize pool_size = {
         .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount = 8192,
+        .descriptorCount = 24576,
     };
 
     VkDescriptorPoolCreateInfo pool_info = {
@@ -2335,16 +2700,38 @@ void VK_UI_Shutdown(vk_context_t *ctx)
             vk_ui.sampler_clamp = VK_NULL_HANDLE;
         }
 
+        if (vk_ui.sampler_nearest_clamp) {
+            vkDestroySampler(ctx->device, vk_ui.sampler_nearest_clamp, NULL);
+            vk_ui.sampler_nearest_clamp = VK_NULL_HANDLE;
+        }
+
+        if (vk_ui.sampler_nearest_repeat) {
+            vkDestroySampler(ctx->device, vk_ui.sampler_nearest_repeat, NULL);
+            vk_ui.sampler_nearest_repeat = VK_NULL_HANDLE;
+        }
+
         if (vk_ui.sampler_repeat) {
             vkDestroySampler(ctx->device, vk_ui.sampler_repeat, NULL);
             vk_ui.sampler_repeat = VK_NULL_HANDLE;
         }
 
-        VK_UI_DestroyBuffer(&vk_ui.vertex_buffer, &vk_ui.vertex_memory, &vk_ui.vertex_mapped);
-        vk_ui.vertex_buffer_bytes = 0;
-
-        VK_UI_DestroyBuffer(&vk_ui.index_buffer, &vk_ui.index_memory, &vk_ui.index_mapped);
-        vk_ui.index_buffer_bytes = 0;
+        for (uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i) {
+            vk_ui_frame_buffers_t *frame = &vk_ui.frame_buffers[i];
+            VK_UI_DestroyBuffer(&frame->vertex_staging_buffer,
+                                &frame->vertex_staging_memory,
+                                &frame->vertex_staging_mapped);
+            VK_UI_DestroyBuffer(&frame->vertex_buffer, &frame->vertex_memory,
+                                NULL);
+            frame->vertex_buffer_bytes = 0;
+            frame->vertex_upload_bytes = 0;
+            VK_UI_DestroyBuffer(&frame->index_staging_buffer,
+                                &frame->index_staging_memory,
+                                &frame->index_staging_mapped);
+            VK_UI_DestroyBuffer(&frame->index_buffer, &frame->index_memory,
+                                NULL);
+            frame->index_buffer_bytes = 0;
+            frame->index_upload_bytes = 0;
+        }
     }
 
     free(vk_ui.images);
@@ -2375,14 +2762,18 @@ void VK_UI_EndFrame(void)
 {
 }
 
-void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
+void VK_UI_RecordUploads(VkCommandBuffer cmd)
 {
-    if (!vk_ui.initialized || !vk_ui.swapchain_ready || !vk_ui.pipeline ||
-        !extent || !vk_ui.draw_count || !vk_ui.vertex_count || !vk_ui.index_count) {
+    vk_ui_frame_buffers_t *frame = VK_UI_CurrentFrameBuffers();
+    if (!frame) {
         return;
     }
+    frame->vertex_upload_bytes = 0;
+    frame->index_upload_bytes = 0;
 
-    if (!VK_UI_EnsureGpuBuffers()) {
+    if (!cmd || !vk_ui.initialized || !vk_ui.draw_count ||
+        !vk_ui.vertex_count || !vk_ui.index_count ||
+        !VK_UI_EnsureGpuBuffers(frame)) {
         return;
     }
 
@@ -2391,12 +2782,58 @@ void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
     if (!VK_UI_ArrayBytes(sizeof(*vk_ui.vertices), vk_ui.vertex_count,
                           &vertex_bytes, "vertex frame upload") ||
         !VK_UI_ArrayBytes(sizeof(*vk_ui.indices), vk_ui.index_count,
-                          &index_bytes, "index frame upload")) {
+                          &index_bytes, "index frame upload") ||
+        !frame->vertex_staging_mapped || !frame->index_staging_mapped) {
         return;
     }
 
-    memcpy(vk_ui.vertex_mapped, vk_ui.vertices, vertex_bytes);
-    memcpy(vk_ui.index_mapped, vk_ui.indices, index_bytes);
+    memcpy(frame->vertex_staging_mapped, vk_ui.vertices, vertex_bytes);
+    memcpy(frame->index_staging_mapped, vk_ui.indices, index_bytes);
+    frame->vertex_upload_bytes = vertex_bytes;
+    frame->index_upload_bytes = index_bytes;
+    VK_Debug_RecordUpload(VK_DEBUG_DOMAIN_UI, vertex_bytes + index_bytes);
+
+    const VkBufferCopy vertex_copy = { .size = vertex_bytes };
+    const VkBufferCopy index_copy = { .size = index_bytes };
+    vkCmdCopyBuffer(cmd, frame->vertex_staging_buffer, frame->vertex_buffer,
+                    1, &vertex_copy);
+    vkCmdCopyBuffer(cmd, frame->index_staging_buffer, frame->index_buffer,
+                    1, &index_copy);
+
+    VkBufferMemoryBarrier barriers[2] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer = frame->vertex_buffer,
+            .size = vertex_bytes,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_INDEX_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer = frame->index_buffer,
+            .size = index_bytes,
+        },
+    };
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 0, NULL,
+                         q_countof(barriers), barriers, 0, NULL);
+}
+
+void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
+{
+    vk_ui_frame_buffers_t *frame = VK_UI_CurrentFrameBuffers();
+    if (!vk_ui.initialized || !vk_ui.swapchain_ready || !vk_ui.pipeline ||
+        !extent || !vk_ui.draw_count || !vk_ui.vertex_count || !vk_ui.index_count ||
+        !frame || !frame->vertex_buffer || !frame->index_buffer ||
+        !frame->vertex_upload_bytes || !frame->index_upload_bytes) {
+        return;
+    }
 
     VkViewport viewport = {
         .x = 0.0f,
@@ -2411,8 +2848,8 @@ void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
     vkCmdSetViewport(cmd, 0, 1, &viewport);
 
     VkDeviceSize offset = 0;
-    vkCmdBindVertexBuffers(cmd, 0, 1, &vk_ui.vertex_buffer, &offset);
-    vkCmdBindIndexBuffer(cmd, vk_ui.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindVertexBuffers(cmd, 0, 1, &frame->vertex_buffer, &offset);
+    vkCmdBindIndexBuffer(cmd, frame->index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
     for (uint32_t i = 0; i < vk_ui.draw_count; ++i) {
         const vk_ui_draw_t *draw = &vk_ui.draws[i];
@@ -2434,6 +2871,7 @@ void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
                                 0, 1, &draw->descriptor_set,
                                 0, NULL);
         vkCmdDrawIndexed(cmd, draw->index_count, 1, draw->first_index, 0, 0);
+        VK_Debug_RecordDraw(VK_DEBUG_DOMAIN_UI, 0, draw->index_count);
     }
 }
 
@@ -2508,6 +2946,8 @@ qhandle_t VK_UI_RegisterImage(const char *name, imagetype_t type, imageflags_t f
         return vk_ui.missing_image;
     }
 
+    VK_UI_AssociateGlowmap(handle);
+
     return handle;
 }
 
@@ -2548,6 +2988,13 @@ void VK_UI_UnregisterImage(qhandle_t handle)
         return;
     }
 
+    // Glow images are private companions. Their base image owns their
+    // descriptor reference and lifetime, so an accidental external release
+    // cannot leave a material descriptor pointing at a destroyed view.
+    if (image->internal_glowmap) {
+        return;
+    }
+
     if (handle == vk_ui.white_image || handle == vk_ui.missing_image) {
         return;
     }
@@ -2556,8 +3003,16 @@ void VK_UI_UnregisterImage(qhandle_t handle)
         vk_ui.raw_image = 0;
     }
 
+    const qhandle_t glow_handle = image->glow_image;
+    image->glow_image = 0;
     VK_UI_DestroyImageResources(image);
     memset(image, 0, sizeof(*image));
+
+    vk_ui_image_t *glow = VK_UI_ImageForHandle(glow_handle);
+    if (glow && glow->internal_glowmap) {
+        VK_UI_DestroyImageResources(glow);
+        memset(glow, 0, sizeof(*glow));
+    }
 }
 
 bool VK_UI_GetPicSize(int *w, int *h, qhandle_t pic)
@@ -2624,6 +3079,37 @@ VkDescriptorSet VK_UI_GetDescriptorSetForImage(qhandle_t pic)
     }
 
     return image->descriptor_set;
+}
+
+VkImageView VK_UI_GetImageView(qhandle_t pic)
+{
+    if (!vk_ui.initialized) {
+        return VK_NULL_HANDLE;
+    }
+
+    vk_ui_image_t *image = VK_UI_ImageForHandle(pic);
+    return image ? image->view : VK_NULL_HANDLE;
+}
+
+VkImage VK_UI_GetImage(qhandle_t pic)
+{
+    if (!vk_ui.initialized) {
+        return VK_NULL_HANDLE;
+    }
+
+    vk_ui_image_t *image = VK_UI_ImageForHandle(pic);
+    return image ? image->image : VK_NULL_HANDLE;
+}
+
+bool VK_UI_HasGlowmap(qhandle_t pic)
+{
+    if (!vk_ui.initialized) {
+        return false;
+    }
+
+    vk_ui_image_t *base = VK_UI_ImageForHandle(pic);
+    vk_ui_image_t *glow = base ? VK_UI_ImageForHandle(base->glow_image) : NULL;
+    return glow && glow->descriptor_set;
 }
 
 bool VK_UI_UpdateImageRGBA(qhandle_t handle, int width, int height, const byte *pic)

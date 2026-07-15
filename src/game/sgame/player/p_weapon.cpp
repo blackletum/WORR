@@ -8,6 +8,7 @@ g_weapon.c*/
 #include "../gameplay/g_proball.hpp"
 #include "../monsters/m_player.hpp"
 #include "../network/lag_compensation.hpp"
+#include "../network/local_action_observation.hpp"
 
 
 #include <array>
@@ -716,6 +717,8 @@ and compensating for low tick-rate overflows.
 =================
 */
 void Think_Weapon(gentity_t *ent) {
+  SG_LocalActionObservationNoteWeaponThink(ent);
+
   if (!ClientIsPlaying(ent->client) || ent->client->eliminated)
     return;
 

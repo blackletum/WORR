@@ -2773,6 +2773,32 @@ static void Draw_Stats_s(void) {
                     GL_ProfileGpuMilliseconds(GL_GPU_PROFILE_POSTFX));
 }
 
+void GL_PrintStats(void) {
+  const float gpu_world =
+      GL_ProfileGpuMilliseconds(GL_GPU_PROFILE_WORLD_OPAQUE) +
+      GL_ProfileGpuMilliseconds(GL_GPU_PROFILE_LIGHTMAP_UPDATE);
+  const float gpu_effects =
+      GL_ProfileGpuMilliseconds(GL_GPU_PROFILE_EFFECTS) +
+      GL_ProfileGpuMilliseconds(GL_GPU_PROFILE_TRANSPARENT);
+  const float gpu_post = GL_ProfileGpuMilliseconds(GL_GPU_PROFILE_POSTFX);
+  const uint64_t uploads = c.streamedVertexBytes + c.streamedIndexBytes +
+                           c.textureUploadBytes;
+  Com_Printf(
+      "GL_STATS frame=%u draws=%d vertices=%llu indices=0 uploads=%llu "
+      "entities=%d dlights=%d particles=%d cpu_ms=%.3f gpu_ms=%.3f "
+      "gpu_world_ms=%.3f gpu_effects_ms=%.3f gpu_post_ms=%.3f gpu_valid=%d\n",
+      gl_telemetry.frame_number, c.batchesDrawn + c.batchesDrawn2D,
+      (unsigned long long)c.trisDrawn * 3u, (unsigned long long)uploads,
+      glr.fd.num_entities, glr.fd.num_dlights, glr.fd.num_particles,
+      GL_ProfileCpuMilliseconds(GL_CPU_PROFILE_FRAME),
+      gpu_world + gpu_effects + gpu_post, gpu_world, gpu_effects, gpu_post,
+      gl_telemetry.gpu_available_mask ? 1 : 0);
+}
+
+static void GL_Stats_f(void) {
+  GL_PrintStats();
+}
+
 /*
 ===============
 R_Init
@@ -2821,6 +2847,7 @@ bool R_Init(bool total) {
   GL_ShowErrors(__func__);
 
   SCR_RegisterStat("renderer", Draw_Stats_s);
+  Cmd_AddCommand("gl_stats", GL_Stats_f);
 
   Com_Printf("----------------------\n");
 
@@ -2878,6 +2905,7 @@ void R_Shutdown(bool total) {
   GL_ShutdownDebugDraw();
 
   SCR_UnregisterStat("renderer");
+  Cmd_RemoveCommand("gl_stats");
 
   memset(&gl_static, 0, sizeof(gl_static));
   memset(&gl_config, 0, sizeof(gl_config));

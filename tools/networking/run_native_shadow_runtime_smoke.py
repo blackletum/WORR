@@ -32,13 +32,20 @@ from typing import Iterable, Mapping, Sequence
 SCHEMA = "worr.networking.native-shadow-runtime.v1"
 FAILURE_SCHEMA = "worr.networking.native-shadow-runtime-failure.v1"
 PROTOCOL = 1038
-MAP_NAME = "mm-rage"
+# Use a stock single-player map so this transport-only gate does not enter the
+# multiplayer welcome/menu service.  That service deliberately emits large
+# UI stufftext batches and is independent of the native carrier proof.
+MAP_NAME = "base1"
 ADDRESS = "127.0.0.1"
 NET_MAXMSGLEN = 512
-RATE_BYTES_PER_SECOND = 1500
+FRAGMENT_RATE_BYTES_PER_SECOND = 1500
+# Every staged datagram is below 1,000 bytes, so this rate makes the integer
+# async send-delay calculation zero.  The second trial therefore proves the
+# async owner by construction instead of racing the synchronous snapshot tick.
+ASYNC_RATE_BYTES_PER_SECOND = 1_000_000
 SERVER_FPS = 40
 PUBLIC_MASK = 0x03
-PRIVATE_MASK = 0x13
+PRIVATE_MASK = 0x53
 IMPAIR_LATENCY_MS = 25
 CLIENT_IMPAIR_SEED = 424242
 SERVER_IMPAIR_SEED = 817263
@@ -52,6 +59,7 @@ FRAGMENT_CLIENT_RELEASE_WAIT_FRAMES = 124  # 2 s after client control.
 ASYNC_CLIENT_RELEASE_WAIT_FRAMES = 186     # 3 s, after the smaller burst.
 SERVER_FINAL_WAIT_FRAMES = 600       # 15 s after queueing the burst.
 CLIENT_FINAL_WAIT_FRAMES = 620       # 10 s after releasing DATA.
+CLIENT_REHOLD_WAIT_FRAMES = 2        # Freeze sampling after first enqueue.
 WAIT_LIMIT = 1000
 WINDOWS_COMMAND_LINE_LIMIT = 30_000
 TRIAL_TIMEOUT_SECONDS = 55.0
@@ -65,6 +73,7 @@ class TrialSpec:
     name: str
     reliable_record_count: int
     client_release_wait_frames: int
+    rate_bytes_per_second: int
     required_server_evidence: tuple[str, ...]
 
 
@@ -73,6 +82,7 @@ TRIAL_SPECS = (
         name=FRAGMENT_TRIAL,
         reliable_record_count=FRAGMENT_RELIABLE_RECORD_COUNT,
         client_release_wait_frames=FRAGMENT_CLIENT_RELEASE_WAIT_FRAMES,
+        rate_bytes_per_second=FRAGMENT_RATE_BYTES_PER_SECOND,
         required_server_evidence=(
             "async_rate_deferrals",
             "async_fragment_deferrals",
@@ -82,8 +92,8 @@ TRIAL_SPECS = (
         name=ASYNC_TRIAL,
         reliable_record_count=ASYNC_RELIABLE_RECORD_COUNT,
         client_release_wait_frames=ASYNC_CLIENT_RELEASE_WAIT_FRAMES,
+        rate_bytes_per_second=ASYNC_RATE_BYTES_PER_SECOND,
         required_server_evidence=(
-            "async_rate_deferrals",
             "async_wake_attempts",
             "async_ack_handoffs",
         ),
@@ -107,6 +117,14 @@ CLIENT_STATUS_FIELDS = (
     "public_mask",
     "private_mask",
     "probe_hold",
+    "cancelled_through_epoch",
+    "cancellation_barriers",
+    "cancelled_transports",
+    "cancelled_command_tx",
+    "cancelled_event_rx",
+    "cancelled_event_receipts",
+    "stale_cancelled_carriers",
+    "stale_cancelled_readiness_records",
     "challenges",
     "client_ready_queued",
     "server_active",
@@ -134,9 +152,11 @@ SERVER_STATUS_FIELDS = (
     "readiness_phase",
     "official_epoch",
     "transport_epoch",
+    "cancelled_through_epoch",
     "public_mask",
     "private_mask",
     "wire_committed",
+    "wire_committed_transport_epoch",
     "challenges_queued",
     "client_ready",
     "server_active",
@@ -160,6 +180,13 @@ SERVER_STATUS_FIELDS = (
     "rx_drained",
     "drains",
     "failures",
+    "cancellation_barriers",
+    "cancelled_transports",
+    "cancelled_rx_messages",
+    "cancelled_receipts",
+    "cancelled_event_records",
+    "stale_cancelled_carriers",
+    "stale_cancelled_readiness_records",
     "last_failure",
 )
 
@@ -444,7 +471,15 @@ def validate_client_status(status: Mapping[str, int]) -> None:
         "protocol": PROTOCOL,
         "public_mask": PUBLIC_MASK,
         "private_mask": PRIVATE_MASK,
-        "probe_hold": 0,
+        "probe_hold": 1,
+        "cancelled_through_epoch": 0,
+        "cancellation_barriers": 1,
+        "cancelled_transports": 0,
+        "cancelled_command_tx": 0,
+        "cancelled_event_rx": 0,
+        "cancelled_event_receipts": 0,
+        "stale_cancelled_carriers": 0,
+        "stale_cancelled_readiness_records": 0,
         "client_ready_queued": 1,
         "proof_enqueued": 1,
         "retained": 0,
@@ -484,6 +519,7 @@ def validate_server_status(
         "lifecycle": 2,
         "hooks": 1,
         "readiness_phase": 4,
+        "cancelled_through_epoch": 0,
         "public_mask": PUBLIC_MASK,
         "private_mask": PRIVATE_MASK,
         "wire_committed": 1,
@@ -502,6 +538,13 @@ def validate_server_status(
         "async_wake_no_handoff": 0,
         "drains": 0,
         "failures": 0,
+        "cancellation_barriers": 1,
+        "cancelled_transports": 0,
+        "cancelled_rx_messages": 0,
+        "cancelled_receipts": 0,
+        "cancelled_event_records": 0,
+        "stale_cancelled_carriers": 0,
+        "stale_cancelled_readiness_records": 0,
         "last_failure": 0,
     }
     for name, expected in exact.items():
@@ -512,6 +555,12 @@ def validate_server_status(
             )
     if status.get("slot", -1) < 0:
         raise RuntimeError("server status has an invalid client slot")
+    if status.get("wire_committed_transport_epoch") != status.get(
+        "transport_epoch"
+    ):
+        raise RuntimeError(
+            "server status wire-committed epoch does not match the active transport"
+        )
     for name in (
         "official_epoch",
         "transport_epoch",
@@ -770,6 +819,8 @@ def client_control_payload(
     return (
         f"wait {client_release_wait_frames}; "
         "cl_worr_native_shadow_probe_hold 0; "
+        f"wait {CLIENT_REHOLD_WAIT_FRAMES}; "
+        "cl_worr_native_shadow_probe_hold 1; "
         f"wait {CLIENT_FINAL_WAIT_FRAMES}; "
         "cl_worr_native_shadow_status; "
         "net_impair_status; "
@@ -785,6 +836,7 @@ def server_command(
     server_completion_marker: str,
     reliable_record_count: int = FRAGMENT_RELIABLE_RECORD_COUNT,
     client_release_wait_frames: int = FRAGMENT_CLIENT_RELEASE_WAIT_FRAMES,
+    rate_bytes_per_second: int = FRAGMENT_RATE_BYTES_PER_SECOND,
 ) -> list[str]:
     command = [
         str(executable),
@@ -794,10 +846,18 @@ def server_command(
         "+set", "net_ip", ADDRESS,
         "+set", "net_port", str(port),
         "+set", "net_maxmsglen", str(NET_MAXMSGLEN),
+        # Keep this transport gate outside the multiplayer welcome/menu
+        # service, whose large UI stufftext batches are tested separately.
+        "+set", "deathmatch", "0",
+        "+set", "coop", "0",
+        "+set", "maxclients", "1",
+        "+set", "g_owner_auto_join", "1",
+        "+set", "match_auto_join", "1",
+        "+set", "match_force_join", "1",
         "+set", "sv_lan_force_rate", "0",
         "+set", "sv_fps", str(SERVER_FPS),
-        "+set", "sv_min_rate", str(RATE_BYTES_PER_SECOND),
-        "+set", "sv_max_rate", str(RATE_BYTES_PER_SECOND),
+        "+set", "sv_min_rate", str(rate_bytes_per_second),
+        "+set", "sv_max_rate", str(rate_bytes_per_second),
         "+set", "sv_worr_native_shadow", "1",
     ]
     command.extend(_common_impairment_settings(SERVER_IMPAIR_SEED))
@@ -832,11 +892,17 @@ def client_command(
     executable: Path,
     *,
     port: int,
+    rate_bytes_per_second: int = FRAGMENT_RATE_BYTES_PER_SECOND,
 ) -> list[str]:
     command = [
         str(executable),
         "+set", "game", "basew",
         "+set", "developer", "1",
+        # A client is needed for this real UDP exchange, but automation must
+        # remain invisible and must never initialize or capture mouse input.
+        "+set", "win_headless", "1",
+        "+set", "in_enable", "0",
+        "+set", "in_grab", "0",
         "+set", "name", "native_shadow_probe",
         "+set", "r_renderer", "opengl",
         "+set", "r_fullscreen", "0",
@@ -850,7 +916,7 @@ def client_command(
         "+set", "net_clientport", "-1",
         "+set", "net_maxmsglen", str(NET_MAXMSGLEN),
         "+set", "cl_protocol", str(PROTOCOL),
-        "+set", "rate", str(RATE_BYTES_PER_SECOND),
+        "+set", "rate", str(rate_bytes_per_second),
         "+set", "cl_worr_native_shadow", "1",
         "+set", "cl_worr_native_shadow_probe_hold", "1",
         "+set", "cl_ignore_stufftext", "0",
@@ -1022,12 +1088,15 @@ def validate_profile(profile: object) -> None:
         "protocol": PROTOCOL,
         "map": MAP_NAME,
         "net_maxmsglen": NET_MAXMSGLEN,
-        "rate_bytes_per_second": RATE_BYTES_PER_SECOND,
+        "rate_bytes_per_second": {
+            spec.name: spec.rate_bytes_per_second
+            for spec in TRIAL_SPECS
+        },
         "server_fps": SERVER_FPS,
         "client_native_shadow": 1,
         "server_native_shadow": 1,
         "client_probe_hold_initial": 1,
-        "client_probe_hold_final": 0,
+        "client_probe_hold_final": 1,
         "impairment_latency_ms": IMPAIR_LATENCY_MS,
         "client_impairment_seed": CLIENT_IMPAIR_SEED,
         "server_impairment_seed": SERVER_IMPAIR_SEED,
@@ -1049,12 +1118,14 @@ def validate_profile(profile: object) -> None:
             raise RuntimeError(f"report profile has no {spec.name} trial")
         expected = {
             "client_release_wait_frames": spec.client_release_wait_frames,
+            "client_rehold_wait_frames": CLIENT_REHOLD_WAIT_FRAMES,
             "server_queue_wait_frames": SERVER_QUEUE_WAIT_FRAMES,
             "server_burst_delay_frames": SERVER_BURST_DELAY_FRAMES,
             "client_final_wait_frames": CLIENT_FINAL_WAIT_FRAMES,
             "server_final_wait_frames": SERVER_FINAL_WAIT_FRAMES,
             "reliable_record_count": spec.reliable_record_count,
             "reliable_record_bytes": RELIABLE_RECORD_BYTES,
+            "rate_bytes_per_second": spec.rate_bytes_per_second,
             "reliable_payload_bytes": (
                 spec.reliable_record_count * RELIABLE_RECORD_BYTES
             ),
@@ -1158,6 +1229,86 @@ def validate_trial_report(trial: object, spec: TrialSpec) -> None:
         )
 
 
+def validate_trial_artifact_binding(
+    trial: Mapping[str, object],
+    spec: TrialSpec,
+    *,
+    port: int,
+    run_id: str,
+    runtime_paths: Mapping[str, Path],
+    log_paths: Mapping[str, Path],
+) -> None:
+    client_marker = (
+        f"worr_native_shadow_{spec.name}_client_complete_{run_id}"
+    )
+    server_marker = (
+        f"worr_native_shadow_{spec.name}_server_complete_{run_id}"
+    )
+    expected_commands = {
+        "client": client_command(
+            runtime_paths["client_executable"],
+            port=port,
+            rate_bytes_per_second=spec.rate_bytes_per_second,
+        ),
+        "server": server_command(
+            runtime_paths["dedicated_executable"],
+            port=port,
+            client_completion_marker=client_marker,
+            server_completion_marker=server_marker,
+            reliable_record_count=spec.reliable_record_count,
+            client_release_wait_frames=spec.client_release_wait_frames,
+            rate_bytes_per_second=spec.rate_bytes_per_second,
+        ),
+    }
+    commands = trial["commands"]
+    assert isinstance(commands, dict)
+    for endpoint, expected_argv in expected_commands.items():
+        if (
+            commands.get(f"{endpoint}_argc") != len(expected_argv)
+            or commands.get(f"{endpoint}_argv_sha256") !=
+                argv_sha256(expected_argv)
+        ):
+            raise RuntimeError(
+                f"native-shadow {spec.name} {endpoint} argv binding "
+                "mismatch"
+            )
+
+    client_stderr = _read_text(
+        log_paths[f"{spec.name}_client_stderr"]
+    )
+    server_stderr = _read_text(
+        log_paths[f"{spec.name}_server_stderr"]
+    )
+    if client_stderr.strip() or server_stderr.strip():
+        raise RuntimeError(
+            f"native-shadow {spec.name} contains unexpected stderr"
+        )
+    evidence = validate_runtime_text(
+        _read_text(log_paths[f"{spec.name}_client_stdout"]),
+        _read_text(log_paths[f"{spec.name}_server_stdout"]),
+        client_marker=client_marker,
+        server_marker=server_marker,
+        port=port,
+        reliable_record_count=spec.reliable_record_count,
+        required_server_evidence=spec.required_server_evidence,
+    )
+    statuses = trial["statuses"]
+    impairment = trial["impairment"]
+    assert isinstance(statuses, dict) and isinstance(impairment, dict)
+    if (
+        evidence["client_status"] != statuses.get("client")
+        or evidence["server_status"] != statuses.get("server")
+        or evidence["reliable_delivery"] !=
+            trial.get("reliable_delivery")
+        or evidence["client_impairment"] != impairment.get("client")
+        or evidence["server_impairment"] != impairment.get("server")
+    ):
+        raise RuntimeError(
+            f"native-shadow {spec.name} report evidence disagrees with "
+            "its hashed logs"
+        )
+
+
 def validate_report(report: object) -> None:
     if not isinstance(report, dict):
         raise RuntimeError("native-shadow report must be an object")
@@ -1165,6 +1316,14 @@ def validate_report(report: object) -> None:
         raise RuntimeError("native-shadow report schema mismatch")
     if report.get("passed") is not True:
         raise RuntimeError("native-shadow report is not a passing report")
+    run_id = report.get("run_id")
+    if (
+        not isinstance(run_id, str)
+        or not run_id
+        or any(character.isspace() or character in ';"'
+               for character in run_id)
+    ):
+        raise RuntimeError("native-shadow report run ID is invalid")
     validate_profile(report.get("profile"))
     contract = report.get("status_contract")
     expected_contract = {
@@ -1188,8 +1347,37 @@ def validate_report(report: object) -> None:
         or overall_elapsed > 120.0
     ):
         raise RuntimeError("native-shadow overall elapsed time is invalid")
-    validate_file_records(report.get("runtime_components"), RUNTIME_ROLES)
-    validate_file_records(report.get("logs"), LOG_ROLES)
+    runtime_records = report.get("runtime_components")
+    log_records = report.get("logs")
+    validate_file_records(runtime_records, RUNTIME_ROLES)
+    validate_file_records(log_records, LOG_ROLES)
+    assert isinstance(runtime_records, list) and isinstance(log_records, list)
+    runtime_paths = {
+        record["role"]: Path(record["path"])
+        for record in runtime_records
+        if isinstance(record, dict)
+    }
+    log_paths = {
+        record["role"]: Path(record["path"])
+        for record in log_records
+        if isinstance(record, dict)
+    }
+    profile = report["profile"]
+    assert isinstance(profile, dict)
+    profile_trials = profile["trials"]
+    assert isinstance(profile_trials, dict)
+    for spec in TRIAL_SPECS:
+        trial = trials[spec.name]
+        trial_profile = profile_trials[spec.name]
+        assert isinstance(trial, dict) and isinstance(trial_profile, dict)
+        validate_trial_artifact_binding(
+            trial,
+            spec,
+            port=int(trial_profile["port"]),
+            run_id=run_id,
+            runtime_paths=runtime_paths,
+            log_paths=log_paths,
+        )
     limitations = report.get("limitations")
     if (
         not isinstance(limitations, list)
@@ -1255,12 +1443,15 @@ def build_profile(trial_ports: Mapping[str, int]) -> dict[str, object]:
         "protocol": PROTOCOL,
         "map": MAP_NAME,
         "net_maxmsglen": NET_MAXMSGLEN,
-        "rate_bytes_per_second": RATE_BYTES_PER_SECOND,
+        "rate_bytes_per_second": {
+            spec.name: spec.rate_bytes_per_second
+            for spec in TRIAL_SPECS
+        },
         "server_fps": SERVER_FPS,
         "client_native_shadow": 1,
         "server_native_shadow": 1,
         "client_probe_hold_initial": 1,
-        "client_probe_hold_final": 0,
+        "client_probe_hold_final": 1,
         "impairment_latency_ms": IMPAIR_LATENCY_MS,
         "client_impairment_seed": CLIENT_IMPAIR_SEED,
         "server_impairment_seed": SERVER_IMPAIR_SEED,
@@ -1271,12 +1462,14 @@ def build_profile(trial_ports: Mapping[str, int]) -> dict[str, object]:
                 "client_release_wait_frames": (
                     spec.client_release_wait_frames
                 ),
+                "client_rehold_wait_frames": CLIENT_REHOLD_WAIT_FRAMES,
                 "server_queue_wait_frames": SERVER_QUEUE_WAIT_FRAMES,
                 "server_burst_delay_frames": SERVER_BURST_DELAY_FRAMES,
                 "client_final_wait_frames": CLIENT_FINAL_WAIT_FRAMES,
                 "server_final_wait_frames": SERVER_FINAL_WAIT_FRAMES,
                 "reliable_record_count": spec.reliable_record_count,
                 "reliable_record_bytes": RELIABLE_RECORD_BYTES,
+                "rate_bytes_per_second": spec.rate_bytes_per_second,
                 "reliable_payload_bytes": (
                     spec.reliable_record_count * RELIABLE_RECORD_BYTES
                 ),
@@ -1346,7 +1539,11 @@ def main() -> int:
             server_marker = (
                 f"worr_native_shadow_{spec.name}_server_complete_{run_id}"
             )
-            client_argv = client_command(args.client_exe, port=port)
+            client_argv = client_command(
+                args.client_exe,
+                port=port,
+                rate_bytes_per_second=spec.rate_bytes_per_second,
+            )
             server_argv = server_command(
                 args.dedicated_exe,
                 port=port,
@@ -1356,6 +1553,7 @@ def main() -> int:
                 client_release_wait_frames=(
                     spec.client_release_wait_frames
                 ),
+                rate_bytes_per_second=spec.rate_bytes_per_second,
             )
             trial_commands[spec.name] = {
                 "client_argc": len(client_argv),
@@ -1454,7 +1652,7 @@ def main() -> int:
             "limitations": [
                 "Each trial observes exactly one native command while legacy MOVE/BATCH_MOVE remains authoritative.",
                 "The gate does not prove mixed DATA+ACK packets or repeated native command streams.",
-                "Fragment-owner and asynchronous-wake evidence use separate fresh connections because their deterministic scheduler windows are mutually exclusive.",
+                "Fragment-owner evidence uses 1,500 B/s while the async-wake trial uses a distinct 1,000,000 B/s zero-delay admission profile; the mutually exclusive scheduler properties use separate fresh connections.",
                 "Latency is deterministic, but this profile does not target directional readiness-packet loss, reordering, or duplication.",
                 "UDP localhost does not model WAN congestion, NAT traversal, multi-client fairness, or promotion to native authority.",
             ],
@@ -1509,7 +1707,10 @@ def main() -> int:
                 "address": ADDRESS,
                 "protocol": PROTOCOL,
                 "net_maxmsglen": NET_MAXMSGLEN,
-                "rate_bytes_per_second": RATE_BYTES_PER_SECOND,
+                "rate_bytes_per_second": {
+                    spec.name: spec.rate_bytes_per_second
+                    for spec in TRIAL_SPECS
+                },
                 "server_fps": SERVER_FPS,
                 "trial_order": list(TRIAL_NAMES),
             },

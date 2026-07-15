@@ -152,10 +152,10 @@ data.
 Fixture identity:
 
 ```text
-size       1228 bytes
-SHA-256    e2bb2511bc17d637ee60ba08c9c51133bba97bb6c3ca7a9930b2d3f8d5c82ca6
+size       1448 bytes
+SHA-256    bdc1a88bd7c83ddc7e52bd674856594113b2f09e798d2401522c06b33d404d53
 IBSP       version 38
-models     world plus two inline models
+models     world plus one rotating and one water inline model (and one deathmatch spawn entity)
 contents   CONTENTS_SOLID and CONTENTS_WATER
 surfaces   fixture/solid and fixture/water
 ```

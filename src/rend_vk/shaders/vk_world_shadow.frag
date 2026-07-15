@@ -4,6 +4,11 @@
 #define VK_WORLD_VERTEX_ALPHATEST 4u
 #define VK_WORLD_VERTEX_LIGHTMAPPED 16u
 #define VK_WORLD_VERTEX_INTENSITY 32u
+#define VK_WORLD_VERTEX_GLOWMAP 64u
+#define VK_WORLD_VERTEX_SKY 128u
+#define VK_FOG_GLOBAL 1u
+#define VK_FOG_HEIGHT 2u
+#define VK_FOG_SKY 4u
 #define SHADOW_VISIBILITY_EXPONENT 2.0
 #define VK_SHADOW_MAX_PAGES 64
 #define VK_SHADOW_MAX_DLIGHTS 64
@@ -30,11 +35,21 @@ layout(std140, set = 2, binding = 1) uniform ShadowPages {
     vec4 shadow_global;
     vec4 shadow_sun;
     vec4 shadow_moment_tuning;
+    vec4 shadow_glowmap_tuning;
     vec4 shadow_dlight_count;
+    vec4 view_origin;
+    vec4 shadow_fog_color_density;
+    vec4 shadow_heightfog_start;
+    vec4 shadow_heightfog_end;
+    vec4 shadow_fog_params;
     shadow_page_t shadow_pages[VK_SHADOW_MAX_PAGES];
     shadow_dlight_t shadow_dlights[VK_SHADOW_MAX_DLIGHTS];
 };
 layout(set = 2, binding = 2) uniform sampler2DArray shadow_moments;
+layout(set = 0, binding = 1) uniform sampler2D glow_sampler;
+#ifdef VK_WORLD_ANIMATED
+layout(set = 3, binding = 0) uniform sampler2D refract_sampler;
+#endif
 
 layout(location = 0) in vec2 in_uv;
 layout(location = 1) in vec2 in_lm_uv;
@@ -42,6 +57,12 @@ layout(location = 2) in vec4 in_color;
 layout(location = 3) flat in uint in_flags;
 layout(location = 4) in vec3 in_world_pos;
 layout(location = 5) in vec3 in_normal;
+#ifdef VK_WORLD_ANIMATED
+layout(location = 6) flat in float in_time;
+layout(location = 7) flat in float in_refraction_scale;
+layout(location = 8) flat in uint in_effects_enabled;
+layout(location = 9) flat in uint in_refraction_enabled;
+#endif
 
 layout(location = 0) out vec4 out_color;
 
@@ -264,21 +285,86 @@ vec3 calc_dynamic_lights(vec3 world_pos, vec3 normal) {
     return shade;
 }
 
+void apply_fog(inout vec3 diffuse, bool sky) {
+    uint fog_flags = uint(shadow_fog_params.w + 0.5);
+    if (sky) {
+        if ((fog_flags & VK_FOG_SKY) != 0u) {
+            diffuse = mix(diffuse, shadow_fog_color_density.rgb,
+                          shadow_fog_params.z);
+        }
+        return;
+    }
+
+    float frag_depth = gl_FragCoord.z / max(gl_FragCoord.w, 1e-6);
+    if ((fog_flags & VK_FOG_GLOBAL) != 0u) {
+        float d = shadow_fog_color_density.a * frag_depth;
+        float fog = 1.0 - exp(-(d * d));
+        diffuse = mix(diffuse, shadow_fog_color_density.rgb, fog);
+    }
+    if ((fog_flags & VK_FOG_HEIGHT) != 0u) {
+        // Preserve the rerelease height-fog equation, including its
+        // directional epsilon, while evaluating from native world data.
+        float dir_z = normalize(in_world_pos - view_origin.xyz).z;
+        float s = sign(dir_z);
+        dir_z += 0.00001 * (1.0 - s * s);
+        float eye = view_origin.z - shadow_heightfog_start.w;
+        float pos = in_world_pos.z - shadow_heightfog_start.w;
+        float density =
+            (exp(-shadow_fog_params.y * eye) -
+             exp(-shadow_fog_params.y * pos)) /
+            (shadow_fog_params.y * dir_z);
+        float extinction = 1.0 - clamp(exp(-density), 0.0, 1.0);
+        float fraction = clamp((pos - shadow_heightfog_start.w) /
+                                   (shadow_heightfog_end.w -
+                                    shadow_heightfog_start.w),
+                               0.0, 1.0);
+        vec3 fog_color = mix(shadow_heightfog_start.rgb,
+                             shadow_heightfog_end.rgb, fraction) * extinction;
+        float fog = (1.0 - exp(-(shadow_fog_params.x * frag_depth))) * extinction;
+        diffuse = mix(diffuse, fog_color, fog);
+    }
+}
+
 void main() {
-    vec4 base = texture(tex_sampler, in_uv);
+    vec2 uv = in_uv;
+#ifdef VK_WORLD_ANIMATED
+    vec2 warp_ofs = vec2(0.0);
+    if (in_effects_enabled != 0u && (in_flags & 1u) != 0u) {
+        // Keep turbulent warp per-fragment, as in the OpenGL shader. Doing
+        // this in the vertex stage flattens the sine wave over large faces.
+        warp_ofs = 0.0625 * sin(uv.yx * 4.0 + in_time);
+        uv += warp_ofs;
+    }
+#endif
+    vec4 base = texture(tex_sampler, uv);
     if ((in_flags & VK_WORLD_VERTEX_ALPHATEST) != 0u && base.a < 0.01) {
         discard;
     }
 
     vec4 lm = texture(lm_sampler, in_lm_uv);
+    if ((in_flags & (VK_WORLD_VERTEX_LIGHTMAPPED |
+                     VK_WORLD_VERTEX_GLOWMAP)) ==
+        (VK_WORLD_VERTEX_LIGHTMAPPED | VK_WORLD_VERTEX_GLOWMAP)) {
+        // GL's wall glow map uses alpha, not RGB, to raise the authored
+        // lightmap toward white before dynamic lighting/modulate is applied.
+        float glow_scale = shadow_glowmap_tuning.x;
+        if ((in_flags & VK_WORLD_VERTEX_INTENSITY) != 0u) {
+            glow_scale *= max(shadow_moment_tuning.z, 1.0);
+        }
+        lm.rgb = mix(lm.rgb, vec3(1.0), texture(glow_sampler, uv).a * glow_scale);
+    }
     vec3 normal = normalize(in_normal);
-    vec3 lighting = lm.rgb;
+    // shadow_moment_tuning.w carries the global r_fullbright state. Keep the
+    // authored per-surface fullbright flag in the same branch so runtime cvar
+    // changes do not require rebuilding or re-uploading the static world.
+    bool fullbright = shadow_moment_tuning.w > 0.5 ||
+                      (in_flags & VK_WORLD_VERTEX_FULLBRIGHT) != 0u;
+    vec3 lighting = fullbright ? vec3(1.0) : lm.rgb;
     // Match GL: shadows, dynamic lights, brightness add and modulate apply
     // only to lightmapped surfaces; unlit faces (classic warp water) keep
     // their raw texture brightness. shadow_dlight_count.y/z carry
     // gl_modulate*gl_modulate_world and gl_brightness.
-    if ((in_flags & (VK_WORLD_VERTEX_FULLBRIGHT | VK_WORLD_VERTEX_LIGHTMAPPED)) ==
-        VK_WORLD_VERTEX_LIGHTMAPPED) {
+    if (!fullbright && (in_flags & VK_WORLD_VERTEX_LIGHTMAPPED) != 0u) {
         lighting *= shadow_sun_factor(in_world_pos, normal);
         lighting += calc_dynamic_lights(in_world_pos, normal);
         lighting = max((lighting + vec3(shadow_dlight_count.z)) *
@@ -288,5 +374,34 @@ void main() {
     if ((in_flags & VK_WORLD_VERTEX_INTENSITY) != 0u) {
         color.rgb *= max(shadow_moment_tuning.z, 1.0);
     }
+    apply_fog(color.rgb, (in_flags & VK_WORLD_VERTEX_SKY) != 0u);
+#ifdef VK_WORLD_ANIMATED
+    // Match the OpenGL refract path: sample the completed opaque scene using
+    // the turbulent offset in screen pixels, then compensate for the regular
+    // source-alpha blend performed by the graphics pipeline.
+    if (in_refraction_enabled != 0u && in_refraction_scale > 0.0 &&
+        (in_flags & 1u) != 0u) {
+        vec2 base_tc = gl_FragCoord.xy / vec2(textureSize(refract_sampler, 0));
+        vec2 refr_tc = base_tc;
+        vec2 warp_tc = warp_ofs * in_refraction_scale;
+        vec2 dxtc = dFdx(in_uv);
+        vec2 dytc = dFdy(in_uv);
+        float det = dxtc.x * dytc.y - dxtc.y * dytc.x;
+        if (abs(det) > 1e-6) {
+            vec2 pix_ofs = vec2((dytc.y * warp_tc.x - dxtc.y * warp_tc.y),
+                                (-dytc.x * warp_tc.x + dxtc.x * warp_tc.y)) / det;
+            refr_tc = base_tc + pix_ofs / vec2(textureSize(refract_sampler, 0));
+        } else {
+            refr_tc = base_tc + warp_tc;
+        }
+        vec3 scene_base = texture(refract_sampler, base_tc).rgb;
+        vec3 scene_refracted = texture(refract_sampler, refr_tc).rgb;
+        float alpha = clamp(color.a, 0.0, 1.0);
+        vec3 desired = mix(scene_refracted, color.rgb, alpha);
+        color.rgb = alpha > 0.0001
+            ? clamp((desired - scene_base * (1.0 - alpha)) / alpha, 0.0, 1.0)
+            : desired;
+    }
+#endif
     out_color = color;
 }

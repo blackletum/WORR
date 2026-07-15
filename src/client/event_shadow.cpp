@@ -10,6 +10,9 @@ the Free Software Foundation; either version 2 of the License, or
 #include "client.h"
 
 #include "client/cgame_event_shadow_runtime.h"
+#include "common/net/legacy_muzzle_event_candidate.h"
+#include "common/net/legacy_spatial_audio_event_candidate.h"
+#include "common/net/legacy_temp_event_candidate.h"
 
 #include <algorithm>
 #include <array>
@@ -197,114 +200,104 @@ void deliver_action_candidate(
     }
 }
 
-bool temp_entity1_is_source(uint16_t subtype)
-{
-    switch (subtype) {
-    case WORR_EVENT_LEGACY_TEMP_PARASITE_ATTACK:
-    case WORR_EVENT_LEGACY_TEMP_MEDIC_CABLE_ATTACK:
-    case WORR_EVENT_LEGACY_TEMP_GRAPPLE_CABLE:
-    case WORR_EVENT_LEGACY_TEMP_LIGHTNING:
-    case WORR_EVENT_LEGACY_TEMP_FLASHLIGHT:
-    case WORR_EVENT_LEGACY_TEMP_HEATBEAM:
-    case WORR_EVENT_LEGACY_TEMP_MONSTER_HEATBEAM:
-    case WORR_EVENT_LEGACY_TEMP_GRAPPLE_CABLE2:
-    case WORR_EVENT_LEGACY_TEMP_POWER_SPLASH:
-    case WORR_EVENT_LEGACY_TEMP_LIGHTNING_BEAM:
-        return true;
-    default:
-        return false;
-    }
-}
-
 bool build_temp_candidate(
     const q2proto_svc_temp_entity_t *temp_entity,
     worr_cgame_event_action_candidate_v2 *candidate,
     uint32_t *adapter_status)
 {
-    worr_event_payload_legacy_temp_v1 payload{};
-    uint16_t fields;
-    const uint16_t subtype = temp_entity->type;
+    worr_event_record_v1 record{};
+    uint32_t source_entity_index = 0;
+    uint32_t subject_entity_index = WORR_EVENT_NO_ENTITY;
+    const auto result = Worr_LegacyTempEventCandidateBuildV1(
+        temp_entity, action_tick(), frame_time_us(), runtime_entity_capacity(),
+        &record, &source_entity_index, &subject_entity_index);
 
-    if (!Worr_EventLegacyTempFieldMaskV1(
-            subtype, temp_entity->entity1, &fields)) {
-        *adapter_status =
-            subtype == WORR_EVENT_LEGACY_TEMP_STEAM
-                ? WORR_CGAME_EVENT_ADAPTER_INVALID_SHAPE_V2
-                : WORR_CGAME_EVENT_ADAPTER_UNSUPPORTED_ID_V2;
+    switch (result) {
+    case WORR_LEGACY_TEMP_EVENT_CANDIDATE_OK:
+        std::memset(candidate, 0, sizeof(*candidate));
+        candidate->struct_size = sizeof(*candidate);
+        candidate->source_entity_index = source_entity_index;
+        candidate->subject_entity_index = subject_entity_index;
+        candidate->record = record;
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_OK_V2;
+        return true;
+    case WORR_LEGACY_TEMP_EVENT_CANDIDATE_UNSUPPORTED_SUBTYPE:
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_UNSUPPORTED_ID_V2;
+        return false;
+    case WORR_LEGACY_TEMP_EVENT_CANDIDATE_ENTITY_OUT_OF_RANGE:
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_ENTITY_OUT_OF_RANGE_V2;
+        return false;
+    case WORR_LEGACY_TEMP_EVENT_CANDIDATE_INVALID_ARGUMENT:
+    case WORR_LEGACY_TEMP_EVENT_CANDIDATE_INVALID_SHAPE:
+    case WORR_LEGACY_TEMP_EVENT_CANDIDATE_INVALID_RECORD:
+    default:
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_INVALID_SHAPE_V2;
         return false;
     }
-    if (temp_entity1_is_source(subtype) &&
-        !runtime_entity_valid(temp_entity->entity1, true)) {
-        *adapter_status =
-            WORR_CGAME_EVENT_ADAPTER_ENTITY_OUT_OF_RANGE_V2;
-        return false;
-    }
-    if (subtype == WORR_EVENT_LEGACY_TEMP_LIGHTNING &&
-        !runtime_entity_valid(temp_entity->entity2, true)) {
-        *adapter_status =
-            WORR_CGAME_EVENT_ADAPTER_ENTITY_OUT_OF_RANGE_V2;
-        return false;
-    }
-
-    payload.subtype = subtype;
-    payload.valid_fields = fields;
-    if (fields & WORR_EVENT_LEGACY_TEMP_FIELD_ENTITY1)
-        payload.raw_entity1 = temp_entity->entity1;
-    if (fields & WORR_EVENT_LEGACY_TEMP_FIELD_ENTITY2)
-        payload.raw_entity2 = temp_entity->entity2;
-    if (fields & WORR_EVENT_LEGACY_TEMP_FIELD_TIME)
-        payload.time_ms = temp_entity->time;
-    if (fields & WORR_EVENT_LEGACY_TEMP_FIELD_COUNT)
-        payload.count_or_amount = temp_entity->count;
-    if (fields & WORR_EVENT_LEGACY_TEMP_FIELD_COLOR)
-        payload.color = temp_entity->color;
-    if (fields & WORR_EVENT_LEGACY_TEMP_FIELD_POSITION1)
-        std::memcpy(payload.position1, temp_entity->position1,
-                    sizeof(payload.position1));
-    if (fields & WORR_EVENT_LEGACY_TEMP_FIELD_POSITION2)
-        std::memcpy(payload.position2, temp_entity->position2,
-                    sizeof(payload.position2));
-    if (fields & WORR_EVENT_LEGACY_TEMP_FIELD_OFFSET)
-        std::memcpy(payload.offset, temp_entity->offset,
-                    sizeof(payload.offset));
-    if (fields & WORR_EVENT_LEGACY_TEMP_FIELD_DIRECTION)
-        std::memcpy(payload.direction, temp_entity->direction,
-                    sizeof(payload.direction));
-
-    initialize_action_candidate(
-        candidate,
-        subtype == WORR_EVENT_LEGACY_TEMP_DAMAGE_DEALT
-            ? WORR_EVENT_TYPE_GAMEPLAY_CUE
-            : WORR_EVENT_TYPE_VISUAL_EFFECT,
-        WORR_EVENT_PAYLOAD_LEGACY_TEMP_V1,
-        static_cast<uint16_t>(sizeof(payload)));
-    if (temp_entity1_is_source(subtype)) {
-        candidate->source_entity_index =
-            static_cast<uint32_t>(temp_entity->entity1);
-    }
-    if (subtype == WORR_EVENT_LEGACY_TEMP_LIGHTNING) {
-        candidate->subject_entity_index =
-            static_cast<uint32_t>(temp_entity->entity2);
-    }
-    std::memcpy(candidate->record.payload, &payload, sizeof(payload));
-    *adapter_status = WORR_CGAME_EVENT_ADAPTER_OK_V2;
-    return true;
 }
 
-uint16_t muzzle_event_type(uint32_t family, uint32_t flash_id)
+bool build_spatial_audio_candidate(
+    const q2proto_sound_t *sound,
+    worr_cgame_event_action_candidate_v2 *candidate,
+    uint32_t *adapter_status)
 {
-    if (family == WORR_EVENT_MUZZLE_FAMILY_MONSTER)
-        return WORR_EVENT_TYPE_WEAPON_FIRE;
-    if (flash_id >= WORR_EVENT_PLAYER_MUZZLE_LOGIN &&
-        flash_id <= WORR_EVENT_PLAYER_MUZZLE_RESPAWN) {
-        return WORR_EVENT_TYPE_STATE_CHANGE;
+    worr_event_record_v1 record{};
+    uint32_t source_entity_index = 0;
+    const auto result = Worr_LegacySpatialAudioEventCandidateBuildV1(
+        sound, action_tick(), frame_time_us(), runtime_entity_capacity(),
+        &record, &source_entity_index);
+
+    switch (result) {
+    case WORR_LEGACY_SPATIAL_AUDIO_EVENT_CANDIDATE_OK:
+        std::memset(candidate, 0, sizeof(*candidate));
+        candidate->struct_size = sizeof(*candidate);
+        candidate->source_entity_index = source_entity_index;
+        candidate->subject_entity_index = WORR_EVENT_NO_ENTITY;
+        candidate->record = record;
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_OK_V2;
+        return true;
+    case WORR_LEGACY_SPATIAL_AUDIO_EVENT_CANDIDATE_ENTITY_OUT_OF_RANGE:
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_ENTITY_OUT_OF_RANGE_V2;
+        return false;
+    case WORR_LEGACY_SPATIAL_AUDIO_EVENT_CANDIDATE_INVALID_ARGUMENT:
+    case WORR_LEGACY_SPATIAL_AUDIO_EVENT_CANDIDATE_INVALID_SHAPE:
+    case WORR_LEGACY_SPATIAL_AUDIO_EVENT_CANDIDATE_INVALID_RECORD:
+    default:
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_INVALID_SHAPE_V2;
+        return false;
     }
-    if (flash_id == WORR_EVENT_PLAYER_MUZZLE_ITEM_RESPAWN ||
-        (flash_id >= WORR_EVENT_PLAYER_MUZZLE_NUKE1 &&
-         flash_id <= WORR_EVENT_PLAYER_MUZZLE_NUKE8)) {
-        return WORR_EVENT_TYPE_VISUAL_EFFECT;
+}
+
+bool build_muzzle_candidate(
+    const q2proto_svc_muzzleflash_t *muzzleflash, uint32_t family,
+    worr_cgame_event_action_candidate_v2 *candidate,
+    uint32_t *adapter_status)
+{
+    worr_event_record_v1 record{};
+    uint32_t source_entity_index = 0;
+    const auto result = Worr_LegacyMuzzleEventCandidateBuildV1(
+        muzzleflash, family, action_tick(), frame_time_us(),
+        runtime_entity_capacity(), &record, &source_entity_index);
+
+    switch (result) {
+    case WORR_LEGACY_MUZZLE_EVENT_CANDIDATE_OK:
+        std::memset(candidate, 0, sizeof(*candidate));
+        candidate->struct_size = sizeof(*candidate);
+        candidate->source_entity_index = source_entity_index;
+        candidate->subject_entity_index = WORR_EVENT_NO_ENTITY;
+        candidate->record = record;
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_OK_V2;
+        return true;
+    case WORR_LEGACY_MUZZLE_EVENT_CANDIDATE_ENTITY_OUT_OF_RANGE:
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_ENTITY_OUT_OF_RANGE_V2;
+        return false;
+    case WORR_LEGACY_MUZZLE_EVENT_CANDIDATE_INVALID_ARGUMENT:
+    case WORR_LEGACY_MUZZLE_EVENT_CANDIDATE_INVALID_SHAPE:
+    case WORR_LEGACY_MUZZLE_EVENT_CANDIDATE_INVALID_RECORD:
+    default:
+        *adapter_status = WORR_CGAME_EVENT_ADAPTER_INVALID_SHAPE_V2;
+        return false;
     }
-    return WORR_EVENT_TYPE_WEAPON_FIRE;
 }
 
 } // namespace
@@ -430,88 +423,36 @@ extern "C" void CL_EventRangeCaptureMuzzleV2(
     uint32_t family)
 {
     worr_cgame_event_action_candidate_v2 candidate;
-    worr_event_payload_muzzle_v1 payload{};
     uint32_t carrier_kind;
+    uint32_t adapter_status;
 
     if (!muzzleflash)
         return;
     carrier_kind = family == WORR_EVENT_MUZZLE_FAMILY_PLAYER
                        ? WORR_CGAME_EVENT_CARRIER_PLAYER_MUZZLE_V2
                        : WORR_CGAME_EVENT_CARRIER_MONSTER_MUZZLE_V2;
-    if (!Worr_EventMuzzleCarrierValidV1(
-            family, muzzleflash->entity, muzzleflash->weapon,
-            runtime_entity_capacity(),
-            WORR_EVENT_MONSTER_MUZZLE_LAST + 1u) ||
-        (family == WORR_EVENT_MUZZLE_FAMILY_MONSTER &&
-         muzzleflash->silenced)) {
+    if (!build_muzzle_candidate(muzzleflash, family, &candidate,
+                                &adapter_status)) {
         deliver_rejected_action(
-            carrier_kind, WORR_CGAME_EVENT_ADAPTER_INVALID_SHAPE_V2);
+            carrier_kind, adapter_status);
         return;
     }
-
-    payload.family = static_cast<uint16_t>(family);
-    payload.flash_id = muzzleflash->weapon;
-    if (muzzleflash->silenced)
-        payload.flags = WORR_EVENT_MUZZLE_FLAG_SILENCED;
-    initialize_action_candidate(
-        &candidate, muzzle_event_type(family, muzzleflash->weapon),
-        WORR_EVENT_PAYLOAD_MUZZLE_V1,
-        static_cast<uint16_t>(sizeof(payload)));
-    candidate.source_entity_index =
-        static_cast<uint32_t>(muzzleflash->entity);
-    std::memcpy(candidate.record.payload, &payload, sizeof(payload));
     deliver_action_candidate(&candidate, carrier_kind);
 }
 
 extern "C" void CL_EventRangeCaptureSoundV2(const q2proto_sound_t *sound)
 {
     worr_cgame_event_action_candidate_v2 candidate;
-    worr_event_payload_spatial_audio_v1 payload{};
+    uint32_t adapter_status;
 
     if (!sound)
         return;
-    if (sound->index <= 0 ||
-        (sound->has_entity_channel &&
-         !runtime_entity_valid(sound->entity, true))) {
+    if (!build_spatial_audio_candidate(sound, &candidate, &adapter_status)) {
         deliver_rejected_action(
             WORR_CGAME_EVENT_CARRIER_SPATIAL_SOUND_V2,
-            sound->has_entity_channel
-                ? WORR_CGAME_EVENT_ADAPTER_ENTITY_OUT_OF_RANGE_V2
-                : WORR_CGAME_EVENT_ADAPTER_INVALID_SHAPE_V2);
+            adapter_status);
         return;
     }
-
-    payload.asset_id = static_cast<uint32_t>(sound->index);
-    payload.raw_entity = WORR_EVENT_NO_ENTITY;
-    payload.volume = sound->volume;
-    payload.attenuation = sound->attenuation;
-    payload.time_offset = sound->timeofs;
-    payload.pitch = 1.0f;
-    if (sound->has_entity_channel) {
-        if (sound->channel < 0 || sound->channel > UINT16_MAX) {
-            deliver_rejected_action(
-                WORR_CGAME_EVENT_CARRIER_SPATIAL_SOUND_V2,
-                WORR_CGAME_EVENT_ADAPTER_INVALID_SHAPE_V2);
-            return;
-        }
-        payload.flags |= WORR_EVENT_SPATIAL_AUDIO_HAS_ENTITY_CHANNEL;
-        payload.channel = static_cast<uint16_t>(sound->channel);
-        payload.raw_entity = static_cast<uint32_t>(sound->entity);
-    }
-    if (sound->has_position) {
-        payload.flags |= WORR_EVENT_SPATIAL_AUDIO_HAS_POSITION;
-        std::memcpy(payload.origin, sound->pos, sizeof(payload.origin));
-    }
-
-    initialize_action_candidate(
-        &candidate, WORR_EVENT_TYPE_AUDIO_CUE,
-        WORR_EVENT_PAYLOAD_SPATIAL_AUDIO_V1,
-        static_cast<uint16_t>(sizeof(payload)));
-    candidate.source_entity_index =
-        sound->has_entity_channel
-            ? static_cast<uint32_t>(sound->entity)
-            : 0u;
-    std::memcpy(candidate.record.payload, &payload, sizeof(payload));
     deliver_action_candidate(
         &candidate, WORR_CGAME_EVENT_CARRIER_SPATIAL_SOUND_V2);
 }

@@ -98,7 +98,10 @@ UI_Rml_CanvasScale(); R_SetScale(); UI_Rml_MouseFromFramebuffer();
     write_text(
         repo_root / ux_services.DEFAULT_INPUTS["vulkan_main_source"],
         "overlay_render_pass VK_ATTACHMENT_LOAD_OP_LOAD "
-        "VK_Entity_IsNoWorldSubview VK_Entity_Record",
+        "VK_Entity_IsNoWorldSubview VK_Entity_Record VK_SoftFocus_Record "
+        "vk_soft_focus_strength VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL "
+        "VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL VK_FILTER_LINEAR "
+        "ui_overlay_info.renderPass = ctx->overlay_render_pass",
     )
     write_text(
         repo_root / ux_services.DEFAULT_INPUTS["rtx_draw_source"],
@@ -131,7 +134,7 @@ def test_valid_runtime_ux_services_pass(tmp_path: Path, capsys: pytest.CaptureFi
     payload = json.loads(capsys.readouterr().out)
     assert result == 0
     assert payload["ok"] is True
-    assert payload["counts"] == {"errors": 0, "failed": 0, "passed": 14, "services": 14}
+    assert payload["counts"] == {"errors": 0, "failed": 0, "passed": 15, "services": 15}
 
 
 def test_missing_live_localization_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -182,3 +185,18 @@ def test_missing_native_preview_overlay_fails(
     result = ux_services.main(["--repo-root", str(repo_root)])
     assert result == 1
     assert "Vulkan does not preserve and overlay" in capsys.readouterr().out
+
+
+def test_missing_native_vulkan_menu_focus_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo_root = tmp_path / "repo"
+    write_valid_repo(repo_root)
+    source = repo_root / ux_services.DEFAULT_INPUTS["vulkan_main_source"]
+    source.write_text(
+        source.read_text(encoding="utf-8").replace("VK_SoftFocus_Record", ""),
+        encoding="utf-8",
+    )
+    result = ux_services.main(["--repo-root", str(repo_root)])
+    assert result == 1
+    assert "menu soft focus" in capsys.readouterr().out

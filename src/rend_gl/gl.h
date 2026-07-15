@@ -340,6 +340,7 @@ void GL_ProfileInit(void);
 void GL_ProfileShutdown(void);
 void GL_ProfileBeginFrame(void);
 void GL_ProfileEndFrame(void);
+void GL_PrintStats(void);
 glCpuProfileGuard_t GL_ProfileCpuBegin(glCpuProfileScope_t scope);
 void GL_ProfileCpuEnd(glCpuProfileGuard_t *guard);
 glGpuProfileGuard_t GL_ProfileGpuBegin(glGpuProfileScope_t scope);

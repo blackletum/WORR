@@ -46,93 +46,153 @@
 
 #main-menu-stack
 {
+	box-sizing: border-box;
 	justify-content: center;
 	align-items: center;
+	margin-bottom: 0px;
+	overflow: hidden;
 }
 
 #main-menu-actions
 {
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+	justify-content: center;
 	box-sizing: border-box;
-	padding: 24px 28px 16px 28px;
-	background-color: #17141199;
-	border-width: 1px;
-	border-color: #332d23;
-	border-radius: 6px;
-	decorator: ninepatch(panel, panel-inner) border-box;
+	width: 648px;
+	max-width: 100%;
+	min-width: 0px;
+	padding: 0px;
+	background-color: transparent;
+	border-width: 0px;
+	overflow: hidden;
+	decorator: none;
 }
 
-#main-menu-actions button,
-#main-menu-actions .ui-button
+#main-menu-actions button.main-choice
 {
-	min-height: 46px;
-	font-size: 18px;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: flex-end;
+	box-sizing: border-box;
+	width: 312px;
+	min-width: 0px;
+	height: 236px;
+	min-height: 236px;
+	margin: 0px 6px;
+	padding: 24px;
+	background-color: #171411;
+	border-width: 1px;
+	border-color: #5f5548;
+	border-left-width: 4px;
+	border-left-color: #4b4235;
+	border-radius: 4px;
+	color: #f3eee4;
+	text-align: left;
+	overflow: hidden;
+	transition: background-color border-color color padding-left 0.12s cubic-out;
+}
+
+#main-menu-actions button.main-choice-campaign
+{
+	decorator: image(../skins/metal/cardart-campaign.png cover);
+}
+
+#main-menu-actions button.main-choice-arena
+{
+	decorator: image(../skins/metal/cardart-servers.png cover);
+}
+
+#main-menu-actions button.main-choice:hover,
+#main-menu-actions button.main-choice:focus
+{
+	background-color: #211e19;
+	border-color: #ffd967;
+	border-left-color: #83d18f;
+	color: #ffd967;
+	padding-left: 28px;
+	image-color: #ffe9c8;
+}
+
+#main-menu-actions button.main-choice:active
+{
+	background-color: #27231d;
+	border-color: #a6e3ad;
+	border-left-color: #a6e3ad;
+	color: #a6e3ad;
+}
+
+.main-choice-kicker,
+.main-choice-title,
+.main-choice-copy
+{
+	display: block;
+	width: 100%;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.main-choice-caption
+{
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	padding: 10px 12px;
+	background-color: #090806d9;
+	border-left-width: 3px;
+	border-left-color: #83d18f;
+}
+
+.main-choice-kicker
+{
+	margin-bottom: 4px;
+	color: #83d18f;
+	font-family: "WORR Display";
+	font-size: 12px;
+	font-weight: bold;
 	letter-spacing: 1px;
+	text-transform: uppercase;
+}
+
+.main-choice-title
+{
+	margin-bottom: 4px;
+	font-family: "WORR Display";
+	font-size: 25px;
+	font-weight: bold;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+}
+
+.main-choice-copy
+{
+	color: #c9beb0;
+	font-size: 14px;
 }
 
 #main-logo
 {
 	display: block;
-	width: 220px;
-	max-width: 100%;
+	width: 264px;
+	max-width: 60%;
 	margin-bottom: 24px;
 }
 
-#main-player-name
+#main-screen
 {
-	margin-top: 16px;
+	overflow: hidden;
+}
+
+#main-screen .main-topbar
+{
+	min-height: 48px;
 	margin-bottom: 0px;
-	font-size: 14px;
-	color: #c9beb0;
-}
-
-#main-player-name .label
-{
-	margin-right: 6px;
-}
-
-#main-version
-{
-	display: flex;
-	flex-direction: column;
-	flex: 1 1 auto;
-	align-items: flex-end;
-	justify-content: center;
-	min-width: 0px;
-}
-
-#main-version-title
-{
-	margin-bottom: 2px;
-	color: #8f9f7a;
-	font-size: 12px;
-	font-weight: bold;
-	text-align: right;
-}
-
-#main-version-value
-{
-	margin-bottom: 0px;
-	color: #7f7f7f;
-	font-family: "WORR Mono";
-	font-size: 11px;
-	text-align: right;
-	white-space: normal;
-	word-break: break-word;
-}
-
-/* 236px buttons + 28px side padding + border, border-box. */
-#main-menu-actions
-{
-	width: 300px;
-	max-width: 300px;
-	min-width: 0px;
-}
-
-#main-menu-actions button,
-#main-menu-actions .ui-button
-{
-	width: 236px;
-	min-width: 236px;
+	padding: 4px 8px;
+	background-color: transparent;
+	border-width: 0px;
+	decorator: none;
 }
 
 .menu-footer

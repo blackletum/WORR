@@ -13,6 +13,7 @@ the Free Software Foundation; either version 2 of the License, or
 #include "common/net/snapshot_store.h"
 #include "shared/command_abi.h"
 #include "shared/event_abi.h"
+#include "shared/event_stream.h"
 #include "shared/native_envelope.h"
 
 #include <stdbool.h>
@@ -43,6 +44,11 @@ extern "C" {
 
 #define WORR_NATIVE_CODEC_COMMAND_FIXED_BODY_BYTES 62u
 #define WORR_NATIVE_CODEC_EVENT_FIXED_BODY_BYTES 64u
+#define WORR_NATIVE_CODEC_EVENT_STREAM_FIXED_BODY_BYTES 8u
+#define WORR_NATIVE_CODEC_MAX_EVENT_ENCODED_BYTES                     \
+    (WORR_NATIVE_CODEC_WIRE_HEADER_BYTES +                           \
+     WORR_NATIVE_CODEC_EVENT_FIXED_BODY_BYTES +                     \
+     WORR_EVENT_PAYLOAD_CAPACITY)
 #define WORR_NATIVE_CODEC_SNAPSHOT_FIXED_BODY_BYTES 437u
 #define WORR_NATIVE_CODEC_SNAPSHOT_ENTITY_MIN_BYTES 52u
 #define WORR_NATIVE_CODEC_SNAPSHOT_ENTITY_MAX_BYTES 125u
@@ -124,6 +130,25 @@ worr_native_codec_result_v1 Worr_NativeCodecEventDecodeV1(
     size_t encoded_bytes,
     uint32_t max_entities,
     worr_event_record_v1 *record_out);
+
+/*
+ * Reliable control record that establishes semantic event authority before
+ * any EVENT DATA is admissible.  Its envelope object identity is exactly
+ * { stream_epoch, first_sequence }; transport provenance stays outside the
+ * descriptor and is checked by the endpoint session owner.
+ */
+worr_native_codec_result_v1 Worr_NativeCodecEventStreamPreflightV1(
+    const worr_event_stream_descriptor_v1 *descriptor,
+    uint32_t *encoded_bytes_out);
+worr_native_codec_result_v1 Worr_NativeCodecEventStreamEncodeV1(
+    const worr_event_stream_descriptor_v1 *descriptor,
+    void *encoded_out,
+    size_t encoded_capacity,
+    size_t *encoded_bytes_out);
+worr_native_codec_result_v1 Worr_NativeCodecEventStreamDecodeV1(
+    const void *encoded,
+    size_t encoded_bytes,
+    worr_event_stream_descriptor_v1 *descriptor_out);
 
 worr_native_codec_result_v1 Worr_NativeCodecSnapshotPreflightV1(
     const worr_snapshot_projection_view_v2 *view,

@@ -105,6 +105,7 @@ bool UI_Rml_OpenRouteWithArguments(const char *route_id, const char *arguments);
 bool UI_Rml_OpenPopupRoute(const char *route_id);
 bool UI_Rml_OpenMenu(uiMenu_t menu);
 bool UI_Rml_IsRouteActive(void);
+bool UI_Rml_IsSessionRouteActive(void);
 void UI_Rml_ModeChanged(void);
 bool UI_Rml_Draw(unsigned realtime);
 bool UI_Rml_KeyEvent(int key, bool down);

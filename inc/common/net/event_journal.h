@@ -25,6 +25,11 @@ enum {
     WORR_EVENT_SLOT_PRESENTED = 1u << 3,
     WORR_EVENT_SLOT_EXPIRED = 1u << 4,
     WORR_EVENT_SLOT_CANCELED = 1u << 5,
+    /* Authority was accepted for this prediction key but its semantic body
+     * differed from the speculative record.  PRESENTED distinguishes a
+     * correction discovered before presentation from one discovered after an
+     * immediate one-shot was already emitted. */
+    WORR_EVENT_SLOT_CORRECTED = 1u << 6,
 };
 
 typedef struct worr_event_slot_ref_v1_s {
@@ -70,6 +75,8 @@ typedef enum worr_event_journal_result_v1_e {
     WORR_EVENT_JOURNAL_INVALID_ARGUMENT = 14,
     WORR_EVENT_JOURNAL_DROPPED_STALE = 15,
     WORR_EVENT_JOURNAL_NOT_READY = 16,
+    WORR_EVENT_JOURNAL_CORRECTED = 17,
+    WORR_EVENT_JOURNAL_CORRECTED_AFTER_PRESENTATION = 18,
 } worr_event_journal_result_v1;
 
 bool Worr_EventJournalInitV1(worr_event_journal_v1 *journal,

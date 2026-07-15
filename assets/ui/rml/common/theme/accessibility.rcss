@@ -404,6 +404,10 @@ body.ui-a11y-reduced-motion,
 .ui-high-visibility .match-hub-join-actions .match-hub-join-button,
 .ui-high-visibility .match-hub-state,
 .ui-high-visibility .match-hub-shell,
+.ui-high-visibility .match-hub-active-vote,
+.ui-high-visibility .match-hub-tooltip,
+.ui-high-visibility .match-hub-context-actions button,
+.ui-high-visibility .match-hub-vote-actions button,
 .ui-high-visibility .session-panel,
 .ui-high-visibility .status-panel,
 .ui-high-visibility .session-card,
@@ -451,6 +455,10 @@ body.ui-a11y-reduced-motion,
 .ui-high-visibility .match-hub-tools button:focus,
 .ui-high-visibility .match-hub-join-actions .match-hub-join-button:hover,
 .ui-high-visibility .match-hub-join-actions .match-hub-join-button:focus,
+.ui-high-visibility .match-hub-context-actions button:hover,
+.ui-high-visibility .match-hub-context-actions button:focus,
+.ui-high-visibility .match-hub-vote-actions button:hover,
+.ui-high-visibility .match-hub-vote-actions button:focus,
 .ui-high-visibility .setting-row[data-control="field"] input:hover,
 .ui-high-visibility .setting-row[data-control="field"] input:focus,
 .ui-high-visibility .setting-row[data-control="combo"] select:hover,
@@ -473,7 +481,9 @@ body.ui-a11y-reduced-motion,
 .ui-high-visibility #singleplayer-save-load-actions button:active,
 .ui-high-visibility button.match-hub-tab:active,
 .ui-high-visibility .match-hub-tools button:active,
-.ui-high-visibility .match-hub-join-actions .match-hub-join-button:active
+.ui-high-visibility .match-hub-join-actions .match-hub-join-button:active,
+.ui-high-visibility .match-hub-context-actions button:active,
+.ui-high-visibility .match-hub-vote-actions button:active
 {
 	background-color: #ffff00;
 	border-color: #ffffff;
@@ -610,6 +620,35 @@ body.ui-a11y-reduced-motion,
 	background-color: #000000;
 	border-color: #ffffff;
 	color: #ffffff;
+	decorator: none;
+}
+
+.ui-high-visibility #main-menu-actions button.main-choice
+{
+	background-color: #000000;
+	border-color: #ffffff;
+	border-left-color: #ffffff;
+	color: #ffffff;
+	image-color: #ffffff;
+	decorator: none;
+}
+
+.ui-high-visibility #main-menu-actions button.main-choice:hover,
+.ui-high-visibility #main-menu-actions button.main-choice:focus
+{
+	background-color: #202000;
+	border-color: #ffff00;
+	border-left-color: #ffff00;
+	color: #ffff00;
+	decorator: none;
+}
+
+.ui-high-visibility #main-menu-actions button.main-choice:active
+{
+	background-color: #ffff00;
+	border-color: #ffffff;
+	border-left-color: #ffffff;
+	color: #000000;
 	decorator: none;
 }
 

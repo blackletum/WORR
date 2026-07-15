@@ -16,6 +16,8 @@ from typing import Any
 DEFAULT_MANIFEST = Path("tools/ui_smoke/rmlui_manifest.json")
 DEFAULT_BASE_THEME = Path("assets/ui/rml/common/theme/base.rcss")
 DEFAULT_ACCESSIBILITY_THEME = Path("assets/ui/rml/common/theme/accessibility.rcss")
+DEFAULT_SHELL_THEME = Path("assets/ui/rml/common/theme/shell.rcss")
+DEFAULT_SESSION_THEME = Path("assets/ui/rml/common/theme/session.rcss")
 DEFAULT_ENGLISH_CATALOG = Path("assets/localization/loc_english.txt")
 POPUP_ROUTES = frozenset({
     "quit_confirm", "forfeit_confirm", "leave_match_confirm",
@@ -94,6 +96,8 @@ def validate_design_compliance(
     manifest_path: Path = DEFAULT_MANIFEST,
     base_theme_path: Path = DEFAULT_BASE_THEME,
     accessibility_theme_path: Path = DEFAULT_ACCESSIBILITY_THEME,
+    shell_theme_path: Path = DEFAULT_SHELL_THEME,
+    session_theme_path: Path = DEFAULT_SESSION_THEME,
     english_catalog_path: Path = DEFAULT_ENGLISH_CATALOG,
 ) -> DesignComplianceReport:
     repo_root = repo_root.resolve()
@@ -101,6 +105,8 @@ def validate_design_compliance(
     manifest_file = resolve(manifest_path, repo_root)
     base_file = resolve(base_theme_path, repo_root)
     accessibility_file = resolve(accessibility_theme_path, repo_root)
+    shell_file = resolve(shell_theme_path, repo_root)
+    session_file = resolve(session_theme_path, repo_root)
     english_catalog_file = resolve(english_catalog_path, repo_root)
 
     catalog_keys: set[str] = set()
@@ -210,6 +216,33 @@ def validate_design_compliance(
         if route_id == "main":
             if not elements_with_class(root, "hero-menu"):
                 report.errors.append("main: hero archetype class is missing")
+            main_actions = [
+                element for element in root.iter()
+                if element.attrib.get("id") == "main-menu-actions"
+            ]
+            main_action_ids = [
+                button.attrib.get("id")
+                for button in (list(main_actions[0].iter("button")) if main_actions else [])
+            ]
+            if main_action_ids != ["main-singleplayer", "main-multiplayer"]:
+                report.errors.append(
+                    "main: fixed hero must contain exactly Single Player and Multiplayer"
+                )
+            if not any(element.attrib.get("id") == "main-logo" for element in root.iter()):
+                report.errors.append("main: primary WORR logo is missing")
+            required_utilities = {
+                "shell-main-topbar-settings", "shell-main-topbar-quit",
+            }
+            authored_ids = {
+                element.attrib.get("id") for element in root.iter()
+                if element.attrib.get("id")
+            }
+            if not required_utilities.issubset(authored_ids):
+                report.errors.append("main: Settings and power utilities must remain available")
+            if "main-close" in authored_ids or elements_with_class(root, "main-brandplate"):
+                report.errors.append("main: redundant close or corner brandplate chrome is present")
+            if elements_with_class(root, "menu-header"):
+                report.errors.append("main: redundant title header is present")
             continue
 
         if route.get("wave") == "C":
@@ -238,6 +271,11 @@ def validate_design_compliance(
         accessibility_file.read_text(encoding="utf-8", errors="replace")
         if accessibility_file.is_file() else ""
     )
+    shell = shell_file.read_text(encoding="utf-8", errors="replace") if shell_file.is_file() else ""
+    session = (
+        session_file.read_text(encoding="utf-8", errors="replace")
+        if session_file.is_file() else ""
+    )
     for token in (
         ".worr-topbar", ".worr-statusbar", ".worr-backplate",
         ".ui-button-cta", ".popup-dialog",
@@ -250,6 +288,20 @@ def validate_design_compliance(
     ):
         if token not in accessibility:
             report.errors.append(f"accessibility theme is missing {token}")
+    for token in (
+        "#main-menu-stack", "#main-menu-actions", "overflow: hidden",
+        ".main-choice-caption",
+    ):
+        if token not in shell:
+            report.errors.append(f"shell theme is missing fixed main-menu contract token {token}")
+    for token in (
+        'body[data-route-group="session"]', ".session-screen",
+        "top: 32px", "right: 40px", "bottom: 32px", "left: 40px",
+    ):
+        if token not in session:
+            report.errors.append(f"session theme is missing in-world frame token {token}")
+    if ".ui-session-overlay" not in base:
+        report.errors.append("base theme is missing live-match session overlay styling")
     return report
 
 

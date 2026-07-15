@@ -105,6 +105,10 @@ Rules:
   get topbar/statusbar chrome.
 - The in-match hub keeps its own translucent floating-shell chrome (already
   established) — it must not adopt the opaque topbar.
+- The main menu is the deliberate chrome exception: it keeps the centered WORR
+  logo, bottom identity/version bar, and top-right Settings/power utilities,
+  but omits the corner brandplate, PLAY slab, page title, Back/Close controls,
+  and any duplicate action.
 
 ### 3.3 Page archetypes
 
@@ -112,7 +116,7 @@ Every menu must be one of these. New archetypes require updating this doc.
 
 | Archetype | Use | Structure |
 |---|---|---|
-| **Hero** | Main menu | Centered brand column on framed plate; 3–5 large actions; version chip; no scroll. |
+| **Hero** | Main menu | Centered WORR logo over exactly two fixed key-art choices (Single Player / Multiplayer); Settings and power stay top-right; identity/version stay in the statusbar; no scroll. |
 | **Card select** | Play flows, episode/skill select | Title row + horizontal row of 3–5 `worr-card`s; selected card expands in place with options + CTA. |
 | **Hub** | Options landing (interim), Game menu | Title row + wrapping framed section cards of left-aligned action rows. |
 | **Form** | Settings pages | Title row (+ tab strip when available) + 1–3 columns of `.setting-row` slabs grouped in section slabs; footer Defaults/Back. |
@@ -231,10 +235,13 @@ single source of widget chrome. Rules:
 
 ## 7. Motion system
 
-Constraint honesty (see engine doc): **no transforms, no filters/blur** —
-motion = opacity, margins/padding, size, and animatable `image-color` tints.
-This is sufficient: QC-style motion is mostly fades, underline slides, and
-in-place reveals.
+Constraint honesty (see engine doc): **no RmlUi transforms or RCSS filters/blur**
+— document motion = opacity, margins/padding, size, and animatable
+`image-color` tints. The live-world focus treatment is a renderer-owned pass
+that runs before RmlUi, reuses the slowtime `dof_strength` easing, and therefore
+does not weaken this document/theme constraint. This is sufficient: QC-style
+motion is mostly fades, underline slides, in-place reveals, and the renderer's
+smooth focus transition into or out of a live-session overlay.
 
 ### 7.1 Timing tokens
 
@@ -319,6 +326,39 @@ Baseline height 36px; hit targets ≥ 36px (44px with large-text mode).
     line (text, not spinner); error = red status slab with retry action.
     Dev-scaffold copy is forbidden in shipped RML.
 
+### 8.1 Multiplayer match-hub contract
+
+The in-game multiplayer shell is an availability-stable control surface over
+the visible arena, not a dashboard that reshuffles itself as server features
+change.
+
+1. The primary strip is always ordered **Overview**, **Server Info**,
+   **Voting**, **MyMap**, **Admin**. An unavailable destination stays in its
+   position and is disabled; it is never hidden. This preserves learned mouse,
+   keyboard, and controller navigation positions.
+2. Tabs use the compact in-match form: 36px high, uppercase microlabel, orange
+   3px underline and filled availability pip for the selected page, gold ring
+   for keyboard focus, and a hollow dim pip for disabled state. Selection and
+   focus must remain visually distinct.
+3. **Voting** opens the callvote choices when no vote is active. While a vote
+   is active, the proposal, caller, countdown, eligibility status, and Yes/No
+   actions replace the Overview content in place. The participation column
+   and shell do not move, and starting a vote on Overview must not remount the
+   document.
+4. The header uses the normal WORR wordmark once. Server, gametype, and map
+   identity sit beside it; a compact intent-edged session-phase signal and
+   small local 24-hour clock/date complete the status cluster. Avoid duplicate
+   product titles, isolated monograms, and ornamental labels.
+5. Match state is expressed as a live signal plus concise plain-language
+   status, not a large tab, banner, or disabled-looking button.
+6. The lower-left footer is reserved for the current pointer-hover or
+   keyboard-focus tooltip. Every actionable control supplies specific context;
+   the idle fallback is a single quiet help sentence. Persistent instructions
+   belong beside the decision they explain.
+7. Secondary destinations such as Match Details, Stats, and Tournament Info
+   remain compact context actions inside Overview. They do not compete with
+   the five primary tabs or produce a second tab row.
+
 ---
 
 ## 9. Navigation & UX rules
@@ -347,9 +387,13 @@ Baseline height 36px; hit targets ≥ 36px (44px with large-text mode).
    normalization pass (Back, Time Limit, Vote:, Multi-Monitor Setup…) — new
    strings follow it. All strings localizable: no concatenated sentence
    fragments across elements.
-7. **Session vs shell:** entering the match hub keeps the game visible
-   (translucent shell, orange accent). Shell menus are opaque worlds
-   (backdrop + grime, green accent). Never mix the two chromes on one screen.
+7. **Session vs shell:** every non-popup session route, plus shell/settings
+   routes opened from a live match, sits inside a partial-screen translucent
+   metal frame with orange accent and visible arena margins. The renderer
+   softly defocuses the world before drawing sharp menu geometry. Destructive
+   popups restore a full-viewport scrim. Front-end shell menus remain opaque
+   worlds (backdrop + grime, green accent). Never mix the two chromes on one
+   screen.
 
 ---
 
@@ -407,6 +451,11 @@ Baseline height 36px; hit targets ≥ 36px (44px with large-text mode).
    mapper; reference usage on download progress). Adoption on stats pages
    is data-gated: it happens when match/weapon stat providers publish cvars
    or models to bind — a data dependency, not open UI work.
+9. ~~**Main/session presentation closeout**~~ — **DONE 2026-07-14** (fixed,
+   non-scrolling two-choice main hero; redundant title/brand/close actions
+   removed; all session routes and live-match child pages use the partial
+   in-world frame; slowtime focus transition is consumed natively by OpenGL,
+   Vulkan, and RTX/vkpt; 58-route screenshot gallery reviewed).
 
 Each item follows the standard slice loop: design per this doc → implement →
 `ui_smoke` suite → docs-dev log → roadmap tick.
@@ -415,8 +464,10 @@ Each item follows the standard slice loop: design per this doc → implement →
 
 ## 12. Engineering constraints (summary — full detail in the theme doc)
 
-- Renderer bridge (GL): geometry + textures + scissor only. **No transforms,
-  no filters/blur, no shader gradients, no box-shadow.** Vertex-color
+- RmlUi renderer bridges: geometry + textures + scissor only. **No transforms,
+  no RCSS filters/blur, no shader gradients, no box-shadow.** Renderer-owned
+  world focus/DoF is allowed only before UI composition so text and controls
+  remain sharp. Vertex-color
   `horizontal/vertical-gradient` OK. `image-color` tints decorators and
   animates.
 - RmlUi 6.2: no `!important`; **additive specificity** (tag 10k / class,

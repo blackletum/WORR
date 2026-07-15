@@ -183,6 +183,7 @@ def test_dry_run_prints_guarded_capture_command(
     assert "+set r_screenshot_dir" in captured.out
     assert "+set r_maxfps 60" in captured.out
     assert "+set s_enable 0" in captured.out
+    assert "+set win_headless 1 +set in_enable 0 +set in_grab 0" in captured.out
     assert "+set r_screenshot_message 1" in captured.out
     assert "--bootstrap-quiet-status" in captured.out
     assert "+ui_rml_reduced_motion 1" in captured.out

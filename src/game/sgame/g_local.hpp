@@ -4480,6 +4480,7 @@ std::string FormatDuration(int seconds);
 Weapon GetWeaponIndexByAbbrev(const std::string &abbr);
 int64_t GetCurrentRealTimeMillis();
 double GetRealTimeSeconds();
+bool Vote_Session_Active();
 bool Vote_Menu_Active(gentity_t *ent);
 
 //

@@ -12,6 +12,7 @@ Advance Q2REPRO with the full functionality of Quake II Rerelease under the WORR
 - For significant work, reference the corresponding project task ID(s) in implementation docs under `docs-dev/` (and in PR/commit notes when available).
 - Use `.install/` as the local distributable staging root. Build workflows must refresh `.install/` with current binaries and packaged assets at the end of each build.
 - Store temporary files and scratch artifacts under `.tmp/`.
+- All automated test launches must run headlessly: use the dedicated-server binary or an explicit no-window/headless mode with an isolated runtime directory. Do not launch an interactive or visible client, initialize client input, or capture the mouse as part of testing; arrange visual validation separately.
 - Backwards compatibility is not a requirement, only a nice-to-have.
 - Use idTech3 (Quake 3 Arena) codebases as refactoring inspiration (Quake3e: `E:\_SOURCE\_CODE\Quake3e-master`, baseq3a: `E:\_SOURCE\_CODE\baseq3a-master`) to replicate its advantages as WORR evolves.
 - Treat `q2proto/` as read-only unless explicitly prompted otherwise; creating/developing a new WORR protocol is allowed when needed, but must preserve compatibility with legacy Q2 servers and demos.

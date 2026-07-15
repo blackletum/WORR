@@ -61,6 +61,16 @@ struct cg_event_journal_entry_t {
     std::uint32_t receive_time_ms;
 };
 
+enum class cg_prediction_correction_reason_t : std::uint8_t {
+    none,
+    input_range_invalid,
+    retained_state_missing,
+    config_discontinuity,
+    replay_rejected,
+    state_divergence,
+    correction_threshold_exceeded,
+};
+
 struct cg_prediction_reconciliation_t {
     std::uint32_t inferred_acked_input_cmd;
     std::uint32_t current_input_cmd;
@@ -68,6 +78,7 @@ struct cg_prediction_reconciliation_t {
     float correction_magnitude;
     std::uint32_t correction_count;
     std::uint32_t hard_reset_count;
+    cg_prediction_correction_reason_t last_correction_reason;
     bool last_correction_was_hard_reset;
 };
 
@@ -90,7 +101,8 @@ void CG_SnapshotTimeline_NotePredictionCorrection(
     std::uint32_t inferred_acked_input_cmd,
     std::uint32_t current_input_cmd,
     float correction_magnitude,
-    bool hard_reset);
+    bool hard_reset,
+    cg_prediction_correction_reason_t reason);
 
 // Debug output is aggregated and rate limited; callers may tick this from both
 // snapshot and prediction paths without producing per-frame console spam.

@@ -118,8 +118,24 @@ static in_gamepad_state_t gamepad;
 static cvar_t    *in_enable;
 static cvar_t    *in_grab;
 
+// Windows automation owns a hidden surface through win_headless. Treat that
+// state as an engine-level input opt-out so an incomplete test command line
+// cannot initialize raw mouse input or later capture the user's cursor.
+static bool IN_HeadlessAutomation(void)
+{
+    return Cvar_VariableInteger("win_headless") != 0;
+}
+
 static bool IN_GetCurrentGrab(void)
 {
+    // IN_Init deliberately leaves in_grab unset for disabled/headless input.
+    // Activation still runs while a local map transitions to gameplay, so
+    // fail closed instead of dereferencing an unavailable input configuration.
+    if (!in_enable || !in_enable->integer || !in_grab ||
+        IN_HeadlessAutomation()) {
+        return false;
+    }
+
     if (cls.active != ACT_ACTIVATED)
         return false;   // main window doesn't have focus
 
@@ -257,7 +273,7 @@ void IN_Init(void)
 {
     in_enable = Cvar_Get("in_enable", "1", 0);
     in_enable->changed = in_changed_hard;
-    if (!in_enable->integer) {
+    if (!in_enable->integer || IN_HeadlessAutomation()) {
         Com_Printf("Mouse input disabled.\n");
         return;
     }
@@ -1306,6 +1322,11 @@ static void CL_NativeReadinessPilotStatus_f(void)
         "hooks=%u capability_confirmed=%u readiness_phase=%u "
         "official_epoch=%u transport_epoch=%u protocol=%u "
         "public_mask=0x%02x private_mask=0x%02x probe_hold=%u "
+        "cancelled_through_epoch=%u cancellation_barriers=%llu "
+        "cancelled_transports=%llu cancelled_command_tx=%llu "
+        "cancelled_event_rx=%llu cancelled_event_receipts=%llu "
+        "stale_cancelled_carriers=%llu "
+        "stale_cancelled_readiness_records=%llu "
         "challenges=%llu client_ready_queued=%llu server_active=%llu "
         "proof_enqueued=%llu retained=%llu retained_highwater=%llu "
         "retained_releases=%llu tx_first_sends=%llu tx_retries=%llu "
@@ -1319,6 +1340,14 @@ static void CL_NativeReadinessPilotStatus_f(void)
         (unsigned)status.transport_epoch, (unsigned)status.protocol,
         (unsigned)status.public_mask, (unsigned)status.private_mask,
         (unsigned)status.probe_hold,
+        (unsigned)status.cancelled_through_transport_epoch,
+        (unsigned long long)status.cancellation_barriers,
+        (unsigned long long)status.cancelled_transports,
+        (unsigned long long)status.cancelled_command_tx,
+        (unsigned long long)status.cancelled_event_rx,
+        (unsigned long long)status.cancelled_event_receipts,
+        (unsigned long long)status.stale_cancelled_carriers,
+        (unsigned long long)status.stale_cancelled_readiness_records,
         (unsigned long long)status.challenges,
         (unsigned long long)status.client_ready_queued,
         (unsigned long long)status.server_active,
@@ -1823,6 +1852,8 @@ static void CL_SendReliable(void)
 
 void CL_SendCmd(void)
 {
+    bool native_output_due;
+
     if (cls.state < ca_connected) {
         return; // not talking to a server
     }
@@ -1832,12 +1863,15 @@ void CL_SendCmd(void)
         return;
     }
 
+    native_output_due = CL_NativeReadinessPilotOutputDue();
+
     if (cls.state != ca_active || sv_paused->integer) {
         // send a userinfo update if needed
         CL_SendReliable();
 
-        // just keepalive or update reliable
-        if (Netchan_ShouldUpdate(&cls.netchan)) {
+        // Keep native retries and event receipts live while paused or before
+        // the first active user command, independently of netchan cadence.
+        if (native_output_due || Netchan_ShouldUpdate(&cls.netchan)) {
             CL_SendKeepAlive();
         }
 
@@ -1847,6 +1881,11 @@ void CL_SendCmd(void)
 
     // are there any new usercmds to send after all?
     if (cl.lastTransmitCmdNumber == cl.cmdNumber) {
+        if (native_output_due) {
+            CL_SendReliable();
+            CL_SendKeepAlive();
+            cl.sendPacketNow = false;
+        }
         return; // nothing to send
     }
 

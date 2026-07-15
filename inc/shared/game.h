@@ -437,6 +437,11 @@ typedef struct {
     // get server frame #
     uint32_t (*ServerFrame)(void);
 
+    // authoritative time of the currently live server simulation state.
+    // Unlike game-local time, this includes the complete map timeline before
+    // the first client is admitted and is the time domain used by snapshots.
+    uint64_t (*ServerSimulationTimeUs)(void);
+
     // misc utils
     void (*SendToClipBoard)(const char * text);
 

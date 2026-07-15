@@ -49,6 +49,8 @@
         "FR-09-T05",
         "FR-09-T08",
         "FR-09-T09",
+        "FR-09-T11",
+        "FR-09-T12",
         "FR-07-T02",
         "DV-03-T07",
         "DV-04-T02",
@@ -110,7 +112,8 @@
       "data_models": [
         "session.dm_join",
         "session.dm_join.menu",
-        "session.dm_join.teams"
+        "session.dm_join.teams",
+        "session.dm_join.vote"
       ],
       "controller_contracts": [
         {
@@ -119,7 +122,7 @@
           "fixture": "navigation.mock.json",
           "model": "ui.navigation",
           "status": "live_provider",
-          "notes": "Callvote, MyMap, host info, forfeit, match info, stats, admin, settings, leave, and popup targets dispatch through the native route/command listener."
+          "notes": "The persistent Overview, Server Info, Voting, MyMap, and Admin strip exposes availability without moving controls; callvote, contextual match details/stats, settings, resume, leave, and popup targets dispatch through the native route/command listener."
         },
         {
           "category": "command_action",
@@ -127,7 +130,7 @@
           "fixture": "command-action.mock.json",
           "model": "session.dm_join.commands",
           "status": "live_provider",
-          "notes": "Team, spectate, ready, tournament, vote, tools, settings, leave, and close commands dispatch through the native listener, including command-cvar resolution."
+          "notes": "Team, spectate, ready, tournament, embedded Yes/No voting, contextual actions, settings, leave, and close commands dispatch through the native listener, including command-cvar resolution."
         },
         {
           "category": "cvar_binding",
@@ -135,7 +138,7 @@
           "fixture": "cvar-binding.mock.json",
           "model": "session.dm_join.cvars",
           "status": "live_provider",
-          "notes": "The native cvar bridge hydrates all live match labels, counts, state, map, rules, notices, and action labels before show and on cvar change."
+          "notes": "The native cvar bridge hydrates live match labels, state, map, rules, notices, active-vote proposal/countdown, tooltip copy, and local date/time before show and on change."
         },
         {
           "category": "condition_state",
@@ -143,10 +146,10 @@
           "fixture": "condition-state.mock.json",
           "model": "session.dm_join.conditions",
           "status": "live_provider",
-          "notes": "The native condition bridge evaluates team, join eligibility, spectator, ready, tournament, vote, MyMap, forfeit, stats, admin, resume, and leave state."
+          "notes": "The native condition bridge evaluates team, join eligibility, spectator, ready, tournament, vote, MyMap, forfeit, stats, admin, resume, and leave state; unavailable primary tabs remain visible but disabled."
         }
       ],
-      "notes": "Live native sgame-published match-hub provider and installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
+      "notes": "FR-09-T12 revises the parity-ready hub around a five-position availability-stable tab strip, standard WORR wordmark, compact live phase/clock cluster, hover/focus help, and an embedded active-vote panel that replaces Overview without displacing participation. Installed 960x720 OpenGL route and live-world evidence accepted on 2026-07-14."
     },
     {
       "id": "join",
@@ -164,6 +167,8 @@
         "FR-09-T05",
         "FR-09-T08",
         "FR-09-T09",
+        "FR-09-T11",
+        "FR-09-T12",
         "FR-07-T01",
         "FR-07-T02",
         "DV-03-T07",
@@ -177,7 +182,8 @@
       "data_models": [
         "session.join",
         "session.join.menu",
-        "session.join.teams"
+        "session.join.teams",
+        "session.join.vote"
       ],
       "controller_contracts": [
         {
@@ -186,7 +192,7 @@
           "fixture": "navigation.mock.json",
           "model": "ui.navigation",
           "status": "live_provider",
-          "notes": "Callvote, MyMap, host info, forfeit, match info, stats, admin, settings, leave, and popup targets dispatch through the native route/command listener."
+          "notes": "The persistent Overview, Server Info, Voting, MyMap, and Admin strip exposes availability without moving controls; callvote, contextual match details/stats, settings, resume, leave, and popup targets dispatch through the native route/command listener."
         },
         {
           "category": "command_action",
@@ -194,7 +200,7 @@
           "fixture": "command-action.mock.json",
           "model": "session.join.commands",
           "status": "live_provider",
-          "notes": "Team, spectate, ready, tournament, vote, tools, settings, leave, and close commands dispatch through the native listener, including command-cvar resolution."
+          "notes": "Team, spectate, ready, tournament, embedded Yes/No voting, contextual actions, settings, leave, and close commands dispatch through the native listener, including command-cvar resolution."
         },
         {
           "category": "cvar_binding",
@@ -202,7 +208,7 @@
           "fixture": "cvar-binding.mock.json",
           "model": "session.join.cvars",
           "status": "live_provider",
-          "notes": "The native cvar bridge hydrates all live match labels, counts, state, map, rules, notices, and action labels before show and on cvar change."
+          "notes": "The native cvar bridge hydrates live match labels, state, map, rules, notices, active-vote proposal/countdown, tooltip copy, and local date/time before show and on change."
         },
         {
           "category": "condition_state",
@@ -210,10 +216,10 @@
           "fixture": "condition-state.mock.json",
           "model": "session.join.conditions",
           "status": "live_provider",
-          "notes": "The native condition bridge evaluates team, join eligibility, spectator, ready, tournament, vote, MyMap, forfeit, stats, admin, resume, and leave state."
+          "notes": "The native condition bridge evaluates team, join eligibility, spectator, ready, tournament, vote, MyMap, forfeit, stats, admin, resume, and leave state; unavailable primary tabs remain visible but disabled."
         }
       ],
-      "notes": "Live native sgame-published match-hub provider and installed seeded 960x720 OpenGL evidence accepted on 2026-07-13. The central migration phase remains controller_stub until destructive action automation and native renderer parity gates are accepted."
+      "notes": "FR-09-T12 revises the parity-ready hub around a five-position availability-stable tab strip, standard WORR wordmark, compact live phase/clock cluster, hover/focus help, and an embedded active-vote panel that replaces Overview without displacing participation. Installed 960x720 OpenGL route and live-world evidence accepted on 2026-07-14."
     },
     {
       "id": "dm_hostinfo",

@@ -139,6 +139,7 @@ q2proto_src = [
 client_src = [
   'src/client/ascii.cpp',
   'src/client/cgame.cpp',
+  'src/client/cgame_event_runtime.cpp',
   'src/client/cgame_classic.cpp',
   'src/client/command_identity.cpp',
   'src/client/consumed_cursor.cpp',
@@ -150,6 +151,7 @@ client_src = [
   'src/client/entities.cpp',
   'src/client/event_shadow.cpp',
   'src/client/font.cpp',
+  'src/client/gameplay_light.c',
   'src/client/ui_font.cpp',
   'src/client/ui_rml/ui_rml.cpp',
   'src/client/ui_rml/ui_rml_runtime.cpp',
@@ -191,6 +193,7 @@ client_src = [
   'src/server/main.c',
   'src/server/native_shadow.c',
   'src/server/send.c',
+  'src/server/snapshot_event_candidates.c',
   'src/server/snapshot_shadow.c',
   'src/server/user.c',
   'src/server/nav.c',
@@ -201,9 +204,11 @@ client_src = [
 
   'inc/server/server.h',
   'inc/server/native_shadow.h',
+  'inc/server/snapshot_event_candidates.h',
   'inc/server/snapshot_shadow.h',
 
   'inc/client/client.h',
+  'inc/client/gameplay_light.h',
   'inc/client/input.h',
   'inc/client/keys.h',
   'inc/client/ui.h',
@@ -320,7 +325,18 @@ renderer_vk_src = [
   'src/renderer/shadow_frontend.c',
   'src/renderer/ui_scale.c',
   'src/renderer/view_setup.c',
+  'src/rend_rtx/refresh/debug.c',
+  'src/rend_rtx/refresh/debug_text.c',
+  'src/rend_vk/vk_debug.c',
+  'src/rend_vk/vk_debug.h',
+  'src/rend_vk/vk_debug_spv.h',
   'src/rend_vk/vk_main.c',
+  'src/rend_vk/vk_postprocess.c',
+  'src/rend_vk/vk_postprocess.h',
+  'src/rend_vk/vk_postprocess_spv.h',
+  'src/rend_vk/vk_bloom_spv.h',
+  'src/rend_vk/vk_crt_spv.h',
+  'src/rend_vk/vk_dof_spv.h',
   'src/rend_vk/vk_entity.c',
   'src/rend_vk/vk_entity.h',
   'src/rend_vk/vk_entity_spv.h',
@@ -353,6 +369,7 @@ server_src = [
   'src/server/main.c',
   'src/server/native_shadow.c',
   'src/server/send.c',
+  'src/server/snapshot_event_candidates.c',
   'src/server/snapshot_shadow.c',
   'src/server/user.c',
   'src/server/nav.c',
@@ -362,6 +379,7 @@ server_src = [
 
   'inc/server/server.h',
   'inc/server/native_shadow.h',
+  'inc/server/snapshot_event_candidates.h',
   'inc/server/snapshot_shadow.h',
 ]
 
@@ -461,6 +479,9 @@ sgame_src = bgame_src + [
   'src/game/sgame/menu/menu_ui_list.cpp',
   'src/game/sgame/network/lag_compensation.cpp',
   'src/game/sgame/network/lag_compensation.hpp',
+  'src/game/sgame/network/rewind_collision_import.hpp',
+  'src/game/sgame/network/local_action_observation.cpp',
+  'src/game/sgame/network/local_action_observation.hpp',
   'src/common/net/event_shadow_map.c',
   'src/game/sgame/network/event_shadow.cpp',
   'src/game/sgame/network/event_shadow.hpp',
@@ -595,6 +616,8 @@ cgame_src = bgame_src + [
   'src/game/cgame/cg_entity_local.h',
   'src/game/cgame/cg_event_shadow.hpp',
   'src/game/cgame/cg_event_shadow.cpp',
+  'src/game/cgame/cg_event_runtime.hpp',
+  'src/game/cgame/cg_event_runtime.cpp',
   'src/game/cgame/cg_canonical_snapshot_timeline.hpp',
   'src/game/cgame/cg_canonical_snapshot_timeline.cpp',
   'src/game/cgame/cg_main.cpp',
@@ -1557,13 +1580,29 @@ q2proto_lib = static_library('q2proto', q2proto_src,
   c_args:              q2proto_c_args,
 )
 
+canonical_event_math_core_lib = static_library(
+  'canonical_event_math_core',
+  'src/common/math.c',
+  include_directories: include_directories('inc'),
+  install: false,
+  pic: true,
+  override_options: ['c_std=c11'],
+)
+
 canonical_event_core_lib = static_library(
   'canonical_event_core',
   [
     'src/common/net/event_abi.c',
     'src/common/net/event_journal.c',
+    'src/common/net/event_stream.c',
+    'src/common/net/legacy_entity_event_candidate.c',
+    'src/common/net/legacy_game_event_candidate.c',
+    'src/common/net/legacy_muzzle_event_candidate.c',
+    'src/common/net/legacy_spatial_audio_event_candidate.c',
+    'src/common/net/legacy_temp_event_candidate.c',
   ],
-  include_directories: include_directories('inc'),
+  include_directories: include_directories('inc', 'q2proto/inc'),
+  link_with: canonical_event_math_core_lib,
   c_args: prediction_core_c_fp_args,
   install: false,
   pic: true,
@@ -1624,6 +1663,16 @@ canonical_command_core_lib = static_library(
 canonical_local_action_core_lib = static_library(
   'canonical_local_action_core',
   'src/common/net/local_action.c',
+  include_directories: include_directories('inc'),
+  c_args: prediction_core_c_fp_args,
+  install: false,
+  pic: true,
+  override_options: ['c_std=c11'],
+)
+
+local_action_observation_core_lib = static_library(
+  'local_action_observation_core',
+  'src/common/net/local_action_observation.c',
   include_directories: include_directories('inc'),
   c_args: prediction_core_c_fp_args,
   install: false,
@@ -1733,6 +1782,36 @@ native_carrier_ack_core_lib = static_library(
   override_options: ['c_std=c11'],
 )
 
+native_carrier_mixed_core_lib = static_library(
+  'native_carrier_mixed_core',
+  'src/common/net/native_carrier_mixed.c',
+  include_directories: include_directories('inc'),
+  install: false,
+  pic: true,
+  override_options: ['c_std=c11'],
+)
+
+native_event_sender_core_lib = static_library(
+  'native_event_sender_core',
+  'src/common/net/native_event_sender.c',
+  include_directories: include_directories('inc'),
+  install: false,
+  pic: true,
+  override_options: ['c_std=c11'],
+)
+
+native_event_admission_core_lib = static_library(
+  'native_event_admission_core',
+  [
+    'src/common/net/event_stream_owner.c',
+    'src/common/net/native_event_admission.c',
+  ],
+  include_directories: include_directories('inc'),
+  install: false,
+  pic: true,
+  override_options: ['c_std=c11'],
+)
+
 canonical_rewind_core_lib = static_library(
   'canonical_rewind_core',
   [
@@ -1787,6 +1866,9 @@ shared_library(client_engine_binary_name, common_src, client_src, renderer_engin
                           native_carrier_core_lib,
                           native_carrier_session_core_lib,
                           native_carrier_ack_core_lib,
+                          native_carrier_mixed_core_lib,
+                          native_event_sender_core_lib,
+                          native_event_admission_core_lib,
                           canonical_rewind_core_lib],
   c_args:                ['-DUSE_CLIENT=1', '-DUSE_REF=REF_GL', engine_c_args, prediction_core_c_fp_args],
   cpp_args:              client_cpp_args,
@@ -1813,6 +1895,9 @@ shared_library(server_engine_binary_name, common_src, server_src,
                           native_session_core_lib,
                           native_carrier_session_core_lib,
                           native_carrier_ack_core_lib,
+                          native_carrier_mixed_core_lib,
+                          native_event_sender_core_lib,
+                          native_event_admission_core_lib,
                           canonical_rewind_core_lib,
                           canonical_snapshot_core_lib,
                           snapshot_q2proto_core_lib],
@@ -1966,7 +2051,8 @@ sgame_dll = shared_library(sgame_binary_name, sgame_src,
   cpp_args:              game_cpp_args,
   link_with:             [canonical_command_core_lib,
                           canonical_snapshot_core_lib,
-                          canonical_event_core_lib],
+                          canonical_event_core_lib,
+                          local_action_observation_core_lib],
   link_whole:            [q3a_botlib_utility_lib, prediction_core_lib,
                           canonical_rewind_core_lib],
   link_args:             dll_link_args + game_link_args,
@@ -2054,6 +2140,88 @@ event_journal_test = executable(
   override_options: ['c_std=c11'],
 )
 
+event_stream_test = executable(
+  'event_stream_test',
+  'tools/networking/event_stream_test.c',
+  include_directories: include_directories('inc'),
+  link_with: [native_codec_core_lib,
+              native_envelope_core_lib,
+              canonical_command_core_lib,
+              canonical_event_core_lib,
+              canonical_snapshot_core_lib],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+event_stream_layout_c_test = executable(
+  'event_stream_layout_c_test',
+  'tools/networking/event_stream_layout_c.c',
+  include_directories: include_directories('inc'),
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+event_stream_layout_cpp_test = executable(
+  'event_stream_layout_cpp_test',
+  'tools/networking/event_stream_layout_cpp.cpp',
+  include_directories: include_directories('inc'),
+  install: false,
+  override_options: ['cpp_std=c++20'],
+)
+
+event_stream_owner_test = executable(
+  'event_stream_owner_test',
+  'tools/networking/event_stream_owner_test.c',
+  include_directories: include_directories('inc'),
+  link_with: [native_event_admission_core_lib,
+              canonical_event_core_lib],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+native_event_admission_test = executable(
+  'native_event_admission_test',
+  'tools/networking/native_event_admission_test.c',
+  dependencies: networking_math_deps,
+  include_directories: include_directories('inc'),
+  link_with: [native_event_admission_core_lib,
+              native_carrier_ack_core_lib,
+              native_carrier_session_core_lib,
+              native_carrier_core_lib,
+              native_session_core_lib,
+              native_readiness_core_lib,
+              net_capability_core_lib,
+              native_codec_core_lib,
+              native_envelope_core_lib,
+              canonical_command_core_lib,
+              canonical_event_core_lib,
+              canonical_snapshot_core_lib],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+native_event_sender_test = executable(
+  'native_event_sender_test',
+  'tools/networking/native_event_sender_test.c',
+  dependencies: networking_math_deps,
+  include_directories: include_directories('inc'),
+  link_with: [native_event_sender_core_lib,
+              native_carrier_mixed_core_lib,
+              native_carrier_ack_core_lib,
+              native_carrier_session_core_lib,
+              native_carrier_core_lib,
+              native_session_core_lib,
+              native_readiness_core_lib,
+              net_capability_core_lib,
+              native_codec_core_lib,
+              native_envelope_core_lib,
+              canonical_command_core_lib,
+              canonical_event_core_lib,
+              canonical_snapshot_core_lib],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
 event_shadow_test = executable(
   'event_shadow_test',
   [
@@ -2080,17 +2248,110 @@ cgame_event_shadow_test = executable(
   override_options: ['c_std=c11'],
 )
 
+legacy_temp_event_candidate_test = executable(
+  'legacy_temp_event_candidate_test',
+  'tools/networking/legacy_temp_event_candidate_test.c',
+  include_directories: include_directories('inc', 'q2proto/inc'),
+  link_with: canonical_event_core_lib,
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+legacy_muzzle_event_candidate_test = executable(
+  'legacy_muzzle_event_candidate_test',
+  'tools/networking/legacy_muzzle_event_candidate_test.c',
+  include_directories: include_directories('inc', 'q2proto/inc'),
+  link_with: canonical_event_core_lib,
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+legacy_game_event_candidate_test = executable(
+  'legacy_game_event_candidate_test',
+  'tools/networking/legacy_game_event_candidate_test.c',
+  include_directories: include_directories('inc', 'q2proto/inc'),
+  link_with: canonical_event_core_lib,
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+legacy_spatial_audio_event_candidate_test = executable(
+  'legacy_spatial_audio_event_candidate_test',
+  'tools/networking/legacy_spatial_audio_event_candidate_test.c',
+  include_directories: include_directories('inc', 'q2proto/inc'),
+  link_with: canonical_event_core_lib,
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
 cgame_event_presentation_test = executable(
   'cgame_event_presentation_test',
   [
     'tools/networking/cgame_event_presentation_test.cpp',
     'src/game/cgame/cg_event_shadow.cpp',
+    'src/game/cgame/cg_event_runtime.cpp',
     'src/common/net/cgame_event_shadow.c',
   ],
   include_directories: include_directories('inc', 'src/game/cgame'),
-  link_with: canonical_event_core_lib,
+  link_with: [canonical_event_core_lib, canonical_snapshot_core_lib],
   install: false,
   override_options: ['c_std=c11', 'cpp_std=c++20'],
+)
+
+cgame_event_runtime_test = executable(
+  'cgame_event_runtime_test',
+  [
+    'tools/networking/cgame_event_runtime_test.cpp',
+    'src/game/cgame/cg_event_shadow.cpp',
+    'src/game/cgame/cg_event_runtime.cpp',
+    'src/common/net/cgame_event_shadow.c',
+  ],
+  include_directories: include_directories('inc', 'src/game/cgame'),
+  link_with: [canonical_event_core_lib, canonical_snapshot_core_lib],
+  install: false,
+  override_options: ['c_std=c11', 'cpp_std=c++20'],
+)
+
+cgame_event_runtime_export_test = executable(
+  'cgame_event_runtime_export_test',
+  [
+    'tools/networking/cgame_event_runtime_export_test.cpp',
+    'src/game/cgame/cg_event_shadow.cpp',
+    'src/game/cgame/cg_event_runtime.cpp',
+    'src/common/net/cgame_event_shadow.c',
+  ],
+  include_directories: include_directories('inc', 'src/game/cgame'),
+  link_with: [canonical_event_core_lib, canonical_snapshot_core_lib],
+  install: false,
+  override_options: ['c_std=c11', 'cpp_std=c++20'],
+)
+
+cgame_event_runtime_owner_test = executable(
+  'cgame_event_runtime_owner_test',
+  [
+    'tools/networking/cgame_event_runtime_owner_test.cpp',
+    'src/client/cgame_event_runtime.cpp',
+  ],
+  include_directories: include_directories('inc'),
+  link_with: canonical_event_core_lib,
+  install: false,
+  override_options: ['cpp_std=c++20'],
+)
+
+cgame_event_runtime_layout_c_test = executable(
+  'cgame_event_runtime_layout_c_test',
+  'tools/networking/cgame_event_runtime_layout_c.c',
+  include_directories: include_directories('inc'),
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+cgame_event_runtime_layout_cpp_test = executable(
+  'cgame_event_runtime_layout_cpp_test',
+  'tools/networking/cgame_event_runtime_layout_cpp.cpp',
+  include_directories: include_directories('inc'),
+  install: false,
+  override_options: ['cpp_std=c++20'],
 )
 
 event_schema_layout_c_test = executable(
@@ -2395,6 +2656,27 @@ server_snapshot_shadow_test = executable(
   'server_snapshot_shadow_test',
   [
     'tools/networking/server_snapshot_shadow_test.cpp',
+    'src/server/snapshot_event_candidates.c',
+    'src/server/snapshot_shadow.c',
+  ],
+  include_directories: include_directories('inc', 'q2proto/inc'),
+  c_args: game_c_args + prediction_core_c_fp_args,
+  cpp_args: game_cpp_args + prediction_core_fp_args,
+  link_with: [
+    snapshot_q2proto_core_lib,
+    canonical_snapshot_core_lib,
+    canonical_event_core_lib,
+    q2proto_lib,
+  ],
+  install: false,
+  override_options: ['c_std=c11', 'cpp_std=c++20'],
+)
+
+server_snapshot_event_candidates_test = executable(
+  'server_snapshot_event_candidates_test',
+  [
+    'tools/networking/server_snapshot_event_candidates_test.cpp',
+    'src/server/snapshot_event_candidates.c',
     'src/server/snapshot_shadow.c',
   ],
   include_directories: include_directories('inc', 'q2proto/inc'),
@@ -2414,6 +2696,7 @@ snapshot_final_projection_parity_corpus = executable(
   'snapshot_final_projection_parity_corpus',
   [
     'tools/networking/snapshot_final_projection_parity_corpus.cpp',
+    'src/server/snapshot_event_candidates.c',
     'src/server/snapshot_shadow.c',
   ],
   include_directories: include_directories('inc', 'q2proto/inc'),
@@ -2552,6 +2835,18 @@ local_action_layout_cpp_test = executable(
   include_directories: include_directories('inc'),
   install: false,
   override_options: ['cpp_std=c++20'],
+)
+
+local_action_observation_test = executable(
+  'local_action_observation_test',
+  'tools/networking/local_action_observation_test.c',
+  include_directories: include_directories('inc'),
+  link_with: [
+    local_action_observation_core_lib,
+    canonical_command_core_lib,
+  ],
+  install: false,
+  override_options: ['c_std=c11'],
 )
 
 local_action_audit_test = executable(
@@ -2863,6 +3158,30 @@ native_carrier_ack_layout_test = executable(
   override_options: ['cpp_std=c++20'],
 )
 
+native_carrier_mixed_test = executable(
+  'native_carrier_mixed_test',
+  'tools/networking/native_carrier_mixed_test.c',
+  include_directories: include_directories('inc'),
+  link_with: [native_carrier_mixed_core_lib,
+              native_carrier_ack_core_lib,
+              native_carrier_session_core_lib,
+              native_carrier_core_lib,
+              native_session_core_lib,
+              native_readiness_core_lib,
+              native_envelope_core_lib,
+              net_capability_core_lib],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+native_carrier_mixed_layout_test = executable(
+  'native_carrier_mixed_layout_test',
+  'tools/networking/native_carrier_mixed_layout.cpp',
+  include_directories: include_directories('inc'),
+  install: false,
+  override_options: ['cpp_std=c++20'],
+)
+
 native_readiness_test = executable(
   'native_readiness_test',
   'tools/networking/native_readiness_test.c',
@@ -2916,11 +3235,46 @@ native_server_shadow_pilot_test = executable(
   [
     'tools/networking/native_server_shadow_pilot_test.c',
     'src/server/native_shadow.c',
+    'src/server/snapshot_event_candidates.c',
+    'src/server/snapshot_shadow.c',
   ],
-  include_directories: include_directories('inc'),
+  include_directories: include_directories('inc', 'q2proto/inc'),
   dependencies: networking_math_deps,
   c_args: ['-DUSE_SERVER=1', engine_c_args],
   link_with: [native_carrier_ack_core_lib,
+              native_carrier_mixed_core_lib,
+              native_carrier_session_core_lib,
+              native_carrier_core_lib,
+              native_event_sender_core_lib,
+              native_session_core_lib,
+              native_command_shadow_core_lib,
+              native_codec_core_lib,
+              native_envelope_core_lib,
+              native_readiness_sideband_core_lib,
+              native_readiness_core_lib,
+              net_capability_core_lib,
+              canonical_command_core_lib,
+              canonical_event_core_lib,
+              canonical_snapshot_core_lib,
+              snapshot_q2proto_core_lib,
+              q2proto_lib],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+native_client_readiness_pilot_test = executable(
+  'native_client_readiness_pilot_test',
+  [
+    'tools/networking/native_client_readiness_pilot_test.cpp',
+    'src/client/cgame_event_runtime.cpp',
+    'src/client/native_readiness_pilot.cpp',
+  ],
+  include_directories: include_directories('inc', 'q2proto/inc', 'src/client'),
+  dependencies: networking_math_deps + [zlib],
+  cpp_args: client_cpp_args + ['-DWORR_NATIVE_READINESS_PILOT_TESTING=1'],
+  link_with: [native_event_admission_core_lib,
+              native_carrier_mixed_core_lib,
+              native_carrier_ack_core_lib,
               native_carrier_session_core_lib,
               native_carrier_core_lib,
               native_session_core_lib,
@@ -2934,20 +3288,29 @@ native_server_shadow_pilot_test = executable(
               canonical_event_core_lib,
               canonical_snapshot_core_lib],
   install: false,
-  override_options: ['c_std=c11'],
+  override_options: ['cpp_std=c++20'],
 )
 
-native_client_readiness_pilot_test = executable(
-  'native_client_readiness_pilot_test',
+native_event_virtual_link_test = executable(
+  'native_event_virtual_link_test',
   [
-    'tools/networking/native_client_readiness_pilot_test.cpp',
+    'tools/networking/native_event_virtual_link_test.cpp',
+    'src/client/cgame_event_runtime.cpp',
     'src/client/native_readiness_pilot.cpp',
+    'src/server/native_shadow.c',
+    'src/server/snapshot_event_candidates.c',
+    'src/server/snapshot_shadow.c',
   ],
   include_directories: include_directories('inc', 'q2proto/inc', 'src/client'),
   dependencies: networking_math_deps + [zlib],
+  c_args: ['-DUSE_SERVER=1', engine_c_args],
   cpp_args: client_cpp_args + ['-DWORR_NATIVE_READINESS_PILOT_TESTING=1'],
-  link_with: [native_carrier_session_core_lib,
+  link_with: [native_event_admission_core_lib,
+              native_carrier_mixed_core_lib,
+              native_carrier_ack_core_lib,
+              native_carrier_session_core_lib,
               native_carrier_core_lib,
+              native_event_sender_core_lib,
               native_session_core_lib,
               native_command_shadow_core_lib,
               native_codec_core_lib,
@@ -2957,9 +3320,11 @@ native_client_readiness_pilot_test = executable(
               net_capability_core_lib,
               canonical_command_core_lib,
               canonical_event_core_lib,
-              canonical_snapshot_core_lib],
+              canonical_snapshot_core_lib,
+              snapshot_q2proto_core_lib,
+              q2proto_lib],
   install: false,
-  override_options: ['cpp_std=c++20'],
+  override_options: ['c_std=c11', 'cpp_std=c++20'],
 )
 
 native_command_shadow_test = executable(
@@ -3088,6 +3453,18 @@ prediction_schema_layout_cpp_test = executable(
   override_options: ['cpp_std=c++20'],
 )
 
+gameplay_light_test = executable(
+  'gameplay_light_test',
+  [
+    'tools/renderer_parity/gameplay_light_test.c',
+    'src/client/gameplay_light.c',
+  ],
+  include_directories: include_directories('inc'),
+  c_args: ['-DUSE_CLIENT=1', '-DUSE_REF=REF_GL', engine_c_args],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
 test(
   'network-impair-model',
   network_impair_model_test,
@@ -3096,8 +3473,57 @@ test(
 )
 
 test(
+  'renderer-gameplay-light',
+  gameplay_light_test,
+  suite: 'renderer',
+  timeout: 30,
+)
+
+test(
   'network-event-journal',
   event_journal_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-event-stream',
+  event_stream_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-event-stream-layout-c',
+  event_stream_layout_c_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-event-stream-layout-cpp',
+  event_stream_layout_cpp_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-event-stream-owner',
+  event_stream_owner_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-native-event-admission',
+  native_event_admission_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-native-event-sender',
+  native_event_sender_test,
   suite: 'networking',
   timeout: 30,
 )
@@ -3117,8 +3543,71 @@ test(
 )
 
 test(
+  'network-legacy-temp-event-candidate',
+  legacy_temp_event_candidate_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-legacy-muzzle-event-candidate',
+  legacy_muzzle_event_candidate_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-legacy-game-event-candidate',
+  legacy_game_event_candidate_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-legacy-spatial-audio-event-candidate',
+  legacy_spatial_audio_event_candidate_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
   'network-cgame-event-presentation',
   cgame_event_presentation_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-cgame-event-runtime',
+  cgame_event_runtime_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-cgame-event-runtime-export',
+  cgame_event_runtime_export_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-cgame-event-runtime-owner',
+  cgame_event_runtime_owner_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-cgame-event-runtime-layout-c',
+  cgame_event_runtime_layout_c_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-cgame-event-runtime-layout-cpp',
+  cgame_event_runtime_layout_cpp_test,
   suite: 'networking',
   timeout: 30,
 )
@@ -3337,6 +3826,13 @@ test(
   timeout: 30,
 )
 
+test(
+  'network-server-snapshot-event-candidates',
+  server_snapshot_event_candidates_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
 snapshot_final_projection_parity_script = files(
   'tools/networking/run_snapshot_final_projection_parity.py',
 )
@@ -3446,6 +3942,13 @@ test(
 test(
   'network-local-action-layout-cpp',
   local_action_layout_cpp_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-local-action-observation',
+  local_action_observation_test,
   suite: 'networking',
   timeout: 30,
 )
@@ -3682,6 +4185,20 @@ test(
 )
 
 test(
+  'network-native-carrier-mixed',
+  native_carrier_mixed_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-native-carrier-mixed-layout',
+  native_carrier_mixed_layout_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
   'network-native-readiness',
   native_readiness_test,
   suite: 'networking',
@@ -3726,6 +4243,13 @@ test(
 test(
   'network-native-client-readiness-pilot',
   native_client_readiness_pilot_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-native-event-virtual-link',
+  native_event_virtual_link_test,
   suite: 'networking',
   timeout: 30,
 )
@@ -3960,6 +4484,105 @@ test(
   timeout: 30,
 )
 
+network_command_gap_acceptance_parser_test = files(
+  'tools/networking/test_run_command_gap_acceptance_gate.py',
+)
+test(
+  'network-command-gap-acceptance-gate-parser',
+  version_prog,
+  args: network_command_gap_acceptance_parser_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+network_cgame_prediction_fail_closed_contract_test = files(
+  'tools/networking/test_cgame_prediction_fail_closed_contract.py',
+)
+test(
+  'network-cgame-prediction-fail-closed-contract',
+  version_prog,
+  args: network_cgame_prediction_fail_closed_contract_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+network_lag_compensation_mover_capture_contract_test = files(
+  'tools/networking/test_lag_compensation_mover_capture_contract.py',
+)
+test(
+  'network-lag-compensation-mover-capture-contract',
+  version_prog,
+  args: network_lag_compensation_mover_capture_contract_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+network_rewind_mover_runtime_gate_parser_test = files(
+  'tools/networking/test_run_rewind_mover_runtime_gate.py',
+)
+test(
+  'network-rewind-mover-runtime-gate-parser',
+  version_prog,
+  args: network_rewind_mover_runtime_gate_parser_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+network_rewind_rail_damage_runtime_gate_parser_test = files(
+  'tools/networking/test_run_rewind_rail_damage_runtime_gate.py',
+)
+test(
+  'network-rewind-rail-damage-runtime-gate-parser',
+  version_prog,
+  args: network_rewind_rail_damage_runtime_gate_parser_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+network_canonical_rail_damage_runtime_gate_parser_test = files(
+  'tools/networking/test_run_canonical_rail_damage_runtime_gate.py',
+)
+test(
+  'network-canonical-rail-damage-runtime-gate-parser',
+  version_prog,
+  args: network_canonical_rail_damage_runtime_gate_parser_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+network_lag_compensation_canonical_rail_contract_test = files(
+  'tools/networking/test_lag_compensation_canonical_rail_contract.py',
+)
+test(
+  'network-lag-compensation-canonical-rail-contract',
+  version_prog,
+  args: network_lag_compensation_canonical_rail_contract_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+network_headless_input_contract_test = files(
+  'tools/networking/test_headless_input_contract.py',
+)
+test(
+  'network-headless-input-contract',
+  version_prog,
+  args: network_headless_input_contract_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+network_lag_compensation_rail_damage_contract_test = files(
+  'tools/networking/test_lag_compensation_rail_damage_contract.py',
+)
+test(
+  'network-lag-compensation-rail-damage-contract',
+  version_prog,
+  args: network_lag_compensation_rail_damage_contract_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
 native_shadow_runtime_parser_test = files(
   'tools/networking/test_run_native_shadow_runtime_smoke.py',
 )
@@ -3967,6 +4590,17 @@ test(
   'network-native-shadow-runtime-parser',
   version_prog,
   args: native_shadow_runtime_parser_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+native_shadow_repeated_runtime_parser_test = files(
+  'tools/networking/test_run_native_shadow_repeated_runtime_smoke.py',
+)
+test(
+  'network-native-shadow-repeated-runtime-parser',
+  version_prog,
+  args: native_shadow_repeated_runtime_parser_test,
   suite: 'networking',
   timeout: 30,
 )
@@ -4004,6 +4638,22 @@ if win32
     ],
   )
 
+  native_shadow_repeated_runtime_script = files(
+    'tools/networking/run_native_shadow_repeated_runtime_smoke.py',
+  )
+  run_target(
+    'networking-native-shadow-repeated-runtime',
+    command: [
+      version_prog,
+      native_shadow_repeated_runtime_script,
+      '--client-exe', meson.current_source_dir() / '.install' / 'worr_x86_64.exe',
+      '--dedicated-exe', meson.current_source_dir() / '.install' / 'worr_ded_x86_64.exe',
+      '--working-dir', meson.current_source_dir() / '.install',
+      '--output', meson.current_source_dir() / '.tmp' / 'networking' / 'native-shadow-repeated-runtime.json',
+      '--timeout', '45',
+    ],
+  )
+
   network_live_snapshot_acceptance_script = files(
     'tools/networking/run_live_snapshot_acceptance_gate.py',
   )
@@ -4018,6 +4668,37 @@ if win32
       '--target', '100000',
       '--profile', 'impaired',
       '--timeout', '1800',
+    ],
+  )
+
+  network_command_gap_acceptance_script = files(
+    'tools/networking/run_command_gap_acceptance_gate.py',
+  )
+  run_target(
+    'networking-command-gap-acceptance',
+    command: [
+      version_prog,
+      network_command_gap_acceptance_script,
+      '--dedicated-exe', meson.current_source_dir() / '.install' / 'worr_ded_x86_64.exe',
+      '--working-dir', meson.current_source_dir() / '.install',
+      '--output', meson.current_source_dir() / '.tmp' / 'networking' / 'command-gap-acceptance.json',
+      '--timeout', '30',
+    ],
+  )
+
+  network_canonical_rail_damage_runtime_script = files(
+    'tools/networking/run_canonical_rail_damage_runtime_gate.py',
+  )
+  run_target(
+    'networking-canonical-rail-damage-acceptance',
+    command: [
+      version_prog,
+      network_canonical_rail_damage_runtime_script,
+      '--client-exe', meson.current_source_dir() / '.install' / 'worr_x86_64.exe',
+      '--dedicated-exe', meson.current_source_dir() / '.install' / 'worr_ded_x86_64.exe',
+      '--working-dir', meson.current_source_dir() / '.install',
+      '--output', meson.current_source_dir() / '.tmp' / 'networking' / 'canonical-rail-damage-runtime.json',
+      '--timeout', '35',
     ],
   )
 endif

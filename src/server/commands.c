@@ -830,7 +830,9 @@ static void SV_WorrNativeShadowStatus_f(void)
             "WORR_NATIVE_SERVER_STATUS_V1 schema=%u "
             "slot=%d protocol=%d enabled=%u lifecycle=%u hooks=%u "
             "readiness_phase=%u official_epoch=%u transport_epoch=%u "
+            "cancelled_through_epoch=%u "
             "public_mask=0x%02x private_mask=0x%02x wire_committed=%u "
+            "wire_committed_transport_epoch=%u "
             "challenges_queued=%llu client_ready=%llu server_active=%llu "
             "rx_carriers=%llu rx_commits=%llu rx_repeat_refreshes=%llu "
             "legacy_joins=%llu command_matches=%llu "
@@ -840,13 +842,20 @@ static void SV_WorrNativeShadowStatus_f(void)
             "async_wake_attempts=%llu async_ack_handoffs=%llu "
             "async_wake_no_handoff=%llu rx_rejections=%llu "
             "tx_ack_rejections=%llu rx_drained=%llu drains=%llu "
-            "failures=%llu "
+            "failures=%llu cancellation_barriers=%llu "
+            "cancelled_transports=%llu cancelled_rx_messages=%llu "
+            "cancelled_receipts=%llu cancelled_event_records=%llu "
+            "stale_cancelled_carriers=%llu "
+            "stale_cancelled_readiness_records=%llu "
             "last_failure=%u\n",
             status.schema_version, client->number, client->protocol,
             status.enabled, status.lifecycle, status.hooks_attached,
             status.readiness_phase, status.official_connection_epoch,
-            status.transport_epoch, status.public_capabilities,
+            status.transport_epoch,
+            status.cancelled_through_transport_epoch,
+            status.public_capabilities,
             status.private_capabilities, status.wire_committed,
+            status.wire_committed_transport_epoch,
             (unsigned long long)status.challenges_queued,
             (unsigned long long)status.client_ready_records,
             (unsigned long long)status.server_active_records,
@@ -870,6 +879,13 @@ static void SV_WorrNativeShadowStatus_f(void)
             (unsigned long long)status.rx_drained,
             (unsigned long long)status.drain_entries,
             (unsigned long long)status.failures,
+            (unsigned long long)status.cancellation_barriers,
+            (unsigned long long)status.cancelled_transports,
+            (unsigned long long)status.cancelled_rx_messages,
+            (unsigned long long)status.cancelled_receipts,
+            (unsigned long long)status.cancelled_event_records,
+            (unsigned long long)status.stale_cancelled_carriers,
+            (unsigned long long)status.stale_cancelled_readiness_records,
             status.last_failure);
     }
 }
@@ -2024,6 +2040,7 @@ static const cmdreg_t c_server[] = {
     { "kickbots", SV_BotKickAll_f },
     { "botlist", SV_BotList_f },
     { "bot_reload_profiles", SV_BotReloadProfiles_f },
+    { "sv_worr_command_gap_selftest", SV_WorrCommandGapSelfTest_f },
     { "pickclient", SV_PickClient_f },
     { "addban", SV_AddBan_f },
     { "delban", SV_DelBan_f },

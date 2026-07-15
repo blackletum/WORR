@@ -300,7 +300,9 @@ static void CG_PredictionHardResync(
     static uint32_t last_noted_result = UINT32_MAX;
 
     VectorClear(cl.prediction_error);
+    memset(cl.predicted_sequences, 0, sizeof(cl.predicted_sequences));
     memset(cl.predicted_states, 0, sizeof(cl.predicted_states));
+    memset(cl.predicted_origins, 0, sizeof(cl.predicted_origins));
     memset(cl.predicted_state_hashes, 0,
            sizeof(cl.predicted_state_hashes));
     memset(cl.predicted_collision_hashes, 0,
@@ -330,7 +332,8 @@ static void CG_PredictionHardResync(
         last_noted_result != result) {
         CG_SnapshotTimeline_NotePredictionCorrection(
             range.authoritative_legacy_sequence,
-            range.current_legacy_sequence, 0, true);
+            range.current_legacy_sequence, 0, true,
+            cg_prediction_correction_reason_t::input_range_invalid);
         CG_SHOWMISS("%i: prediction input hard resync (result %u)\n",
                     cl.frame.number, result);
         last_noted_frame = cl.frame.number;
@@ -386,7 +389,8 @@ void CL_CheckPredictionError(void)
 
     if (cl.predicted_sequences[slot] != command ||
         !CG_PredictionStateValid(cl.predicted_states[slot])) {
-        VectorClear(cl.prediction_error);
+        CG_PredictionHardResync(
+            WORR_CGAME_PREDICTION_INPUT_RETAINED_STATE_MISSING, input_range);
         return;
     }
 
@@ -395,7 +399,8 @@ void CL_CheckPredictionError(void)
     const uint64_t config_hash = Worr_PredictionHashConfigV1(&config);
     if (cl.predicted_config_hashes[slot] &&
         cl.predicted_config_hashes[slot] != config_hash) {
-        VectorClear(cl.prediction_error);
+        CG_PredictionHardResync(
+            WORR_CGAME_PREDICTION_INPUT_CONFIG_DISCONTINUITY, input_range);
         return;
     }
 
@@ -410,11 +415,14 @@ void CL_CheckPredictionError(void)
     if (!state_matches || !hash_matches) {
         if (len > 80) {
             CG_SnapshotTimeline_NotePredictionCorrection(
-                command, input_range.current_legacy_sequence, len, true);
+                command, input_range.current_legacy_sequence, len, true,
+                cg_prediction_correction_reason_t::
+                    correction_threshold_exceeded);
             VectorClear(cl.prediction_error);
         } else {
             CG_SnapshotTimeline_NotePredictionCorrection(
-                command, input_range.current_legacy_sequence, len, false);
+                command, input_range.current_legacy_sequence, len, false,
+                cg_prediction_correction_reason_t::state_divergence);
             VectorCopy(delta, cl.prediction_error);
         }
         CG_SHOWMISS(
@@ -509,6 +517,8 @@ void CL_PredictMovement(void)
     for (uint32_t replayed = 0; replayed < replay_count; ++replayed) {
         const auto &input = input_range.commands[replayed];
         if (!run_command(input.legacy_sequence, input.command)) {
+            CG_PredictionHardResync(
+                WORR_CGAME_PREDICTION_INPUT_REPLAY_REJECTED, input_range);
             CG_SnapshotTimeline_DebugTick(cls.realtime);
             return;
         }
@@ -521,6 +531,8 @@ void CL_PredictMovement(void)
         step_reference_valid = true;
         if (!run_command(input_range.pending_command.legacy_sequence,
                          input_range.pending_command.command)) {
+            CG_PredictionHardResync(
+                WORR_CGAME_PREDICTION_INPUT_REPLAY_REJECTED, input_range);
             CG_SnapshotTimeline_DebugTick(cls.realtime);
             return;
         }

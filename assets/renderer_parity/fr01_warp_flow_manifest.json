@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "task_id": "FR-01-T10",
+  "scenes": [
+    {
+      "id": "warp_flow_surface",
+      "config": "renderer_parity/fr01_warp_flow.cfg",
+      "capture": "fr01_warp_flow.tga",
+      "crop": [160, 120, 640, 480],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [4, 4, 4],
+        "max_pixels_over_threshold_percent": 2.0
+      }
+    }
+  ]
+}

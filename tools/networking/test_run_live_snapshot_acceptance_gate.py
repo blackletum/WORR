@@ -101,6 +101,9 @@ class LiveSnapshotAcceptanceGateTests(unittest.TestCase):
             },
         )
         self.assertEqual(GATE.LIVE_IMPAIR_RATE_KBPS, 0)
+        self.assertEqual(settings["win_headless"], "1")
+        self.assertEqual(settings["in_enable"], "0")
+        self.assertEqual(settings["in_grab"], "0")
         self.assertEqual(command[-4:], ["+echo", "terminal-marker", "+wait", "1000"])
         wait_values = [
             int(command[index + 1])

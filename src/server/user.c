@@ -267,16 +267,6 @@ static void SV_WriteWorrCapabilitySetting(int32_t index, uint32_t value)
     MSG_WriteLong((int32_t)value);
 }
 
-static bool SV_CanAppendNativeReadinessRecord(void)
-{
-    if (!sv_client || !sv_client->worr_native_shadow ||
-        sv_client->netchan.type != NETCHAN_NEW) {
-        return false;
-    }
-    return SV_NativeShadowCanAppendSvcReadinessV1(
-        &msg_write, &sv_client->netchan.message);
-}
-
 /* The adapter stages the complete record and performs one checked final copy.
  * A failed preflight or encode leaves msg_write byte-identical, so callers can
  * disable the unadvertised pilot and keep legacy. */
@@ -294,13 +284,9 @@ static bool SV_AppendNativeReadinessRecord(
         &msg_write, &sv_client->netchan.message, opcode, record);
 }
 
-bool SV_TryQueueNativeShadowChallenge(client_t *client)
+bool SV_MaintainNativeShadowChallengePending(client_t *client)
 {
-    byte staging_data[SV_NATIVE_SHADOW_SVC_WIRE_BYTES];
-    sizebuf_t staging;
     sv_native_shadow_peer_v1 *pilot;
-    worr_native_readiness_record_v1 challenge;
-    int opcode;
 
     if (!client || !client->worr_native_shadow_challenge_pending)
         return false;
@@ -327,15 +313,29 @@ bool SV_TryQueueNativeShadowChallenge(client_t *client)
         client->worr_native_shadow_challenge_requested_at = 0;
         return false;
     }
-    if ((uint32_t)(svs.realtime -
-                   client->worr_native_shadow_challenge_requested_at) >=
-        SV_NATIVE_SHADOW_CHALLENGE_QUEUE_TIMEOUT_MS) {
+    if (SV_NativeShadowChallengeQueueExpiredV1(
+            client->worr_native_shadow_challenge_requested_at,
+            svs.realtime)) {
         client->worr_native_shadow_challenge_pending = false;
         client->worr_native_shadow_challenge_requested_at = 0;
         SV_NativeShadowPeerDisableV1(
             pilot, SV_NATIVE_SHADOW_FAILURE_QUEUE);
         return false;
     }
+    return true;
+}
+
+bool SV_TryQueueNativeShadowChallenge(client_t *client)
+{
+    byte staging_data[SV_NATIVE_SHADOW_SVC_WIRE_BYTES];
+    sizebuf_t staging;
+    sv_native_shadow_peer_v1 *pilot;
+    worr_native_readiness_record_v1 challenge;
+    int opcode;
+
+    if (!SV_MaintainNativeShadowChallengePending(client))
+        return false;
+    pilot = client->worr_native_shadow;
     /* A busy channel is an expected deferral, not a readiness failure.  The
      * 10-second protocol deadline does not exist until this becomes true. */
     if (!SV_NativeShadowPostBootstrapQueueIdleV1(pilot))
@@ -1833,6 +1833,119 @@ static bool SV_WorrFillCommandGap(
                                    range->first_command_id) == 0;
 }
 
+/*
+==============================
+SV_WorrCommandGapSelfTest_f
+
+This is a headless operator regression over the exact production recovery
+function, not a second command-stream implementation.  Large packet loss uses
+simulation_budget zero in SV_OldClientExecuteMove and
+SV_EnhancedClientExecuteMove, so the two fixed cases exercise that same
+fast-forward-only branch without needing a renderer, a client session, or a
+game callback.  The synthetic client is stack-owned and all global callback
+pointers are restored before the status line is published.
+==============================
+*/
+void SV_WorrCommandGapSelfTest_f(void)
+{
+    static const uint32_t gap_cases[] = {161u, 401u};
+    const worr_command_cursor_v1 baseline = {
+        .epoch = 1u,
+        .contiguous_sequence = 1000u,
+    };
+    const uint32_t maximum_gap = WORR_CANONICAL_COMMAND_MAX_TRANSPORT_GAP;
+    const uint32_t command_duration_ms = 16u;
+    size_t index;
+
+    for (index = 0; index < q_countof(gap_cases); ++index) {
+        const uint32_t expected_gap = gap_cases[index];
+        const uint32_t expected_sequence =
+            baseline.contiguous_sequence + expected_gap;
+        client_t synthetic_client;
+        client_t *saved_client = sv_client;
+        edict_t *saved_player = sv_player;
+        worr_legacy_command_range_v1 range;
+        bool initialized = false;
+        bool invoked = false;
+        bool stream_valid = false;
+        bool cursor_valid = false;
+
+        memset(&synthetic_client, 0, sizeof(synthetic_client));
+        memset(&range, 0, sizeof(range));
+        Q_strlcpy(synthetic_client.name, "command-gap-selftest",
+                  sizeof(synthetic_client.name));
+        synthetic_client.lastcmd.msec = command_duration_ms;
+
+        initialized =
+            Worr_CommandStreamInitV1(
+                &synthetic_client.worr_command_stream,
+                synthetic_client.worr_command_slots, CMD_BACKUP,
+                WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS, baseline,
+                UINT64_C(16000000)) &&
+            Worr_LegacyCommandRangeInitV1(
+                &range,
+                (worr_command_id_v1){
+                    .epoch = baseline.epoch,
+                    .sequence = expected_sequence + 1u,
+                },
+                1u);
+
+        if (initialized) {
+            /* This is the production policy selected for net_drop >= 20. */
+            sv_client = &synthetic_client;
+            sv_player = NULL;
+            invoked = SV_WorrFillCommandGap(&range, maximum_gap, 0u);
+            stream_valid =
+                Worr_CommandStreamValidateV1(
+                    &synthetic_client.worr_command_stream);
+            cursor_valid =
+                synthetic_client.worr_command_stream.received_cursor.epoch ==
+                    baseline.epoch &&
+                synthetic_client.worr_command_stream.consumed_cursor.epoch ==
+                    baseline.epoch &&
+                synthetic_client.worr_command_stream.received_cursor
+                        .contiguous_sequence == expected_sequence &&
+                synthetic_client.worr_command_stream.consumed_cursor
+                        .contiguous_sequence == expected_sequence;
+        }
+
+        sv_client = saved_client;
+        sv_player = saved_player;
+
+        Com_Printf(
+            "worr_command_gap_selftest: case=gap-%u status=%s gap=%u "
+            "synthesized=0 skipped=%" PRIu64 " received=%u:%u "
+            "consumed=%u:%u attempts=%" PRIu64 " fast_forwards=%" PRIu64
+            " fast_forwarded=%" PRIu64 " rejections=%" PRIu64
+            " policy_rejections=%" PRIu64 " stream_valid=%u "
+            "cursor_valid=%u\n",
+            expected_gap,
+            initialized && invoked && stream_valid && cursor_valid &&
+                    synthetic_client.worr_command_fast_forward_attempts == 1u &&
+                    synthetic_client.worr_command_fast_forwards == 1u &&
+                    synthetic_client.worr_command_fast_forwarded_commands ==
+                        expected_gap &&
+                    synthetic_client.worr_command_fast_forward_rejections == 0u &&
+                    synthetic_client.worr_command_gap_policy_rejections == 0u
+                ? "pass"
+                : "fail",
+            expected_gap,
+            synthetic_client.worr_command_fast_forwarded_commands,
+            synthetic_client.worr_command_stream.received_cursor.epoch,
+            synthetic_client.worr_command_stream.received_cursor
+                .contiguous_sequence,
+            synthetic_client.worr_command_stream.consumed_cursor.epoch,
+            synthetic_client.worr_command_stream.consumed_cursor
+                .contiguous_sequence,
+            synthetic_client.worr_command_fast_forward_attempts,
+            synthetic_client.worr_command_fast_forwards,
+            synthetic_client.worr_command_fast_forwarded_commands,
+            synthetic_client.worr_command_fast_forward_rejections,
+            synthetic_client.worr_command_gap_policy_rejections,
+            stream_valid ? 1u : 0u, cursor_valid ? 1u : 0u);
+    }
+}
+
 static void SV_WorrReportCommandStreamReject(
     const char *stage,
     const worr_legacy_command_range_v1 *range,
@@ -2579,23 +2692,15 @@ void SV_ExecuteClientMessage(client_t *client)
                 sv_native_shadow_observe_result_v1 result;
                 worr_native_readiness_record_v1 server_active;
 
-                /* A valid COMMIT transitions the readiness core immediately;
-                 * reserve the exact response tuple first so queue pressure can
-                 * only disable the hidden pilot, never strand ACTIVE state. */
-                if (readiness_setting &&
-                    message.setting.index ==
-                        WORR_NATIVE_READINESS_SETTING_COMMIT &&
-                    !SV_CanAppendNativeReadinessRecord()) {
-                    SV_NativeShadowPeerDisableV1(
-                        client->worr_native_shadow,
-                        SV_NATIVE_SHADOW_FAILURE_QUEUE);
-                    result = SV_NATIVE_SHADOW_OBSERVE_PILOT_DISABLED;
-                } else {
-                    result = SV_NativeShadowObserveSettingV1(
-                        client->worr_native_shadow,
-                        message.setting.index, message.setting.value,
-                        &server_active);
-                }
+                /* The parser-shared helper classifies every complete record
+                 * before reserving SERVER_ACTIVE capacity.  Thus a full
+                 * reliable queue cannot turn a valid canceled CLIENT_READY
+                 * into a private readiness failure, while a current response
+                 * still fails closed before native wire commitment. */
+                result = SV_NativeShadowObserveSettingWithResponseCapacityV1(
+                    client->worr_native_shadow,
+                    message.setting.index, message.setting.value,
+                    &msg_write, &client->netchan.message, &server_active);
                 if (readiness_setting)
                     sideband_setting = true;
                 if (result ==

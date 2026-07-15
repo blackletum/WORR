@@ -210,6 +210,9 @@ static void test_wrap_overflow_and_invalid_command(void)
 
 int main(void)
 {
+    CHECK(WORR_CGAME_PREDICTION_INPUT_REPLAY_REJECTED == 10);
+    CHECK(WORR_CGAME_PREDICTION_INPUT_RETAINED_STATE_MISSING == 11);
+    CHECK(WORR_CGAME_PREDICTION_INPUT_CONFIG_DISCONTINUITY == 12);
     test_canonical_cursor_ignores_packet_ack();
     test_canonical_zero_cursor_replays_from_identity_baseline();
     test_bootstrap_and_true_legacy_fallback();

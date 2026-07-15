@@ -332,6 +332,7 @@ typedef enum worr_native_command_shadow_join_result_v1_e {
     WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_STATE = 14,
     WORR_NATIVE_COMMAND_SHADOW_JOIN_INVALID_RECORD = 15,
     WORR_NATIVE_COMMAND_SHADOW_JOIN_CLOCK_REGRESSION = 16,
+    WORR_NATIVE_COMMAND_SHADOW_JOIN_RETIRED = 17,
 } worr_native_command_shadow_join_result_v1;
 
 typedef struct worr_native_command_shadow_join_telemetry_v1_s {
@@ -402,6 +403,15 @@ Worr_NativeCommandShadowJoinObserveV1(
     const worr_command_record_v1 *record,
     uint64_t now_tick,
     worr_native_command_shadow_compare_report_v1 *report_out);
+
+/*
+ * Retires only the exact command-ID slot after its native and legacy halves
+ * have been compared.  Missing IDs and incomplete slots are never mutated.
+ */
+worr_native_command_shadow_join_result_v1
+Worr_NativeCommandShadowJoinRetireComparedV1(
+    worr_native_command_shadow_join_v1 *join,
+    worr_command_id_v1 command_id);
 
 /* Slots expire when now_tick - last_update_tick is at least expiry_ticks. */
 worr_native_command_shadow_join_result_v1

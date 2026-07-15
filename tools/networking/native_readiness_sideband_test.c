@@ -20,9 +20,8 @@
         }                                                                   \
     } while (0)
 
-#define NATIVE_CAPABILITIES                                                 \
-    ((uint32_t)(WORR_NET_CAP_LEGACY_STAGE_MASK |                           \
-                WORR_NET_CAP_NATIVE_ENVELOPE_V1))
+#define NATIVE_CAPABILITIES WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK
+#define EVENT_NATIVE_CAPABILITIES WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK
 
 static void fill_bytes(void *object, size_t bytes, unsigned char value)
 {
@@ -45,7 +44,9 @@ static void make_record(uint16_t kind,
                         worr_native_readiness_record_v1 *record)
 {
     CHECK(Worr_NativeReadinessRecordInitV1(
-        record, kind, UINT32_C(0x89abcdef), NATIVE_CAPABILITIES,
+        record, kind, UINT32_C(0x89abcdef),
+        kind == WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM
+            ? EVENT_NATIVE_CAPABILITIES : NATIVE_CAPABILITIES,
         UINT64_C(0xfedcba9876543210)));
 }
 
@@ -171,10 +172,10 @@ static void test_encode_and_transactionality(void)
     static const uint16_t golden_words[
         WORR_NATIVE_READINESS_SIDEBAND_PAIR_COUNT] = {
         UINT16_C(0x0001), UINT16_C(0x0001), UINT16_C(0xcdef),
-        UINT16_C(0x89ab), UINT16_C(0x0013), UINT16_C(0x0000),
+        UINT16_C(0x89ab), UINT16_C(0x0053), UINT16_C(0x0000),
         UINT16_C(0x3210), UINT16_C(0x7654), UINT16_C(0xba98),
-        UINT16_C(0xfedc), UINT16_C(0xfaf0), UINT16_C(0x7312),
-        UINT16_C(0x8723),
+        UINT16_C(0xfedc), UINT16_C(0x0c0a), UINT16_C(0x5d6c),
+        UINT16_C(0xeb36),
     };
     worr_native_readiness_record_v1 record;
     worr_native_readiness_record_v1 bad;
@@ -191,7 +192,7 @@ static void test_encode_and_transactionality(void)
     uint32_t index;
 
     make_pairs(WORR_NATIVE_READINESS_RECORD_CHALLENGE, &record, pairs);
-    CHECK(record.record_checksum == UINT32_C(0x7312faf0));
+    CHECK(record.record_checksum == UINT32_C(0x5d6c0c0a));
     CHECK(pairs[0].index == WORR_NATIVE_READINESS_SETTING_BEGIN);
     CHECK(pairs[0].value ==
           (int16_t)WORR_NATIVE_READINESS_SIDEBAND_VERSION);
@@ -248,7 +249,7 @@ static void test_clc_and_svc_round_trip(void)
     uint16_t kind;
 
     for (kind = WORR_NATIVE_READINESS_RECORD_CHALLENGE;
-         kind <= WORR_NATIVE_READINESS_RECORD_SERVER_ACTIVE;
+         kind <= WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM;
          ++kind) {
         worr_native_readiness_record_v1 record;
         worr_native_readiness_record_v1 output;
@@ -609,6 +610,13 @@ static void test_every_single_value_bit_is_rejected(void)
                 break;
             }
             CHECK(rejected);
+            if (parser.phase !=
+                WORR_NATIVE_READINESS_SIDEBAND_PHASE_POISONED) {
+                fprintf(stderr,
+                        "single-bit rejection pair=%u bit=%u phase=%u "
+                        "observed=%u\n",
+                        pair_index, bit, parser.phase, observed);
+            }
             CHECK(parser.phase ==
                   WORR_NATIVE_READINESS_SIDEBAND_PHASE_POISONED);
             CHECK(Worr_NativeReadinessSidebandPacketEndV1(&parser) ==

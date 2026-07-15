@@ -22,8 +22,10 @@ extern "C" {
 /*
  * Isolated FR-10-T04 endpoint-readiness state machine.  This core owns no
  * pointers, transport, storage, clock, or random-number generator and does
- * not advertise WORR_NET_CAP_NATIVE_ENVELOPE_V1.  The caller supplies every
- * nonzero readiness nonce and is responsible for carrying records reliably.
+ * not advertise native capabilities.  The caller supplies every nonzero
+ * readiness nonce and is responsible for carrying records reliably.  Every
+ * private binding requires both NATIVE_ENVELOPE_V1 and
+ * NATIVE_EPOCH_CANCEL_V1; the public legacy-stage offer remains independent.
  */
 #define WORR_NATIVE_READINESS_ABI_VERSION 1u
 
@@ -40,12 +42,16 @@ typedef enum worr_native_readiness_phase_v1_e {
     WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE = 4,
     WORR_NATIVE_READINESS_PHASE_CLIENT_ACTIVE = 5,
     WORR_NATIVE_READINESS_PHASE_FAILED = 6,
+    /* Opt-in NATIVE_ENVELOPE + NATIVE_EVENT_STREAM + EPOCH_CANCEL extension. */
+    WORR_NATIVE_READINESS_PHASE_SERVER_WAIT_CLIENT_ACTIVE_CONFIRM = 7,
 } worr_native_readiness_phase_v1;
 
 typedef enum worr_native_readiness_record_kind_v1_e {
     WORR_NATIVE_READINESS_RECORD_CHALLENGE = 1,
     WORR_NATIVE_READINESS_RECORD_CLIENT_READY = 2,
     WORR_NATIVE_READINESS_RECORD_SERVER_ACTIVE = 3,
+    /* Valid only for an opt-in native event-stream capability binding. */
+    WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM = 4,
 } worr_native_readiness_record_kind_v1;
 
 typedef enum worr_native_readiness_result_v1_e {
@@ -142,7 +148,9 @@ bool Worr_NativeReadinessStateValidateV1(
  * and emits CHALLENGE.  State and output must be disjoint and remain untouched
  * on failure.  timeout_ticks is nonzero and now_tick + timeout_ticks must fit.
  * For both Init entry points, transport_epoch identifies the fresh connection
- * incarnation and must be globally non-reused by the caller.
+ * incarnation and must be globally non-reused by the caller.  Before an
+ * adapter emits the returned CHALLENGE, it must have made all server-owned
+ * retained work from older epochs terminal and unable to emit later.
  */
 worr_native_readiness_result_v1 Worr_NativeReadinessServerInitV1(
     worr_native_readiness_state_v1 *state_out,
@@ -170,6 +178,7 @@ worr_native_readiness_result_v1 Worr_NativeReadinessClientInitV1(
  * connection incarnation must receive a globally non-reused transport_epoch;
  * that caller-owned invariant prevents an old valid CHALLENGE from binding to
  * a newly initialized client and cannot be enforced by this pointer-free core.
+ * ServerAdvanceEpoch has the same cancellation precondition as ServerInit.
  */
 worr_native_readiness_result_v1 Worr_NativeReadinessServerAdvanceEpochV1(
     worr_native_readiness_state_v1 *state,
@@ -187,8 +196,27 @@ worr_native_readiness_result_v1 Worr_NativeReadinessClientAdvanceEpochV1(
     uint64_t timeout_ticks);
 
 /*
- * Exact transition chain:
+ * Command transition chain:
  *   CHALLENGE -> CLIENT_READY -> SERVER_ACTIVE.
+ *
+ * NATIVE_EPOCH_CANCEL_V1 makes the first two records reliable lifecycle
+ * declarations.  CHALLENGE declares that the server has canceled all of its
+ * retained work older than transport_epoch.  CLIENT_READY exactly echoes the
+ * epoch/capability/nonce binding and declares that the client has likewise
+ * canceled all of its older retained work before emitting the response.  An
+ * adapter must satisfy that client-side precondition before calling
+ * ClientObserveChallengeV1.  This pointer-free core validates and repeats the
+ * declarations but cannot perform adapter-owned cancellation.  Exact
+ * duplicates only reassert the same barrier and do not start a new lifecycle.
+ *
+ * A binding containing NATIVE_ENVELOPE_V1, NATIVE_EVENT_STREAM_V1, and
+ * NATIVE_EPOCH_CANCEL_V1 opts into the extended transition chain:
+ *   CHALLENGE -> CLIENT_READY -> SERVER_ACTIVE -> CLIENT_ACTIVE_CONFIRM.
+ * The server remains in SERVER_WAIT_CLIENT_ACTIVE_CONFIRM until the exact
+ * fourth record is accepted.  Native server RX is safe in that wait phase so
+ * an application hook can admit DATA appended to the same packet as the
+ * reliable confirmation; native server TX stays closed.  Existing bindings do
+ * not enter that phase and retain the original three-record behavior.
  *
  * Every mutable object, input record, and output record must be pairwise
  * disjoint.  Invalid arguments/aliasing leave all objects untouched.  A valid
@@ -212,6 +240,33 @@ worr_native_readiness_result_v1 Worr_NativeReadinessClientObserveServerActiveV1(
     const worr_native_readiness_record_v1 *server_active,
     uint64_t now_tick);
 
+/*
+ * Event-stream-only client transition.  It accepts SERVER_ACTIVE and emits
+ * the exact CLIENT_ACTIVE_CONFIRM atomically.  Exact duplicate SERVER_ACTIVE
+ * records reproduce the same confirmation.  The legacy entry point above
+ * rejects event-stream bindings without mutation so activation cannot
+ * silently omit the explicit confirmation barrier.
+ */
+worr_native_readiness_result_v1
+Worr_NativeReadinessClientObserveServerActiveWithConfirmV1(
+    worr_native_readiness_state_v1 *state,
+    const worr_native_readiness_record_v1 *server_active,
+    uint64_t now_tick,
+    worr_native_readiness_record_v1 *client_active_confirm_out);
+
+/*
+ * Event-stream-only server transition.  The exact confirmation opens native
+ * server TX; RX was already safe in the wait phase because application hooks
+ * run before legacy setting parsing.  Exact duplicates after activation are
+ * idempotent.  Missing, corrupt, out-of-order, or binding-mismatched records
+ * remain fail-closed.
+ */
+worr_native_readiness_result_v1
+Worr_NativeReadinessServerObserveClientActiveConfirmV1(
+    worr_native_readiness_state_v1 *state,
+    const worr_native_readiness_record_v1 *client_active_confirm,
+    uint64_t now_tick);
+
 /* Waiting states fail closed at now_tick >= deadline_tick. */
 worr_native_readiness_result_v1 Worr_NativeReadinessCheckDeadlineV1(
     worr_native_readiness_state_v1 *state,
@@ -220,7 +275,11 @@ worr_native_readiness_result_v1 Worr_NativeReadinessCheckDeadlineV1(
 /*
  * Client receive becomes safe after CHALLENGE was accepted and local adapter
  * setup completed before CLIENT_READY emission.  Server receive/transmit and
- * client transmit become safe only in their respective ACTIVE phases.  Live
+ * client transmit normally become safe only in their respective ACTIVE
+ * phases.  The event-stream extension additionally makes server receive safe
+ * in SERVER_WAIT_CLIENT_ACTIVE_CONFIRM: the application RX hook runs before
+ * the legacy parser can consume a reliable confirmation carried in that same
+ * packet.  Server transmit remains closed until final SERVER_ACTIVE.  Live
  * adapters must use these mutating gates immediately before every native RX/TX
  * admission; each gate applies the same sticky clock/deadline check as
  * Worr_NativeReadinessCheckDeadlineV1 before testing the phase.

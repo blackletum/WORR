@@ -23,6 +23,7 @@ change game behavior on the fly.*/
 #include "../g_local.hpp"
 #include "../network/event_shadow.hpp"
 #include "../network/lag_compensation.hpp"
+#include "../network/local_action_observation.hpp"
 #include "../../../../inc/shared/bot_admin_audit_status.h"
 #include "../../../../inc/shared/bot_chat_policy_status.h"
 #include "../../../../inc/shared/bot_frame_command.h"
@@ -1549,6 +1550,7 @@ Q2GAME_API game_export_t *GetGameAPI(game_import_t *import) {
   gi = *import;
 
   SG_EventShadowInitialize();
+  SG_LocalActionObservationInitialize();
 
   InitServerLogging();
 
@@ -2587,6 +2589,8 @@ static inline void G_RunFrame_(bool main_loop) {
 
   // --- Finalize Frame ---
   ClientEndServerFrames();
+  if (deathmatch->integer)
+    LagCompensation_RecordMovers();
   HostAutoScreenshotsRun();
 
   // --- Heatmap thinking ---

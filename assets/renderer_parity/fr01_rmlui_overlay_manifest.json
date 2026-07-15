@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "scenes": [
+    {
+      "id": "rmlui-runtime-overlay",
+      "capture": "rmlui_core_runtime_smoke.tga",
+      "crop": [0, 0, 960, 720],
+      "metrics": {
+        "pixel_threshold": 0,
+        "max_mean_absolute_rgb": [0, 0, 0],
+        "max_pixels_over_threshold_percent": 0
+      }
+    },
+    {
+      "id": "rmlui-main-shell",
+      "capture": "rmlui_main.tga",
+      "crop": [0, 0, 960, 720],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [0.32, 0.28, 0.22],
+        "max_pixels_over_threshold_percent": 1.0
+      }
+    },
+    {
+      "id": "rmlui-performance-settings",
+      "capture": "rmlui_performance.tga",
+      "crop": [0, 0, 960, 720],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [0.2, 0.2, 0.17],
+        "max_pixels_over_threshold_percent": 0.7
+      }
+    },
+    {
+      "id": "rmlui-quit-confirm-popup",
+      "capture": "rmlui_quit_confirm.tga",
+      "crop": [0, 0, 960, 720],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [0.14, 0.12, 0.10],
+        "max_pixels_over_threshold_percent": 0.4
+      }
+    },
+    {
+      "id": "rmlui-leave-match-confirm-popup",
+      "capture": "rmlui_leave_match_confirm.tga",
+      "crop": [0, 0, 960, 720],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [0.13, 0.12, 0.10],
+        "max_pixels_over_threshold_percent": 0.4
+      }
+    },
+    {
+      "id": "rmlui-forfeit-confirm-popup",
+      "capture": "rmlui_forfeit_confirm.tga",
+      "crop": [0, 0, 960, 720],
+      "metrics": {
+        "pixel_threshold": 8,
+        "max_mean_absolute_rgb": [0.14, 0.12, 0.10],
+        "max_pixels_over_threshold_percent": 0.4
+      }
+    }
+  ]
+}

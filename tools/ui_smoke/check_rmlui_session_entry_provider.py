@@ -15,6 +15,7 @@ RUNTIME = Path("src/client/ui_rml/ui_rml_runtime.cpp")
 CLIENT_RML = Path("src/client/ui_rml/ui_rml.cpp")
 SESSION_PUBLISHER = Path("src/game/sgame/menu/menu_page_welcome.cpp")
 SESSION_COMMANDS = Path("src/game/sgame/commands/command_client.cpp")
+SESSION_UI_UPDATE = Path("src/game/sgame/player/p_view.cpp")
 SESSION_THEME = Path("assets/ui/rml/common/theme/session.rcss")
 ACCESSIBILITY_THEME = Path("assets/ui/rml/common/theme/accessibility.rcss")
 SESSION_ROUTES = Path("assets/ui/rml/session/routes.json")
@@ -31,8 +32,8 @@ DOCUMENTS = {
 
 EXPECTED_VERSIONS = {
     "dm_welcome": "2",
-    "dm_join": "3",
-    "join": "3",
+    "dm_join": "4",
+    "join": "4",
     "dm_hostinfo": "2",
     "dm_matchinfo": "2",
 }
@@ -74,8 +75,15 @@ PUBLISHED_CVARS = (
     "ui_dm_spectator_count",
     "ui_dm_subtitle",
     "ui_dm_teamplay",
+    "ui_dm_tab_server_available",
     "ui_dm_time_limit",
     "ui_dm_title",
+    "ui_dm_vote_active",
+    "ui_dm_vote_caller",
+    "ui_dm_vote_can_vote",
+    "ui_dm_vote_proposal",
+    "ui_dm_vote_status",
+    "ui_dm_vote_time_left",
     "ui_hostinfo_host",
     "ui_hostinfo_motd",
     "ui_hostinfo_server",
@@ -149,6 +157,10 @@ def _validate_runtime(repo_root: Path, errors: list[str]) -> None:
             '!Cvar_VariableInteger("ui_dm_initial")',
             'Cvar_VariableInteger("ui_dm_show_resume")',
             'UI_Rml_InsertCommandSequence("ui_rml_runtime_close",',
+            "UI_Rml_AttachElementTooltipListeners",
+            'Cvar_Get("ui_local_time"',
+            'Cvar_Get("ui_local_date"',
+            "UI_Rml_UpdateLocalClock(realtime, false)",
             "UI_Rml_RemoteSessionCommandWhenConnected",
             "cls.state >= ca_connected",
             '!strcmp(command, "worr_dm_join_close")',
@@ -201,8 +213,23 @@ def _validate_publisher(repo_root: Path, errors: list[str]) -> None:
             'RegisterCommand("worr_dm_hostinfo"',
             'RegisterCommand("worr_dm_matchinfo"',
             'RegisterCommand("worr_welcome_continue"',
+            "ent->client->initialMenu.dmJoinActive",
+            "OpenDmJoinMenu(ent);",
         ),
         "session command registration",
+        errors,
+    )
+
+    update = _read(repo_root / SESSION_UI_UPDATE, errors)
+    _require(
+        update,
+        (
+            "Vote_Session_Active()",
+            "cl->initialMenu.dmJoinActive",
+            "cl->ui.voteActive = true;",
+            "RefreshDmJoinMenu(ent);",
+        ),
+        "embedded match-hub vote ownership",
         errors,
     )
 
@@ -263,6 +290,87 @@ def _validate_hub(route_id: str, root: ElementTree.Element, errors: list[str]) -
     for element_id in required_ids:
         if element_id not in elements:
             errors.append(f"{route_id} is missing required live control: {element_id}")
+
+    logo = next(
+        (
+            element
+            for element in root.iter("img")
+            if "match-hub-logo" in element.attrib.get("class", "").split()
+        ),
+        None,
+    )
+    if logo is None or logo.attrib.get("src") != "../common/brand/logo-session.png":
+        errors.append(f"{route_id} must use the normal WORR menu logo")
+
+    tabs = elements.get(f"{prefix}-tabs")
+    expected_tabs = (
+        f"{prefix}-overview-tab",
+        f"{prefix}-server-tab",
+        f"{prefix}-vote-tab",
+        f"{prefix}-mymap-tab",
+        f"{prefix}-admin-tab",
+    )
+    actual_tabs = (
+        tuple(child.attrib.get("id") for child in list(tabs))
+        if tabs is not None
+        else ()
+    )
+    if actual_tabs != expected_tabs:
+        errors.append(
+            f"{route_id} must expose the ordered Overview, Server Info, Voting, MyMap, Admin tab rail"
+        )
+    overview_tab = elements.get(f"{prefix}-overview-tab")
+    if overview_tab is None or overview_tab.attrib.get("aria-current") != "page":
+        errors.append(f"{route_id} must explicitly mark Overview as the active tab")
+    tab_conditions = {
+        f"{prefix}-server-tab": "ui_dm_tab_server_available!=0",
+        f"{prefix}-vote-tab": "ui_dm_show_callvote!=0",
+        f"{prefix}-mymap-tab": "ui_dm_show_mymap!=0",
+        f"{prefix}-admin-tab": "ui_dm_show_admin!=0",
+    }
+    for tab_id, condition in tab_conditions.items():
+        tab = elements.get(tab_id)
+        if tab is None or tab.attrib.get("data-enable-if") != condition:
+            errors.append(f"{route_id} tab {tab_id} must disable from {condition}")
+        elif "data-visible-if" in tab.attrib:
+            errors.append(f"{route_id} tab {tab_id} must remain visible when unavailable")
+
+    overview = elements.get(f"{prefix}-overview")
+    active_vote = elements.get(f"{prefix}-active-vote")
+    if overview is None or overview.attrib.get("data-visible-if") != "ui_dm_vote_active=0":
+        errors.append(f"{route_id} Overview must yield its pane to an active vote")
+    if active_vote is None or active_vote.attrib.get("data-visible-if") != "ui_dm_vote_active!=0":
+        errors.append(f"{route_id} must expose the embedded active-vote pane")
+    proposal = elements.get(f"{prefix}-vote-proposal")
+    if (
+        proposal is None
+        or proposal.tag != "span"
+        or proposal.attrib.get("data-bind") != "cvars.ui_dm_vote_proposal"
+    ):
+        errors.append(
+            f"{route_id} vote proposal must bind through a stable child span"
+        )
+    for suffix, command in (("vote-yes", "worr_vote_yes"), ("vote-no", "worr_vote_no")):
+        vote_button = elements.get(f"{prefix}-{suffix}")
+        if (
+            vote_button is None
+            or vote_button.attrib.get("data-command") != command
+            or vote_button.attrib.get("data-enable-if") != "ui_dm_vote_can_vote!=0"
+        ):
+            errors.append(f"{route_id} embedded {suffix} must preserve live vote eligibility")
+
+    tooltip = elements.get(f"{prefix}-tooltip")
+    if tooltip is None or tooltip.attrib.get("data-tooltip-region") != "true":
+        errors.append(f"{route_id} footer must be reserved for hover/focus context help")
+
+    bound_cvars = {
+        element.attrib.get("data-bind", "").removeprefix("cvars.")
+        for element in root.iter()
+        if element.attrib.get("data-bind", "").startswith("cvars.")
+    }
+    for cvar_name in ("ui_local_time", "ui_local_date"):
+        if cvar_name not in bound_cvars:
+            errors.append(f"{route_id} is missing real-world {cvar_name} binding")
 
     red = elements.get(f"{prefix}-red")
     free = elements.get(f"{prefix}-free")
@@ -372,6 +480,10 @@ def _validate_styles_and_capture(repo_root: Path, errors: list[str]) -> None:
             ".match-hub-shell",
             ".match-hub-stat-grid",
             ".match-hub-join-actions",
+            ".match-hub-tab-indicator",
+            "button.match-hub-tab:disabled",
+            ".match-hub-active-vote",
+            ".match-hub-tooltip",
             ".session-info-list",
             ".session-info-row",
             ".session-info-line",
@@ -387,6 +499,8 @@ def _validate_styles_and_capture(repo_root: Path, errors: list[str]) -> None:
         accessibility,
         (
             ".ui-high-visibility .match-hub-shell",
+            ".ui-high-visibility .match-hub-active-vote",
+            ".ui-high-visibility .match-hub-tooltip",
             ".ui-high-visibility .session-info-row",
             ".ui-high-visibility .session-info-line",
         ),

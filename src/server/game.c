@@ -1026,6 +1026,11 @@ static uint32_t PF_ServerFrame(void)
     return sv.framenum;
 }
 
+static uint64_t PF_ServerSimulationTimeUs(void)
+{
+    return sv.worr_server_time_us;
+}
+
 static void PF_SendToClipboard(const char* text)
 {
 #if USE_CLIENT
@@ -1119,6 +1124,7 @@ static const game_import_t game_import = {
     .Draw_Arrow = PF_Draw_Arrow,
     .ReportMatchDetails_Multicast = PF_ReportMatchDetails_Multicast,
     .ServerFrame = PF_ServerFrame,
+    .ServerSimulationTimeUs = PF_ServerSimulationTimeUs,
     .SendToClipBoard = PF_SendToClipboard,
 
     .Info_ValueForKey = PF_Info_ValueForKey,

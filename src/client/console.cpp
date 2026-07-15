@@ -318,6 +318,8 @@ static void toggle_console(consoleMode_t mode, chatMode_t chat) {
 
 void Con_ToggleConsole_f(void) { toggle_console(CON_DEFAULT, CHAT_NONE); }
 
+static void Con_CloseConsole_f(void) { Con_Close(true); }
+
 /*
 ================
 Con_Clear_f
@@ -592,6 +594,7 @@ static void con_timestampscolor_changed(cvar_t *self) {
 
 static const cmdreg_t c_console[] = {
     {"toggleconsole", Con_ToggleConsole_f},
+    {"closeconsole", Con_CloseConsole_f},
     {"messagemode", Con_MessageMode_f},
     {"messagemode2", Con_MessageMode2_f},
     {"remotemode", Con_RemoteMode_f, CL_RemoteMode_c},

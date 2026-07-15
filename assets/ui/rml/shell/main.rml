@@ -5,34 +5,36 @@
     <link type="text/rcss" href="../common/theme/shell.rcss" />
     <link type="text/rcss" href="../common/theme/accessibility.rcss" />
   </head>
-  <body id="shell-main" data-route-id="main" data-route-group="shell" data-route-version="1" data-document-status="first-round-scaffold" data-menu-music="menu" data-menu-sound-open="open">
+  <body id="shell-main" data-route-id="main" data-route-group="shell" data-route-version="2" data-document-status="live-provider" data-menu-music="menu" data-menu-sound-open="open">
     <div class="screen shell-screen" id="main-screen">
-      <header class="worr-topbar">
-        <div class="worr-brandplate"><img src="../common/icons/brand/worr-mark.png" /></div>
+      <header class="worr-topbar main-topbar">
         <div class="worr-topbar-spacer"></div>
         <div class="worr-topbar-cluster">
           <button id="shell-main-topbar-settings" class="worr-iconbtn" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open"><img src="../common/icons/widgets/gear.png" /></button>
           <button id="shell-main-topbar-quit" class="worr-iconbtn" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert"><img src="../common/icons/widgets/power.png" /></button>
         </div>
       </header>
-      <div class="menu-header">
-        <h1>WORR</h1>
-      </div>
 
       <div class="menu-stack hero-menu" id="main-menu-stack" data-component="common.components.menu_frame">
         <img id="main-logo" src="../common/brand/logo-menu.png" />
         <div class="menu-actions" id="main-menu-actions">
-          <button id="main-singleplayer" type="button" data-command="pushmenu singleplayer" data-route-target="singleplayer" data-menu-sound="open" data-loc-key="m_single_player">Single Player</button>
-          <button id="main-multiplayer" type="button" data-command="pushmenu multiplayer" data-route-target="multiplayer" data-menu-sound="open" data-loc-key="m_multiplayer">Multiplayer</button>
-          <button id="main-options" type="button" data-command="pushmenu options" data-route-target="options" data-menu-sound="open" data-loc-key="m_options">Options</button>
-          <button id="main-quit" class="ui-button-danger" type="button" data-command="ui.popup" data-route-target="quit_confirm" data-menu-sound="alert" data-loc-key="m_quit">Quit</button>
+          <button id="main-singleplayer" class="main-choice main-choice-campaign" type="button" data-command="pushmenu singleplayer" data-route-target="singleplayer" data-menu-sound="open">
+            <span class="main-choice-caption">
+              <span class="main-choice-kicker" data-loc-key="worr_ui_campaign">Campaign</span>
+              <span class="main-choice-title" data-loc-key="m_single_player">Single Player</span>
+              <span class="main-choice-copy" data-loc-key="worr_ui_fight_the_war_alone">Fight the war alone</span>
+            </span>
+          </button>
+          <button id="main-multiplayer" class="main-choice main-choice-arena" type="button" data-command="pushmenu multiplayer" data-route-target="multiplayer" data-menu-sound="open">
+            <span class="main-choice-caption">
+              <span class="main-choice-kicker" data-loc-key="worr_ui_arena">Arena</span>
+              <span class="main-choice-title" data-loc-key="m_multiplayer">Multiplayer</span>
+              <span class="main-choice-copy" data-loc-key="worr_ui_join_the_fight_online">Join the fight online</span>
+            </span>
+          </button>
         </div>
-        <p id="main-player-name"><span class="label" data-loc-key="worr_ui_player">Player:</span> <span class="value" data-bind-cvar="name">Player</span></p>
       </div>
 
-      <div class="menu-footer" id="main-menu-footer">
-        <button id="main-close" type="button" data-command="ui.close" data-menu-sound="cancel" data-loc-key="worr_ui_close">Close</button>
-      </div>
       <footer class="worr-statusbar">
         <span class="worr-statusbar-id" data-bind-cvar="name">Player</span>
         <span class="worr-statusbar-version">WORR <span data-bind-cvar="version">dev</span></span>
