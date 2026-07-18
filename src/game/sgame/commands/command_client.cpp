@@ -12,6 +12,7 @@ commands_client.cpp - Implements all general client-side commands.*/
 #include "../gameplay/client_config.hpp"
 #include "../monsters/m_player.hpp"
 #include "../menu/menu_ui_list.hpp"
+#include "../network/local_action_weapon_catalog.hpp"
 #include "../../bgame/weapon_pref_utils.hpp"
 #include <string>
 #include <format>
@@ -246,32 +247,9 @@ Allows the losing player in a duel to forfeit the match.
 		constexpr size_t kChatMaxLen = 256;
 
 		Weapon WeaponFromItemId(item_id_t id) {
-			switch (id) {
-			case IT_WEAPON_GRAPPLE: return Weapon::GrapplingHook;
-			case IT_WEAPON_BLASTER: return Weapon::Blaster;
-			case IT_WEAPON_CHAINFIST: return Weapon::Chainfist;
-			case IT_WEAPON_SHOTGUN: return Weapon::Shotgun;
-			case IT_WEAPON_SSHOTGUN: return Weapon::SuperShotgun;
-			case IT_WEAPON_MACHINEGUN: return Weapon::Machinegun;
-			case IT_WEAPON_ETF_RIFLE: return Weapon::ETFRifle;
-			case IT_WEAPON_CHAINGUN: return Weapon::Chaingun;
-			case IT_AMMO_GRENADES: return Weapon::HandGrenades;
-			case IT_AMMO_TRAP: return Weapon::Trap;
-			case IT_AMMO_TESLA: return Weapon::TeslaMine;
-			case IT_WEAPON_GLAUNCHER: return Weapon::GrenadeLauncher;
-			case IT_WEAPON_PROXLAUNCHER: return Weapon::ProxLauncher;
-			case IT_WEAPON_RLAUNCHER: return Weapon::RocketLauncher;
-			case IT_WEAPON_HYPERBLASTER: return Weapon::HyperBlaster;
-			case IT_WEAPON_IONRIPPER: return Weapon::IonRipper;
-			case IT_WEAPON_PLASMAGUN: return Weapon::PlasmaGun;
-			case IT_WEAPON_PLASMABEAM: return Weapon::PlasmaBeam;
-			case IT_WEAPON_THUNDERBOLT: return Weapon::Thunderbolt;
-			case IT_WEAPON_RAILGUN: return Weapon::Railgun;
-			case IT_WEAPON_PHALANX: return Weapon::Phalanx;
-			case IT_WEAPON_BFG: return Weapon::BFG10K;
-			case IT_WEAPON_DISRUPTOR: return Weapon::Disruptor;
-			default: return Weapon::None;
-			}
+			if (id == IT_WEAPON_GRAPPLE)
+				return Weapon::GrapplingHook;
+			return SG_LocalActionWeaponIndexFromItem(id);
 		}
 
 		std::string ShortWeaponName(const Item* weapon) {

@@ -19,6 +19,52 @@ Create a repository-grounded SWOT and convert it into actionable, task-based pro
     Vulkan validation.
   - Converted every known partial/missing parity or modernization row into
     `FR-01-T08..T15` or the existing `FR-02-T13..T15` tasks.
+  - Completed the `FR-01-T14` shared material-desaturation slice: Video
+    settings now use renderer-neutral `r_texture_saturation`, while
+    `gl_saturation` remains a synchronized compatibility alias. Vulkan applies
+    OpenGL's weighted-luminance wall transform natively before picmip/mip
+    generation and excludes turbulent, no-adjust, and glow-companion data.
+    The staged validation fixture exact-compares 235,200 pixels, including
+    exact 219,459-pixel authored and 15,741-pixel replacement grayscale masks.
+    Details: `docs-dev/renderer/vulkan-shared-texture-saturation-control-parity-2026-07-17.md`.
+  - Completed the `FR-01-T14` shared lightmap-brightness control slice:
+    `r_lightmap_brightness` now drives both native receiver uniform paths and
+    synchronizes legacy `gl_brightness`. The nonzero `0.2` staged gate
+    exact-compares all 50,000 output pixels plus its full lightmap-add mask
+    under Vulkan validation. Details:
+    `docs-dev/renderer/vulkan-shared-lightmap-brightness-control-parity-2026-07-17.md`.
+  - Completed the `FR-01-T14` shared lightmap-saturation control slice:
+    Video settings now use `r_lightmap_saturation` while legacy
+    `gl_coloredlightmaps` remains synchronized. Vulkan rebuilds its native
+    atlas through the ordinary dirty-rectangle update and desaturates
+    CPU-sampled entity light in the same order as OpenGL. The staged
+    validation gate proves a 47,300-pixel coloured authored inline-lightmap
+    mask at IoU `1.0`, with no difference greater than one RGB level. Details:
+    `docs-dev/renderer/vulkan-shared-lightmap-saturation-control-parity-2026-07-17.md`.
+  - Completed the `FR-01-T14` shared texture-intensity control slice: all
+    Video menus now write the archived canonical `r_intensity` cvar, while legacy
+    `intensity` remains a synchronized compatibility alias. Vulkan forwards
+    the runtime value through native receiver uniforms for world and entity
+    material paths; the new staged non-default gate covers an opaque
+    texture-replace wall under Vulkan validation; its 235,200-pixel crop is
+    exact and its 219,459-pixel doubled-intensity mask has IoU `1.0`. Details:
+    `docs-dev/renderer/vulkan-shared-texture-intensity-control-parity-2026-07-17.md`.
+  - Completed the `FR-01-T14` shared vertical-sync control slice: Video menus
+    now write archived `r_vsync`, with `gl_swapinterval` kept as a synchronized
+    compatibility alias. Vulkan recreates only its native swapchain at the
+    frame boundary and selects FIFO for VSync or IMMEDIATE/MAILBOX when it is
+    disabled; no renderer redirect or asset reload is involved. Its live
+    post-map disable gate exact-compares 235,200 pixels, including 219,459
+    authored and 15,741 replacement wall pixels at IoU `1.0`. Details:
+    `docs-dev/renderer/vulkan-shared-vsync-control-parity-2026-07-17.md`.
+  - Completed the `FR-01-T14` shared texture-gamma control slice: native
+    Vulkan now mirrors OpenGL's non-hardware-gamma wall/skin upload curve from
+    shared `r_gamma`, keeps `vid_gamma` synchronized, and preserves the common
+    platform gamma-ramp path without a Vulkan-to-OpenGL redirect. Its
+    non-identity gate exact-compares 235,200 pixels, including 219,459
+    authored and 15,741 replacement gamma-adjusted material pixels at IoU
+    `1.0`. Details:
+    `docs-dev/renderer/vulkan-shared-texture-gamma-control-parity-2026-07-17.md`.
   - Completed `FR-01-T08` native Vulkan debug overlays and diagnostics:
     world-space lines/shapes/stroke-font text are recorded through native
     depth/no-depth Vulkan line pipelines; renderer stats and `vk_stats` now
@@ -1876,6 +1922,26 @@ Tasks:
   192 upload bytes. This is localized evidence rather than a renderer-wide
   GPU budget. Details:
   docs-dev/renderer/vulkan-static-world-texture-replace-no-fog-2026-07-16.md.
+  Global `r_fullbright` lightmapped static-world batches now reuse those same
+  native texture-replace modules rather than running the generic shader's
+  inert lightmap, glow-map, normal, shadow, and receiver-light work. The
+  strict opaque-material gate preserves alpha-tested, translucent, warped, and
+  sky fallbacks. A validation-clean 34,000-pixel global-fullbright world crop
+  is exact across OpenGL and Vulkan; a 100-sample Iris Xe control lowers
+  Vulkan opaque-world GPU p50 from 0.978 to 0.377 ms (61.5%) and completed
+  GPU-frame p50 from 1.038 to 0.438 ms (57.8%), with unchanged draw/upload
+  counts. This is localized native GPU evidence, not a renderer-wide
+  Vulkan/OpenGL budget. Details:
+  docs-dev/renderer/vulkan-global-fullbright-world-fast-path-2026-07-17.md.
+  The dense 6-by-6 inline-BSP lane now has a complementary provenance-bound
+  native full-frame GPU regression budget: 100 warm-trimmed samples on Iris Xe
+  record `0.59433 ms` mean / `0.524 ms` p50 Vulkan full-frame GPU time,
+  `0.2778 ms` CPU mean, 18 draws, and 4,800 uploaded bytes. It caps those
+  native values and requires valid full-frame timestamps for both backends,
+  but makes no GPU ratio claim: the same OpenGL capture has a `0.323 ms`
+  full-frame p50. This establishes a durable optimized-native baseline while
+  leaving the cross-renderer GPU gap open. Details:
+  `docs-dev/renderer/vulkan-dense-inline-bsp-full-frame-budget-2026-07-17.md`.
   A durable alpha-cutout world/inline-BSP gate now matches OpenGL's
   alpha-less-than-or-equal-to-0.666 discard threshold in the general native
   world fragment path. Its generated map uses a low-alpha front static face,
@@ -2045,7 +2111,60 @@ Tasks:
   `docs-dev/renderer/vulkan-linear-scene-presentation-architecture-2026-07-16.md`,
   `docs-dev/renderer/vulkan-scene-presentation-pass-split-2026-07-16.md`, and
   `docs-dev/renderer/vulkan-float-scene-hdr-activation-2026-07-16.md`, and
-  `docs-dev/renderer/vulkan-auto-exposure-float-scene-2026-07-16.md`.
+  `docs-dev/renderer/vulkan-auto-exposure-float-scene-2026-07-16.md`. The
+  2026-07-17 native MSAA slice closes the prior silent-control gap:
+  `r_multisamples` is shared with OpenGL, Vulkan clamps it to legal native
+  device/format capability, and render-pass2 resolves multisampled color plus
+  sample-zero depth/stencil for direct, float-HDR, and scaled scene families.
+  Scene world/entity/debug/UI pipelines match the selected count, while
+  post-process inputs retain resolved single-sample images. The 4x static
+  gate is exact over 235,200 pixels with clean validation; the 4x RmlUi
+  main-shell gate also passes at 691,200 pixels. The historical release
+  telemetry records a 2.0706x Vulkan GPU-frame cost from 0x to 4x on Intel
+  Iris Xe; after the native global-fullbright world optimization, a fresh
+  100-sample rerun reports 4.4876x and isolates the added time to
+  scene-pass completion/resolution, not the opaque-world shader. A native
+  colour-only MSAA render-pass variant now elides depth/stencil resolve when
+  liquid refraction, DOF, and depth-sampled rim bloom are all inactive. Its
+  `vk_stats` counter is one per static-world frame, exact validation still
+  covers 235,200 pixels, and the same 100-sample slice reduces Vulkan mean
+  full-frame GPU time from `1.97537 ms` to `1.10714 ms` (43.95%). The guard
+  records zero elisions for depth-aware DOF. That strict 4x gate now passes
+  without changing its threshold: OpenGL's DOF inputs are internally
+  single-sample, so Vulkan creates compatible native single-sample scene and
+  liquid-load render passes plus matching scene-pipeline variants only for an
+  active DOF frame. It does not change `r_multisamples` or redirect rendering
+  to OpenGL; ordinary frames retain native MSAA and the color-only fast path.
+  The original 307,200-pixel gate has maximum RGB error `[1, 1, 1]`, MAE
+  `[0.004349, 0.004935, 0.002051]`, and zero pixels above error one. Its new
+  eight-fixture matrix also passes under validation. The new
+  `msaa_single_sample_dof_scene_frames` counter is `1.0` over 100 warm DOF
+  frames while depth-resolve elisions are `0.0`; the complementary non-DOF 4x
+  workload has those values reversed (`0.0` / `1.0`). Broader HDR/scaled/
+  post-effect coverage, broader liquid-refraction evidence, and product
+  performance budgets remain open; see
+  `docs-dev/renderer/vulkan-native-msaa-resolve-2026-07-17.md` and
+  `docs-dev/renderer/vulkan-msaa-depth-aware-postprocess-scene-parity-2026-07-17.md`.
+  The fixed-half 4x scale follow-up establishes that OpenGL's scaled offscreen
+  FBO is also single-sample. Vulkan now selects the same native companion for
+  an MSAA scaled scene and records it separately through
+  `msaa_single_sample_scaled_scene_frames`; direct presentation still uses the
+  requested native MSAA. The native DOF composite preserves OpenGL's virtual
+  UI quad (including retained menu-target history), and its paired Gaussian
+  weights are pre-normalized so the fragment loop has no normalization divide.
+  The validation-enabled scaled DOF-disabled control is exact over 307,200
+  pixels. The active inventory-layout scene is bounded to MAE
+  `[0.005758, 0.043229, 0.005745]` and 0.267253% pixels above RGB error one,
+  within its explicit 0.3% / `[0.01, 0.05, 0.01]` gate. The explicit scaled
+  `quit_confirm` menu rectangle holds MAE `[0.005697, 0.041803, 0.005697]`
+  under the same bound, while both 4x DOF-disabled controls and the no-menu
+  scaled DOF control remain exact. Dynamic scaling, broader menu rectangles,
+  HDR, and final-presentation coverage remain open. Details are in
+  `docs-dev/renderer/vulkan-scaled-msaa-dof-parity-2026-07-17.md`. The same
+  headless probe corrected the `VK_STATS` phase field ordering: `gpu_scene_ms`
+  now serializes before post-process time, so GPU-validity values are no longer
+  shifted, while `vk_stats_log=1` confirms both scaled and DOF companion-path
+  counters on the native 4x fixed-half frame.
 - [ ] `FR-02-T14` Replace fixed worst-case shadow arrays with budgeted active capacity/resolution buckets, transactional allocation, capability-correct samplers, dirty-layer mip generation, and alpha-tested caster materials.
   Dependency: `FR-02-T12`. Priority: P1.
   Progress: The transient native shadow-caster stream starts at 64 KiB and
@@ -2120,6 +2239,18 @@ Tasks:
   Dependency: none. Priority: P1.
 - [ ] `FR-03-T11` Make video, gamma, lighting, and shadow controls renderer/capability aware and expose the shared `r_shadow*` controls.
   Dependency: `FR-02-T01`, `FR-02-T13`. Priority: P1.
+  Progress: The 2026-07-17 audit converted Video intensity, material gamma,
+  saturation, lightmap gain, filtering, anisotropy, picmip, and VSync to
+  native/shared controls. The former static `gl_shaders` selector now binds
+  all three Video routes to archived `r_renderer` values (`opengl`, `vulkan`,
+  `rtx`) and the existing native restart lifecycle; it no longer pretends an
+  OpenGL legacy-vs-GLSL cvar selects a renderer backend. The same routes now
+  bind anti-aliasing to shared `r_multisamples`; legacy `gl_multisamples`
+  remains synchronized and both renderers recreate native resources when it
+  changes. Build and
+  adapter-specific filtering/capability explanation remains open under
+  `FR-02-T01/T02` and this task. See
+  `docs-dev/renderer/vulkan-native-renderer-selection-control-2026-07-17.md`.
 
 Strategic note:
 - `FR-09` is now the long-term UI platform migration track. Remaining `FR-03`
@@ -4595,8 +4726,8 @@ Tasks:
   legacy-entity event production, descriptor-before-ID reliable retention,
   live full-duplex mixed packing, transactional epoch cancellation, and
   scheduler liveness. Command mode binds private `0x53`, event mode binds
-  private `0x73`, snapshot mode binds private `0x57`, combined `0x77` remains
-  unsupported, and public `0x03` remains unchanged. A
+  private `0x73`, snapshot mode binds private `0x57`, and the implemented
+  combined mode binds exact private `0x77`; public `0x03` remains unchanged. A
   deterministic in-process virtual link now drives the real client/server
   production hook callbacks through directional DATA loss, reorder,
   duplication, one-way ACK loss, corruption, and lifecycle traffic. Its first
@@ -4723,8 +4854,8 @@ Tasks:
   production pilot now gives eligible NEW client/server connections process-
   stable owners and registers the hooks behind `cl_worr_native_shadow=0` /
   `sv_worr_native_shadow=0`. Public capability offer/confirmation remains
-  exactly `0x03`; private readiness binds command `0x53`, event `0x73`, or
-  snapshot `0x57`, while combined `0x77` is rejected. Legacy
+  exactly `0x03`; private readiness binds command `0x53`, event `0x73`,
+  snapshot `0x57`, or combined event-plus-snapshot `0x77`. Legacy
   `MOVE`/`BATCH_MOVE` remains the sole command authority. After the exact
   written legacy range is known and no native record is retained, the client
   may retain its newest command and append one
@@ -4788,8 +4919,10 @@ Tasks:
   `0x03` tuple. A receive-only server binding admits client DATA during that
   confirmation wait but grants no early TX authority. Separate snapshot
   controls select private `0x57`, bind a nonzero canonical snapshot epoch in
-  the same 15-pair proof, and require the same fourth record. Event and
-  snapshot modes are mutually exclusive; future combined `0x77` is rejected.
+  the same 15-pair proof, and require the same fourth record. Enabling both
+  event and snapshot controls activates exact private `0x77`; fair DATA-lane
+  scheduling and disjoint low/high message-sequence ranges isolate semantic
+  ACK authority by record class.
   The server then copies exact final projections into a supersedable two-bank
   sender, while the real client RX owner defers semantic commit until the
   independently reconstructed legacy expectation exists. Its rolling
@@ -4887,9 +5020,21 @@ Tasks:
   broader full-matrix impairment breadth,
   ACK-exhaustion/map-rotation evidence,
   broader event-family production, comprehensive demo/spectator policy, load/
-  cross-platform parity, native gameplay/render snapshot authority, public
-  advertisement, and release-scale dual-adapter evidence remain open,
-  so
+  cross-platform parity, public advertisement, and release-scale dual-adapter
+  evidence remain open. A later
+  schema-v32 local-action slice now proves the private event carrier across a
+  real in-session shooter reconnect: three two-process repeats rebase to
+  command epoch 3 and match 45/45 receipts with zero unmatched, outstanding,
+  mismatch, conflict, or resync while normal Blaster damage remains
+  authoritative. This closes the narrow live cross-process action-receipt gap,
+  not the broader carrier/load/release matrix. The next private-carrier slice
+  activates exact combined `0x77`: a fair scheduler services event and snapshot
+  DATA, disjoint message-sequence lanes preserve semantic ACK class identity,
+  and variable legacy-prefix packets defer without corrupting the active native
+  dispatch. Three schema-v33 two-process runs match 99/99 exact local-action
+  receipts while both snapshot peers ACK and release retained frames with zero
+  client/server failure. This closes the narrow simultaneous-lane proof, not
+  public advertisement, sustained load, or the full fault/platform matrix, so
   `FR-10-T04` remains In Progress. No `q2proto/` file changed. Evidence:
   `docs-dev/fr-10-t04-native-envelope-foundation-2026-07-13.md`,
   `docs-dev/fr-10-t04-native-transport-session-retention-2026-07-13.md`,
@@ -4944,7 +5089,11 @@ Tasks:
   with the production adapter continuation in
   `docs-dev/fr-10-t04-t06-t07-production-native-snapshot-adapters-2026-07-16.md`,
   and the accepted serialized production corpus in
-  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`.
+  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`,
+  plus live reconnect receipt evidence in
+  `docs-dev/fr-10-t04-t05-t08-t09-t14-live-reconnect-local-action-authority-2026-07-18.md`,
+  and combined-lane evidence in
+  `docs-dev/fr-10-t04-t06-t14-combined-native-event-snapshot-shadow-2026-07-18.md`.
 - [ ] `FR-10-T05` Implement the typed, sequenced event journal with predictable,
   authoritative, reliable, and persistent delivery classes.
   Area: `bgame/cgame/sgame/client/server`. Priority: P0.
@@ -5077,12 +5226,13 @@ Tasks:
   emission legacy-event candidate copy-out into the default-off per-peer event
   shadow, plus a bounded Stage D native serialized snapshot semantic-admission
   transaction and default-off production final-emission TX/client RX
-  integration through the real netchan hooks. A deterministic two-run corpus
-  now carries 100,000 positive final projections through serialization,
+  integration through the real netchan hooks, combined private `0x77` delivery,
+  and source-gated remote-transform presentation authority. A deterministic
+  two-run corpus now carries 100,000 positive final projections through serialization,
   impairment, client admission, cgame prediction-authority selection, semantic
   ACK, and exact server release with golden digest `c6aee48df85341ab`.
-  Broader semantic/keyframe recovery, load/budget/release evidence, public
-  authority, and promotion remain open.
+  Broader semantic/keyframe recovery, previous-only presentation,
+  load/budget/release evidence, public authority, and broad promotion remain open.
   Definition of Done: distinct packet/snapshot/tick/baseline IDs are validated;
   acknowledged baselines recover under loss; no entity or payload limit
   truncates silently; and zero unexplained semantic mismatches occur across the
@@ -5163,7 +5313,12 @@ Tasks:
   two-bank server sender, receives them through the actual client hook,
   defers semantic admission to the exact legacy expectation, publishes only
   through the native cgame consumer, and returns its semantic ACK through the
-  reverse carrier. The deterministic real-hook gate covers loss, reorder,
+  reverse carrier. Retention now keeps an attempted active frame until semantic
+  ACK, coalesces newer projections into a pending slot, promotes the pending
+  frame after ACK, and uses a bounded 1,000-tick abandonment rule when the
+  receiver has expired incomplete work. Epoch rebinding preserves admitted
+  history and q2proto bases; server projection canonicalizes q2proto's
+  direction-specific unions before hashing and serialization. The deterministic real-hook gate covers loss, reorder,
   duplicate, lost ACK/repeat, exact release, five-proof hash quarantine, wrong
   epoch, real 1,024/8,192 identity domains, 24 expectations before DATA, and
   complete-timeout slot reuse.
@@ -5205,9 +5360,14 @@ Tasks:
   127-command maximum, loss/burst/reorder/duplicate/stall coverage, and three
   rejected corruption probes across four epochs. It is an in-process,
   single-profile, fixed eight-entity/four-area-byte fixture and does not execute
-  `cg_predict` or PMove. Other event families, broader keyframe impairment/
-  promotion evidence, load/budget gates, public authority, and broad rendering
-  promotion remain open. Evidence:
+  `cg_predict` or PMove. A three-repeat, two-process presentation gate now
+  proves target-only private `0x57` admission and actual mode-3 remote-transform
+  authority. Every run records positive queue/ACK/release and
+  clock/pair/sample/native/promotion counters, exact `promoted == native`, and
+  zero clock, pair, alignment, parity, event-fence, endpoint, or transform-error
+  failures. Other event families, broader keyframe impairment/promotion
+  evidence, previous-only rendering, load/budget gates, public authority, and
+  broad promotion remain open. Evidence:
   `docs-dev/networking-canonical-snapshot-stage-a-2026-07-12.md` and
   `docs-dev/networking-canonical-snapshot-stage-b-q2proto-projection-2026-07-12.md`,
   `docs-dev/networking-live-client-snapshot-prediction-and-demo-clock-2026-07-12.md`,
@@ -5222,7 +5382,9 @@ Tasks:
   plus
   `docs-dev/fr-10-t04-t06-t07-production-native-snapshot-adapters-2026-07-16.md`,
   and
-  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`.
+  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`,
+  plus `docs-dev/fr-10-t04-t06-t14-combined-native-event-snapshot-shadow-2026-07-18.md`
+  and `docs-dev/fr-10-t06-t07-t14-native-snapshot-presentation-authority-2026-07-18.md`.
 - [ ] `FR-10-T07` Move cgame to an immutable snapshot timeline with explicit
   transitions, discontinuities, adaptive interpolation, bounded extrapolation,
   and event playback.
@@ -5249,7 +5411,7 @@ Tasks:
   canceled-epoch DATA cannot invoke the consumer. The production-wrapper virtual
   link reaches this real endpoint, records exactly one presentation, and proves
   corrupt current traffic plus delayed canceled DATA cannot invoke cgame.
-  It remains a no-effects authority sink rather than presenter-cutover proof.
+  It remains a no-effects event authority sink rather than event-presenter proof.
   Stage D adds an exact snapshot admission generation, ID/hash/time,
   endpoint/legacy-parity hashes, and separate timeline/event-fence flags to the
   V2 status receipt. Exact identity plus five cross-endpoint parity/semantic
@@ -5269,7 +5431,14 @@ Tasks:
   Failure handling detaches only exact owned hooks, preserves foreign
   replacements, and releases authority only at map/serverdata or matching
   connection boundaries. The production-hook link proves this live client RX
-  path, but not presenter cutover. Cgame prediction now has a separate exact
+  path. A continuation adds source-gated `cg_snapshot_timeline_render=3`; cgame
+  refuses it unless the engine-owned native-timeline latch is active. It samples
+  no later than the newest admitted native server time, promotes only safe
+  remote transforms, retains per-entity fallback, and does not alter controlled
+  player prediction. Three hidden-client repeats record 303/303/261 samples,
+  84/287/189 native-authority samples, identical promotion counts, and zero
+  clock/pair/alignment/parity/event-fence/endpoint/transform-error failures.
+  Cgame prediction now has a separate exact
   value-copy bridge over that owned timeline. A generation-checked helper
   copies one retained snapshot/player pair by exact snapshot sequence; a V2
   engine import resolves replay from that copied snapshot's server-consumed
@@ -5285,13 +5454,23 @@ Tasks:
   The serialized production corpus extends selection to 100,000 positive
   snapshots across four epochs, including four legal `{epoch,0}` bootstraps,
   99,996 nonzero cursors, both pending and non-pending command ranges, 43
-  discontinuity resets, and four 127-command ranges. This remains resolver/
-  selector evidence over locally fabricated history; it does not execute
-  `cg_predict`, PMove, presenters, or the engine V2 request-construction path.
-  Legacy effect/audio
-  presentation and default rendering remain authoritative; native snapshot
-  authority, actual canonical presenters, impairment parity, adaptive
-  extrapolation, budgets, and classic-cgame migration remain open. Evidence:
+  discontinuity resets, and four 127-command ranges. A production-linked
+  focused continuation now crosses the runtime boundary that corpus omitted:
+  the extracted shipped engine V2 request constructor consumes the admitted
+  snapshot receipt's exact cursor, and real cgame `CL_PredictMovement` executes
+  the shared PMove core. Pending/finalized replay hashes match, the legal
+  127-command range succeeds, deliberate 128-command exhaustion clears the
+  prediction rings, bounded and threshold corrections classify correctly, and
+  a timeline publication without its event fence cannot seed prediction. The
+  result records `receipt_fence_blocks=1`, `v2_replays=4`,
+  `oracle_matches=3`, and digest `abf2723d5f03cbe9`. This remains focused
+  replay evidence rather than sustained impairment/load, weapon prediction, or
+  presenter proof.
+  Legacy effect/audio presentation and default rendering remain authoritative.
+  Source-gated remote-transform snapshot authority is now proven, but
+  previous-only entities, event/effect/audio presenters, impairment/load
+  breadth, adaptive extrapolation, budgets, demos, and classic-cgame migration
+  remain open. Evidence:
   `docs-dev/networking-snapshot-timeline-core-t07-2026-07-12.md`,
   `docs-dev/networking-live-client-snapshot-prediction-and-demo-clock-2026-07-12.md`,
   `docs-dev/networking-live-cgame-canonical-render-promotion-2026-07-13.md`,
@@ -5307,7 +5486,10 @@ Tasks:
   and
   `docs-dev/fr-10-t07-t08-t09-canonical-snapshot-prediction-authority-2026-07-16.md`,
   plus
-  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`.
+  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`,
+  and
+  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-production-v2-pmove-replay-boundary-2026-07-17.md`,
+  plus `docs-dev/fr-10-t06-t07-t14-native-snapshot-presentation-authority-2026-07-18.md`.
 - [ ] `FR-10-T08` Complete client prediction, input replay, reconciliation,
   predicted-state caching, and predicted-side-effect suppression.
   Area: `bgame/cgame/client`. Priority: P0.
@@ -5402,9 +5584,45 @@ Tasks:
   pair it now latches the same resync health boundary before its queued ACK is
   sent.
   This emits no legacy packet, snapshot, demo data, public event, or
-  presentation. Live cgame/sgame weapon-catalog adapters, audiovisual
-  suppression, broad live shadow parity, correction auditing, and correction
-  budgets remain open.
+  presentation. A pointer-free shared catalog now freezes all 22 ordinary
+  Rerelease weapon identities, their exact legacy driver and inventory
+  ownership class, and mandatory shadow-only state. The sgame adapter validates
+  unique `Weapon`/item/ammo round trips against `itemList`, replaces duplicate
+  production mappings, and adds per-catalog command-scope/weapon-think
+  observation counters. Grapple remains in the independent Hook contract. The
+  exact catalog digest is `e857eec08cfa9c00`. A second profile freezes all 22
+  legacy frame skeletons with digest `4f723f6fddf5bf52`, and every ordinary
+  production weapon wrapper now consumes its profile before invoking the
+  unchanged legacy driver/callback. A third callback-capability descriptor
+  freezes exact trigger/emission families, direct dependencies, special
+  behavior, per-callback ammo/emission bounds, and V2 blocker masks with digest
+  `a5d823b554b31ee8`. Its hostile audit proves zero of 22 weapons are
+  representable by the simplified V2 rule, and production wrappers validate
+  the descriptor without moving authority. A bounded observation-only lease
+  now assigns the latest exact authenticated command to at most one later
+  server-frame weapon advance, expires on every frame path, retains separate
+  scoped/leased records, and joins them only across exact non-timer state plus
+  equal bounded relative-timer decay. Three live hidden-client Blaster repeats
+  prove offers, supersedes, claims, expiries, exact scoped/leased/joined
+  records, and zero rejection. A descriptor-complete 528-byte shared shadow
+  record now binds joined authority to the exact catalog, profile, semantics,
+  digests, observed comparable ammo delta, blockers, and hashes. Its ordered
+  22-record golden is `1270244792631122`; schema-v30 live evidence proves
+  Blaster catalog `1`, flags `127`, exact blocker mask `4367`, and nonzero
+  command-specific record hashes in all three repeats. A compact 64-byte
+  default-off authority receipt now binds that evidence to the exact canonical
+  command hash. The engine mailbox is bounded, FIFO, backpressure-retaining,
+  and reconnect-reset; native event payload kind `12` is fieldwise encoded and
+  always non-presentable. A bounded cgame owner accepts command-first or
+  receipt-first arrival, requires exact semantic command correlation, and
+  latches shared runtime resync on mismatch/conflict. The production-wrapper
+  virtual link proves descriptor admission, delivery, exact match, zero
+  presentation, ACK, and server release. The schema-v32 live continuation now
+  proves in-session shooter reconnect rebase plus cross-process parity over
+  three repeats: epoch-3 exact command correlation, 45/45 receipt matches,
+  zero unmatched/outstanding/mismatch/conflict/resync, exact joined Blaster
+  shadow metadata, and normal 15 damage. Audiovisual suppression, broad parity,
+  correction auditing, and correction budgets remain open.
   Evidence:
   `docs-dev/networking-authoritative-prediction-input-range-2026-07-12.md`,
   `docs-dev/networking-canonical-local-action-transaction-v2-2026-07-13.md`,
@@ -5431,7 +5649,21 @@ Tasks:
   and
   `docs-dev/fr-10-t07-t08-t09-canonical-snapshot-prediction-authority-2026-07-16.md`,
   plus
-  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`.
+  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`,
+  and
+  `docs-dev/fr-10-t08-t09-rerelease-weapon-catalog-boundary-2026-07-17.md`,
+  plus
+  `docs-dev/fr-10-t08-t09-weapon-semantics-v2-blocker-audit-2026-07-17.md`,
+  and
+  `docs-dev/fr-10-t08-t09-post-command-weapon-observation-lease-2026-07-17.md`,
+  plus
+  `docs-dev/fr-10-t08-t09-post-command-weapon-lease-runtime-acceptance-2026-07-17.md`,
+  and
+  `docs-dev/fr-10-t08-t09-descriptor-complete-local-action-shadow-2026-07-17.md`,
+  plus
+  `docs-dev/fr-10-t04-t05-t08-t09-local-action-shadow-authority-receipt-2026-07-17.md`,
+  and
+  `docs-dev/fr-10-t04-t05-t08-t09-t14-live-reconnect-local-action-authority-2026-07-18.md`.
 - [ ] `FR-10-T09` Establish wrap-safe canonical command identity, validated
   timing, and authoritative consumed-input acknowledgement.
   Area: `bgame/cgame/client/server`. Priority: P0.
@@ -5501,7 +5733,12 @@ Tasks:
   resolves continuous nonempty canonical ranges through the 127-command
   capacity boundary. It is locally constructed resolver/selector evidence,
   not exhaustive engine-import, native command authority, or wrap/flood/event-
-  correlation acceptance. Live producer/consumer cutover, native exact render
+  correlation acceptance. A later live local-action slice uses the exact
+  finalized command-record V2 import and input-only semantic hash to pair
+  epoch-3 commands with 45/45 cross-process receipts after an in-session
+  reconnect, with zero mismatch, conflict, or resync. This closes one narrow
+  real event-correlation row, not exhaustive identity mapping. Live
+  producer/consumer cutover, native exact render
   watermarks, exhaustive command
   coverage, native authority, and full impairment/runtime acceptance remain
   open.
@@ -5522,7 +5759,9 @@ Tasks:
   and
   `docs-dev/fr-10-t04-native-two-process-async-ack-impairment-gate-2026-07-14.md`,
   with current repeated-stream evidence in
-  `docs-dev/fr-10-t04-repeated-command-shadow-and-mixed-carrier-core-2026-07-14.md`.
+  `docs-dev/fr-10-t04-repeated-command-shadow-and-mixed-carrier-core-2026-07-14.md`,
+  plus live reconnect correlation evidence in
+  `docs-dev/fr-10-t04-t05-t08-t09-t14-live-reconnect-local-action-authority-2026-07-18.md`.
 - [ ] `FR-10-T10` Establish server clock mapping and bounded timestamped
   full-collision-pose history with a non-mutating historical query scene.
   Area: `server/sgame/network`. Priority: P0.
@@ -6019,7 +6258,7 @@ Tasks:
   scraping. The first `worr.networking.acceptance-evidence.v1` producer hashes
   its source, matrix, and binaries and records platform/build/workload,
   deterministic outcomes, timings, thresholds, privacy declarations, child
-  artifacts, and explicit limitations. Meson now registers 149 networking
+  artifacts, and explicit limitations. Meson now registers 157 networking
   tests after the repeated-shadow, mixed-carrier, repeated-runtime-parser,
   cgame runtime/export/owner ABI, and canonical event descriptor/codec/owner/
   admission, semantic repeat-fence, live event-shadow, and production-wrapper
@@ -6039,18 +6278,25 @@ Tasks:
   1,024/8,192 identity domains, a 24-expectation delayed-DATA window,
   complete-timeout slot reuse, and four exact prediction-ready cgame
   admissions with digest `7176afa3d4eb62b2`. The final headless suite passes
-  149/149; its serialized snapshot corpus row passes in 382.30 seconds and
+  157/157 in 383.93 seconds; its serialized snapshot corpus row passes in
+  289.24 seconds and
   verifies two exact 100,000-frame runs against golden `c6aee48df85341ab`.
   The runner requires the real golden, removes stale evidence, publishes
   atomically, binds evidence to executable/manifest/runner hashes, and records
   explicit no-window/no-input/no-mouse policy; its focused contract passes
   11/11.
-  The corpus fabricates resolver history and stops at the selector, uses one
-  impairment profile, dynamic per-transmission vectors, within-burst fragment
-  scheduling with synthetic receive sequencing, and eight entities/four area
-  bytes. It proves neither `cg_predict`/PMove nor allocation-free operation,
-  engine V2 request construction, cross-snapshot netchan reorder, real sockets,
-  multi-client load/soak, or cross-platform breadth.
+  The corpus fabricates resolver history and stops at the selector, but the
+  focused production continuation now crosses that boundary through the
+  shipped engine V2 request constructor, real cgame `CL_PredictMovement`,
+  shared PMove, prediction hashes, and correction handling. Its four replay
+  calls cover pending/finalized parity, 127 success, 128 fail-closed clearing,
+  bounded/threshold correction, and an event-fence receipt block with digest
+  `abf2723d5f03cbe9`. The corpus still uses one impairment profile, dynamic
+  per-transmission vectors, within-burst fragment scheduling with synthetic
+  receive sequencing, and eight entities/four area bytes. Neither result
+  proves allocation-free operation, cross-snapshot netchan reorder, real
+  sockets, weapon/presentation prediction, multi-client load/soak, or
+  cross-platform breadth.
   Three consecutive 125-test repetitions
   remain valid historical pre-Stage-D evidence. The
   preceding one-shot production-pilot
@@ -6106,9 +6352,9 @@ Tasks:
   6/6 through the real cgame receipt boundary, the production-hook snapshot
   gate passes twice, the focused prediction-authority set passes 5/5, and the
   two-run 100,000-frame serialized production corpus passes inside the final
-  149/149 suite. The final full production build passes, package tests pass
+  157/157 suite. The final full production build passes, package tests pass
   16/16, the release bootstrap headless contract passes 1/1, and the refreshed
-  Windows x86-64 stage validates 16 root files, one dependency, a 500-file pak,
+  Windows x86-64 stage validates 16 root files, one dependency, a 524-file pak,
   one q2aas reference map, 31 botfile payloads, and 215 RmlUi assets.
   Focused native proof also covers connection-
   incarnation owner mismatch, exact packet-bound ACK outcomes, unsafe alias
@@ -6135,8 +6381,8 @@ Tasks:
   SHA-256 equality for the client engine, dedicated engine, cgame, and sgame
   built/staged production binaries.
   The preceding targeted production rebuild, focused Stage D suite, full
-  networking suite, and refreshed stage passed. The final post-corpus full
-  build, 149/149 headless networking suite, policy gates, and `.install/`
+  networking suite, and refreshed stage passed. The final post-receipt full
+  build, 157/157 headless networking suite, policy gates, and `.install/`
   refresh also pass. The
   earlier 375/375 pre-Stage-D
   repeat and repeated plus one-command runtime gates remain valid historical
@@ -6164,7 +6410,19 @@ Tasks:
   fixed `SERVER_ACTIVE` response capacity; the regression sends both paths
   through a physically full reliable buffer. Status preserves a distinct prior
   wire-committed epoch across a replacement challenge. The floor covers
-  advertised readiness epochs that never activated.
+  advertised readiness epochs that never activated. The schema-v32
+  local-action runtime report adds three machine-readable two-process
+  reconnect rows: all prove epoch-3 exact joined shadows, normal 15 damage,
+  45/45 aggregate receipt matches, and zero mismatch/conflict/resync. This is
+  reconnect lifecycle evidence, not the required malformed/load/soak or
+  cross-platform acceptance matrix. Schema v33 adds combined `0x77` and
+  target-only native-presentation modes. Three combined repeats match 99/99
+  exact local-action receipts while both snapshot peers ACK and release
+  retained frames with zero client/server failure. Three presentation repeats
+  prove positive native snapshot traffic and exact mode-3 remote-transform
+  promotion with zero clock, pair, alignment, parity, event-fence, endpoint, or
+  transform-error failures. These remain focused live gates rather than the
+  mandatory load/soak/malformed/platform matrix.
   Evidence:
   `docs-dev/networking-rewind-observability-acceptance-evidence-2026-07-13.md`,
   `docs-dev/networking-adaptive-input-pacing-and-redundancy-2026-07-13.md`,
@@ -6198,7 +6456,11 @@ Tasks:
   and
   `docs-dev/fr-10-t04-t06-t07-production-native-snapshot-adapters-2026-07-16.md`,
   plus
-  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`.
+  `docs-dev/fr-10-t04-t06-t07-t08-t09-t14-serialized-production-snapshot-corpus-2026-07-17.md`,
+  and
+  `docs-dev/fr-10-t04-t05-t08-t09-t14-live-reconnect-local-action-authority-2026-07-18.md`,
+  plus `docs-dev/fr-10-t04-t06-t14-combined-native-event-snapshot-shadow-2026-07-18.md`
+  and `docs-dev/fr-10-t06-t07-t14-native-snapshot-presentation-authority-2026-07-18.md`.
 - [ ] `FR-10-T15` Complete progressive rollout, dual-stack acceptance,
   operator/end-user documentation, migration defaults, and removal gates.
   Area: `docs-dev/docs-user/tools/release`. Priority: P1.

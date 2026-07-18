@@ -42,11 +42,11 @@
       "type": "enum",
       "cvar": "r_renderer",
       "label": "Renderer",
-      "value": "vk",
+      "value": "vulkan",
       "requires_restart": true,
       "options": [
-        { "value": "gl", "label": "OpenGL" },
-        { "value": "vk", "label": "Vulkan" },
+        { "value": "opengl", "label": "OpenGL" },
+        { "value": "vulkan", "label": "Vulkan" },
         { "value": "rtx", "label": "Vulkan RTX" }
       ]
     },

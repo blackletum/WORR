@@ -146,6 +146,7 @@ def build_bsp(
     bmodel_entity_origin: tuple[float, float, float] = BMODEL_ENTITY_ORIGIN,
     world_lightmap_rgb: tuple[int, int, int] | None = BACKGROUND_LIGHTMAP_RGB,
     bmodel_lightmap_rgb: tuple[int, int, int] | None = None,
+    light_data_prefix_bytes: int = 0,
     background_surface_flags: int = 0,
     bmodel_surface_flags: int = 0,
     world_backdrop_texture: str | None = None,
@@ -251,14 +252,16 @@ def build_bsp(
         0,
         world_face_count,
     )
-    lighting = bytearray()
+    if light_data_prefix_bytes < 0 or light_data_prefix_bytes % 3:
+        raise ValueError("light_data_prefix_bytes must be a non-negative RGB-byte count")
+    lighting = bytearray(light_data_prefix_bytes)
     world_light_offset = -1
     if world_lightmap_rgb is not None:
         lightmap_pixel = bytes(world_lightmap_rgb)
+        world_light_offset = len(lighting)
         lighting.extend(lightmap_pixel * (
             BACKGROUND_LIGHTMAP_WIDTH * BACKGROUND_LIGHTMAP_HEIGHT
         ))
-        world_light_offset = 0
     bmodel_light_offsets: tuple[int, ...] = ()
     if bmodel_lightmap_rgb is not None:
         bmodel_pixel = bytes(bmodel_lightmap_rgb)

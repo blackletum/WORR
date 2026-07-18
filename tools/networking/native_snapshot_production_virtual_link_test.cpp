@@ -9,8 +9,21 @@
  * created.  All impairment is applied to copied application payloads.
  */
 
+/* The engine and cgame export same-spelled prediction entry points with
+ * different module linkage. This executable intentionally links the cgame
+ * implementation, so keep the engine declarations from assigning C linkage
+ * to the calls below. */
+#define CL_PredictMovement CL_EnginePredictMovement
+#define CL_CheckPredictionError CL_EngineCheckPredictionError
 #include "client.h"
+#undef CL_CheckPredictionError
+#undef CL_PredictMovement
+#include "client/cgame_entity.h"
 #include "client/cgame_event_runtime.h"
+#include "client/cgame_prediction_input.h"
+#include "client/command_identity.h"
+#include "client/consumed_cursor.h"
+#include "client/net_capability.h"
 #include "client/native_readiness_pilot.h"
 #include "client/snapshot_shadow.h"
 #include "server/native_shadow.h"
@@ -20,11 +33,17 @@
 #include "common/net/native_codec.h"
 #include "common/net/native_readiness_sideband.h"
 #include "common/net/native_snapshot_receiver.h"
+#include "common/net/usercmd_delta.h"
 #include "cg_canonical_snapshot_timeline.hpp"
 #include "cg_event_runtime.hpp"
 #include "cg_prediction_authority.hpp"
+#include "cg_prediction_config.hpp"
+#include "cg_snapshot_timeline.hpp"
+#include "shared/prediction_abi.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
@@ -36,6 +55,16 @@ client_static_t cls{};
 client_state_t cl{};
 unsigned com_localTime{};
 cgame_import_t cgi{};
+const cgame_entity_import_t *cgei{};
+
+extern "C" void Worr_TestSetCGamePredictCvar(cvar_t *value);
+extern "C" void CG_PredictionInputSetImport(
+    const worr_cgame_prediction_input_import_v1 *import);
+extern "C" void CG_PredictionInputSetImportV2(
+    const worr_cgame_prediction_input_import_v2 *import);
+void CG_PredictionAuthority_InitCvars();
+void CL_PredictMovement();
+void CL_CheckPredictionError();
 
 #if USE_DEBUG
 cvar_t *developer{};
@@ -75,6 +104,11 @@ cvar_t snapshot_shadow_mode_cvar{};
 cvar_t probe_hold_cvar{};
 cvar_t projection_shadow_cvar{};
 cvar_t projection_debug_cvar{};
+cvar_t prediction_authority_cvar{};
+cvar_t prediction_debug_cvar{};
+cvar_t prediction_enabled_cvar{};
+cvar_t paused_cvar{};
+cvar_t snapshot_timeline_owned_cvar{};
 std::array<byte, 1024> reliable_storage{};
 
 [[noreturn]] void fail(const char *expression, int line)
@@ -152,6 +186,8 @@ struct frame_carrier_t {
     player_state_t legacy_player{};
     std::array<entity_state_t, kEntityCount> legacy_entities{};
     worr_snapshot_consumed_command_v2 consumed_command{};
+    uint32_t canonical_movement_type{PM_NORMAL};
+    uint32_t canonical_movement_flags{};
 };
 
 struct server_projection_t {
@@ -189,6 +225,16 @@ struct metrics_t {
     uint32_t expectation_window_rollovers{};
     uint32_t complete_timeout_recoveries{};
     uint32_t prediction_authorities{};
+    uint32_t prediction_receipt_fence_blocks{};
+    uint32_t v2_prediction_replays{};
+    uint32_t pending_finalized_matches{};
+    uint32_t oracle_matches{};
+    uint32_t bounded_corrections{};
+    uint32_t threshold_corrections{};
+    uint32_t range_127_successes{};
+    uint32_t range_128_resets{};
+    uint32_t collision_traces{};
+    uint32_t point_contents_queries{};
 };
 
 metrics_t metrics{};
@@ -204,11 +250,353 @@ uint64_t metrics_digest()
     return digest;
 }
 
+std::array<centity_t, 2> prediction_entities{};
+bsp_t prediction_bsp{};
+csurface_t prediction_ground_surface{};
+csurface_t prediction_wall_surface{};
+cgame_entity_import_t prediction_host{};
+uint64_t last_prediction_state_hash{};
+uint64_t last_prediction_collision_hash{};
+uint64_t last_prediction_replay_hash{};
+
+struct analytic_hit_t {
+    bool hit{};
+    bool start_solid{};
+    bool all_solid{};
+    float fraction{1.0f};
+    float normal[3]{};
+    float distance{};
+    csurface_t *surface{};
+};
+
+float support_minimum(const float mins[3], const float maxs[3],
+                      const float normal[3])
+{
+    float result = 0.0f;
+    for (uint32_t axis = 0; axis < 3; ++axis)
+        result += normal[axis] >= 0.0f
+                      ? normal[axis] * mins[axis]
+                      : normal[axis] * maxs[axis];
+    return result;
+}
+
+analytic_hit_t trace_plane(const float start[3], const float mins[3],
+                           const float maxs[3], const float end[3],
+                           const float normal[3], float distance,
+                           csurface_t *surface)
+{
+    analytic_hit_t result{};
+    const float expanded = distance -
+                           support_minimum(mins, maxs, normal);
+    float start_distance = -expanded;
+    float end_distance = -expanded;
+    for (uint32_t axis = 0; axis < 3; ++axis) {
+        start_distance += start[axis] * normal[axis];
+        end_distance += end[axis] * normal[axis];
+    }
+    result.start_solid = start_distance < 0.0f;
+    result.all_solid = result.start_solid && end_distance < 0.0f;
+    if (result.all_solid) {
+        result.hit = true;
+        result.fraction = 0.0f;
+    } else if (start_distance >= 0.0f && end_distance < 0.0f) {
+        result.hit = true;
+        result.fraction = start_distance /
+                          (start_distance - end_distance);
+    }
+    if (result.hit) {
+        VectorCopy(normal, result.normal);
+        result.distance = distance;
+        result.surface = surface;
+    }
+    return result;
+}
+
+trace_t analytic_trace(const float start[3], const float mins[3],
+                       const float maxs[3], const float end[3],
+                       contents_t contents_mask, bool world_entity)
+{
+    trace_t trace{};
+    trace.fraction = 1.0f;
+    VectorCopy(end, trace.endpos);
+    if ((contents_mask & CONTENTS_SOLID) == 0)
+        return trace;
+
+    constexpr float ground_normal[3] = {0.0f, 0.0f, 1.0f};
+    constexpr float wall_normal[3] = {-1.0f, 0.0f, 0.0f};
+    const analytic_hit_t ground = trace_plane(
+        start, mins, maxs, end, ground_normal, 0.0f,
+        &prediction_ground_surface);
+    const analytic_hit_t wall = trace_plane(
+        start, mins, maxs, end, wall_normal, -64.0f,
+        &prediction_wall_surface);
+
+    const analytic_hit_t *best = nullptr;
+    for (const analytic_hit_t *candidate : {&ground, &wall}) {
+        trace.startsolid = trace.startsolid || candidate->start_solid;
+        trace.allsolid = trace.allsolid || candidate->all_solid;
+        if (candidate->hit &&
+            (!best || candidate->fraction < best->fraction)) {
+            best = candidate;
+        }
+    }
+    if (!best)
+        return trace;
+
+    trace.fraction = std::clamp(best->fraction, 0.0f, 1.0f);
+    for (uint32_t axis = 0; axis < 3; ++axis) {
+        trace.endpos[axis] = start[axis] +
+            (end[axis] - start[axis]) * trace.fraction;
+    }
+    VectorCopy(best->normal, trace.plane.normal);
+    trace.plane.dist = best->distance;
+    trace.plane.type = best->normal[0] != 0.0f
+                           ? PLANE_X
+                           : (best->normal[1] != 0.0f ? PLANE_Y
+                                                      : PLANE_Z);
+    trace.plane.signbits = best->normal[0] < 0.0f ? 1u : 0u;
+    trace.surface = best->surface;
+    trace.contents = CONTENTS_SOLID;
+    if (world_entity) {
+        trace.ent = reinterpret_cast<struct edict_s *>(
+            &prediction_entities[0]);
+    }
+    return trace;
+}
+
+void prediction_client_trace(trace_t *trace, const vec3_t start,
+                             const vec3_t end, const vec3_t mins,
+                             const vec3_t maxs,
+                             const struct edict_s *,
+                             contents_t contents_mask)
+{
+    ++metrics.collision_traces;
+    *trace = analytic_trace(start, mins, maxs, end, contents_mask, true);
+}
+
+void prediction_box_trace(trace_t *trace, const vec3_t start,
+                          const vec3_t end, const vec3_t mins,
+                          const vec3_t maxs, const mnode_t *, int mask,
+                          bool)
+{
+    ++metrics.collision_traces;
+    *trace = analytic_trace(start, mins, maxs, end,
+                            static_cast<contents_t>(mask), false);
+}
+
+contents_t analytic_point_contents(const float point[3])
+{
+    return point[2] < 0.0f || point[0] > 64.0f
+               ? CONTENTS_SOLID
+               : static_cast<contents_t>(0);
+}
+
+contents_t prediction_point_contents(const vec3_t point)
+{
+    ++metrics.point_contents_queries;
+    return analytic_point_contents(point);
+}
+
+void oracle_trace(void *, worr_prediction_trace_v1 *result,
+                  const float start[3], const float mins[3],
+                  const float maxs[3], const float end[3],
+                  uint32_t, uint32_t contents_mask, uint32_t query_flags)
+{
+    CHECK(result != nullptr);
+    CHECK((query_flags & ~WORR_PREDICTION_TRACE_WORLD_ONLY) == 0);
+    const trace_t trace = analytic_trace(
+        start, mins, maxs, end, static_cast<contents_t>(contents_mask),
+        (query_flags & WORR_PREDICTION_TRACE_WORLD_ONLY) == 0);
+    *result = {};
+    result->struct_size = sizeof(*result);
+    result->schema_version = WORR_PREDICTION_ABI_VERSION;
+    result->all_solid = trace.allsolid;
+    result->start_solid = trace.startsolid;
+    result->fraction = trace.fraction;
+    VectorCopy(trace.endpos, result->end);
+    VectorCopy(trace.plane.normal, result->plane.normal);
+    result->plane.distance = trace.plane.dist;
+    result->plane.type = trace.plane.type;
+    result->plane.sign_bits = trace.plane.signbits;
+    result->contents = trace.contents;
+    result->entity_id = trace.ent ? 0u : WORR_PREDICTION_NO_ENTITY;
+    result->surface_id = trace.surface
+                             ? trace.surface->id
+                             : WORR_PREDICTION_NO_ENTITY;
+    result->surface_flags = trace.surface
+                                ? static_cast<uint32_t>(trace.surface->flags)
+                                : 0u;
+    result->surface2_id = WORR_PREDICTION_NO_ENTITY;
+}
+
+uint32_t oracle_point_contents(void *, const float point[3])
+{
+    return static_cast<uint32_t>(analytic_point_contents(point));
+}
+
+cvar_t *prediction_find_cvar(const char *)
+{
+    return nullptr;
+}
+
+void install_prediction_host()
+{
+    prediction_entities = {};
+    prediction_bsp = {};
+    prediction_ground_surface = {};
+    prediction_ground_surface.id = 1;
+    prediction_wall_surface = {};
+    prediction_wall_surface.id = 2;
+    prediction_host = {};
+    prediction_host.api_version = CGAME_ENTITY_API_VERSION;
+    prediction_host.cl = &cl;
+    prediction_host.cls = &cls;
+    prediction_host.cl_entities = prediction_entities.data();
+    prediction_host.Com_LPrintf = Com_LPrintf;
+    prediction_host.Com_Error = Com_Error;
+    prediction_host.Cvar_Get = Cvar_Get;
+    prediction_host.Cvar_FindVar = prediction_find_cvar;
+    prediction_host.sv_paused = &paused_cvar;
+    prediction_host.CL_Trace = prediction_client_trace;
+    prediction_host.CL_PointContents = prediction_point_contents;
+    prediction_host.CM_BoxTrace = prediction_box_trace;
+    cgei = &prediction_host;
+    cl.bsp = &prediction_bsp;
+    cls.state = ca_active;
+    cls.demo.playback = false;
+    prediction_enabled_cvar.integer = 1;
+    prediction_authority_cvar.integer = 2;
+    Worr_TestSetCGamePredictCvar(&prediction_enabled_cvar);
+    CG_PredictionInputSetImport(CL_GetCGamePredictionInputImportV1());
+    CG_PredictionInputSetImportV2(CL_GetCGamePredictionInputImportV2());
+    CG_PredictionAuthority_InitCvars();
+    CHECK(prediction_authority_cvar.integer == 2);
+}
+
+usercmd_t prediction_command(uint32_t sequence)
+{
+    usercmd_t command{};
+    command.msec = static_cast<byte>(16u + (sequence % 3u));
+    command.angles[1] = static_cast<float>((sequence % 5u) * 3u);
+    command.forwardmove = 220.0f +
+                          static_cast<float>((sequence % 7u) * 4u);
+    command.sidemove = (sequence & 1u) ? 24.0f : -24.0f;
+    return command;
+}
+
+void set_pending_command(const usercmd_t &command)
+{
+    cl.cmd = command;
+    cl.localmove[0] = command.forwardmove;
+    cl.localmove[1] = command.sidemove;
+}
+
+void clear_pending_command()
+{
+    cl.cmd = {};
+    cl.localmove[0] = 0.0f;
+    cl.localmove[1] = 0.0f;
+}
+
+void finalize_prediction_command(uint32_t sequence,
+                                 const usercmd_t &command)
+{
+    CHECK(sequence == cl.cmdNumber + 1u);
+    cl.cmds[sequence & CMD_MASK] = command;
+    CHECK(CL_CommandIdentityFinalize(sequence));
+    worr_prediction_command_v1 canonical{};
+    CHECK(NetUsercmd_ToPredictionCommandV1(&command, &canonical));
+    CHECK(CL_CommandIdentityRetainCommand(sequence, &canonical));
+    worr_command_record_v1 retained{};
+    CHECK(CL_CommandIdentityRecordForNumber(sequence, &retained));
+    CHECK(retained.command_id.epoch != 0);
+    CHECK(retained.command_id.sequence == sequence);
+    CHECK(Worr_PredictionHashCommandV1(&retained.command) ==
+          Worr_PredictionHashCommandV1(&canonical));
+    cl.cmdNumber = sequence;
+}
+
+worr_cgame_prediction_input_range_v1 resolve_prediction_range(
+    const worr_snapshot_consumed_command_v2 &consumed)
+{
+    const auto *import = CL_GetCGamePredictionInputImportV2();
+    CHECK(import != nullptr);
+    worr_cgame_prediction_input_request_v2 request{};
+    request.struct_size = sizeof(request);
+    request.api_version = WORR_CGAME_PREDICTION_INPUT_API_VERSION_V2;
+    request.flags =
+        WORR_CGAME_PREDICTION_INPUT_REQUEST_CANONICAL_REQUIRED;
+    request.consumed_command = consumed;
+    worr_cgame_prediction_input_range_v1 range{};
+    const uint32_t result = import->ResolveInputRangeForCursor(
+        &request, &range);
+    CHECK(result == range.result);
+    return range;
+}
+
+worr_prediction_step_v1 replay_oracle(
+    const cg_canonical_prediction_snapshot_v2 &authority,
+    const worr_cgame_prediction_input_range_v1 &range)
+{
+    worr_prediction_step_v1 step{};
+    step.struct_size = sizeof(step);
+    step.schema_version = WORR_PREDICTION_ABI_VERSION;
+    step.state = authority.player.movement;
+    CG_GetPredictionConfigV1(&step.config);
+    step.snap_initial = 1;
+    step.player_entity_id =
+        authority.snapshot.controlled_entity.identity.index;
+    VectorCopy(authority.player.view_offset, step.view_offset);
+    step.trace = oracle_trace;
+    step.point_contents = oracle_point_contents;
+
+    for (uint32_t index = 0; index < range.command_count; ++index) {
+        step.command = range.commands[index].command;
+        CHECK(Worr_PredictionStepV1(&step));
+        step.snap_initial = 0;
+    }
+    if ((range.flags & WORR_CGAME_PREDICTION_INPUT_HAS_PENDING) != 0) {
+        step.command = range.pending_command.command;
+        CHECK(Worr_PredictionStepV1(&step));
+    }
+    return step;
+}
+
+void require_prediction_record_matches_oracle(
+    uint32_t sequence,
+    const worr_snapshot_consumed_command_v2 &consumed)
+{
+    cg_canonical_prediction_snapshot_v2 authority{};
+    CHECK(CG_CanonicalSnapshotTimelineCopyPredictionSnapshot(
+              static_cast<uint32_t>(cl.frame.number) + 1u,
+              &authority) == WORR_SNAPSHOT_TIMELINE_OK);
+    const auto range = resolve_prediction_range(consumed);
+    CHECK(range.result == WORR_CGAME_PREDICTION_INPUT_OK);
+    const auto oracle = replay_oracle(authority, range);
+    const uint32_t slot = sequence & CMD_MASK;
+    CHECK(cl.predicted_sequences[slot] == sequence);
+    CHECK(cl.predicted_state_hashes[slot] == oracle.state_hash);
+    CHECK(cl.predicted_collision_hashes[slot] == oracle.collision_hash);
+    CHECK(Worr_PredictionHashStateV1(&cl.predicted_states[slot]) ==
+          oracle.state_hash);
+    CHECK(Worr_PredictionHashStateV1(&oracle.state) ==
+          oracle.state_hash);
+    last_prediction_state_hash = cl.predicted_state_hashes[slot];
+    last_prediction_collision_hash =
+        cl.predicted_collision_hashes[slot];
+    last_prediction_replay_hash =
+        cl.predicted_replay_chain_hashes[slot];
+    ++metrics.oracle_matches;
+}
+
 q2proto_svc_playerstate_t full_wire_player()
 {
     q2proto_svc_playerstate_t player{};
-    player.delta_bits = Q2P_PSD_PM_GRAVITY | Q2P_PSD_FOV |
+    player.delta_bits = Q2P_PSD_PM_TYPE | Q2P_PSD_PM_FLAGS |
+                        Q2P_PSD_PM_GRAVITY | Q2P_PSD_FOV |
                         Q2P_PSD_PM_VIEWHEIGHT;
+    player.pm_type = PM_NORMAL;
+    player.pm_flags = PMF_ON_GROUND;
     player.pm_gravity = 800;
     player.pm_viewheight = 22;
     player.fov = 100;
@@ -220,6 +608,8 @@ q2proto_svc_playerstate_t full_wire_player()
 player_state_t full_legacy_player()
 {
     player_state_t player{};
+    player.pmove.pm_type = PM_NORMAL;
+    player.pmove.pm_flags = PMF_ON_GROUND;
     player.pmove.gravity = 800;
     player.pmove.viewheight = 22;
     player.fov = 100.0f;
@@ -239,7 +629,9 @@ q2proto_entity_state_delta_t entity_delta(uint16_t model,
 
 frame_carrier_t make_keyframe(
     uint32_t entity_index_limit,
-    uint32_t frame_number = kKeyframeNumber)
+    uint32_t frame_number = kKeyframeNumber,
+    uint32_t command_epoch = kCommandEpoch,
+    uint32_t consumed_sequence = UINT32_MAX)
 {
     frame_carrier_t frame{};
     CHECK(entity_index_limit >
@@ -248,8 +640,11 @@ frame_carrier_t make_keyframe(
     frame.wire.deltaframe = -1;
     frame.wire.playerstate = full_wire_player();
     frame.legacy_player = full_legacy_player();
-    frame.consumed_command.cursor.epoch = kCommandEpoch;
-    frame.consumed_command.cursor.contiguous_sequence = frame_number;
+    frame.canonical_movement_type = PM_NORMAL;
+    frame.canonical_movement_flags = PMF_ON_GROUND;
+    frame.consumed_command.cursor.epoch = command_epoch;
+    frame.consumed_command.cursor.contiguous_sequence =
+        consumed_sequence == UINT32_MAX ? frame_number : consumed_sequence;
     frame.consumed_command.provenance =
         WORR_SNAPSHOT_CONSUMED_COMMAND_SERVER_CONSUMED;
 
@@ -275,18 +670,22 @@ frame_carrier_t make_keyframe(
 }
 
 frame_carrier_t make_delta_frame(const frame_carrier_t &base,
-                                 bool client_variant)
+                                 bool client_variant,
+                                 uint32_t frame_number =
+                                     kKeyframeNumber + 1u,
+                                 uint32_t delta_frame_number =
+                                     kKeyframeNumber)
 {
     frame_carrier_t frame{};
-    frame.wire.serverframe =
-        static_cast<int32_t>(kKeyframeNumber + 1u);
-    frame.wire.deltaframe = static_cast<int32_t>(kKeyframeNumber);
+    frame.wire.serverframe = static_cast<int32_t>(frame_number);
+    frame.wire.deltaframe = static_cast<int32_t>(delta_frame_number);
     frame.area = base.area;
     frame.legacy_player = base.legacy_player;
     frame.legacy_entities = base.legacy_entities;
     frame.consumed_command = base.consumed_command;
-    frame.consumed_command.cursor.contiguous_sequence =
-        static_cast<uint32_t>(frame.wire.serverframe);
+    frame.consumed_command.cursor.contiguous_sequence = frame_number;
+    frame.canonical_movement_type = base.canonical_movement_type;
+    frame.canonical_movement_flags = base.canonical_movement_flags;
 
     const uint16_t model =
         static_cast<uint16_t>(client_variant ? 61u : 60u);
@@ -300,6 +699,45 @@ frame_carrier_t make_delta_frame(const frame_carrier_t &base,
     frame.legacy_entities[0].modelindex = model;
     frame.legacy_entities[0].frame = animation;
     return frame;
+}
+
+void set_frame_consumed_sequence(frame_carrier_t &frame,
+                                 uint32_t command_epoch,
+                                 uint32_t consumed_sequence)
+{
+    frame.consumed_command.cursor.epoch = command_epoch;
+    frame.consumed_command.cursor.contiguous_sequence = consumed_sequence;
+    frame.consumed_command.provenance =
+        WORR_SNAPSHOT_CONSUMED_COMMAND_SERVER_CONSUMED;
+    frame.consumed_command.reserved0 = 0;
+}
+
+void set_frame_movement(frame_carrier_t &frame, const float origin[3],
+                        const float velocity[3], uint32_t movement_flags,
+                        uint32_t movement_type = PM_NORMAL)
+{
+    frame.canonical_movement_type = movement_type;
+    frame.canonical_movement_flags = movement_flags;
+    frame.wire.playerstate.delta_bits |=
+        Q2P_PSD_PM_TYPE | Q2P_PSD_PM_FLAGS;
+    frame.wire.playerstate.pm_type = static_cast<uint8_t>(movement_type);
+    frame.wire.playerstate.pm_flags =
+        static_cast<uint16_t>(movement_flags);
+    frame.wire.playerstate.pm_origin.read.value.delta_bits = UINT8_C(7);
+    frame.wire.playerstate.pm_origin.read.diff_bits = 0;
+    q2proto_var_coords_set_float(
+        &frame.wire.playerstate.pm_origin.read.value.values, origin);
+    frame.wire.playerstate.pm_velocity.read.value.delta_bits = UINT8_C(7);
+    frame.wire.playerstate.pm_velocity.read.diff_bits = 0;
+    q2proto_var_coords_set_float(
+        &frame.wire.playerstate.pm_velocity.read.value.values, velocity);
+
+    frame.legacy_player.pmove.pm_type =
+        static_cast<pmtype_t>(movement_type);
+    frame.legacy_player.pmove.pm_flags =
+        static_cast<uint16_t>(movement_flags);
+    VectorCopy(origin, frame.legacy_player.pmove.origin);
+    VectorCopy(velocity, frame.legacy_player.pmove.velocity);
 }
 
 sv_snapshot_shadow_config_v1 snapshot_shadow_config(
@@ -331,19 +769,36 @@ sv_snapshot_shadow_ref_v1 commit_server_frame(
     frame.wire.areabits = frame.area.data();
     frame.wire.areabits_len =
         static_cast<uint32_t>(frame.area.size());
+    /* q2proto's frame carrier is direction-sensitive: the server writer owns
+     * the write union while the independently reconstructed client owns the
+     * read union. Keep this shared fixture honest by presenting a server-only
+     * copy with the exact absolute authoritative movement values. */
+    q2proto_svc_frame_t server_wire = frame.wire;
+    q2proto_var_coords_set_float(
+        &server_wire.playerstate.pm_origin.write.prev,
+        frame.legacy_player.pmove.origin);
+    q2proto_var_coords_set_float(
+        &server_wire.playerstate.pm_origin.write.current,
+        frame.legacy_player.pmove.origin);
+    q2proto_var_coords_set_float(
+        &server_wire.playerstate.pm_velocity.write.prev,
+        frame.legacy_player.pmove.velocity);
+    q2proto_var_coords_set_float(
+        &server_wire.playerstate.pm_velocity.write.current,
+        frame.legacy_player.pmove.velocity);
 
     sv_snapshot_shadow_frame_v1 input{};
     input.struct_size = sizeof(input);
     input.schema_version = SV_SNAPSHOT_SHADOW_VERSION;
-    input.wire_frame = &frame.wire;
+    input.wire_frame = &server_wire;
     input.authoritative_server_tick =
         static_cast<uint32_t>(frame.wire.serverframe);
     input.authoritative_tick_delta =
         frame.wire.deltaframe > 0 ? 1u : 0u;
     input.authoritative_server_time_us = server_time_us;
     input.controlled_entity_index = 1;
-    input.canonical_movement_type = 0;
-    input.canonical_movement_flags = 0;
+    input.canonical_movement_type = frame.canonical_movement_type;
+    input.canonical_movement_flags = frame.canonical_movement_flags;
     input.team_id = 0;
     input.consumed_command = frame.consumed_command;
     CHECK(SV_SnapshotShadowBeginFrameV1(shadow, &input) ==
@@ -394,6 +849,8 @@ void install_legacy_frame(const frame_carrier_t &frame)
                 frame.area.size());
     cl.frame.ps = frame.legacy_player;
     cl.frame.clientNum = 0;
+    cl.frame.canonical_server_time_valid = false;
+    cl.frame.canonical_server_time_us = 0;
     cl.frame.consumed_command = frame.consumed_command;
     cl.frame.numEntities = static_cast<int>(kEntityCount);
     cl.frame.firstEntity = 0;
@@ -413,8 +870,11 @@ worr_native_snapshot_expectation_v1 publish_client_expectation(
     for (uint32_t index = 0; index < frame.delta_count; ++index)
         CL_SnapshotShadowCaptureEntityDelta(&frame.deltas[index]);
     install_legacy_frame(frame);
+    cl.frame.canonical_server_time_us = server_time_us;
+    cl.frame.canonical_server_time_valid = true;
     CHECK(CL_SnapshotShadowAcceptFrameEx(
-        server_time_us, 1, 0, 0, 0,
+        server_time_us, 1, frame.canonical_movement_type,
+        frame.canonical_movement_flags, 0,
         CL_SNAPSHOT_SHADOW_ACCEPT_COMPARE_LEGACY));
 
     cl_snapshot_shadow_status_v1 status{};
@@ -635,19 +1095,26 @@ sv_native_shadow_observe_result_v1 feed_record_to_server(
 
 void confirm_public_capability(uint32_t official_epoch)
 {
+    CL_NetCapabilityReset(official_epoch);
+    CHECK(CL_NetCapabilityPacketBegin());
+    CHECK(CL_NetCapabilityObserveSetting(
+        WORR_NET_CAPABILITY_CONFIRM_EPOCH_SETTING,
+        static_cast<int32_t>(official_epoch)));
+    CHECK(CL_NetCapabilityObserveSetting(
+        WORR_NET_CAPABILITY_CONFIRM_SUPPORTED_SETTING,
+        static_cast<int32_t>(kPublicCapabilities)));
+    CHECK(CL_NetCapabilityObserveSetting(
+        WORR_NET_CAPABILITY_CONFIRM_NEGOTIATED_SETTING,
+        static_cast<int32_t>(kPublicCapabilities)));
+    CHECK(CL_NetCapabilityPacketEnd());
+
     worr_net_capability_state_v1 state{};
-    CHECK(Worr_NetCapabilityStateInitV1(
-        &state, official_epoch, kPublicCapabilities,
-        kPublicCapabilities));
-    worr_net_capability_confirm_v1 confirm{};
-    confirm.struct_size = sizeof(confirm);
-    confirm.schema_version = WORR_NET_CAPABILITY_VERSION;
-    confirm.connection_epoch = official_epoch;
-    confirm.supported = kPublicCapabilities;
-    confirm.negotiated = kPublicCapabilities;
-    CHECK(Worr_NetCapabilityConfirmV1(&state, &confirm) ==
-          WORR_NET_CAPABILITY_OK);
-    CL_NativeReadinessPilotCapabilityConfirmed(&state);
+    CHECK(CL_NetCapabilityGetState(&state));
+    CHECK(state.connection_epoch == official_epoch);
+    CHECK(state.phase == WORR_NET_CAPABILITY_CONFIRMED);
+    CHECK(state.negotiated == kPublicCapabilities);
+    CHECK(CL_NetCapabilityHas(
+        WORR_NET_CAP_CONSUMED_COMMAND_CURSOR_V1));
 }
 
 worr_native_readiness_record_v1 activate_snapshot_epoch_client(
@@ -784,6 +1251,13 @@ void reset_fixture(fixture_t &fixture, uint32_t now,
                 sizeof(projection_shadow_cvar));
     std::memset(&projection_debug_cvar, 0,
                 sizeof(projection_debug_cvar));
+    std::memset(&prediction_authority_cvar, 0,
+                sizeof(prediction_authority_cvar));
+    std::memset(&prediction_debug_cvar, 0,
+                sizeof(prediction_debug_cvar));
+    std::memset(&prediction_enabled_cvar, 0,
+                sizeof(prediction_enabled_cvar));
+    std::memset(&paused_cvar, 0, sizeof(paused_cvar));
     reliable_storage.fill(0);
     com_localTime = now;
     fixture.official_epoch = official_epoch;
@@ -1062,6 +1536,96 @@ void check_ack_only(const wire_packet_t &packet,
           expected_message_sequence);
     CHECK(view.entries[0].last_message_sequence ==
           expected_message_sequence);
+}
+
+server_projection_t admit_exact_snapshot(
+    fixture_t &fixture, frame_carrier_t &frame,
+    uint64_t server_time_us, uint32_t queue_time)
+{
+    const auto ref = commit_server_frame(
+        fixture.server_snapshot_shadow, frame, server_time_us);
+    const auto projection = server_projection(
+        fixture.server_snapshot_shadow, ref,
+        fixture.entity_index_limit);
+    const auto expectation = publish_client_expectation(
+        frame, server_time_us);
+    CHECK(snapshot_id_equal(
+        expectation.snapshot_id,
+        projection.view.snapshot->snapshot_id));
+    if (!expectation_parity_equal(expectation.hashes, projection.hashes)) {
+        std::fprintf(
+            stderr,
+            "admit_exact_snapshot parity mismatch id=%u:%u "
+            "legacy=%016llx/%016llx player=%016llx/%016llx "
+            "entity=%016llx/%016llx area=%016llx/%016llx "
+            "event=%016llx/%016llx endpoint=%016llx/%016llx\n",
+            expectation.snapshot_id.epoch,
+            expectation.snapshot_id.sequence,
+            static_cast<unsigned long long>(
+                expectation.hashes.legacy_parity_hash),
+            static_cast<unsigned long long>(
+                projection.hashes.legacy_parity_hash),
+            static_cast<unsigned long long>(
+                expectation.hashes.semantic_player_hash),
+            static_cast<unsigned long long>(
+                projection.hashes.semantic_player_hash),
+            static_cast<unsigned long long>(
+                expectation.hashes.semantic_entity_hash),
+            static_cast<unsigned long long>(
+                projection.hashes.semantic_entity_hash),
+            static_cast<unsigned long long>(
+                expectation.hashes.semantic_area_hash),
+            static_cast<unsigned long long>(
+                projection.hashes.semantic_area_hash),
+            static_cast<unsigned long long>(
+                expectation.hashes.semantic_event_hash),
+            static_cast<unsigned long long>(
+                projection.hashes.semantic_event_hash),
+            static_cast<unsigned long long>(expectation.hashes.endpoint_hash),
+            static_cast<unsigned long long>(projection.hashes.endpoint_hash));
+    }
+    CHECK(expectation_parity_equal(
+        expectation.hashes, projection.hashes));
+    CL_NativeReadinessPilotSnapshotExpectationReady();
+
+    const auto before = cgame_status();
+    CHECK(SV_NativeShadowQueueSnapshotV1(
+        &fixture.server, fixture.server_snapshot_shadow,
+        ref, queue_time));
+    const auto burst = collect_server_burst(
+        fixture, queue_time,
+        projection.view.snapshot->snapshot_id);
+    for (size_t index = burst.size(); index-- > 0;) {
+        CHECK(deliver_to_client(
+                  fixture, burst[index], queue_time) ==
+              NETCHAN_APP_RX_EXPOSE_LEGACY);
+    }
+    const auto after = cgame_status();
+    CHECK(after.accepted == before.accepted + 1u);
+    CHECK(after.consume_attempts == before.consume_attempts + 1u);
+    CHECK(after.admission_generation ==
+          before.admission_generation + 1u);
+    CHECK(after.receipt_flags ==
+          (WORR_CGAME_SNAPSHOT_RECEIPT_TIMELINE_ACCEPTED |
+           WORR_CGAME_SNAPSHOT_RECEIPT_EVENT_FENCE_ACCEPTED));
+    CHECK(snapshot_id_equal(
+        after.last_snapshot_id,
+        projection.view.snapshot->snapshot_id));
+    ++metrics.exact_cgame_consumes;
+
+    CHECK(CL_NativeReadinessPilotOutputDue());
+    const auto acknowledgement = prepare_packet(
+        cls.netchan, queue_time + 1u);
+    check_ack_only(
+        acknowledgement, fixture.transport_epoch,
+        snapshot_frame(burst.front()).message_sequence);
+    accept_packet(cls.netchan, acknowledgement);
+    CHECK(deliver_to_server(
+              fixture, acknowledgement, queue_time + 1u) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    CHECK(server_status(fixture, queue_time + 1u)
+              .retained_count == 0);
+    return projection;
 }
 
 wire_packet_t craft_projection_packet(
@@ -1530,6 +2094,258 @@ void test_production_complete_timeout_reuses_pending_slot()
     cleanup_fixture(fixture);
 }
 
+void test_serialized_v2_prediction_replay_and_reconciliation()
+{
+    fixture_t fixture{};
+    constexpr uint32_t kOfficialEpoch = 8101;
+    constexpr uint32_t kSnapshotEpoch = 18101;
+    constexpr uint32_t kStartTime = 8000;
+    constexpr uint64_t kAuthorityTimeUs = UINT64_C(800000);
+    constexpr float initial_origin[3] = {0.0f, 0.0f, 24.0f};
+    constexpr float initial_velocity[3] = {0.0f, 0.0f, 0.0f};
+
+    reset_fixture(
+        fixture, kStartTime, kOfficialEpoch, kSnapshotEpoch);
+    auto authority_frame = make_keyframe(
+        fixture.entity_index_limit, kKeyframeNumber,
+        kOfficialEpoch, 0);
+    set_frame_movement(
+        authority_frame, initial_origin, initial_velocity,
+        PMF_ON_GROUND);
+    (void)admit_exact_snapshot(
+        fixture, authority_frame, kAuthorityTimeUs,
+        kStartTime + 10u);
+    CHECK(authority_frame.consumed_command.cursor.epoch ==
+          kOfficialEpoch);
+    CHECK(authority_frame.consumed_command.cursor.contiguous_sequence == 0);
+
+    install_prediction_host();
+    CG_SnapshotTimeline_Reset(cls.realtime);
+    CL_ResetCGamePredictionInputDiagnostics();
+    CHECK(cl.cmdNumber == 0);
+    const usercmd_t first = prediction_command(1);
+    set_pending_command(first);
+    const uint32_t trace_count_before = metrics.collision_traces;
+    CL_PredictMovement();
+    ++metrics.v2_prediction_replays;
+    CHECK(metrics.collision_traces > trace_count_before);
+    CHECK(metrics.point_contents_queries != 0);
+    auto pending_range = resolve_prediction_range(
+        authority_frame.consumed_command);
+    CHECK(pending_range.result == WORR_CGAME_PREDICTION_INPUT_OK);
+    CHECK(pending_range.command_count == 0);
+    CHECK((pending_range.flags &
+           WORR_CGAME_PREDICTION_INPUT_HAS_PENDING) != 0);
+    require_prediction_record_matches_oracle(
+        1, authority_frame.consumed_command);
+    const worr_prediction_state_v1 pending_state =
+        cl.predicted_states[1u & CMD_MASK];
+    const uint64_t pending_state_hash =
+        cl.predicted_state_hashes[1u & CMD_MASK];
+    const uint64_t pending_collision_hash =
+        cl.predicted_collision_hashes[1u & CMD_MASK];
+    const uint64_t pending_replay_hash =
+        cl.predicted_replay_chain_hashes[1u & CMD_MASK];
+
+    finalize_prediction_command(1, first);
+    clear_pending_command();
+    CL_PredictMovement();
+    ++metrics.v2_prediction_replays;
+    const auto finalized_range = resolve_prediction_range(
+        authority_frame.consumed_command);
+    CHECK(finalized_range.result == WORR_CGAME_PREDICTION_INPUT_OK);
+    CHECK(finalized_range.command_count == 1);
+    CHECK((finalized_range.flags &
+           WORR_CGAME_PREDICTION_INPUT_HAS_PENDING) == 0);
+    CHECK(std::memcmp(
+              &pending_state, &cl.predicted_states[1u & CMD_MASK],
+              sizeof(pending_state)) == 0);
+    CHECK(pending_state_hash ==
+          cl.predicted_state_hashes[1u & CMD_MASK]);
+    CHECK(pending_collision_hash ==
+          cl.predicted_collision_hashes[1u & CMD_MASK]);
+    CHECK(pending_replay_hash ==
+          cl.predicted_replay_chain_hashes[1u & CMD_MASK]);
+    ++metrics.pending_finalized_matches;
+    require_prediction_record_matches_oracle(
+        1, authority_frame.consumed_command);
+
+    float bounded_origin[3];
+    float bounded_velocity[3];
+    VectorCopy(pending_state.origin, bounded_origin);
+    VectorCopy(pending_state.velocity, bounded_velocity);
+    bounded_origin[1] += 5.0f;
+    auto bounded_frame = make_delta_frame(
+        authority_frame, false, kKeyframeNumber + 1u,
+        kKeyframeNumber);
+    set_frame_consumed_sequence(
+        bounded_frame, kOfficialEpoch, 1);
+    set_frame_movement(
+        bounded_frame, bounded_origin, bounded_velocity,
+        pending_state.movement_flags, pending_state.movement_type);
+    (void)admit_exact_snapshot(
+        fixture, bounded_frame, kAuthorityTimeUs + UINT64_C(16000),
+        kStartTime + 20u);
+    const auto before_bounded =
+        CG_SnapshotTimeline_PredictionTelemetry();
+    CL_CheckPredictionError();
+    const auto after_bounded =
+        CG_SnapshotTimeline_PredictionTelemetry();
+    CHECK(after_bounded.correction_count ==
+          before_bounded.correction_count + 1u);
+    CHECK(after_bounded.hard_reset_count ==
+          before_bounded.hard_reset_count);
+    CHECK(after_bounded.last_correction_reason ==
+          cg_prediction_correction_reason_t::state_divergence);
+    CHECK(std::fabs(cl.prediction_error[0]) +
+              std::fabs(cl.prediction_error[1]) +
+              std::fabs(cl.prediction_error[2]) >
+          0.0f);
+    CHECK(std::fabs(cl.prediction_error[0]) +
+              std::fabs(cl.prediction_error[1]) +
+              std::fabs(cl.prediction_error[2]) <=
+          80.0f);
+    ++metrics.bounded_corrections;
+
+    float threshold_origin[3];
+    VectorCopy(bounded_origin, threshold_origin);
+    threshold_origin[0] += 100.0f;
+    auto threshold_frame = make_delta_frame(
+        bounded_frame, false, kKeyframeNumber + 2u,
+        kKeyframeNumber + 1u);
+    set_frame_consumed_sequence(
+        threshold_frame, kOfficialEpoch, 1);
+    set_frame_movement(
+        threshold_frame, threshold_origin, bounded_velocity,
+        pending_state.movement_flags, pending_state.movement_type);
+    (void)admit_exact_snapshot(
+        fixture, threshold_frame,
+        kAuthorityTimeUs + UINT64_C(32000),
+        kStartTime + 30u);
+    const auto before_threshold =
+        CG_SnapshotTimeline_PredictionTelemetry();
+    CL_CheckPredictionError();
+    const auto after_threshold =
+        CG_SnapshotTimeline_PredictionTelemetry();
+    CHECK(after_threshold.correction_count ==
+          before_threshold.correction_count + 1u);
+    CHECK(after_threshold.hard_reset_count ==
+          before_threshold.hard_reset_count + 1u);
+    CHECK(after_threshold.last_correction_reason ==
+          cg_prediction_correction_reason_t::
+              correction_threshold_exceeded);
+    CHECK(cl.prediction_error[0] == 0.0f &&
+          cl.prediction_error[1] == 0.0f &&
+          cl.prediction_error[2] == 0.0f);
+    ++metrics.threshold_corrections;
+    cleanup_fixture(fixture);
+
+    constexpr uint32_t kBoundaryOfficialEpoch = 8102;
+    constexpr uint32_t kBoundarySnapshotEpoch = 18102;
+    reset_fixture(
+        fixture, kStartTime + 100u, kBoundaryOfficialEpoch,
+        kBoundarySnapshotEpoch);
+    auto boundary_frame = make_keyframe(
+        fixture.entity_index_limit, kKeyframeNumber,
+        kBoundaryOfficialEpoch, 0);
+    set_frame_movement(
+        boundary_frame, initial_origin, initial_velocity,
+        PMF_ON_GROUND);
+    (void)admit_exact_snapshot(
+        fixture, boundary_frame,
+        kAuthorityTimeUs + UINT64_C(100000),
+        kStartTime + 110u);
+    install_prediction_host();
+    CL_ResetCGamePredictionInputDiagnostics();
+    for (uint32_t sequence = 1; sequence <= 127; ++sequence) {
+        finalize_prediction_command(
+            sequence, prediction_command(sequence));
+    }
+    clear_pending_command();
+    const auto range_127 = resolve_prediction_range(
+        boundary_frame.consumed_command);
+    CHECK(range_127.result == WORR_CGAME_PREDICTION_INPUT_OK);
+    CHECK(range_127.command_count == 127);
+    CL_PredictMovement();
+    ++metrics.v2_prediction_replays;
+    CHECK(cl.predicted_sequences[127u & CMD_MASK] == 127u);
+    require_prediction_record_matches_oracle(
+        127, boundary_frame.consumed_command);
+    ++metrics.range_127_successes;
+
+    finalize_prediction_command(128, prediction_command(128));
+    const auto range_128 = resolve_prediction_range(
+        boundary_frame.consumed_command);
+    CHECK(range_128.result ==
+          WORR_CGAME_PREDICTION_INPUT_RANGE_EXHAUSTED);
+    CHECK((range_128.flags &
+           WORR_CGAME_PREDICTION_INPUT_HARD_RESYNC_REQUIRED) != 0);
+    CL_PredictMovement();
+    ++metrics.v2_prediction_replays;
+    for (uint32_t slot = 0; slot < CMD_BACKUP; ++slot)
+        CHECK(cl.predicted_sequences[slot] == 0);
+    cl_cgame_prediction_input_diagnostics_v1 diagnostics{};
+    CHECK(CL_GetCGamePredictionInputDiagnostics(&diagnostics));
+    CHECK(diagnostics.last_result ==
+          WORR_CGAME_PREDICTION_INPUT_RANGE_EXHAUSTED);
+    CHECK(diagnostics.failures != 0);
+    ++metrics.range_128_resets;
+    cleanup_fixture(fixture);
+}
+
+void test_prediction_receipt_requires_event_fence()
+{
+    fixture_t fixture{};
+    constexpr uint32_t kOfficialEpoch = 8103;
+    constexpr uint32_t kSnapshotEpoch = 18103;
+    constexpr uint32_t kStartTime = 8200;
+    constexpr uint64_t kServerTimeUs = UINT64_C(900000);
+
+    reset_fixture(
+        fixture, kStartTime, kOfficialEpoch, kSnapshotEpoch);
+    auto frame = make_keyframe(
+        fixture.entity_index_limit, kKeyframeNumber,
+        kOfficialEpoch, 0);
+    const auto ref = commit_server_frame(
+        fixture.server_snapshot_shadow, frame, kServerTimeUs);
+    const auto projection = server_projection(
+        fixture.server_snapshot_shadow, ref,
+        fixture.entity_index_limit);
+    CHECK(projection.view.snapshot != nullptr);
+
+    const auto before = cgame_status();
+    CHECK(CG_EventRuntimeResetSnapshot(kSnapshotEpoch + 1u) ==
+          CG_EVENT_RUNTIME_OK);
+    CHECK(cgame_timeline()->ConsumeCanonicalSnapshot(
+        &projection.view, &projection.hashes,
+        kServerTimeUs + UINT64_C(1000)));
+
+    const auto after = cgame_status();
+    CHECK(after.accepted == before.accepted + 1u);
+    CHECK(after.receipt_flags ==
+          WORR_CGAME_SNAPSHOT_RECEIPT_TIMELINE_ACCEPTED);
+    CHECK(after.last_event_fence_result ==
+          CG_EVENT_RUNTIME_WRONG_EPOCH);
+
+    cg_canonical_prediction_snapshot_v2 authority{};
+    CHECK(CG_CanonicalSnapshotTimelineCopyPredictionSnapshot(
+              projection.view.snapshot->snapshot_id.sequence,
+              &authority) == WORR_SNAPSHOT_TIMELINE_NOT_FOUND);
+
+    cg_canonical_snapshot_timeline_diagnostics_v1 diagnostics{};
+    CHECK(CG_CanonicalSnapshotTimelineGetDiagnostics(&diagnostics));
+    worr_snapshot_v2 copied{};
+    CHECK(CG_CanonicalSnapshotTimelineCopySnapshot(
+              diagnostics.latest_ref, &copied) ==
+          WORR_SNAPSHOT_TIMELINE_OK);
+    CHECK(snapshot_id_equal(
+        copied.snapshot_id,
+        projection.view.snapshot->snapshot_id));
+
+    ++metrics.prediction_receipt_fence_blocks;
+    cleanup_fixture(fixture);
+}
+
 void test_legacy_entity_domain_activation_and_admission()
 {
     fixture_t fixture{};
@@ -1640,6 +2456,10 @@ extern "C" cvar_t *Cvar_Get(
     const char *name, const char *, int)
 {
     if (name &&
+        std::strcmp(name, "cg_prediction_snapshot_authority") == 0) {
+        return &prediction_authority_cvar;
+    }
+    if (name &&
         std::strcmp(name, "cl_worr_native_event_shadow") == 0) {
         return &event_shadow_cvar;
     }
@@ -1652,6 +2472,11 @@ extern "C" cvar_t *Cvar_Get(
         return &probe_hold_cvar;
     }
     if (name &&
+        std::strcmp(
+            name, "cl_worr_native_snapshot_timeline_owned") == 0) {
+        return &snapshot_timeline_owned_cvar;
+    }
+    if (name &&
         std::strcmp(name, "cl_snapshot_shadow_debug") == 0) {
         return &projection_debug_cvar;
     }
@@ -1660,6 +2485,13 @@ extern "C" cvar_t *Cvar_Get(
         return &projection_shadow_cvar;
     }
     return &native_shadow_cvar;
+}
+
+extern "C" void Cvar_SetByVar(cvar_t *var, const char *value, from_t)
+{
+    CHECK(var != nullptr && value != nullptr);
+    var->integer = value[0] == '1' ? 1 : 0;
+    var->value = static_cast<float>(var->integer);
 }
 
 extern "C" bool Netchan_SetApplicationTxHook(
@@ -1770,11 +2602,24 @@ extern "C" void Com_LPrintf(
     va_end(arguments);
 }
 
+extern "C" void Com_Error(
+    error_type_t, const char *format, ...)
+{
+    va_list arguments;
+    va_start(arguments, format);
+    std::vfprintf(stderr, format, arguments);
+    va_end(arguments);
+    std::fputc('\n', stderr);
+    std::exit(EXIT_FAILURE);
+}
+
 int main()
 {
     test_production_snapshot_loss_reorder_ack_loss_and_mismatch();
     test_production_expectation_window_with_delayed_confirm();
     test_production_complete_timeout_reuses_pending_slot();
+    test_serialized_v2_prediction_replay_and_reconciliation();
+    test_prediction_receipt_requires_event_fence();
     test_legacy_entity_domain_activation_and_admission();
     test_wrong_snapshot_epoch_fails_closed();
     std::printf(
@@ -1783,7 +2628,13 @@ int main()
         "ack_loss=%u repeat_revalidate=%u cgame_once=%u "
         "hash_quarantine=%u wrong_epoch=%u real_domains=%u "
         "expectation_rollovers=%u timeout_recoveries=%u "
-        "prediction_ready=%u digest=%016llx\n",
+        "prediction_ready=%u receipt_fence_blocks=%u "
+        "v2_replays=%u pending_finalized=%u "
+        "oracle_matches=%u bounded_corrections=%u "
+        "threshold_corrections=%u range127=%u range128_reset=%u "
+        "collision_traces=%u point_contents=%u "
+        "state_hash=%016llx collision_hash=%016llx "
+        "replay_hash=%016llx digest=%016llx\n",
         metrics.fragmented_messages,
         metrics.server_to_client_losses,
         metrics.reordered_deliveries,
@@ -1797,6 +2648,19 @@ int main()
         metrics.expectation_window_rollovers,
         metrics.complete_timeout_recoveries,
         metrics.prediction_authorities,
+        metrics.prediction_receipt_fence_blocks,
+        metrics.v2_prediction_replays,
+        metrics.pending_finalized_matches,
+        metrics.oracle_matches,
+        metrics.bounded_corrections,
+        metrics.threshold_corrections,
+        metrics.range_127_successes,
+        metrics.range_128_resets,
+        metrics.collision_traces,
+        metrics.point_contents_queries,
+        static_cast<unsigned long long>(last_prediction_state_hash),
+        static_cast<unsigned long long>(last_prediction_collision_hash),
+        static_cast<unsigned long long>(last_prediction_replay_hash),
         static_cast<unsigned long long>(metrics_digest()));
     return EXIT_SUCCESS;
 }

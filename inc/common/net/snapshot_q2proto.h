@@ -178,6 +178,13 @@ worr_snapshot_q2proto_result_v2 Worr_SnapshotQ2ProtoViewV2(
     worr_snapshot_projection_view_v2 *view_out,
     worr_snapshot_projection_hashes_v2 *hashes_out);
 
+/* Rekey every retained projection to a negotiated epoch without invalidating
+ * process-local refs or discarding q2proto delta bases.  The operation is
+ * transactional: invalid retained state leaves the context unchanged. */
+worr_snapshot_q2proto_result_v2 Worr_SnapshotQ2ProtoRebindEpochV2(
+    worr_snapshot_q2proto_context_v2 *context,
+    uint32_t new_snapshot_epoch);
+
 worr_snapshot_q2proto_result_v2 Worr_SnapshotQ2ProtoResetV2(
     worr_snapshot_q2proto_context_v2 *context,
     uint32_t new_snapshot_epoch);

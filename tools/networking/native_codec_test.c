@@ -235,6 +235,37 @@ static worr_event_record_v1 make_event_base(uint32_t sequence)
     return record;
 }
 
+static bool make_local_action_shadow_receipt(
+    worr_local_action_shadow_authority_receipt_v1 *receipt_out)
+{
+    worr_command_record_v1 command = make_command();
+    worr_local_action_observation_state_v1 before;
+    worr_local_action_observation_state_v1 after;
+    worr_local_action_observation_record_v1 observation;
+    worr_local_action_shadow_v1 shadow;
+
+    memset(&before, 0, sizeof(before));
+    before.struct_size = sizeof(before);
+    before.schema_version = WORR_LOCAL_ACTION_OBSERVATION_ABI_VERSION;
+    before.flags = WORR_LOCAL_ACTION_OBSERVATION_PLAYER_ALIVE |
+                   WORR_LOCAL_ACTION_OBSERVATION_PLAYER_ELIGIBLE;
+    before.phase = WORR_LOCAL_ACTION_OBSERVATION_READY;
+    before.active_weapon_id = 9;
+    before.presentation_frame = 7;
+    before.presentation_rate = 10;
+    after = before;
+    after.presentation_frame = 8;
+    memset(&observation, 0, sizeof(observation));
+    memset(&shadow, 0, sizeof(shadow));
+    memset(receipt_out, 0, sizeof(*receipt_out));
+    return Worr_LocalActionObservationBuildV1(
+               0, &command, &before, &after, &observation) &&
+           Worr_LocalActionShadowBuildV1(WORR_LOCAL_ACTION_CATALOG_BLASTER,
+                                          &observation, &shadow) &&
+           Worr_LocalActionShadowAuthorityReceiptBuildV1(&shadow,
+                                                           receipt_out);
+}
+
 static worr_event_record_v1 make_event_kind(uint16_t kind,
                                             uint32_t sequence)
 {
@@ -464,6 +495,42 @@ static bool test_event_codecs(void)
         CHECK(memcmp(decoded.payload, &receipt, sizeof(receipt)) == 0);
 
         source.source_entity.index = 1;
+        CHECK(!Worr_EventRecordValidateV1(&source, TEST_MAX_ENTITIES));
+    }
+
+    {
+        worr_local_action_shadow_authority_receipt_v1 receipt;
+        CHECK(make_local_action_shadow_receipt(&receipt));
+        CHECK(Worr_LocalActionShadowAuthorityReceiptValidateV1(&receipt));
+
+        source = make_event_base(52);
+        source.flags = WORR_EVENT_FLAG_HAS_AUTHORITY_ID |
+                       WORR_EVENT_FLAG_CRITICAL;
+        source.source_ordinal = 0;
+        source.source_entity.index = WORR_EVENT_NO_ENTITY;
+        source.source_entity.generation = 0;
+        source.subject_entity.index = WORR_EVENT_NO_ENTITY;
+        source.subject_entity.generation = 0;
+        source.event_type = WORR_EVENT_TYPE_AUTHORITY_RECEIPT;
+        source.payload_kind =
+            WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1;
+        source.payload_size = sizeof(receipt);
+        memcpy(source.payload, &receipt, sizeof(receipt));
+        CHECK(Worr_EventRecordValidateV1(&source, TEST_MAX_ENTITIES));
+        CHECK(Worr_NativeCodecEventEncodeV1(
+                  &source, TEST_MAX_ENTITIES, encoded, sizeof(encoded),
+                  &encoded_bytes) == WORR_NATIVE_CODEC_OK);
+        CHECK(Worr_NativeCodecInspectV1(encoded, encoded_bytes, &info) ==
+              WORR_NATIVE_CODEC_OK);
+        CHECK(info.range_counts[0] == sizeof(receipt));
+        CHECK(Worr_NativeCodecEventDecodeV1(
+                  encoded, encoded_bytes, TEST_MAX_ENTITIES, &decoded) ==
+              WORR_NATIVE_CODEC_OK);
+        CHECK(decoded.payload_kind ==
+              WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1);
+        CHECK(memcmp(decoded.payload, &receipt, sizeof(receipt)) == 0);
+
+        source.payload[24] ^= 1;
         CHECK(!Worr_EventRecordValidateV1(&source, TEST_MAX_ENTITIES));
     }
 

@@ -17,6 +17,7 @@ uint32_t authority_first_sequence;
 uint32_t authority_epoch_high_water;
 bool authority_requires_resync;
 uint8_t native_consumer_cookie;
+cl_cgame_event_runtime_diagnostic_v1 native_diagnostic;
 
 enum class status_check_t {
     valid,
@@ -199,8 +200,15 @@ worr_cgame_event_runtime_result_v1 native_reset_authority(
      * so a stale descriptor cannot be accepted through the direct API. */
     if (stream_epoch == 0 && first_sequence == 0)
         return CL_CGameEventRuntimeQuiesceAuthority();
-    return CL_CGameEventRuntimeResetAuthority(
+    const auto result = CL_CGameEventRuntimeResetAuthority(
         stream_epoch, first_sequence);
+    native_diagnostic = {};
+    native_diagnostic.reset_epoch = stream_epoch;
+    native_diagnostic.reset_sequence = first_sequence;
+    native_diagnostic.reset_result = result;
+    native_diagnostic.reset_consumer_attached =
+        event_runtime_consumer ? 1u : 0u;
+    return result;
 }
 
 worr_cgame_event_runtime_result_v1 native_submit_authority(
@@ -214,8 +222,16 @@ worr_cgame_event_runtime_result_v1 native_submit_authority(
 bool native_get_status(
     void *opaque, worr_cgame_event_runtime_status_v1 *status_out)
 {
-    return opaque == &native_consumer_cookie &&
-           CL_CGameEventRuntimeGetStatus(status_out);
+    const bool valid = opaque == &native_consumer_cookie &&
+                       CL_CGameEventRuntimeGetStatus(status_out);
+    if (native_diagnostic.reset_epoch != 0) {
+        native_diagnostic.status_valid = valid ? 1u : 0u;
+        native_diagnostic.status_consumer_attached =
+            event_runtime_consumer ? 1u : 0u;
+        if (valid)
+            native_diagnostic.status = *status_out;
+    }
+    return valid;
 }
 
 } // namespace
@@ -414,22 +430,30 @@ CL_CGameEventRuntimeSubmitAuthoritativeBatch(
 bool CL_CGameEventRuntimeGetStatus(
     worr_cgame_event_runtime_status_v1 *status_out)
 {
-    if (!status_out || !event_runtime_consumer)
+    if (!status_out || !event_runtime_consumer) {
+        native_diagnostic.status_owner_failure = 1u;
         return false;
+    }
     worr_cgame_event_runtime_status_v1 status{};
     if (!read_status(status)) {
+        native_diagnostic.status_owner_failure = 2u;
+        native_diagnostic.status = status;
         quarantine_consumer();
         return false;
     }
+    native_diagnostic.status = status;
     const auto status_check = check_status_against_owner(status);
     if (status_check == status_check_t::invalid) {
+        native_diagnostic.status_owner_failure = 3u;
         quarantine_consumer();
         return false;
     }
     if (status_check == status_check_t::requires_resync) {
+        native_diagnostic.status_owner_failure = 4u;
         enter_runtime_requested_resync();
         return false;
     }
+    native_diagnostic.status_owner_failure = 0;
     *status_out = status;
     return true;
 }
@@ -437,6 +461,15 @@ bool CL_CGameEventRuntimeGetStatus(
 bool CL_CGameEventRuntimeRequiresResync(void)
 {
     return authority_requires_resync;
+}
+
+bool CL_CGameEventRuntimeGetDiagnosticV1(
+    cl_cgame_event_runtime_diagnostic_v1 *diagnostic_out)
+{
+    if (!diagnostic_out)
+        return false;
+    *diagnostic_out = native_diagnostic;
+    return true;
 }
 
 bool CL_CGameEventRuntimeGetNativeConsumerV1(

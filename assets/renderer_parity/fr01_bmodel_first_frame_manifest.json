@@ -43,6 +43,27 @@
           "min_backend_intersection_over_union": 0.99
         }
       ]
+    },
+    {
+      "id": "global_fullbright_lightmapped_world",
+      "config": "renderer_parity/fr01_bmodel_first_frame_fullbright_world.cfg",
+      "capture": "fr01_bmodel_first_frame_fullbright_world.tga",
+      "crop": [250, 190, 100, 340],
+      "metrics": {
+        "pixel_threshold": 0,
+        "max_mean_absolute_rgb": [0, 0, 0],
+        "max_pixels_over_threshold_percent": 0
+      },
+      "probes": [
+        {
+          "name": "global_fullbright_legacy_lightmap_surface",
+          "min_color": [24, 40, 72],
+          "max_color": [24, 40, 72],
+          "min_pixels_per_backend": 30000,
+          "max_backend_count_delta_percent": 0,
+          "min_backend_intersection_over_union": 1
+        }
+      ]
     }
   ]
 }

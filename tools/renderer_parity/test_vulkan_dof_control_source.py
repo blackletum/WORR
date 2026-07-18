@@ -51,12 +51,15 @@ class VulkanDofControlSourceTests(unittest.TestCase):
         self.assertIn("focus_dist <= 0.0", DOF_SHADER)
         self.assertIn("blur_range <= 0.0", DOF_SHADER)
 
-    def test_menu_rectangle_converts_top_origin_ui_pixels_for_vulkan(self) -> None:
-        self.assertIn("cgame supplies top-origin pixels", VK_POST)
-        self.assertIn("1.0f - bottom / output_height", VK_POST)
-        self.assertIn("1.0f - top / output_height", VK_POST)
+    def test_virtual_dof_quad_matches_the_opengl_clipping_contract(self) -> None:
+        self.assertIn("R_UIScalePixelRectToVirtual", VK_POST)
+        self.assertIn("virtual_top = top * base_scale + scene_height -", VK_POST)
+        self.assertIn("VK_ATTACHMENT_LOAD_OP_LOAD", VK_POST)
+        self.assertIn("dof_preserve_history", VK_POST)
+        self.assertIn("dof_composite_rect", VK_POST)
         self.assertIn("depth_sampler", DOF_SHADER)
         self.assertIn("vec4 rect;", DOF_SHADER)
+        self.assertIn("tc = (tc - push_data.rect.xy) / rect_size;", DOF_SHADER)
 
     def test_dof_runs_after_scene_copy_and_before_final_composite(self) -> None:
         final_postprocess = VK_MAIN.index("if (final_postprocess) {")

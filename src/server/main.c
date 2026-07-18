@@ -17,6 +17,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 */
 
 #include "server.h"
+#include "server/local_action_shadow_authority.h"
 #include "server/native_shadow.h"
 #include "server/snapshot_shadow.h"
 #include "client/input.h"
@@ -1905,8 +1906,9 @@ static bool SV_BotAddImmediate(const char *name, const char *team,
         return false;
     }
 
-    memset(newcl, 0, sizeof(*newcl));
     number = newcl - svs.client_pool;
+    SV_LocalActionShadowAuthorityResetClient((uint32_t)number);
+    memset(newcl, 0, sizeof(*newcl));
     newcl->number = newcl->infonum = number;
     newcl->protocol = -1;
     newcl->bot = true;
@@ -7018,6 +7020,7 @@ static void SVC_DirectConnect(void)
     // build a new connection
     // accept the new client
     // this is the only place a client_t is ever initialized
+    SV_LocalActionShadowAuthorityResetClient((uint32_t)number);
     memset(newcl, 0, sizeof(*newcl));
     newcl->number = newcl->infonum = number;
     newcl->challenge = params.challenge; // save challenge for checksumming
@@ -7100,25 +7103,21 @@ static void SVC_DirectConnect(void)
             sv_worr_native_snapshot_shadow &&
             sv_worr_native_snapshot_shadow->integer != 0;
 
-        /* This slice deliberately has one server-originated DATA owner.
-         * A combined event+snapshot sender will be negotiated separately;
-         * enabling both current pilots is an ambiguous configuration and
-         * therefore leaves the private protocol entirely disabled. */
-        if (!(event_mode && snapshot_mode)) {
-            sv_native_shadow_peer_v1 *pilot =
-                SV_Mallocz(sizeof(*pilot));
-            const sv_native_shadow_mode_v1 native_shadow_mode =
-                snapshot_mode
-                    ? SV_NATIVE_SHADOW_MODE_SNAPSHOT
-                    : (event_mode ? SV_NATIVE_SHADOW_MODE_EVENT
-                                  : SV_NATIVE_SHADOW_MODE_COMMAND);
-            if (SV_NativeShadowPeerInitModeV1(
-                    pilot, &newcl->netchan, svs.realtime,
-                    native_shadow_mode)) {
-                newcl->worr_native_shadow = pilot;
-            } else {
-                Z_Free(pilot);
-            }
+        sv_native_shadow_peer_v1 *pilot =
+            SV_Mallocz(sizeof(*pilot));
+        const sv_native_shadow_mode_v1 native_shadow_mode =
+            event_mode && snapshot_mode
+                ? SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT
+                : (snapshot_mode
+                       ? SV_NATIVE_SHADOW_MODE_SNAPSHOT
+                       : (event_mode ? SV_NATIVE_SHADOW_MODE_EVENT
+                                     : SV_NATIVE_SHADOW_MODE_COMMAND));
+        if (SV_NativeShadowPeerInitModeV1(
+                pilot, &newcl->netchan, svs.realtime,
+                native_shadow_mode)) {
+            newcl->worr_native_shadow = pilot;
+        } else {
+            Z_Free(pilot);
         }
     }
 

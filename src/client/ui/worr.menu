@@ -72,8 +72,8 @@ begin video
     values "video mode" r_fullscreen windowed $$r_modelist
     pairs "borderless" r_borderless off 0 fullscreen 1 always 2
     action --align "multi-monitor settings..." pushmenu multimonitor
-    toggle "vertical sync" gl_swapinterval
-    pairs "anti-aliasing" gl_multisamples no 0 "2x MSAA" 2 "4x MSAA" 4 "8x MSAA" 8
+    toggle "vertical sync" r_vsync
+    pairs "anti-aliasing" r_multisamples no 0 "2x MSAA" 2 "4x MSAA" 4 "8x MSAA" 8
     range "texture gamma" r_gamma 0.3 1.3
     toggle "hardware gamma" r_hwgamma
     range "texture quality" r_picmip 0 3 1
@@ -83,11 +83,11 @@ begin video
         bilinear GL_LINEAR_MIPMAP_NEAREST \
         trilinear GL_LINEAR_MIPMAP_LINEAR
     pairs "anisotropic filter" r_anisotropy no 1 2x 2 4x 4 8x 8 16x 16
-    range "texture saturation" gl_saturation 0 1
-    pairs "texture intensity" intensity 1x 1 2x 2 3x 3
-    range "lightmap saturation" gl_coloredlightmaps 0 1
-    range "lightmap brightness" gl_brightness 0 0.3
-    values "rendering backend" gl_shaders legacy shaders
+    range "texture saturation" r_texture_saturation 0 1
+    pairs "texture intensity" r_intensity 1x 1 2x 2 3x 3
+    range "lightmap saturation" r_lightmap_saturation 0 1
+    range "lightmap brightness" r_lightmap_brightness 0 0.3
+    pairs "rendering backend" r_renderer OpenGL opengl Vulkan vulkan "Vulkan RTX" rtx
 end
 
 begin multimonitor

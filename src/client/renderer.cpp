@@ -1136,7 +1136,7 @@ void CL_InitRenderer(void)
     }
 
 #if USE_EXTERNAL_RENDERERS
-    r_renderer = Cvar_Get("r_renderer", "opengl", CVAR_RENDERER);
+    r_renderer = Cvar_Get("r_renderer", "opengl", CVAR_ARCHIVE | CVAR_RENDERER);
     r_renderer->generator = r_renderer_g;
     const char *renderer_name = R_NormalizeRendererName(r_renderer->string);
     if (!R_LoadExternalRenderer(renderer_name)) {

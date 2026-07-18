@@ -193,11 +193,13 @@ cvar_t *gl_shadows;
 cvar_t *gl_modulate;
 cvar_t *gl_modulate_world;
 cvar_t *gl_coloredlightmaps;
+cvar_t *r_lightmap_saturation;
 cvar_t *gl_lightmap_bits;
 cvar_t *r_overBrightBits;
 cvar_t *r_mapOverBrightBits;
 cvar_t *r_mapOverBrightCap;
 cvar_t *gl_brightness;
+cvar_t *r_lightmap_brightness;
 cvar_t *gl_dynamic;
 cvar_t *gl_dlight_falloff;
 cvar_t *gl_modulate_entities;
@@ -244,6 +246,9 @@ cvar_t *gl_hdr_auto_min;
 cvar_t *gl_hdr_auto_max;
 cvar_t *gl_hdr_auto_speed;
 cvar_t *gl_swapinterval;
+static cvar_t *r_vsync;
+static cvar_t *gl_multisamples;
+static cvar_t *r_multisamples;
 cvar_t *r_dof;
 cvar_t *r_dof_allow_stencil;
 cvar_t *r_dofBlurRange;
@@ -314,6 +319,10 @@ cvar_t *gl_damageblend_frac;
 
 int32_t gl_shaders_modified;
 static bool gl_lightmap_syncing;
+static bool gl_lightmap_brightness_syncing;
+static bool gl_lightmap_saturation_syncing;
+static bool gl_vsync_syncing;
+static bool gl_multisample_syncing;
 
 typedef struct {
   cvar_t **primary;
@@ -2120,20 +2129,76 @@ static size_t GL_ViewLeaf_m(char *buffer, size_t size) {
 #endif
 
 static void gl_lightmap_changed(cvar_t *self) {
-  lm.scale = Cvar_ClampValue(gl_coloredlightmaps, 0, 1);
+  lm.scale = Cvar_ClampValue(
+      r_lightmap_saturation ? r_lightmap_saturation : gl_coloredlightmaps,
+      0, 1);
   lm.comp = !(gl_config.caps & QGL_CAP_TEXTURE_BITS) ? GL_RGBA
             : lm.scale                               ? GL_RGB
                                                      : GL_LUMINANCE;
-  lm.add = 255 * Cvar_ClampValue(gl_brightness, -1, 1);
+  lm.add = 255 * Cvar_ClampValue(
+      r_lightmap_brightness ? r_lightmap_brightness : gl_brightness, -1, 1);
   lm.modulate = Cvar_ClampValue(gl_modulate, 0, 1e6f);
   lm.modulate *= Cvar_ClampValue(gl_modulate_world, 0, 1e6f);
   lm.modulate *= gl_static.identity_light;
   if (gl_static.use_shaders &&
-      (self == gl_brightness || self == gl_modulate ||
+      (self == gl_brightness || self == r_lightmap_brightness ||
+       self == gl_modulate ||
        self == gl_modulate_world) &&
       !gl_vertexlight->integer)
     return;
   lm.dirty = true; // rebuild all lightmaps next frame
+}
+
+static void gl_lightmap_saturation_changed(cvar_t *self) {
+  if (gl_lightmap_saturation_syncing || !self)
+    return;
+
+  gl_lightmap_saturation_syncing = true;
+  if (self == r_lightmap_saturation && gl_coloredlightmaps)
+    Cvar_SetByVar(gl_coloredlightmaps, self->string, FROM_CODE);
+  else if (self == gl_coloredlightmaps && r_lightmap_saturation)
+    Cvar_SetByVar(r_lightmap_saturation, self->string, FROM_CODE);
+  gl_lightmap_saturation_syncing = false;
+
+  gl_lightmap_changed(self);
+}
+
+static void gl_sync_lightmap_saturation_defaults(void) {
+  if (!r_lightmap_saturation || !gl_coloredlightmaps)
+    return;
+
+  if (!(r_lightmap_saturation->flags & CVAR_MODIFIED) &&
+      (gl_coloredlightmaps->flags & CVAR_MODIFIED))
+    Cvar_SetByVar(r_lightmap_saturation, gl_coloredlightmaps->string,
+                  FROM_CODE);
+  else
+    Cvar_SetByVar(gl_coloredlightmaps, r_lightmap_saturation->string,
+                  FROM_CODE);
+}
+
+static void gl_lightmap_brightness_changed(cvar_t *self) {
+  if (gl_lightmap_brightness_syncing || !self)
+    return;
+
+  gl_lightmap_brightness_syncing = true;
+  if (self == r_lightmap_brightness && gl_brightness)
+    Cvar_SetByVar(gl_brightness, self->string, FROM_CODE);
+  else if (self == gl_brightness && r_lightmap_brightness)
+    Cvar_SetByVar(r_lightmap_brightness, self->string, FROM_CODE);
+  gl_lightmap_brightness_syncing = false;
+
+  gl_lightmap_changed(self);
+}
+
+static void gl_sync_lightmap_brightness_defaults(void) {
+  if (!r_lightmap_brightness || !gl_brightness)
+    return;
+
+  if (!(r_lightmap_brightness->flags & CVAR_MODIFIED) &&
+      (gl_brightness->flags & CVAR_MODIFIED))
+    Cvar_SetByVar(r_lightmap_brightness, gl_brightness->string, FROM_CODE);
+  else
+    Cvar_SetByVar(gl_brightness, r_lightmap_brightness->string, FROM_CODE);
 }
 
 static void gl_modulate_entities_changed(cvar_t *self) {
@@ -2215,9 +2280,75 @@ static void gl_novis_changed(cvar_t *self) {
   glr.viewcluster1 = glr.viewcluster2 = -2;
 }
 
+static void gl_sync_vsync_defaults(void) {
+  if (!r_vsync || !gl_swapinterval)
+    return;
+
+  if (!(r_vsync->flags & CVAR_MODIFIED) &&
+      (gl_swapinterval->flags & CVAR_MODIFIED)) {
+    Cvar_SetByVar(r_vsync, gl_swapinterval->string, FROM_CODE);
+  } else {
+    Cvar_SetByVar(gl_swapinterval, r_vsync->string, FROM_CODE);
+  }
+}
+
 static void gl_swapinterval_changed(cvar_t *self) {
+  if (gl_vsync_syncing || !self)
+    return;
+
+  gl_vsync_syncing = true;
+  int value = Cvar_ClampInteger(self, 0, 1);
+  const char *string = value ? "1" : "0";
+  if (self == r_vsync && gl_swapinterval) {
+    Cvar_SetByVar(gl_swapinterval, string, FROM_CODE);
+  } else if (self == gl_swapinterval && r_vsync) {
+    Cvar_SetByVar(r_vsync, string, FROM_CODE);
+  }
+
   if (vid && vid->swap_interval)
-    vid->swap_interval(self->integer);
+    vid->swap_interval(value);
+
+  gl_vsync_syncing = false;
+}
+
+// gl_multisamples is retained for configs and commands written by older
+// installations.  The shared archived r_multisamples cvar is what every
+// Video UI and renderer now exposes; both settings request renderer restart
+// because the platform context must be recreated with the selected count.
+static void gl_sync_multisample_defaults(void) {
+  if (!r_multisamples || !gl_multisamples)
+    return;
+
+  if (!(r_multisamples->flags & CVAR_MODIFIED) &&
+      (gl_multisamples->flags & CVAR_MODIFIED)) {
+    Cvar_SetByVar(r_multisamples, gl_multisamples->string, FROM_CODE);
+  } else {
+    Cvar_SetByVar(gl_multisamples, r_multisamples->string, FROM_CODE);
+  }
+}
+
+static void gl_multisample_changed(cvar_t *self) {
+  if (gl_multisample_syncing || !self)
+    return;
+
+  gl_multisample_syncing = true;
+  const int value = Cvar_ClampInteger(self, 0, 32);
+  const char *string = va("%d", value);
+  if (r_multisamples)
+    Cvar_SetByVar(r_multisamples, string, FROM_CODE);
+  if (gl_multisamples)
+    Cvar_SetByVar(gl_multisamples, string, FROM_CODE);
+  gl_multisample_syncing = false;
+}
+
+static void gl_register_multisample_cvars(void) {
+  gl_multisamples = Cvar_Get("gl_multisamples", "0",
+                             CVAR_RENDERER | CVAR_NOARCHIVE);
+  r_multisamples = Cvar_Get("r_multisamples", gl_multisamples->string,
+                             CVAR_ARCHIVE | CVAR_RENDERER);
+  gl_sync_multisample_defaults();
+  gl_multisamples->changed = gl_multisample_changed;
+  r_multisamples->changed = gl_multisample_changed;
 }
 
 static void gl_clearcolor_changed(cvar_t *self) {
@@ -2350,7 +2481,12 @@ static void GL_Register(void) {
   gl_modulate_world = Cvar_Get("gl_modulate_world", "1", 0);
   gl_modulate_world->changed = gl_lightmap_changed;
   gl_coloredlightmaps = Cvar_Get("gl_coloredlightmaps", "1", 0);
-  gl_coloredlightmaps->changed = gl_lightmap_changed;
+  r_lightmap_saturation = Cvar_Get("r_lightmap_saturation",
+                                   gl_coloredlightmaps->string,
+                                   CVAR_ARCHIVE);
+  gl_sync_lightmap_saturation_defaults();
+  gl_coloredlightmaps->changed = gl_lightmap_saturation_changed;
+  r_lightmap_saturation->changed = gl_lightmap_saturation_changed;
   gl_lightmap_bits = Cvar_Get("gl_lightmap_bits", "0", 0);
   gl_lightmap_bits->changed = gl_lightmap_changed;
   r_overBrightBits =
@@ -2369,7 +2505,11 @@ static void GL_Register(void) {
       Cvar_Get("r_mapOverBrightCap", r_mapOverBrightCap->string,
                CVAR_ARCHIVE | CVAR_FILES | CVAR_NOARCHIVE);
   gl_brightness = Cvar_Get("gl_brightness", "0", 0);
-  gl_brightness->changed = gl_lightmap_changed;
+  r_lightmap_brightness =
+      Cvar_Get("r_lightmap_brightness", gl_brightness->string, CVAR_ARCHIVE);
+  gl_sync_lightmap_brightness_defaults();
+  gl_brightness->changed = gl_lightmap_brightness_changed;
+  r_lightmap_brightness->changed = gl_lightmap_brightness_changed;
   gl_dynamic = Cvar_Get("gl_dynamic", "1", 0);
   gl_dynamic->changed = gl_lightmap_changed;
   gl_dlight_falloff = Cvar_Get("gl_dlight_falloff", "1", 0);
@@ -2492,8 +2632,13 @@ static void GL_Register(void) {
       "r_resolutionscale_numframesbeforeraising", "200", CVAR_USERINFO);
   r_resolutionscale_targetdrawtime =
       Cvar_Get("r_resolutionscale_targetdrawtime", "1.125", CVAR_SERVERINFO);
-  gl_swapinterval = Cvar_Get("gl_swapinterval", "1", CVAR_ARCHIVE);
+  gl_swapinterval = Cvar_Get("gl_swapinterval", "1",
+                             CVAR_ARCHIVE | CVAR_NOARCHIVE);
+  r_vsync = Cvar_Get("r_vsync", gl_swapinterval->string, CVAR_ARCHIVE);
+  gl_sync_vsync_defaults();
   gl_swapinterval->changed = gl_swapinterval_changed;
+  r_vsync->changed = gl_swapinterval_changed;
+  gl_register_multisample_cvars();
 
   // development variables
   gl_znear = Cvar_Get("gl_znear", "2", CVAR_CHEAT);
@@ -2541,7 +2686,7 @@ static void GL_Register(void) {
   gl_sync_lightmap_defaults();
   gl_lightmap_changed(NULL);
   gl_modulate_entities_changed(NULL);
-  gl_swapinterval_changed(gl_swapinterval);
+  gl_swapinterval_changed(r_vsync);
   gl_clearcolor_changed(gl_clearcolor);
   gl_color_tint_changed(gl_color_tint);
   gl_color_split_shadows_changed(gl_color_split_shadows);
@@ -2560,6 +2705,31 @@ static void GL_Register(void) {
 }
 
 static void GL_Unregister(void) {
+  if (gl_coloredlightmaps &&
+      gl_coloredlightmaps->changed == gl_lightmap_saturation_changed)
+    gl_coloredlightmaps->changed = NULL;
+  if (r_lightmap_saturation &&
+      r_lightmap_saturation->changed == gl_lightmap_saturation_changed)
+    r_lightmap_saturation->changed = NULL;
+  gl_lightmap_saturation_syncing = false;
+  if (gl_brightness && gl_brightness->changed == gl_lightmap_brightness_changed)
+    gl_brightness->changed = NULL;
+  if (r_lightmap_brightness &&
+      r_lightmap_brightness->changed == gl_lightmap_brightness_changed)
+    r_lightmap_brightness->changed = NULL;
+  gl_lightmap_brightness_syncing = false;
+  if (gl_swapinterval && gl_swapinterval->changed == gl_swapinterval_changed)
+    gl_swapinterval->changed = NULL;
+  if (r_vsync && r_vsync->changed == gl_swapinterval_changed)
+    r_vsync->changed = NULL;
+  gl_vsync_syncing = false;
+  if (gl_multisamples && gl_multisamples->changed == gl_multisample_changed)
+    gl_multisamples->changed = NULL;
+  if (r_multisamples && r_multisamples->changed == gl_multisample_changed)
+    r_multisamples->changed = NULL;
+  gl_multisamples = NULL;
+  r_multisamples = NULL;
+  gl_multisample_syncing = false;
   Cmd_RemoveCommand("strings");
   Cmd_RemoveCommand("gfxinfo");
   Cmd_RemoveCommand("r_shadow_dump");
@@ -2588,6 +2758,8 @@ static void APIENTRY myDebugProc(GLenum source, GLenum type, GLuint id,
 
 static void GL_SetupConfig(void) {
   GLint integer = 0;
+  GLint sample_buffers = 0;
+  GLint samples = 0;
 
   qglGetIntegerv(GL_MAX_TEXTURE_SIZE, &integer);
   gl_config.max_texture_size_log2 = Q_log2(min(integer, MAX_TEXTURE_SIZE));
@@ -2668,6 +2840,16 @@ static void GL_SetupConfig(void) {
   if (gl_config.caps & QGL_CAP_TEXTURE_ANISOTROPY) {
     qglGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &gl_config.max_anisotropy);
   }
+
+  // Report the realized default framebuffer rather than only the requested
+  // platform pixel format. This keeps paired headless evidence honest when a
+  // driver declines a requested OpenGL multisample configuration.
+  qglGetIntegerv(GL_SAMPLE_BUFFERS, &sample_buffers);
+  qglGetIntegerv(GL_SAMPLES, &samples);
+  Com_Printf("GL_RENDERER: %s\n", qglGetString(GL_RENDERER));
+  Com_Printf("OpenGL: framebuffer MSAA %dx%s.\n",
+             sample_buffers > 0 ? samples : 0,
+             sample_buffers > 0 ? "" : " (disabled)");
 
   GL_ShowErrors(__func__);
 }
@@ -2949,11 +3131,14 @@ r_opengl_config_t R_GetGLConfig(void) {
 #define GET_CVAR(name, def, min, max)                                          \
   Cvar_ClampInteger(Cvar_Get(name, def, CVAR_RENDERER), min, max)
 
+  if (!r_multisamples)
+    gl_register_multisample_cvars();
+
   r_opengl_config_t cfg = {
       .colorbits = GET_CVAR("gl_colorbits", "0", 0, 32),
       .depthbits = GET_CVAR("gl_depthbits", "0", 0, 32),
       .stencilbits = GET_CVAR("gl_stencilbits", "8", 0, 8),
-      .multisamples = GET_CVAR("gl_multisamples", "0", 0, 32),
+      .multisamples = Cvar_ClampInteger(r_multisamples, 0, 32),
       .debug = GET_CVAR("gl_debug", "0", 0, 2),
   };
 

@@ -61,6 +61,7 @@ static cvar_t *gl_texturebits;
 static cvar_t *gl_anisotropy;
 static cvar_t *r_anisotropy;
 static cvar_t *gl_saturation;
+static cvar_t *r_texture_saturation;
 static cvar_t *gl_gamma;
 static cvar_t *vid_gamma_legacy;
 static cvar_t *gl_invert;
@@ -76,6 +77,7 @@ static bool gl_texturemode_syncing;
 static bool gl_anisotropy_syncing;
 static bool r_picmip_filter_syncing;
 static bool gl_gamma_alias_syncing;
+static bool gl_saturation_syncing;
 
 static int GL_UpscaleLevel(int width, int height, imagetype_t type, imageflags_t flags);
 static void GL_Upload32(byte *data, int width, int height, int baselevel, imagetype_t type, imageflags_t flags, const image_t *image);
@@ -263,6 +265,19 @@ static void gl_sync_texturemode_defaults(void)
         Cvar_SetByVar(r_texture_filter, gl_texturemode->string, FROM_CODE);
     } else {
         Cvar_SetByVar(gl_texturemode, r_texture_filter->string, FROM_CODE);
+    }
+}
+
+static void gl_sync_texture_saturation_defaults(void)
+{
+    if (!r_texture_saturation || !gl_saturation)
+        return;
+
+    if (!(r_texture_saturation->flags & CVAR_MODIFIED) &&
+        (gl_saturation->flags & CVAR_MODIFIED)) {
+        Cvar_SetByVar(r_texture_saturation, gl_saturation->string, FROM_CODE);
+    } else {
+        Cvar_SetByVar(gl_saturation, r_texture_saturation->string, FROM_CODE);
     }
 }
 
@@ -512,6 +527,26 @@ static byte intensitytable[256];
 static byte gammaintensitytable[256];
 static float colorscale;
 static bool lightscale;
+
+static void gl_texture_saturation_changed(cvar_t *self)
+{
+    if (gl_saturation_syncing || !self)
+        return;
+
+    gl_saturation_syncing = true;
+    if (self == r_texture_saturation && gl_saturation) {
+        Cvar_SetByVar(gl_saturation, self->string, FROM_CODE);
+    } else if (self == gl_saturation && r_texture_saturation) {
+        Cvar_SetByVar(r_texture_saturation, self->string, FROM_CODE);
+    }
+    gl_saturation_syncing = false;
+
+    // This setting is applied while material pixels are registered. CVAR_FILES
+    // requests the normal image reload; keeping the cached scale in sync also
+    // makes the renderer's current registration state unambiguous.
+    colorscale = Cvar_ClampValue(
+        r_texture_saturation ? r_texture_saturation : self, 0, 1);
+}
 
 /*
 ================
@@ -1966,6 +2001,12 @@ void GL_InitImages(void)
     gl_gamma_scale_pics = Cvar_Get("gl_gamma_scale_pics", "0", CVAR_FILES);
     gl_upscale_pcx = Cvar_Get("gl_upscale_pcx", "0", CVAR_FILES);
     gl_saturation = Cvar_Get("gl_saturation", "1", CVAR_FILES);
+    r_texture_saturation = Cvar_Get("r_texture_saturation",
+                                    gl_saturation->string,
+                                    CVAR_ARCHIVE | CVAR_FILES);
+    gl_sync_texture_saturation_defaults();
+    gl_saturation->changed = gl_texture_saturation_changed;
+    r_texture_saturation->changed = gl_texture_saturation_changed;
     gl_intensity = Cvar_Get("intensity", "1", 0);
     gl_invert = Cvar_Get("gl_invert", "0", CVAR_FILES);
     gl_gamma = Cvar_Get("r_gamma", "1", CVAR_ARCHIVE);
@@ -1986,7 +2027,8 @@ void GL_InitImages(void)
     else
         gl_intensity->flags |= CVAR_FILES;
 
-    r_intensity = Cvar_Get("r_intensity", gl_intensity->string, gl_intensity->flags);
+    r_intensity = Cvar_Get("r_intensity", gl_intensity->string,
+                           gl_intensity->flags | CVAR_ARCHIVE);
     gl_sync_intensity_defaults();
     gl_intensity->changed = gl_intensity_sync;
     r_intensity->changed = gl_intensity_sync;
@@ -2009,8 +2051,8 @@ void GL_InitImages(void)
     else
         GL_BuildGammaTables();
 
-    // FIXME: the name 'saturation' is misleading in this context
-    colorscale = Cvar_ClampValue(gl_saturation, 0, 1);
+    // This is material desaturation, not the full-scene post-process control.
+    colorscale = Cvar_ClampValue(r_texture_saturation, 0, 1);
     lightscale = !(gl_gamma->value == 1.0f && (gl_static.use_shaders || gl_intensity->value == 1.0f));
 
     qglGenTextures(NUM_AUTO_TEXTURES, gl_static.texnums);
@@ -2061,6 +2103,12 @@ void GL_ShutdownImages(void)
     if (r_anisotropy && r_anisotropy->changed == gl_anisotropy_changed)
         r_anisotropy->changed = NULL;
     gl_anisotropy_syncing = false;
+    if (gl_saturation && gl_saturation->changed == gl_texture_saturation_changed)
+        gl_saturation->changed = NULL;
+    if (r_texture_saturation &&
+        r_texture_saturation->changed == gl_texture_saturation_changed)
+        r_texture_saturation->changed = NULL;
+    gl_saturation_syncing = false;
     gl_gamma->changed = NULL;
     if (vid_gamma_legacy)
         vid_gamma_legacy->changed = NULL;

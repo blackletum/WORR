@@ -18,6 +18,7 @@ the Free Software Foundation; either version 2 of the License, or
 namespace {
 
 const worr_cgame_command_record_import_v1 *command_record_import;
+const worr_cgame_command_record_import_v2 *command_record_import_v2;
 
 struct local_interaction_shadow_telemetry_t {
     std::uint64_t prediction_passes{};
@@ -41,6 +42,7 @@ struct local_interaction_shadow_telemetry_t {
 local_interaction_shadow_telemetry_t telemetry;
 
 constexpr std::uint32_t kAuthorityPairCapacity = 128;
+constexpr std::uint32_t kAttackButton = 1u << 0;
 enum : std::uint32_t {
     AUTHORITY_PAIR_OCCUPIED = 1u << 0,
     AUTHORITY_PAIR_PREDICTED = 1u << 1,
@@ -215,6 +217,14 @@ bool valid_import(const worr_cgame_command_record_import_v1 *import)
            import->ResolveCanonicalCommandRange;
 }
 
+bool valid_import(const worr_cgame_command_record_import_v2 *import)
+{
+    return import && import->struct_size == sizeof(*import) &&
+           import->api_version ==
+               WORR_CGAME_COMMAND_RECORD_API_VERSION_V2 &&
+           import->ResolveCanonicalCommandById;
+}
+
 bool valid_range(const worr_cgame_prediction_input_range_v1 &prediction,
                  const worr_cgame_command_record_range_v1 &records)
 {
@@ -316,6 +326,209 @@ bool initialize_before_first(
     return true;
 }
 
+struct local_action_shadow_telemetry_t {
+    std::uint64_t observation_passes{};
+    std::uint64_t canonical_commands{};
+    std::uint64_t authority_receipts{};
+    std::uint64_t authority_duplicates{};
+    std::uint64_t authority_unmatched{};
+    std::uint64_t command_matches{};
+    std::uint64_t command_mismatches{};
+    std::uint64_t authority_conflicts{};
+    std::uint64_t authority_expirations{};
+    std::uint64_t capacity_failures{};
+    std::uint64_t exact_lookup_attempts{};
+    std::uint64_t exact_lookup_hits{};
+    std::uint64_t exact_lookup_misses{};
+    std::uint32_t requires_resync{};
+};
+
+local_action_shadow_telemetry_t action_shadow_telemetry;
+
+enum : std::uint32_t {
+    ACTION_SHADOW_OCCUPIED = 1u << 0,
+    ACTION_SHADOW_COMMAND = 1u << 1,
+    ACTION_SHADOW_RECEIPT = 1u << 2,
+    ACTION_SHADOW_TERMINAL = 1u << 3,
+};
+
+struct local_action_shadow_pair_t {
+    std::uint32_t flags{};
+    std::uint32_t legacy_sequence{};
+    worr_command_id_v1 command_id{};
+    std::uint64_t command_hash{};
+    worr_local_action_shadow_authority_receipt_v1 receipt{};
+};
+
+std::array<local_action_shadow_pair_t, kAuthorityPairCapacity>
+    action_shadow_pairs;
+std::uint32_t action_shadow_observed_through;
+bool action_shadow_observation_started;
+
+void require_action_shadow_resync()
+{
+    action_shadow_telemetry.requires_resync = 1;
+}
+
+int find_action_shadow_pair(worr_command_id_v1 command_id)
+{
+    for (std::uint32_t index = 0; index < action_shadow_pairs.size(); ++index) {
+        const auto &entry = action_shadow_pairs[index];
+        if ((entry.flags & ACTION_SHADOW_OCCUPIED) != 0 &&
+            command_id_equal(entry.command_id, command_id)) {
+            return static_cast<int>(index);
+        }
+    }
+    return -1;
+}
+
+int find_free_action_shadow_pair()
+{
+    for (std::uint32_t index = 0; index < action_shadow_pairs.size(); ++index) {
+        if (action_shadow_pairs[index].flags == 0)
+            return static_cast<int>(index);
+    }
+    return -1;
+}
+
+cg_local_action_shadow_receipt_result_v1 reconcile_action_shadow_pair(
+    local_action_shadow_pair_t &entry)
+{
+    if ((entry.flags & (ACTION_SHADOW_COMMAND | ACTION_SHADOW_RECEIPT)) !=
+        (ACTION_SHADOW_COMMAND | ACTION_SHADOW_RECEIPT)) {
+        return cg_local_action_shadow_receipt_result_v1::accepted_unmatched;
+    }
+    if ((entry.flags & ACTION_SHADOW_TERMINAL) != 0)
+        return cg_local_action_shadow_receipt_result_v1::duplicate;
+
+    entry.flags |= ACTION_SHADOW_TERMINAL;
+    if (entry.command_hash == entry.receipt.command_hash) {
+        increment_saturated(action_shadow_telemetry.command_matches);
+        return cg_local_action_shadow_receipt_result_v1::command_matched;
+    }
+    increment_saturated(action_shadow_telemetry.command_mismatches);
+    require_action_shadow_resync();
+    return cg_local_action_shadow_receipt_result_v1::command_mismatch;
+}
+
+bool prune_action_shadow_pairs(
+    const worr_cgame_prediction_input_range_v1 &prediction_range,
+    const worr_cgame_command_record_range_v1 *records)
+{
+    for (auto &entry : action_shadow_pairs) {
+        if ((entry.flags & ACTION_SHADOW_OCCUPIED) == 0)
+            continue;
+        if ((entry.flags & ACTION_SHADOW_TERMINAL) != 0 &&
+            entry.legacy_sequence != 0 &&
+            entry.legacy_sequence <=
+                prediction_range.authoritative_legacy_sequence) {
+            entry = {};
+            continue;
+        }
+        if (records && records->command_count != 0 &&
+            (entry.flags & ACTION_SHADOW_COMMAND) == 0 &&
+            entry.command_id.epoch ==
+                records->commands[0].command.command_id.epoch &&
+            entry.command_id.sequence <
+                records->commands[0].command.command_id.sequence) {
+            increment_saturated(action_shadow_telemetry.authority_expirations);
+            require_action_shadow_resync();
+            return false;
+        }
+    }
+    return true;
+}
+
+bool resolve_action_shadow_record(
+    std::uint32_t legacy_sequence,
+    worr_cgame_command_record_range_v1 &records)
+{
+    records = {};
+    const std::uint32_t result =
+        command_record_import->ResolveCanonicalCommandRange(
+            legacy_sequence, 1, &records);
+    if (result == WORR_CGAME_COMMAND_RECORD_HISTORY_MISSING)
+        return false;
+    if (result != WORR_CGAME_COMMAND_RECORD_OK ||
+        records.struct_size != sizeof(records) ||
+        records.api_version != WORR_CGAME_COMMAND_RECORD_API_VERSION ||
+        records.result != WORR_CGAME_COMMAND_RECORD_OK ||
+        records.flags != WORR_CGAME_COMMAND_RECORD_CANONICAL ||
+        records.first_legacy_sequence != legacy_sequence ||
+        records.command_count != 1 ||
+        records.commands[0].legacy_sequence != legacy_sequence ||
+        records.commands[0].reserved0 != 0 ||
+        !Worr_CommandRecordValidateV1(
+            &records.commands[0].command,
+            WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS)) {
+        require_action_shadow_resync();
+        return false;
+    }
+    return true;
+}
+
+bool observe_action_shadow_command(
+    const worr_cgame_command_record_entry_v1 &command)
+{
+    // This first receipt slice is intentionally attack-bearing on both ends.
+    // Retaining idle commands would consume reconciliation capacity for
+    // records the server is specified not to publish.
+    if ((command.command.command.buttons & kAttackButton) == 0)
+        return true;
+
+    std::uint64_t command_hash = 0;
+    if (!Worr_CommandRecordInputHashV1(
+            &command.command, WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS,
+            &command_hash)) {
+        require_action_shadow_resync();
+        return false;
+    }
+
+    int index = find_action_shadow_pair(command.command.command_id);
+    if (index < 0) {
+        index = find_free_action_shadow_pair();
+        if (index < 0) {
+            increment_saturated(action_shadow_telemetry.capacity_failures);
+            require_action_shadow_resync();
+            return false;
+        }
+        action_shadow_pairs[index].flags = ACTION_SHADOW_OCCUPIED;
+        action_shadow_pairs[index].command_id = command.command.command_id;
+    }
+
+    auto &entry = action_shadow_pairs[index];
+    if ((entry.flags & ACTION_SHADOW_COMMAND) != 0) {
+        if (entry.command_hash != command_hash ||
+            entry.legacy_sequence != command.legacy_sequence) {
+            increment_saturated(action_shadow_telemetry.authority_conflicts);
+            require_action_shadow_resync();
+            return false;
+        }
+        return true;
+    }
+
+    entry.command_hash = command_hash;
+    entry.legacy_sequence = command.legacy_sequence;
+    entry.flags |= ACTION_SHADOW_COMMAND;
+    increment_saturated(action_shadow_telemetry.canonical_commands);
+    return (entry.flags & ACTION_SHADOW_RECEIPT) == 0 ||
+           reconcile_action_shadow_pair(entry) !=
+               cg_local_action_shadow_receipt_result_v1::command_mismatch;
+}
+
+std::uint64_t action_shadow_outstanding_receipts()
+{
+    std::uint64_t outstanding = 0;
+    for (const auto &entry : action_shadow_pairs) {
+        if ((entry.flags & (ACTION_SHADOW_OCCUPIED | ACTION_SHADOW_RECEIPT)) ==
+                (ACTION_SHADOW_OCCUPIED | ACTION_SHADOW_RECEIPT) &&
+            (entry.flags & ACTION_SHADOW_TERMINAL) == 0) {
+            increment_saturated(outstanding);
+        }
+    }
+    return outstanding;
+}
+
 } // namespace
 
 void CG_LocalInteractionSetImport(
@@ -325,10 +538,21 @@ void CG_LocalInteractionSetImport(
     CG_LocalInteractionReset();
 }
 
+void CG_LocalInteractionSetImportV2(
+    const worr_cgame_command_record_import_v2 *import)
+{
+    command_record_import_v2 = valid_import(import) ? import : nullptr;
+    CG_LocalInteractionReset();
+}
+
 void CG_LocalInteractionReset()
 {
     telemetry = {};
     authority_pairs = {};
+    action_shadow_telemetry = {};
+    action_shadow_pairs = {};
+    action_shadow_observed_through = 0;
+    action_shadow_observation_started = false;
 }
 
 bool CG_LocalInteractionRequiresResync()
@@ -488,4 +712,182 @@ void CG_LocalInteractionPredict(
             }
         }
     }
+}
+
+bool CG_LocalActionShadowRequiresResync()
+{
+    return action_shadow_telemetry.requires_resync != 0;
+}
+
+void CG_LocalActionShadowGetStatus(
+    cg_local_action_shadow_status_v1 *status_out)
+{
+    if (!status_out)
+        return;
+    *status_out = {
+        action_shadow_telemetry.observation_passes,
+        action_shadow_telemetry.canonical_commands,
+        action_shadow_telemetry.authority_receipts,
+        action_shadow_telemetry.authority_duplicates,
+        action_shadow_telemetry.authority_unmatched,
+        action_shadow_telemetry.command_matches,
+        action_shadow_telemetry.command_mismatches,
+        action_shadow_telemetry.authority_conflicts,
+        action_shadow_telemetry.authority_expirations,
+        action_shadow_telemetry.capacity_failures,
+        action_shadow_outstanding_receipts(),
+        action_shadow_telemetry.exact_lookup_attempts,
+        action_shadow_telemetry.exact_lookup_hits,
+        action_shadow_telemetry.exact_lookup_misses,
+        action_shadow_telemetry.requires_resync,
+    };
+}
+
+cg_local_action_shadow_receipt_result_v1
+CG_LocalActionShadowSubmitAuthorityReceipt(
+    const worr_local_action_shadow_authority_receipt_v1 *receipt)
+{
+    int index;
+
+    if (action_shadow_telemetry.requires_resync != 0)
+        return cg_local_action_shadow_receipt_result_v1::requires_resync;
+    if (!Worr_LocalActionShadowAuthorityReceiptValidateV1(receipt)) {
+        require_action_shadow_resync();
+        return cg_local_action_shadow_receipt_result_v1::invalid;
+    }
+
+    /* Render cadence can skip the interval in which a command is pending,
+     * especially across a reconnect or a deliberately frozen player. Resolve
+     * the receipt's exact immutable command by canonical ID before recording
+     * it as unmatched. No movement range, packet ack, or timestamp is inferred
+     * here. */
+    if (find_action_shadow_pair(receipt->command_id) < 0 &&
+        valid_import(command_record_import_v2)) {
+        worr_cgame_command_record_entry_v1 command{};
+        increment_saturated(action_shadow_telemetry.exact_lookup_attempts);
+        const std::uint32_t result =
+            command_record_import_v2->ResolveCanonicalCommandById(
+                receipt->command_id, &command);
+        if (result == WORR_CGAME_COMMAND_RECORD_OK) {
+            increment_saturated(action_shadow_telemetry.exact_lookup_hits);
+            if (command.reserved0 != 0 ||
+                !command_id_equal(
+                    command.command.command_id, receipt->command_id) ||
+                !Worr_CommandRecordValidateV1(
+                    &command.command,
+                    WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS) ||
+                !observe_action_shadow_command(command)) {
+                require_action_shadow_resync();
+                return cg_local_action_shadow_receipt_result_v1::invalid;
+            }
+        } else if (result == WORR_CGAME_COMMAND_RECORD_HISTORY_MISSING) {
+            increment_saturated(action_shadow_telemetry.exact_lookup_misses);
+        } else {
+            require_action_shadow_resync();
+            return cg_local_action_shadow_receipt_result_v1::invalid;
+        }
+    }
+
+    index = find_action_shadow_pair(receipt->command_id);
+    if (index < 0) {
+        index = find_free_action_shadow_pair();
+        if (index < 0) {
+            increment_saturated(action_shadow_telemetry.capacity_failures);
+            require_action_shadow_resync();
+            return cg_local_action_shadow_receipt_result_v1::capacity;
+        }
+        action_shadow_pairs[index].flags = ACTION_SHADOW_OCCUPIED;
+        action_shadow_pairs[index].command_id = receipt->command_id;
+    }
+
+    auto &entry = action_shadow_pairs[index];
+    if ((entry.flags & ACTION_SHADOW_RECEIPT) != 0) {
+        if (std::memcmp(&entry.receipt, receipt, sizeof(*receipt)) == 0) {
+            increment_saturated(action_shadow_telemetry.authority_duplicates);
+            return cg_local_action_shadow_receipt_result_v1::duplicate;
+        }
+        increment_saturated(action_shadow_telemetry.authority_conflicts);
+        require_action_shadow_resync();
+        return cg_local_action_shadow_receipt_result_v1::conflict;
+    }
+
+    entry.receipt = *receipt;
+    entry.flags |= ACTION_SHADOW_RECEIPT;
+    increment_saturated(action_shadow_telemetry.authority_receipts);
+    if ((entry.flags & ACTION_SHADOW_COMMAND) == 0) {
+        increment_saturated(action_shadow_telemetry.authority_unmatched);
+        return cg_local_action_shadow_receipt_result_v1::accepted_unmatched;
+    }
+    return reconcile_action_shadow_pair(entry);
+}
+
+void CG_LocalActionShadowObserveCommands(
+    const worr_cgame_prediction_input_range_v1 &prediction_range)
+{
+    if ((prediction_range.flags & WORR_CGAME_PREDICTION_INPUT_CANONICAL) == 0 ||
+        !valid_import(command_record_import) ||
+        action_shadow_telemetry.requires_resync != 0) {
+        return;
+    }
+    const std::uint64_t newest_wide =
+        static_cast<std::uint64_t>(
+            prediction_range.authoritative_legacy_sequence) +
+        prediction_range.command_count;
+    if (newest_wide > UINT32_MAX) {
+        require_action_shadow_resync();
+        return;
+    }
+    const std::uint32_t newest = static_cast<std::uint32_t>(newest_wide);
+    if (newest == 0 ||
+        (action_shadow_observation_started &&
+         newest == action_shadow_observed_through)) {
+        (void)prune_action_shadow_pairs(prediction_range, nullptr);
+        return;
+    }
+    if (action_shadow_observation_started &&
+        newest < action_shadow_observed_through) {
+        require_action_shadow_resync();
+        return;
+    }
+
+    std::uint32_t first = 1;
+    if (action_shadow_observation_started) {
+        if (action_shadow_observed_through == UINT32_MAX) {
+            require_action_shadow_resync();
+            return;
+        }
+        first = action_shadow_observed_through + 1u;
+    } else if (newest >= WORR_CGAME_PREDICTION_INPUT_CAPACITY) {
+        first = newest - WORR_CGAME_PREDICTION_INPUT_CAPACITY + 1u;
+    }
+
+    bool observed_any = false;
+    for (std::uint64_t sequence_wide = first;
+         sequence_wide <= newest; ++sequence_wide) {
+        const std::uint32_t sequence =
+            static_cast<std::uint32_t>(sequence_wide);
+        worr_cgame_command_record_range_v1 records{};
+        if (!resolve_action_shadow_record(sequence, records)) {
+            if (action_shadow_telemetry.requires_resync != 0)
+                return;
+            if (action_shadow_observation_started) {
+                require_action_shadow_resync();
+                return;
+            }
+            continue;
+        }
+        if (!observed_any &&
+            !prune_action_shadow_pairs(prediction_range, &records)) {
+            return;
+        }
+        if (!observe_action_shadow_command(records.commands[0]))
+            return;
+        action_shadow_observed_through = sequence;
+        action_shadow_observation_started = true;
+        observed_any = true;
+    }
+    if (observed_any)
+        increment_saturated(action_shadow_telemetry.observation_passes);
+    else
+        (void)prune_action_shadow_pairs(prediction_range, nullptr);
 }

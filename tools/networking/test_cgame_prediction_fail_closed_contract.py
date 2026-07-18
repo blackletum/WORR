@@ -13,6 +13,19 @@ TIMELINE = (
     ROOT / "src/game/cgame/cg_snapshot_timeline.cpp"
 ).read_text(encoding="utf-8")
 INPUT_ABI = (ROOT / "inc/shared/cgame_prediction.h").read_text(encoding="utf-8")
+ENGINE_INPUT = (
+    ROOT / "src/client/cgame_prediction_input.cpp"
+).read_text(encoding="utf-8")
+ENGINE_CGAME = (ROOT / "src/client/cgame.cpp").read_text(encoding="utf-8")
+CANONICAL_TIMELINE = (
+    ROOT / "src/game/cgame/cg_canonical_snapshot_timeline.cpp"
+).read_text(encoding="utf-8")
+CANONICAL_TIMELINE_HEADER = (
+    ROOT / "src/game/cgame/cg_canonical_snapshot_timeline.hpp"
+).read_text(encoding="utf-8")
+PREDICTION_AUTHORITY = (
+    ROOT / "src/game/cgame/cg_prediction_authority.cpp"
+).read_text(encoding="utf-8")
 
 
 def function_body(source: str, signature: str) -> str:
@@ -30,6 +43,48 @@ def function_body(source: str, signature: str) -> str:
 
 
 class CgamePredictionFailClosedContractTests(unittest.TestCase):
+    def test_engine_v2_import_is_one_production_owned_module(self) -> None:
+        self.assertNotIn("Worr_PredictionInputResolveV1", ENGINE_CGAME)
+        self.assertIn(
+            "CL_GetCGamePredictionInputImportV1()", ENGINE_CGAME
+        )
+        self.assertIn(
+            "CL_GetCGamePredictionInputImportV2()", ENGINE_CGAME
+        )
+        for contract in (
+            "cl.cmds[sequence & CMD_MASK]",
+            "CL_CommandIdentityForNumber(sequence, &entry.command_id)",
+            "CL_CommandIdentityGetState(",
+            "CL_NetCapabilityHas(",
+            "CL_ConsumedCursorCanonicalEstablished()",
+            "cl.history[cls.netchan.incoming_acknowledged & CMD_MASK]",
+            "Worr_PredictionInputResolveV1(&request, range_out)",
+        ):
+            self.assertIn(contract, ENGINE_INPUT)
+
+    def test_prediction_authority_requires_slot_bound_semantic_receipt(self) -> None:
+        for contract in (
+            "cg_canonical_prediction_receipt_v1",
+            "admission_generation",
+            "receipt_flags",
+            "snapshot_hash",
+            "consumed_command",
+            "controlled_entity_generation",
+        ):
+            self.assertIn(contract, CANONICAL_TIMELINE_HEADER)
+        self.assertIn(
+            "canonical.prediction_receipts[ref.slot]", CANONICAL_TIMELINE
+        )
+        self.assertIn(
+            "WORR_CGAME_SNAPSHOT_RECEIPT_EVENT_FENCE_ACCEPTED",
+            CANONICAL_TIMELINE,
+        )
+        self.assertIn("stored_receipt.ref.generation", CANONICAL_TIMELINE)
+        self.assertIn("receipt_valid(timeline)", PREDICTION_AUTHORITY)
+        self.assertIn(
+            "admission_receipt_invalid", PREDICTION_AUTHORITY
+        )
+
     def test_recovery_results_are_append_only_and_named(self) -> None:
         self.assertIn("WORR_CGAME_PREDICTION_INPUT_REPLAY_REJECTED = 10", INPUT_ABI)
         self.assertIn(
@@ -157,6 +212,7 @@ class CgamePredictionFailClosedContractTests(unittest.TestCase):
             "CG_SnapshotTimeline_NotePredictionCorrection(", hard_resync_body
         )
         self.assertIn("reason);", hard_resync_body)
+        self.assertIn("cl.predicted_step_time = 0;", clear_body)
 
     def test_invariant_failures_route_through_hard_resync(self) -> None:
         check_body = function_body(PREDICT, "void CL_CheckPredictionError(")

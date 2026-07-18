@@ -71,6 +71,17 @@ class VulkanWorldFastLitSourceTests(unittest.TestCase):
         self.assertIn("VK_CULL_MODE_NONE", texture_replace_creation)
         self.assertNotIn("VK_CULL_MODE_BACK_BIT", texture_replace_creation)
 
+    def test_global_fullbright_reuses_texture_replace_for_inert_lightmap_inputs(self) -> None:
+        self.assertIn("const bool world_fullbright = VK_World_Fullbright()", WORLD)
+        self.assertIn("OpenGL rebuilds ordinary opaque world surfaces as GLS_TEXTURE_REPLACE", WORLD)
+        texture_replace_gate = WORLD.split("const uint8_t texture_replace_vertex_flags", 1)[1].split(
+            "uint32_t fast_lit_candidates", 1
+        )[0]
+        self.assertIn("world_fullbright", texture_replace_gate)
+        self.assertIn("VK_WORLD_VERTEX_LIGHTMAPPED", texture_replace_gate)
+        self.assertIn("VK_WORLD_VERTEX_GLOWMAP", texture_replace_gate)
+        self.assertNotIn("VK_WORLD_VERTEX_ALPHATEST", texture_replace_gate)
+
     def test_static_light_glowmaps_have_their_own_receiver_specialization(self) -> None:
         self.assertIn("pipeline_fast_lit_glowmap_opaque", WORLD)
         self.assertIn("fast_lit_glowmap_vertex_flags", WORLD)

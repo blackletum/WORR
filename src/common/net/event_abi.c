@@ -169,6 +169,9 @@ static uint16_t payload_size_for_kind(uint16_t kind)
         return (uint16_t)sizeof(worr_event_payload_spatial_audio_v1);
     case WORR_EVENT_PAYLOAD_LOCAL_INTERACTION_AUTHORITY_V1:
         return (uint16_t)sizeof(worr_local_interaction_authority_receipt_v1);
+    case WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1:
+        return (uint16_t)sizeof(
+            worr_local_action_shadow_authority_receipt_v1);
     default:
         return UINT16_MAX;
     }
@@ -207,7 +210,9 @@ static bool payload_matches_event_type(uint16_t event_type,
         return payload_kind == WORR_EVENT_PAYLOAD_U32X4;
     case WORR_EVENT_TYPE_AUTHORITY_RECEIPT:
         return payload_kind ==
-               WORR_EVENT_PAYLOAD_LOCAL_INTERACTION_AUTHORITY_V1;
+                   WORR_EVENT_PAYLOAD_LOCAL_INTERACTION_AUTHORITY_V1 ||
+               payload_kind ==
+                   WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1;
     default:
         return false;
     }
@@ -728,6 +733,11 @@ static bool validate_payload(const worr_event_record_v1 *record,
         memcpy(&payload, record->payload, sizeof(payload));
         return Worr_LocalInteractionAuthorityReceiptValidateV1(&payload);
     }
+    case WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1: {
+        worr_local_action_shadow_authority_receipt_v1 payload;
+        memcpy(&payload, record->payload, sizeof(payload));
+        return Worr_LocalActionShadowAuthorityReceiptValidateV1(&payload);
+    }
     default:
         return false;
     }
@@ -990,6 +1000,23 @@ static uint64_t hash_payload(uint64_t hash,
         hash = hash_u32(hash, payload.outcome_flags);
         return hash_u32(hash, payload.reserved0);
     }
+    case WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1: {
+        worr_local_action_shadow_authority_receipt_v1 payload;
+        memcpy(&payload, record->payload, sizeof(payload));
+        hash = hash_u32(hash, payload.struct_size);
+        hash = hash_u32(hash, payload.schema_version);
+        hash = hash_u32(hash, payload.model_revision);
+        hash = hash_u32(hash, payload.reserved0);
+        hash = hash_u32(hash, payload.command_id.epoch);
+        hash = hash_u32(hash, payload.command_id.sequence);
+        hash = hash_u32(hash, payload.catalog_id);
+        hash = hash_u32(hash, payload.flags);
+        hash = hash_u32(hash, payload.v2_blockers);
+        hash = hash_u32(hash, payload.reserved1);
+        hash = hash_u64(hash, payload.command_hash);
+        hash = hash_u64(hash, payload.descriptor_hash);
+        return hash_u64(hash, payload.record_hash);
+    }
     default:
         return 0;
     }
@@ -1190,6 +1217,13 @@ static bool payload_semantically_equal(const worr_event_record_v1 *left,
                a.state_flags == b.state_flags &&
                a.outcome_flags == b.outcome_flags &&
                a.reserved0 == b.reserved0;
+    }
+    case WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1: {
+        worr_local_action_shadow_authority_receipt_v1 a;
+        worr_local_action_shadow_authority_receipt_v1 b;
+        memcpy(&a, left->payload, sizeof(a));
+        memcpy(&b, right->payload, sizeof(b));
+        return memcmp(&a, &b, sizeof(a)) == 0;
     }
     default:
         return false;

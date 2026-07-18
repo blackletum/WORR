@@ -71,6 +71,10 @@ legacy interpolation under jitter.
 - `1`: select and sample the canonical pair, measure parity, and keep legacy
   transform authority.
 - `2`: promote parity-proven canonical remote transforms; fall back per entity.
+- `3`: require the engine-owned native snapshot timeline and promote safe
+  remote transforms at the newest admitted native time; fall back per entity.
+  Cgame refuses this mode unless the read-only
+  `cl_worr_native_snapshot_timeline_owned` source gate is active.
 
 `cg_snapshot_timeline_render_epsilon` is the non-archived maximum component or
 angular difference accepted by the promotion gate. It defaults to `0.125` and
@@ -79,7 +83,8 @@ is clamped to `0.0001..8.0`.
 Audit and promotion modes emit one aggregate line per second. The line includes
 clock/pair successes and failures, alignment failures, pair mode/block flags,
 sample failures and discontinuities, parity matches/mismatches, promoted
-transform count, and maximum origin/beam-end/angle errors for the active
+transform count, mode-3 native-authority samples/blocks, and maximum
+origin/beam-end/angle errors for the active
 snapshot epoch. No per-entity log spam is generated.
 
 ## Safety and compatibility
@@ -94,6 +99,9 @@ snapshot epoch. No per-entity log spam is generated.
   future event or render consumer does not inherit a dormant clock.
 - Promotion never applies to the predicted local player.
 - Extrapolation is disabled in this parity stage.
+- The native-ownership latch remains set through diagnostic DRAIN and clears
+  only at map/serverdata or the matching connection boundary, preventing two
+  canonical timeline producers inside one epoch.
 
 ## Verification
 
@@ -110,6 +118,11 @@ pre-existing recoverable `premature end of file` warning before completing all
 
 ## Remaining FR-10-T07 work
 
+The 2026-07-18 continuation in
+`docs-dev/fr-10-t06-t07-t14-native-snapshot-presentation-authority-2026-07-18.md`
+extends this parity milestone with three accepted live mode-3 runs and proves
+actual safe remote-transform authority. The following broader work remains:
+
 - Store canonical records in a presentation-owned event queue and replace the
   raw legacy presenter only after ordered/deduplicated parity is proven.
 - Represent and render previous-only entities when the selected canonical time
@@ -123,4 +136,3 @@ pre-existing recoverable `premature end of file` warning before completing all
 - Remove the audit-stage 512-entity and 32-area-byte cgame arena limits through
   negotiated/dynamic sizing before canonical rendering can be enabled by
   default.
-

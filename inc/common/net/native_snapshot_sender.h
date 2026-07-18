@@ -26,9 +26,11 @@ extern "C" {
  * The native TX session deliberately has one supersedable slot.  Two
  * generation-tagged payload banks keep the selected WNC1 bytes immutable for
  * an entire multi-fragment dispatch while newer projections coalesce into one
- * latest-pending bank.  Once the dispatch has a definite terminal outcome,
- * the pending bank is promoted through NativeTxSessionEnqueueV1, atomically
- * superseding the older retained snapshot when it is still present.
+ * latest-pending bank. A sent snapshot normally remains retained until its
+ * semantic ACK; the pending bank is then promoted. A bounded 1,000-tick ACK
+ * wait permits supersession recovery when the receiver has expired an
+ * incomplete/unacknowledgeable message, preventing permanent head-of-line
+ * blocking without turning ordinary frame cadence into stale ACK churn.
  *
  * The object owns encoded bytes and carrier transaction state, but no socket,
  * netchan, clock, snapshot store, cvar, or inbound ACK ledger.  It is intended
@@ -46,6 +48,7 @@ extern "C" {
 #define WORR_NATIVE_SNAPSHOT_SENDER_MAX_ENCODED_BYTES \
     WORR_NATIVE_CODEC_MAX_ENCODED_BYTES
 #define WORR_NATIVE_SNAPSHOT_SENDER_PRIORITY 2u
+#define WORR_NATIVE_SNAPSHOT_SENDER_MAX_ACK_WAIT_TICKS UINT64_C(1000)
 
 enum {
     WORR_NATIVE_SNAPSHOT_SENDER_INITIALIZED = 1u << 0,

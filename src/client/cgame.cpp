@@ -21,9 +21,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "client/cgame_entity.h"
 #include "client/cgame_event_runtime.h"
 #include "client/cgame_event_shadow_runtime.h"
+#include "client/cgame_prediction_input.h"
 #include "client/command_identity.h"
-#include "client/consumed_cursor.h"
-#include "client/net_capability.h"
 #include "client/snapshot_shadow.h"
 #include "client/cgame_ui.h"
 #include "client/font.h"
@@ -31,178 +30,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "common/mdfour.h"
 #include "common/loc.h"
 #include "common/gamedll.h"
-#include "common/net/prediction_input.h"
-#include "common/net/usercmd_delta.h"
 #include "shared/cgame_prediction.h"
-
-static_assert(CMD_BACKUP == WORR_CGAME_PREDICTION_INPUT_CAPACITY,
-              "prediction input ABI must retain the engine command ring");
 
 static cvar_t   *cl_alpha;
 
 static void CG_AddCommandString(const char *string);
 static void CG_InsertCommandString(const char *string);
 static const char* CG_Localize(const char *base, const char **args, size_t num_args);
-
-static worr_prediction_command_v1 CG_PredictionInputCommand(
-    const usercmd_t &command, const float *pending_move)
-{
-    worr_prediction_command_v1 output{};
-    if (!pending_move) {
-        (void)NetUsercmd_ToPredictionCommandV1(&command, &output);
-        return output;
-    }
-    output.struct_size = sizeof(output);
-    output.schema_version = WORR_PREDICTION_ABI_VERSION;
-    output.duration_ms = command.msec;
-    output.buttons = command.buttons;
-    VectorCopy(command.angles, output.view_angles);
-    output.forward_move = pending_move ? pending_move[0] : command.forwardmove;
-    output.side_move = pending_move ? pending_move[1] : command.sidemove;
-    return output;
-}
-
-static uint32_t CG_PredictionInputFail(
-    worr_cgame_prediction_input_range_v1 *range_out, uint32_t result)
-{
-    if (range_out) {
-        *range_out = {};
-        range_out->struct_size = sizeof(*range_out);
-        range_out->api_version =
-            WORR_CGAME_PREDICTION_INPUT_API_VERSION;
-        range_out->result = result;
-        range_out->flags =
-            WORR_CGAME_PREDICTION_INPUT_HARD_RESYNC_REQUIRED;
-    }
-    return result;
-}
-
-static bool CG_ConsumedCommandEqual(
-    const worr_snapshot_consumed_command_v2 &left,
-    const worr_snapshot_consumed_command_v2 &right)
-{
-    return left.cursor.epoch == right.cursor.epoch &&
-           left.cursor.contiguous_sequence ==
-               right.cursor.contiguous_sequence &&
-           left.provenance == right.provenance &&
-           left.reserved0 == right.reserved0;
-}
-
-static uint32_t CG_ResolvePredictionInputRangeFromCursor(
-    const worr_snapshot_consumed_command_v2 &consumed_command,
-    bool canonical_required,
-    worr_cgame_prediction_input_range_v1 *range_out)
-{
-    worr_cgame_prediction_input_command_v1
-        history[WORR_CGAME_PREDICTION_INPUT_CAPACITY]{};
-    worr_prediction_input_resolve_request_v1 request{};
-
-    if (!range_out)
-        return WORR_CGAME_PREDICTION_INPUT_INVALID_ARGUMENT;
-
-    for (uint32_t age = 0; age < CMD_BACKUP; ++age) {
-        const uint32_t sequence = cl.cmdNumber - age;
-        auto &entry = history[age];
-        entry.legacy_sequence = sequence;
-        (void)CL_CommandIdentityForNumber(sequence, &entry.command_id);
-        entry.command =
-            CG_PredictionInputCommand(cl.cmds[sequence & CMD_MASK], nullptr);
-    }
-
-    request.struct_size = sizeof(request);
-    request.schema_version = WORR_PREDICTION_INPUT_RESOLVER_VERSION;
-    const bool canonical_capability =
-        CL_NetCapabilityHas(WORR_NET_CAP_CONSUMED_COMMAND_CURSOR_V1);
-    if (canonical_capability) {
-        request.flags |=
-            WORR_PREDICTION_INPUT_RESOLVE_CANONICAL_CAPABILITY;
-        if (canonical_required ||
-            CL_ConsumedCursorCanonicalEstablished()) {
-            request.flags |=
-                WORR_PREDICTION_INPUT_RESOLVE_CANONICAL_ESTABLISHED;
-        }
-    }
-    if (canonical_required &&
-        (!canonical_capability ||
-         consumed_command.provenance !=
-             WORR_SNAPSHOT_CONSUMED_COMMAND_SERVER_CONSUMED ||
-         consumed_command.reserved0 != 0 ||
-         !Worr_CommandCursorValidV1(consumed_command.cursor))) {
-        return CG_PredictionInputFail(
-            range_out,
-            WORR_CGAME_PREDICTION_INPUT_CANONICAL_METADATA_REQUIRED);
-    }
-    (void)CL_CommandIdentityGetState(
-        &request.identity_initial_epoch,
-        &request.identity_baseline_legacy_sequence);
-    request.current_legacy_sequence = cl.cmdNumber;
-    request.legacy_acknowledged_sequence =
-        cl.history[cls.netchan.incoming_acknowledged & CMD_MASK].cmdNumber;
-    request.history_count = q_countof(history);
-    request.consumed_command = consumed_command;
-    request.pending_present = cl.cmd.msec != 0;
-    if (request.pending_present) {
-        request.pending_command.legacy_sequence = cl.cmdNumber + 1u;
-        request.pending_command.command =
-            CG_PredictionInputCommand(cl.cmd, cl.localmove);
-    }
-    request.history = history;
-    const uint32_t result =
-        Worr_PredictionInputResolveV1(&request, range_out);
-    if (canonical_required &&
-        (result != WORR_CGAME_PREDICTION_INPUT_OK ||
-         range_out->source !=
-             WORR_CGAME_PREDICTION_INPUT_SOURCE_CANONICAL_CURSOR ||
-         !CG_ConsumedCommandEqual(range_out->consumed_command,
-                                  consumed_command))) {
-        if (result != WORR_CGAME_PREDICTION_INPUT_OK)
-            return result;
-        return CG_PredictionInputFail(
-            range_out, WORR_CGAME_PREDICTION_INPUT_INVALID_METADATA);
-    }
-    return result;
-}
-
-static uint32_t CG_ResolvePredictionInputRange(
-    worr_cgame_prediction_input_range_v1 *range_out)
-{
-    return CG_ResolvePredictionInputRangeFromCursor(
-        cl.frame.consumed_command, false, range_out);
-}
-
-static uint32_t CG_ResolvePredictionInputRangeForCursor(
-    const worr_cgame_prediction_input_request_v2 *request,
-    worr_cgame_prediction_input_range_v1 *range_out)
-{
-    if (!request || !range_out ||
-        request->struct_size != sizeof(*request) ||
-        request->api_version !=
-            WORR_CGAME_PREDICTION_INPUT_API_VERSION_V2 ||
-        request->flags !=
-            WORR_CGAME_PREDICTION_INPUT_REQUEST_CANONICAL_REQUIRED ||
-        request->reserved0 != 0) {
-        return CG_PredictionInputFail(
-            range_out,
-            WORR_CGAME_PREDICTION_INPUT_INVALID_ARGUMENT);
-    }
-    return CG_ResolvePredictionInputRangeFromCursor(
-        request->consumed_command, true, range_out);
-}
-
-static const worr_cgame_prediction_input_import_v1
-    cg_prediction_input_import = {
-        .struct_size = sizeof(cg_prediction_input_import),
-        .api_version = WORR_CGAME_PREDICTION_INPUT_API_VERSION,
-        .ResolveInputRange = CG_ResolvePredictionInputRange,
-    };
-
-static const worr_cgame_prediction_input_import_v2
-    cg_prediction_input_import_v2 = {
-        .struct_size = sizeof(cg_prediction_input_import_v2),
-        .api_version = WORR_CGAME_PREDICTION_INPUT_API_VERSION_V2,
-        .ResolveInputRangeForCursor =
-            CG_ResolvePredictionInputRangeForCursor,
-    };
 
 static uint32_t CG_ResolveCanonicalCommandRecordRange(
     uint32_t first_legacy_sequence, uint32_t command_count,
@@ -241,6 +75,30 @@ static const worr_cgame_command_record_import_v1
         .struct_size = sizeof(cg_command_record_import),
         .api_version = WORR_CGAME_COMMAND_RECORD_API_VERSION,
         .ResolveCanonicalCommandRange = CG_ResolveCanonicalCommandRecordRange,
+    };
+
+static uint32_t CG_ResolveCanonicalCommandRecordById(
+    worr_command_id_v1 command_id,
+    worr_cgame_command_record_entry_v1 *entry_out)
+{
+    worr_cgame_command_record_entry_v1 candidate{};
+    if (!entry_out || !Worr_CommandIdValidV1(command_id, false))
+        return WORR_CGAME_COMMAND_RECORD_INVALID_ARGUMENT;
+    if (!CL_CommandIdentityRecordForId(
+            command_id, &candidate.legacy_sequence,
+            &candidate.command)) {
+        return WORR_CGAME_COMMAND_RECORD_HISTORY_MISSING;
+    }
+    *entry_out = candidate;
+    return WORR_CGAME_COMMAND_RECORD_OK;
+}
+
+static const worr_cgame_command_record_import_v2
+    cg_command_record_import_v2 = {
+        .struct_size = sizeof(cg_command_record_import_v2),
+        .api_version = WORR_CGAME_COMMAND_RECORD_API_VERSION_V2,
+        .ResolveCanonicalCommandById =
+            CG_ResolveCanonicalCommandRecordById,
     };
 
 static bool CGX_IsExtendedServer(void)
@@ -873,15 +731,19 @@ static void * CG_GetExtension(const char *name)
     }
     if (strcmp(name, WORR_CGAME_PREDICTION_INPUT_IMPORT_V1) == 0) {
         return const_cast<worr_cgame_prediction_input_import_v1 *>(
-            &cg_prediction_input_import);
+            CL_GetCGamePredictionInputImportV1());
     }
     if (strcmp(name, WORR_CGAME_PREDICTION_INPUT_IMPORT_V2) == 0) {
         return const_cast<worr_cgame_prediction_input_import_v2 *>(
-            &cg_prediction_input_import_v2);
+            CL_GetCGamePredictionInputImportV2());
     }
     if (strcmp(name, WORR_CGAME_COMMAND_RECORD_IMPORT_V1) == 0) {
         return const_cast<worr_cgame_command_record_import_v1 *>(
             &cg_command_record_import);
+    }
+    if (strcmp(name, WORR_CGAME_COMMAND_RECORD_IMPORT_V2) == 0) {
+        return const_cast<worr_cgame_command_record_import_v2 *>(
+            &cg_command_record_import_v2);
     }
     return NULL;
 }

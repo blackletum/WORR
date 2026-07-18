@@ -13,7 +13,7 @@ from pathlib import Path
 from generate_rewind_collision_bsp_fixture import build_fixture
 
 
-EXPECTED_SHA256 = "bdc1a88bd7c83ddc7e52bd674856594113b2f09e798d2401522c06b33d404d53"
+EXPECTED_SHA256 = "42642d702c39f5d7a4d788964c4a9e9e5e7d92c5cc3cf45b953cef987fe6fe3d"
 
 
 def main() -> int:
@@ -49,12 +49,13 @@ def main() -> int:
         check=False,
     )
     report = {
-        "schema": "worr.rewind-collision-real-bsp-parity.v1",
+        "schema": "worr.rewind-collision-real-bsp-parity.v2",
         "fixture": {
             "path": str(fixture.relative_to(repo_root)).replace("\\", "/"),
             "bytes": len(first),
             "sha256": digest,
             "inline_models": 2,
+            "deathmatch_spawns": 4,
         },
         "probe": {
             "path": str(args.probe.resolve()),

@@ -19,6 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "server.h"
 #include "server/command_context.h"
 #include "server/local_interaction_authority.h"
+#include "server/local_action_shadow_authority.h"
 #include "server/nav.h"
 
 server_static_t svs;                // persistent server info
@@ -26,8 +27,16 @@ server_t        sv;                 // local server
 
 void SV_ClientReset(client_t *client)
 {
+    ptrdiff_t client_index;
+
     if (client->state < cs_connected) {
         return;
+    }
+
+    if (svs.client_pool && client >= svs.client_pool &&
+        client < svs.client_pool + svs.maxclients) {
+        client_index = client - svs.client_pool;
+        SV_LocalActionShadowAuthorityResetClient((uint32_t)client_index);
     }
 
     // any partially connected client will be restarted
@@ -237,6 +246,7 @@ void SV_SpawnServer(const mapcmd_t *cmd)
     // load and spawn all other entities
     SV_EventShadowResetMap();
     SV_LocalInteractionAuthorityResetMap();
+    SV_LocalActionShadowAuthorityResetMap();
     ge->SpawnEntities(sv.name, sv.cm.entitystring, cmd->spawnpoint);
 
     // run two frames to allow everything to settle

@@ -40,7 +40,7 @@ class VulkanPicmipSourceTests(unittest.TestCase):
         self.assertIn("static bool VK_UI_ShouldPicmip", VK_UI)
         self.assertIn("static bool VK_UI_ApplyPicmip", VK_UI)
         self.assertIn("static void VK_UI_MipMapRgba", VK_UI)
-        self.assertIn("VK_UI_ApplyPicmip(image, &width, &height, rgba, &picmip_rgba)", VK_UI)
+        self.assertIn("VK_UI_ApplyPicmip(image, &width, &height, upload_rgba,", VK_UI)
         self.assertIn("image->mip_levels = VK_UI_ImageMipLevelCount(image, width, height);", VK_UI)
 
     def test_headless_fixture_locks_reduced_material_residency(self) -> None:

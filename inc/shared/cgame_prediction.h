@@ -179,6 +179,24 @@ typedef struct worr_cgame_command_record_import_v1_s {
         worr_cgame_command_record_range_v1 *range_out);
 } worr_cgame_command_record_import_v1;
 
+/*
+ * V2 resolves one retained record by its connection-scoped canonical ID.
+ * Receipt reconciliation uses this path when render cadence never observes
+ * the command while it is pending; it never reconstructs a record from wire
+ * acknowledgement or client time.
+ */
+#define WORR_CGAME_COMMAND_RECORD_IMPORT_V2 \
+    "WORR_CGAME_COMMAND_RECORD_IMPORT_V2"
+#define WORR_CGAME_COMMAND_RECORD_API_VERSION_V2 2u
+
+typedef struct worr_cgame_command_record_import_v2_s {
+    uint32_t struct_size;
+    uint32_t api_version;
+    uint32_t (*ResolveCanonicalCommandById)(
+        worr_command_id_v1 command_id,
+        worr_cgame_command_record_entry_v1 *entry_out);
+} worr_cgame_command_record_import_v2;
+
 #ifdef __cplusplus
 }
 #endif
@@ -241,5 +259,12 @@ WORR_CGAME_PREDICTION_STATIC_ASSERT(
     offsetof(worr_cgame_command_record_import_v1,
              ResolveCanonicalCommandRange) == 8,
     "cgame command record import header changed");
+WORR_CGAME_PREDICTION_STATIC_ASSERT(
+    sizeof(worr_cgame_command_record_import_v2) == 16,
+    "cgame command record import v2 layout changed");
+WORR_CGAME_PREDICTION_STATIC_ASSERT(
+    offsetof(worr_cgame_command_record_import_v2,
+             ResolveCanonicalCommandById) == 8,
+    "cgame command record import v2 header changed");
 
 #undef WORR_CGAME_PREDICTION_STATIC_ASSERT

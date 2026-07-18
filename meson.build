@@ -139,6 +139,7 @@ q2proto_src = [
 client_src = [
   'src/client/ascii.cpp',
   'src/client/cgame.cpp',
+  'src/client/cgame_prediction_input.cpp',
   'src/client/cgame_event_runtime.cpp',
   'src/client/cgame_classic.cpp',
   'src/client/command_identity.cpp',
@@ -188,6 +189,7 @@ client_src = [
   'src/server/event_shadow.c',
   'src/server/game.c',
   'src/server/local_interaction_authority.c',
+  'src/server/local_action_shadow_authority.c',
   'src/server/rewind_collision.c',
   'src/server/game3_proxy/game3_proxy.c',
   'src/server/init.c',
@@ -365,6 +367,7 @@ server_src = [
   'src/server/event_shadow.c',
   'src/server/game.c',
   'src/server/local_interaction_authority.c',
+  'src/server/local_action_shadow_authority.c',
   'src/server/rewind_collision.c',
   'src/server/game3_proxy/game3_proxy.c',
   'src/server/init.c',
@@ -484,6 +487,10 @@ sgame_src = bgame_src + [
   'src/game/sgame/network/rewind_collision_import.hpp',
   'src/game/sgame/network/local_action_observation.cpp',
   'src/game/sgame/network/local_action_observation.hpp',
+  'src/game/sgame/network/local_action_shadow.cpp',
+  'src/game/sgame/network/local_action_shadow.hpp',
+  'src/game/sgame/network/local_action_weapon_catalog.cpp',
+  'src/game/sgame/network/local_action_weapon_catalog.hpp',
   'src/common/net/event_shadow_map.c',
   'src/game/sgame/network/event_shadow.cpp',
   'src/game/sgame/network/event_shadow.hpp',
@@ -626,6 +633,8 @@ cgame_src = bgame_src + [
   'src/game/cgame/cg_canonical_snapshot_timeline.cpp',
   'src/game/cgame/cg_prediction_authority.hpp',
   'src/game/cgame/cg_prediction_authority.cpp',
+  'src/game/cgame/cg_prediction_config.hpp',
+  'src/game/cgame/cg_prediction_config.cpp',
   'src/game/cgame/cg_main.cpp',
   'src/game/cgame/cg_entity_api.cpp',
   'src/game/cgame/cg_entities.cpp',
@@ -1656,9 +1665,27 @@ canonical_local_action_core_lib = static_library(
   override_options: ['c_std=c11'],
 )
 
+local_action_catalog_core_lib = static_library(
+  'local_action_catalog_core',
+  [
+    'src/common/net/local_action_catalog.c',
+    'src/common/net/local_action_weapon_profile.c',
+    'src/common/net/local_action_weapon_semantics.c',
+    'src/common/net/local_action_shadow.c',
+  ],
+  include_directories: include_directories('inc'),
+  c_args: prediction_core_c_fp_args,
+  install: false,
+  pic: true,
+  override_options: ['c_std=c11'],
+)
+
 local_action_observation_core_lib = static_library(
   'local_action_observation_core',
-  'src/common/net/local_action_observation.c',
+  [
+    'src/common/net/local_action_observation.c',
+    'src/common/net/local_action_command_lease.c',
+  ],
   include_directories: include_directories('inc'),
   c_args: prediction_core_c_fp_args,
   install: false,
@@ -1690,7 +1717,10 @@ canonical_event_core_lib = static_library(
     'src/common/net/legacy_temp_event_candidate.c',
   ],
   include_directories: include_directories('inc', 'q2proto/inc'),
-  link_with: [canonical_event_math_core_lib, local_interaction_core_lib],
+  link_with: [canonical_event_math_core_lib, local_interaction_core_lib,
+              local_action_catalog_core_lib,
+              local_action_observation_core_lib,
+              canonical_command_core_lib],
   c_args: prediction_core_c_fp_args,
   install: false,
   pic: true,
@@ -2101,6 +2131,7 @@ sgame_dll = shared_library(sgame_binary_name, sgame_src,
   link_with:             [canonical_command_core_lib,
                           canonical_snapshot_core_lib,
                           canonical_event_core_lib,
+                          local_action_catalog_core_lib,
                           local_action_observation_core_lib,
                           local_interaction_core_lib],
   link_whole:            [q3a_botlib_utility_lib, prediction_core_lib,
@@ -2380,6 +2411,22 @@ local_interaction_authority_test = executable(
   override_options: ['c_std=c11'],
 )
 
+local_action_shadow_authority_test = executable(
+  'local_action_shadow_authority_test',
+  [
+    'tools/networking/local_action_shadow_authority_test.c',
+    'src/server/local_action_shadow_authority.c',
+  ],
+  include_directories: include_directories('inc'),
+  link_with: [
+    local_action_catalog_core_lib,
+    local_action_observation_core_lib,
+    canonical_command_core_lib,
+  ],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
 cgame_event_shadow_test = executable(
   'cgame_event_shadow_test',
   [
@@ -2451,7 +2498,9 @@ cgame_local_interaction_test = executable(
     'src/game/cgame/cg_local_interaction.cpp',
   ],
   include_directories: include_directories('inc', 'src/game/cgame'),
-  link_with: [local_interaction_core_lib, canonical_command_core_lib],
+  link_with: [local_interaction_core_lib, canonical_command_core_lib,
+              local_action_catalog_core_lib,
+              local_action_observation_core_lib],
   install: false,
   override_options: ['c_std=c11', 'cpp_std=c++20'],
 )
@@ -2983,6 +3032,66 @@ local_action_test = executable(
   override_options: ['c_std=c11'],
 )
 
+local_action_catalog_test = executable(
+  'local_action_catalog_test',
+  'tools/networking/local_action_catalog_test.c',
+  include_directories: include_directories('inc'),
+  link_with: [local_action_catalog_core_lib],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+local_action_weapon_profile_test = executable(
+  'local_action_weapon_profile_test',
+  'tools/networking/local_action_weapon_profile_test.c',
+  include_directories: include_directories('inc'),
+  link_with: [local_action_catalog_core_lib],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+local_action_weapon_semantics_test = executable(
+  'local_action_weapon_semantics_test',
+  'tools/networking/local_action_weapon_semantics_test.c',
+  include_directories: include_directories('inc'),
+  link_with: [local_action_catalog_core_lib],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+local_action_shadow_test = executable(
+  'local_action_shadow_test',
+  'tools/networking/local_action_shadow_test.c',
+  include_directories: include_directories('inc'),
+  link_with: [
+    local_action_catalog_core_lib,
+    local_action_observation_core_lib,
+    canonical_command_core_lib,
+  ],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+local_action_weapon_catalog_adapter_test = executable(
+  'local_action_weapon_catalog_adapter_test',
+  [
+    'tools/networking/local_action_weapon_catalog_adapter_test.cpp',
+    'src/game/sgame/network/local_action_shadow.cpp',
+    'src/game/sgame/network/local_action_weapon_catalog.cpp',
+  ],
+  dependencies: game_deps + networking_math_deps,
+  include_directories: include_directories('.', 'inc', 'src/game/sgame',
+                                           'src/game/bgame'),
+  cpp_args: game_cpp_args,
+  link_with: [
+    local_action_catalog_core_lib,
+    local_action_observation_core_lib,
+    canonical_command_core_lib,
+  ],
+  install: false,
+  override_options: ['b_vscrt=from_buildtype', 'cpp_std=' + sgame_cpp_std],
+)
+
 local_action_layout_c_test = executable(
   'local_action_layout_c_test',
   'tools/networking/local_action_layout_c.c',
@@ -3002,6 +3111,18 @@ local_action_layout_cpp_test = executable(
 local_action_observation_test = executable(
   'local_action_observation_test',
   'tools/networking/local_action_observation_test.c',
+  include_directories: include_directories('inc'),
+  link_with: [
+    local_action_observation_core_lib,
+    canonical_command_core_lib,
+  ],
+  install: false,
+  override_options: ['c_std=c11'],
+)
+
+local_action_command_lease_test = executable(
+  'local_action_command_lease_test',
+  'tools/networking/local_action_command_lease_test.c',
   include_directories: include_directories('inc'),
   link_with: [
     local_action_observation_core_lib,
@@ -3535,12 +3656,21 @@ native_event_virtual_link_test = executable(
 native_snapshot_production_virtual_link_test = executable(
   'native_snapshot_production_virtual_link_test',
   [
+    'tools/networking/cgame_prediction_replay_test_globals.cpp',
     'tools/networking/native_snapshot_production_virtual_link_test.cpp',
     'src/client/cgame_event_runtime.cpp',
+    'src/client/cgame_prediction_input.cpp',
+    'src/client/command_identity.cpp',
+    'src/client/consumed_cursor.cpp',
+    'src/client/net_capability.cpp',
     'src/client/native_readiness_pilot.cpp',
     'src/client/snapshot_shadow.cpp',
+    'src/common/net/usercmd_delta.c',
     'src/game/cgame/cg_canonical_snapshot_timeline.cpp',
+    'src/game/cgame/cg_predict.cpp',
     'src/game/cgame/cg_prediction_authority.cpp',
+    'src/game/cgame/cg_prediction_config.cpp',
+    'src/game/cgame/cg_snapshot_timeline.cpp',
     'src/game/cgame/cg_event_runtime.cpp',
     'src/game/cgame/cg_local_interaction.cpp',
     'src/server/native_shadow.c',
@@ -3581,6 +3711,7 @@ native_snapshot_production_virtual_link_test = executable(
               local_interaction_core_lib,
               snapshot_q2proto_core_lib,
               q2proto_lib],
+  link_whole: prediction_core_lib,
   install: false,
   override_options: ['c_std=c11', 'cpp_std=c++20'],
 )
@@ -3588,13 +3719,22 @@ native_snapshot_production_virtual_link_test = executable(
 native_snapshot_production_corpus_test = executable(
   'native_snapshot_production_corpus_test',
   [
+    'tools/networking/cgame_prediction_replay_test_globals.cpp',
     'tools/networking/native_snapshot_production_corpus_test.cpp',
     'src/client/cgame_event_runtime.cpp',
+    'src/client/cgame_prediction_input.cpp',
+    'src/client/command_identity.cpp',
+    'src/client/consumed_cursor.cpp',
+    'src/client/net_capability.cpp',
     'src/client/native_readiness_pilot.cpp',
     'src/client/snapshot_shadow.cpp',
     'src/common/net/impair.c',
+    'src/common/net/usercmd_delta.c',
     'src/game/cgame/cg_canonical_snapshot_timeline.cpp',
+    'src/game/cgame/cg_predict.cpp',
     'src/game/cgame/cg_prediction_authority.cpp',
+    'src/game/cgame/cg_prediction_config.cpp',
+    'src/game/cgame/cg_snapshot_timeline.cpp',
     'src/game/cgame/cg_event_runtime.cpp',
     'src/game/cgame/cg_local_interaction.cpp',
     'src/server/native_shadow.c',
@@ -3635,6 +3775,7 @@ native_snapshot_production_corpus_test = executable(
               local_interaction_core_lib,
               snapshot_q2proto_core_lib,
               q2proto_lib],
+  link_whole: prediction_core_lib,
   install: false,
   override_options: ['c_std=c11', 'cpp_std=c++20'],
 )
@@ -3918,6 +4059,13 @@ test(
 test(
   'network-local-interaction-authority',
   local_interaction_authority_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-local-action-shadow-authority',
+  local_action_shadow_authority_test,
   suite: 'networking',
   timeout: 30,
 )
@@ -4327,6 +4475,41 @@ test(
 )
 
 test(
+  'network-local-action-catalog',
+  local_action_catalog_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-local-action-weapon-profile',
+  local_action_weapon_profile_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-local-action-weapon-semantics',
+  local_action_weapon_semantics_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-local-action-shadow',
+  local_action_shadow_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-local-action-weapon-catalog-adapter',
+  local_action_weapon_catalog_adapter_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
   'network-local-action-layout-c',
   local_action_layout_c_test,
   suite: 'networking',
@@ -4336,6 +4519,24 @@ test(
 test(
   'network-local-action-layout-cpp',
   local_action_layout_cpp_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-local-action-command-lease',
+  local_action_command_lease_test,
+  suite: 'networking',
+  timeout: 30,
+)
+
+test(
+  'network-local-action-command-lease-source',
+  find_program('python3'),
+  args: [
+    files('tools/networking/test_local_action_command_lease_source.py'),
+    '--repo-root', meson.current_source_dir(),
+  ],
   suite: 'networking',
   timeout: 30,
 )
@@ -5173,6 +5374,19 @@ if win32
       '--dedicated-exe', meson.current_source_dir() / '.install' / 'worr_ded_x86_64.exe',
       '--working-dir', meson.current_source_dir() / '.install',
       '--output', meson.current_source_dir() / '.tmp' / 'networking' / 'canonical-rail-damage-runtime.json',
+      '--timeout', '35',
+    ],
+  )
+  run_target(
+    'networking-local-action-lease-acceptance',
+    command: [
+      version_prog,
+      network_canonical_rail_damage_runtime_script,
+      '--client-exe', meson.current_source_dir() / '.install' / 'worr_x86_64.exe',
+      '--dedicated-exe', meson.current_source_dir() / '.install' / 'worr_ded_x86_64.exe',
+      '--working-dir', meson.current_source_dir() / '.install',
+      '--output', meson.current_source_dir() / '.tmp' / 'networking' / 'local-action-lease-runtime.json',
+      '--weapon', 'blaster-local-action-lease',
       '--timeout', '35',
     ],
   )

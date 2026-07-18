@@ -76,6 +76,12 @@ static cvar_t *vk_resolutionscale_lowerspeed;
 static cvar_t *vk_resolutionscale_numframesbeforelowering;
 static cvar_t *vk_resolutionscale_numframesbeforeraising;
 static cvar_t *vk_resolutionscale_targetdrawtime;
+static cvar_t *vk_r_vsync;
+static cvar_t *vk_gl_swapinterval;
+static cvar_t *vk_r_multisamples;
+static cvar_t *vk_gl_multisamples;
+static bool vk_vsync_syncing;
+static bool vk_multisample_syncing;
 static uint32_t vk_showtearing_frame;
 static shadow_frontend_state_t vk_shadow_frontend;
 static shadow_frontend_cvars_t vk_shadow_frontend_cvars;
@@ -95,6 +101,80 @@ static VkDeviceMemory vk_screenshot_memory;
 static VkDeviceSize vk_screenshot_capacity;
 static bool vk_dof_supported;
 static uint64_t vk_frame_begin_us;
+
+bool VK_RegisterScenePipelineVariant(vk_context_t *ctx,
+                                     VkPipeline multisample_pipeline,
+                                     VkPipeline single_sample_pipeline)
+{
+    if (!ctx || !multisample_pipeline || !single_sample_pipeline) {
+        Com_SetLastError("Vulkan: invalid scene pipeline variant");
+        return false;
+    }
+
+    for (uint32_t i = 0; i < ctx->scene_pipeline_variant_count; ++i) {
+        vk_scene_pipeline_variant_t *variant =
+            &ctx->scene_pipeline_variants[i];
+        if (variant->multisample_pipeline == multisample_pipeline) {
+            Com_SetLastError("Vulkan: duplicate scene pipeline variant");
+            return false;
+        }
+    }
+
+    if (ctx->scene_pipeline_variant_count >=
+        q_countof(ctx->scene_pipeline_variants)) {
+        Com_SetLastError("Vulkan: scene pipeline variant capacity exceeded");
+        return false;
+    }
+
+    ctx->scene_pipeline_variants[ctx->scene_pipeline_variant_count++] =
+        (vk_scene_pipeline_variant_t) {
+            .multisample_pipeline = multisample_pipeline,
+            .single_sample_pipeline = single_sample_pipeline,
+        };
+    return true;
+}
+
+VkPipeline VK_SelectScenePipeline(const vk_context_t *ctx,
+                                  VkPipeline multisample_pipeline)
+{
+    if (!ctx || !ctx->scene_single_sample_active || !multisample_pipeline) {
+        return multisample_pipeline;
+    }
+
+    for (uint32_t i = 0; i < ctx->scene_pipeline_variant_count; ++i) {
+        const vk_scene_pipeline_variant_t *variant =
+            &ctx->scene_pipeline_variants[i];
+        if (variant->multisample_pipeline == multisample_pipeline) {
+            return variant->single_sample_pipeline;
+        }
+    }
+
+    // A scene pass cannot bind an MSAA pipeline against its single-sample
+    // attachments. Creation is intentionally fail-closed; this guard keeps a
+    // malformed future registration visible instead of submitting invalid
+    // Vulkan commands.
+    Com_WPrintf("Vulkan: missing single-sample scene pipeline variant.\n");
+    return VK_NULL_HANDLE;
+}
+
+static void VK_DestroyScenePipelineVariants(vk_context_t *ctx)
+{
+    if (!ctx || !ctx->device) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < ctx->scene_pipeline_variant_count; ++i) {
+        VkPipeline pipeline =
+            ctx->scene_pipeline_variants[i].single_sample_pipeline;
+        if (pipeline) {
+            vkDestroyPipeline(ctx->device, pipeline, NULL);
+        }
+    }
+    memset(ctx->scene_pipeline_variants, 0,
+           sizeof(ctx->scene_pipeline_variants));
+    ctx->scene_pipeline_variant_count = 0;
+    ctx->scene_single_sample_active = false;
+}
 
 #define VK_RESOLUTION_SCALE_MIN 0.25f
 #define VK_RESOLUTION_SCALE_MAX 1.0f
@@ -945,6 +1025,10 @@ static bool VK_SelectPhysicalDevice(void)
     vk_state.ctx.max_sampler_anisotropy =
         vk_state.ctx.sampler_anisotropy_supported
             ? max(props.limits.maxSamplerAnisotropy, 1.0f) : 1.0f;
+    vk_state.ctx.scene_sample_counts =
+        props.limits.framebufferColorSampleCounts &
+        props.limits.framebufferDepthSampleCounts;
+    vk_state.ctx.scene_samples = VK_SAMPLE_COUNT_1_BIT;
     Com_Printf("Vulkan device: %s\n", props.deviceName);
 
     Z_Free(devices);
@@ -961,7 +1045,7 @@ static bool VK_CreateDevice(void)
         .pQueuePriorities = &queue_priority,
     };
 
-    const char *extensions[2] = {
+    const char *extensions[4] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     };
     uint32_t enabled_ext_count = 1;
@@ -969,6 +1053,20 @@ static bool VK_CreateDevice(void)
     if (VK_DeviceHasExtension(vk_state.ctx.physical_device,
                               VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)) {
         extensions[enabled_ext_count++] = VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
+    }
+
+    const bool has_renderpass2 = VK_DeviceHasExtension(
+        vk_state.ctx.physical_device,
+        VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+    const bool has_depth_stencil_resolve = VK_DeviceHasExtension(
+        vk_state.ctx.physical_device,
+        VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME);
+    if (has_renderpass2 && has_depth_stencil_resolve) {
+        extensions[enabled_ext_count++] = VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME;
+        extensions[enabled_ext_count++] = VK_KHR_DEPTH_STENCIL_RESOLVE_EXTENSION_NAME;
+        vk_state.ctx.depth_stencil_resolve_supported = true;
+    } else {
+        vk_state.ctx.depth_stencil_resolve_supported = false;
     }
 
     VkPhysicalDeviceFeatures enabled_features = { 0 };
@@ -993,6 +1091,16 @@ static bool VK_CreateDevice(void)
 
     vkGetDeviceQueue(vk_state.ctx.device, vk_state.ctx.graphics_queue_family, 0,
                      &vk_state.ctx.graphics_queue);
+
+    if (vk_state.ctx.depth_stencil_resolve_supported) {
+        vk_state.ctx.create_render_pass2 =
+            (PFN_vkCreateRenderPass2KHR)vkGetDeviceProcAddr(
+                vk_state.ctx.device, "vkCreateRenderPass2KHR");
+        if (!vk_state.ctx.create_render_pass2) {
+            Com_WPrintf("Vulkan: renderpass2 entry point unavailable; native MSAA disabled.\n");
+            vk_state.ctx.depth_stencil_resolve_supported = false;
+        }
+    }
 
     return true;
 }
@@ -1059,11 +1167,139 @@ static VkSurfaceFormatKHR VK_ChooseSurfaceFormat(const VkSurfaceFormatKHR *forma
     return formats[0];
 }
 
-static VkPresentModeKHR VK_ChoosePresentMode(const VkPresentModeKHR *modes, uint32_t count)
+static void VK_VSyncChanged(cvar_t *self)
 {
+    if (vk_vsync_syncing || !self) {
+        return;
+    }
+
+    vk_vsync_syncing = true;
+    int value = Cvar_ClampInteger(self, 0, 1);
+    const char *string = value ? "1" : "0";
+    if (self == vk_r_vsync && vk_gl_swapinterval) {
+        Cvar_SetByVar(vk_gl_swapinterval, string, FROM_CODE);
+    } else if (self == vk_gl_swapinterval && vk_r_vsync) {
+        Cvar_SetByVar(vk_r_vsync, string, FROM_CODE);
+    }
+
+    // Present mode belongs to the native Vulkan swapchain. Reuse the normal
+    // deferred recreation path so a menu change never tears down resources
+    // while the current command buffer can still reference them.
+    if (vk_state.initialized) {
+        vk_state.swapchain_dirty = true;
+    }
+    vk_vsync_syncing = false;
+}
+
+static void VK_RegisterVSyncCvars(void)
+{
+    vk_gl_swapinterval = Cvar_Get("gl_swapinterval", "1",
+                                  CVAR_ARCHIVE | CVAR_NOARCHIVE);
+    vk_r_vsync = Cvar_Get("r_vsync", vk_gl_swapinterval->string,
+                          CVAR_ARCHIVE);
+
+    if (!(vk_r_vsync->flags & CVAR_MODIFIED) &&
+        (vk_gl_swapinterval->flags & CVAR_MODIFIED)) {
+        Cvar_SetByVar(vk_r_vsync, vk_gl_swapinterval->string, FROM_CODE);
+    } else {
+        Cvar_SetByVar(vk_gl_swapinterval, vk_r_vsync->string, FROM_CODE);
+    }
+
+    vk_gl_swapinterval->changed = VK_VSyncChanged;
+    vk_r_vsync->changed = VK_VSyncChanged;
+    VK_VSyncChanged(vk_r_vsync);
+}
+
+static void VK_UnregisterVSyncCvars(void)
+{
+    if (vk_gl_swapinterval && vk_gl_swapinterval->changed == VK_VSyncChanged) {
+        vk_gl_swapinterval->changed = NULL;
+    }
+    if (vk_r_vsync && vk_r_vsync->changed == VK_VSyncChanged) {
+        vk_r_vsync->changed = NULL;
+    }
+    vk_gl_swapinterval = NULL;
+    vk_r_vsync = NULL;
+    vk_vsync_syncing = false;
+}
+
+// gl_multisamples remains a command/config compatibility spelling, while the
+// Video UI and both native renderers use the shared archived r_multisamples
+// cvar. Both carry CVAR_RENDERER because a sample-count change reallocates
+// attachments and rebuilds graphics pipelines.
+static void VK_MultisampleChanged(cvar_t *self)
+{
+    if (vk_multisample_syncing || !self) {
+        return;
+    }
+
+    vk_multisample_syncing = true;
+    const int value = Cvar_ClampInteger(self, 0, 64);
+    const char *string = va("%d", value);
+    if (vk_r_multisamples) {
+        Cvar_SetByVar(vk_r_multisamples, string, FROM_CODE);
+    }
+    if (vk_gl_multisamples) {
+        Cvar_SetByVar(vk_gl_multisamples, string, FROM_CODE);
+    }
+    vk_multisample_syncing = false;
+}
+
+static void VK_RegisterMultisampleCvars(void)
+{
+    vk_gl_multisamples = Cvar_Get("gl_multisamples", "0",
+                                  CVAR_ARCHIVE | CVAR_RENDERER |
+                                  CVAR_NOARCHIVE);
+    vk_r_multisamples = Cvar_Get("r_multisamples",
+                                 vk_gl_multisamples->string,
+                                 CVAR_ARCHIVE | CVAR_RENDERER);
+    if (!(vk_r_multisamples->flags & CVAR_MODIFIED) &&
+        (vk_gl_multisamples->flags & CVAR_MODIFIED)) {
+        Cvar_SetByVar(vk_r_multisamples, vk_gl_multisamples->string,
+                      FROM_CODE);
+    } else {
+        Cvar_SetByVar(vk_gl_multisamples, vk_r_multisamples->string,
+                      FROM_CODE);
+    }
+    vk_gl_multisamples->changed = VK_MultisampleChanged;
+    vk_r_multisamples->changed = VK_MultisampleChanged;
+}
+
+static void VK_UnregisterMultisampleCvars(void)
+{
+    if (vk_gl_multisamples &&
+        vk_gl_multisamples->changed == VK_MultisampleChanged) {
+        vk_gl_multisamples->changed = NULL;
+    }
+    if (vk_r_multisamples &&
+        vk_r_multisamples->changed == VK_MultisampleChanged) {
+        vk_r_multisamples->changed = NULL;
+    }
+    vk_gl_multisamples = NULL;
+    vk_r_multisamples = NULL;
+    vk_multisample_syncing = false;
+}
+
+static VkPresentModeKHR VK_ChoosePresentMode(const VkPresentModeKHR *modes,
+                                              uint32_t count, bool vsync)
+{
+    if (!vsync) {
+        for (uint32_t i = 0; i < count; ++i) {
+            if (modes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+                return modes[i];
+            }
+        }
+        for (uint32_t i = 0; i < count; ++i) {
+            if (modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+                return modes[i];
+            }
+        }
+    }
+
     for (uint32_t i = 0; i < count; ++i) {
-        if (modes[i] == VK_PRESENT_MODE_FIFO_KHR)
+        if (modes[i] == VK_PRESENT_MODE_FIFO_KHR) {
             return modes[i];
+        }
     }
 
     return VK_PRESENT_MODE_FIFO_KHR;
@@ -1082,6 +1318,289 @@ static VkExtent2D VK_ChooseSwapExtent(const VkSurfaceCapabilitiesKHR *caps,
     };
 
     return extent;
+}
+
+static int VK_SampleCountValue(VkSampleCountFlagBits samples)
+{
+    switch (samples) {
+    case VK_SAMPLE_COUNT_64_BIT: return 64;
+    case VK_SAMPLE_COUNT_32_BIT: return 32;
+    case VK_SAMPLE_COUNT_16_BIT: return 16;
+    case VK_SAMPLE_COUNT_8_BIT: return 8;
+    case VK_SAMPLE_COUNT_4_BIT: return 4;
+    case VK_SAMPLE_COUNT_2_BIT: return 2;
+    default: return 1;
+    }
+}
+
+static VkSampleCountFlags VK_ImageSampleCounts(vk_context_t *ctx,
+                                               VkFormat format,
+                                               VkImageUsageFlags usage)
+{
+    if (!ctx || !ctx->physical_device || format == VK_FORMAT_UNDEFINED) {
+        return 0;
+    }
+
+    VkImageFormatProperties properties;
+    VkResult result = vkGetPhysicalDeviceImageFormatProperties(
+        ctx->physical_device, format, VK_IMAGE_TYPE_2D,
+        VK_IMAGE_TILING_OPTIMAL, usage, 0, &properties);
+    return result == VK_SUCCESS ? properties.sampleCounts : 0;
+}
+
+static VkSampleCountFlagBits VK_SelectSceneSamples(vk_context_t *ctx,
+                                                    VkFormat color_format,
+                                                    VkFormat depth_format)
+{
+    const int requested = vk_r_multisamples
+        ? Cvar_ClampInteger(vk_r_multisamples, 0, 64) : 0;
+    VkSampleCountFlagBits selected = VK_SAMPLE_COUNT_1_BIT;
+
+    if (requested >= 2 && ctx && ctx->depth_stencil_resolve_supported &&
+        ctx->create_render_pass2) {
+        VkSampleCountFlags supported = ctx->scene_sample_counts;
+        supported &= VK_ImageSampleCounts(
+            ctx, color_format, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+        supported &= VK_ImageSampleCounts(
+            ctx, depth_format, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+        static const VkSampleCountFlagBits candidates[] = {
+            VK_SAMPLE_COUNT_64_BIT,
+            VK_SAMPLE_COUNT_32_BIT,
+            VK_SAMPLE_COUNT_16_BIT,
+            VK_SAMPLE_COUNT_8_BIT,
+            VK_SAMPLE_COUNT_4_BIT,
+            VK_SAMPLE_COUNT_2_BIT,
+        };
+        for (uint32_t i = 0; i < q_countof(candidates); ++i) {
+            if (VK_SampleCountValue(candidates[i]) <= requested &&
+                (supported & candidates[i])) {
+                selected = candidates[i];
+                break;
+            }
+        }
+    }
+
+    const int actual = VK_SampleCountValue(selected);
+    if (requested >= 2 && actual == 1 &&
+        (!ctx || !ctx->depth_stencil_resolve_supported ||
+         !ctx->create_render_pass2)) {
+        Com_WPrintf("Vulkan: depth/stencil resolve is unavailable; disabling MSAA.\n");
+    } else if (requested != actual) {
+        Com_WPrintf("Vulkan: clamped requested %dx MSAA to %dx.\n",
+                    requested, actual);
+    }
+
+    // Keep the shared UI accurate: never leave an unavailable sample count
+    // selected after capabilities reduce it to a legal native value.
+    if (vk_r_multisamples && requested != actual) {
+        Cvar_SetByVar(vk_r_multisamples, va("%d", actual), FROM_CODE);
+    }
+    if (vk_gl_multisamples && requested != actual) {
+        Cvar_SetByVar(vk_gl_multisamples, va("%d", actual), FROM_CODE);
+    }
+    return selected;
+}
+
+static bool VK_CreateDeviceLocalImage(vk_context_t *ctx,
+                                      const VkImageCreateInfo *image_info,
+                                      VkImage *out_image,
+                                      VkDeviceMemory *out_memory,
+                                      const char *what)
+{
+    if (!ctx || !ctx->device || !image_info || !out_image || !out_memory) {
+        Com_SetLastError("Vulkan: invalid device-local image request");
+        return false;
+    }
+
+    VkResult result = vkCreateImage(ctx->device, image_info, NULL, out_image);
+    if (result != VK_SUCCESS) {
+        return VK_Check(result, what);
+    }
+
+    VkMemoryRequirements requirements;
+    vkGetImageMemoryRequirements(ctx->device, *out_image, &requirements);
+    const uint32_t memory_type = VK_FindMemoryType(
+        ctx->physical_device, requirements.memoryTypeBits,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (memory_type == UINT32_MAX) {
+        Com_SetLastError("Vulkan: no suitable device-local image memory type found");
+        return false;
+    }
+
+    VkMemoryAllocateInfo allocation = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = requirements.size,
+        .memoryTypeIndex = memory_type,
+    };
+    result = vkAllocateMemory(ctx->device, &allocation, NULL, out_memory);
+    if (result != VK_SUCCESS) {
+        return VK_Check(result, "vkAllocateMemory(device-local image)");
+    }
+    result = vkBindImageMemory(ctx->device, *out_image, *out_memory, 0);
+    return VK_Check(result, "vkBindImageMemory(device-local image)");
+}
+
+static VkImageView VK_PresentationDepthView(const vk_frame_context_t *frame)
+{
+    return frame && frame->presentation_depth_view
+        ? frame->presentation_depth_view
+        : (frame ? frame->depth_view : VK_NULL_HANDLE);
+}
+
+static VkImage VK_SceneDepthAttachmentImage(const vk_context_t *ctx,
+                                            const vk_frame_context_t *frame)
+{
+    return ctx && ctx->scene_samples != VK_SAMPLE_COUNT_1_BIT &&
+           !ctx->scene_single_sample_active && frame
+        ? frame->msaa_depth_image
+        : (frame ? frame->depth_image : VK_NULL_HANDLE);
+}
+
+static bool VK_CreateMSAASceneRenderPass(
+    vk_context_t *ctx, VkFormat color_format, VkFormat depth_format,
+    VkAttachmentLoadOp color_load, VkImageLayout color_initial,
+    VkImageLayout color_final, VkAttachmentLoadOp depth_load,
+    bool resolve_depth,
+    VkRenderPass *out_render_pass, const char *what)
+{
+    if (!ctx || !ctx->create_render_pass2 ||
+        ctx->scene_samples == VK_SAMPLE_COUNT_1_BIT || !out_render_pass) {
+        Com_SetLastError("Vulkan: native MSAA render-pass request is unavailable");
+        return false;
+    }
+
+    VkAttachmentDescription2 attachments[4] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+            .format = color_format,
+            .samples = ctx->scene_samples,
+            .loadOp = color_load,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = color_initial,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+            .format = depth_format,
+            .samples = ctx->scene_samples,
+            .loadOp = depth_load,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_DepthFormatHasStencil(depth_format)
+                ? depth_load : VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .initialLayout = depth_load == VK_ATTACHMENT_LOAD_OP_LOAD
+                ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                : VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+            .format = color_format,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = color_initial,
+            .finalLayout = color_final,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+            .format = depth_format,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        },
+    };
+    VkAttachmentReference2 color_ref = {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+        .attachment = 0,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+    };
+    VkAttachmentReference2 color_resolve_ref = {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+        .attachment = 2,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+    };
+    VkAttachmentReference2 depth_ref = {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+        .attachment = 1,
+        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT |
+            (VK_DepthFormatHasStencil(depth_format)
+                ? VK_IMAGE_ASPECT_STENCIL_BIT : 0),
+    };
+    VkAttachmentReference2 depth_resolve_ref = {
+        .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+        .attachment = 3,
+        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .aspectMask = depth_ref.aspectMask,
+    };
+    VkSubpassDescriptionDepthStencilResolve depth_resolve = {
+        .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_DEPTH_STENCIL_RESOLVE,
+        // Sample zero is the resolve mode guaranteed by
+        // VK_KHR_depth_stencil_resolve and preserves a deterministic depth
+        // receiver for DOF, bloom, and the native liquid continuation pass.
+        // Depth can be omitted only when none of those consumers is active;
+        // colour still resolves normally for native MSAA presentation.
+        .depthResolveMode = resolve_depth ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT
+                                          : VK_RESOLVE_MODE_NONE,
+        .stencilResolveMode = resolve_depth && VK_DepthFormatHasStencil(depth_format)
+            ? VK_RESOLVE_MODE_SAMPLE_ZERO_BIT : VK_RESOLVE_MODE_NONE,
+        .pDepthStencilResolveAttachment = resolve_depth
+            ? &depth_resolve_ref : NULL,
+    };
+    VkSubpassDescription2 subpass = {
+        .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
+        .pNext = &depth_resolve,
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &color_ref,
+        .pResolveAttachments = &color_resolve_ref,
+        .pDepthStencilAttachment = &depth_ref,
+    };
+    VkSubpassDependency2 dependencies[2] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                             VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+            .srcSubpass = 0,
+            .dstSubpass = VK_SUBPASS_EXTERNAL,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                             VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        },
+    };
+    VkRenderPassCreateInfo2 create_info = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
+        .attachmentCount = q_countof(attachments),
+        .pAttachments = attachments,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+        .dependencyCount = q_countof(dependencies),
+        .pDependencies = dependencies,
+    };
+    return VK_Check(ctx->create_render_pass2(ctx->device, &create_info, NULL,
+                                             out_render_pass), what);
 }
 
 static void VK_DestroyLiquidSceneResources(vk_context_t *ctx)
@@ -1123,6 +1642,11 @@ static void VK_DestroyLinearSceneResources(vk_context_t *ctx)
             vkDestroyFramebuffer(ctx->device, frame->linear_scene_framebuffer,
                                  NULL);
         }
+        if (frame->linear_scene_single_sample_framebuffer) {
+            vkDestroyFramebuffer(ctx->device,
+                                 frame->linear_scene_single_sample_framebuffer,
+                                 NULL);
+        }
         VK_UI_DestroyExternalImageDescriptor(
             &frame->linear_scene_copy_descriptor_set);
         VK_UI_DestroyExternalImageDescriptor(
@@ -1155,6 +1679,7 @@ static void VK_DestroyLinearSceneResources(vk_context_t *ctx)
         frame->linear_scene_descriptor_set = VK_NULL_HANDLE;
         frame->linear_scene_copy_base_descriptor_set = VK_NULL_HANDLE;
         frame->linear_scene_framebuffer = VK_NULL_HANDLE;
+        frame->linear_scene_single_sample_framebuffer = VK_NULL_HANDLE;
         frame->linear_scene_copy_view = VK_NULL_HANDLE;
         frame->linear_scene_copy_base_view = VK_NULL_HANDLE;
         frame->linear_scene_copy_image = VK_NULL_HANDLE;
@@ -1291,7 +1816,9 @@ static bool VK_CreateLinearSceneFramebuffers(vk_context_t *ctx)
     for (uint32_t frame_index = 0; frame_index < ctx->frame_count;
          ++frame_index) {
         vk_frame_context_t *frame = &ctx->frames[frame_index];
-        if (!frame->linear_scene_view || !frame->depth_view) {
+        if (!frame->linear_scene_view || !frame->depth_view ||
+            (ctx->scene_samples != VK_SAMPLE_COUNT_1_BIT &&
+             (!frame->msaa_color_view || !frame->msaa_depth_view))) {
             Com_SetLastError("Vulkan: scaled scene framebuffer attachment unavailable");
             return false;
         }
@@ -1300,14 +1827,30 @@ static bool VK_CreateLinearSceneFramebuffers(vk_context_t *ctx)
                                  NULL);
             frame->linear_scene_framebuffer = VK_NULL_HANDLE;
         }
-        VkImageView attachments[] = {
+        if (frame->linear_scene_single_sample_framebuffer) {
+            vkDestroyFramebuffer(ctx->device,
+                                 frame->linear_scene_single_sample_framebuffer,
+                                 NULL);
+            frame->linear_scene_single_sample_framebuffer = VK_NULL_HANDLE;
+        }
+        VkImageView attachments[4] = {
             frame->linear_scene_view,
             frame->depth_view,
+            VK_NULL_HANDLE,
+            VK_NULL_HANDLE,
         };
+        uint32_t attachment_count = 2;
+        if (ctx->scene_samples != VK_SAMPLE_COUNT_1_BIT) {
+            attachments[0] = frame->msaa_color_view;
+            attachments[1] = frame->msaa_depth_view;
+            attachments[2] = frame->linear_scene_view;
+            attachments[3] = frame->depth_view;
+            attachment_count = 4;
+        }
         VkFramebufferCreateInfo framebuffer_info = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .renderPass = ctx->scene_render_pass,
-            .attachmentCount = q_countof(attachments),
+            .attachmentCount = attachment_count,
             .pAttachments = attachments,
             .width = ctx->scene_extent.width,
             .height = ctx->scene_extent.height,
@@ -1318,6 +1861,24 @@ static bool VK_CreateLinearSceneFramebuffers(vk_context_t *ctx)
             &frame->linear_scene_framebuffer);
         if (result != VK_SUCCESS) {
             return VK_Check(result, "vkCreateFramebuffer(linear scene)");
+        }
+        if (ctx->scene_samples != VK_SAMPLE_COUNT_1_BIT &&
+            ctx->scene_single_sample_render_pass) {
+            VkImageView single_sample_attachments[] = {
+                frame->linear_scene_view,
+                frame->depth_view,
+            };
+            framebuffer_info.renderPass = ctx->scene_single_sample_render_pass;
+            framebuffer_info.attachmentCount =
+                q_countof(single_sample_attachments);
+            framebuffer_info.pAttachments = single_sample_attachments;
+            result = vkCreateFramebuffer(
+                ctx->device, &framebuffer_info, NULL,
+                &frame->linear_scene_single_sample_framebuffer);
+            if (result != VK_SUCCESS) {
+                return VK_Check(result,
+                                "vkCreateFramebuffer(linear scene single sample)");
+            }
         }
     }
     return true;
@@ -1753,6 +2314,7 @@ static void VK_DestroySwapchain(vk_context_t *ctx)
     VK_Entity_DestroySwapchainResources(ctx);
     VK_Debug_DestroySwapchainResources(ctx);
     VK_UI_DestroySwapchainResources(ctx);
+    VK_DestroyScenePipelineVariants(ctx);
     VK_DestroyBloomEmissionResources(ctx);
     VK_DestroyLinearSceneResources(ctx);
 
@@ -1767,6 +2329,17 @@ static void VK_DestroySwapchain(vk_context_t *ctx)
             Z_Free(frame->framebuffers);
             frame->framebuffers = NULL;
         }
+        if (frame->msaa_framebuffers) {
+            for (uint32_t image = 0; image < ctx->swapchain.image_count; ++image) {
+                if (frame->msaa_framebuffers[image]) {
+                    vkDestroyFramebuffer(ctx->device,
+                                         frame->msaa_framebuffers[image],
+                                         NULL);
+                }
+            }
+            Z_Free(frame->msaa_framebuffers);
+            frame->msaa_framebuffers = NULL;
+        }
         VK_UI_DestroyExternalImageDescriptor(
             &frame->bloom_depth_descriptor_set);
         // VK_UI can already be shut down during final renderer teardown.
@@ -1774,6 +2347,44 @@ static void VK_DestroySwapchain(vk_context_t *ctx)
         if (frame->depth_sample_view) {
             vkDestroyImageView(ctx->device, frame->depth_sample_view, NULL);
             frame->depth_sample_view = VK_NULL_HANDLE;
+        }
+        if (frame->presentation_depth_view) {
+            vkDestroyImageView(ctx->device, frame->presentation_depth_view,
+                               NULL);
+            frame->presentation_depth_view = VK_NULL_HANDLE;
+        }
+        if (frame->presentation_depth_image) {
+            vkDestroyImage(ctx->device, frame->presentation_depth_image,
+                           NULL);
+            frame->presentation_depth_image = VK_NULL_HANDLE;
+        }
+        if (frame->presentation_depth_memory) {
+            vkFreeMemory(ctx->device, frame->presentation_depth_memory, NULL);
+            frame->presentation_depth_memory = VK_NULL_HANDLE;
+        }
+        if (frame->msaa_color_view) {
+            vkDestroyImageView(ctx->device, frame->msaa_color_view, NULL);
+            frame->msaa_color_view = VK_NULL_HANDLE;
+        }
+        if (frame->msaa_color_image) {
+            vkDestroyImage(ctx->device, frame->msaa_color_image, NULL);
+            frame->msaa_color_image = VK_NULL_HANDLE;
+        }
+        if (frame->msaa_color_memory) {
+            vkFreeMemory(ctx->device, frame->msaa_color_memory, NULL);
+            frame->msaa_color_memory = VK_NULL_HANDLE;
+        }
+        if (frame->msaa_depth_view) {
+            vkDestroyImageView(ctx->device, frame->msaa_depth_view, NULL);
+            frame->msaa_depth_view = VK_NULL_HANDLE;
+        }
+        if (frame->msaa_depth_image) {
+            vkDestroyImage(ctx->device, frame->msaa_depth_image, NULL);
+            frame->msaa_depth_image = VK_NULL_HANDLE;
+        }
+        if (frame->msaa_depth_memory) {
+            vkFreeMemory(ctx->device, frame->msaa_depth_memory, NULL);
+            frame->msaa_depth_memory = VK_NULL_HANDLE;
         }
         if (frame->depth_view) {
             vkDestroyImageView(ctx->device, frame->depth_view, NULL);
@@ -1822,9 +2433,24 @@ static void VK_DestroySwapchain(vk_context_t *ctx)
         vkDestroyRenderPass(ctx->device, ctx->scene_render_pass, NULL);
         ctx->scene_render_pass = VK_NULL_HANDLE;
     }
+    if (ctx->scene_no_depth_resolve_render_pass) {
+        vkDestroyRenderPass(ctx->device,
+                            ctx->scene_no_depth_resolve_render_pass, NULL);
+        ctx->scene_no_depth_resolve_render_pass = VK_NULL_HANDLE;
+    }
+    if (ctx->scene_single_sample_render_pass) {
+        vkDestroyRenderPass(ctx->device,
+                            ctx->scene_single_sample_render_pass, NULL);
+        ctx->scene_single_sample_render_pass = VK_NULL_HANDLE;
+    }
     if (ctx->scene_load_render_pass) {
         vkDestroyRenderPass(ctx->device, ctx->scene_load_render_pass, NULL);
         ctx->scene_load_render_pass = VK_NULL_HANDLE;
+    }
+    if (ctx->scene_single_sample_load_render_pass) {
+        vkDestroyRenderPass(ctx->device,
+                            ctx->scene_single_sample_load_render_pass, NULL);
+        ctx->scene_single_sample_load_render_pass = VK_NULL_HANDLE;
     }
     if (ctx->presentation_render_pass) {
         vkDestroyRenderPass(ctx->device, ctx->presentation_render_pass, NULL);
@@ -1884,6 +2510,7 @@ static void VK_DestroySwapchain(vk_context_t *ctx)
     ctx->linear_scene_supported = false;
     ctx->linear_scene_mips_supported = false;
     ctx->linear_scene_mip_levels = 0;
+    ctx->scene_samples = VK_SAMPLE_COUNT_1_BIT;
     memset(&ctx->swapchain.extent, 0, sizeof(ctx->swapchain.extent));
 }
 
@@ -1959,7 +2586,10 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
         return false;
     }
 
-    VkPresentModeKHR present_mode = VK_ChoosePresentMode(present_modes, present_count);
+    const bool vsync = !vk_r_vsync ||
+        Cvar_ClampInteger(vk_r_vsync, 0, 1) != 0;
+    VkPresentModeKHR present_mode =
+        VK_ChoosePresentMode(present_modes, present_count, vsync);
     Z_Free(present_modes);
 
     VkExtent2D extent = VK_ChooseSwapExtent(&caps, width, height);
@@ -2183,13 +2813,22 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
         Com_WPrintf("Vulkan: depth format is not sampleable; depth-aware DOF disabled.\n");
     }
 
+    ctx->scene_samples = VK_SelectSceneSamples(
+        ctx, ctx->scene_format, ctx->swapchain.depth_format);
+    const bool scene_multisampled =
+        ctx->scene_samples != VK_SAMPLE_COUNT_1_BIT;
+    if (scene_multisampled) {
+        Com_Printf("Vulkan: native scene MSAA enabled at %dx.\n",
+                   VK_SampleCountValue(ctx->scene_samples));
+    }
+
     VkImageCreateInfo depth_image_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
         .format = ctx->swapchain.depth_format,
         .extent = {
-            .width = ctx->swapchain.extent.width,
-            .height = ctx->swapchain.extent.height,
+            .width = ctx->scene_extent.width,
+            .height = ctx->scene_extent.height,
             .depth = 1,
         },
         .mipLevels = 1,
@@ -2201,6 +2840,31 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
+    VkImageCreateInfo presentation_depth_image_info = depth_image_info;
+    presentation_depth_image_info.extent.width = ctx->swapchain.extent.width;
+    presentation_depth_image_info.extent.height = ctx->swapchain.extent.height;
+    presentation_depth_image_info.usage =
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    VkImageCreateInfo msaa_color_image_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = ctx->scene_format,
+        .extent = {
+            .width = ctx->scene_extent.width,
+            .height = ctx->scene_extent.height,
+            .depth = 1,
+        },
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = ctx->scene_samples,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    VkImageCreateInfo msaa_depth_image_info = depth_image_info;
+    msaa_depth_image_info.samples = ctx->scene_samples;
+    msaa_depth_image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
     VkImageAspectFlags depth_aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
     if (ctx->swapchain.depth_format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
@@ -2223,41 +2887,12 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
 
     for (uint32_t i = 0; i < ctx->frame_count; ++i) {
         vk_frame_context_t *frame = &ctx->frames[i];
-        result = vkCreateImage(ctx->device, &depth_image_info, NULL,
-                               &frame->depth_image);
-        if (result != VK_SUCCESS) {
-            VK_DestroySwapchain(ctx);
-            return VK_Check(result, "vkCreateImage(depth)");
-        }
-
-        VkMemoryRequirements depth_requirements;
-        vkGetImageMemoryRequirements(ctx->device, frame->depth_image,
-                                     &depth_requirements);
-        uint32_t depth_memory_type = VK_FindMemoryType(
-            ctx->physical_device, depth_requirements.memoryTypeBits,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        if (depth_memory_type == UINT32_MAX) {
-            Com_SetLastError("Vulkan: no suitable depth memory type found");
+        if (!VK_CreateDeviceLocalImage(ctx, &depth_image_info,
+                                       &frame->depth_image,
+                                       &frame->depth_memory,
+                                       "vkCreateImage(scene depth)")) {
             VK_DestroySwapchain(ctx);
             return false;
-        }
-
-        VkMemoryAllocateInfo depth_alloc_info = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .allocationSize = depth_requirements.size,
-            .memoryTypeIndex = depth_memory_type,
-        };
-        result = vkAllocateMemory(ctx->device, &depth_alloc_info, NULL,
-                                  &frame->depth_memory);
-        if (result != VK_SUCCESS) {
-            VK_DestroySwapchain(ctx);
-            return VK_Check(result, "vkAllocateMemory(depth)");
-        }
-        result = vkBindImageMemory(ctx->device, frame->depth_image,
-                                   frame->depth_memory, 0);
-        if (result != VK_SUCCESS) {
-            VK_DestroySwapchain(ctx);
-            return VK_Check(result, "vkBindImageMemory(depth)");
         }
 
         depth_view_info.image = frame->depth_image;
@@ -2267,7 +2902,67 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
             VK_DestroySwapchain(ctx);
             return VK_Check(result, "vkCreateImageView(depth)");
         }
+        if (scene_multisampled) {
+            if (!VK_CreateDeviceLocalImage(ctx, &msaa_color_image_info,
+                                           &frame->msaa_color_image,
+                                           &frame->msaa_color_memory,
+                                           "vkCreateImage(scene MSAA color)")) {
+                VK_DestroySwapchain(ctx);
+                return false;
+            }
+            VkImageViewCreateInfo color_view_info = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .image = frame->msaa_color_image,
+                .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                .format = ctx->scene_format,
+                .subresourceRange = {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .levelCount = 1,
+                    .layerCount = 1,
+                },
+            };
+            result = vkCreateImageView(ctx->device, &color_view_info, NULL,
+                                       &frame->msaa_color_view);
+            if (result != VK_SUCCESS) {
+                VK_DestroySwapchain(ctx);
+                return VK_Check(result, "vkCreateImageView(scene MSAA color)");
+            }
+            if (!VK_CreateDeviceLocalImage(ctx, &msaa_depth_image_info,
+                                           &frame->msaa_depth_image,
+                                           &frame->msaa_depth_memory,
+                                           "vkCreateImage(scene MSAA depth)")) {
+                VK_DestroySwapchain(ctx);
+                return false;
+            }
+            depth_view_info.image = frame->msaa_depth_image;
+            result = vkCreateImageView(ctx->device, &depth_view_info, NULL,
+                                       &frame->msaa_depth_view);
+            if (result != VK_SUCCESS) {
+                VK_DestroySwapchain(ctx);
+                return VK_Check(result, "vkCreateImageView(scene MSAA depth)");
+            }
+        }
+        if (ctx->scene_extent.width != ctx->swapchain.extent.width ||
+            ctx->scene_extent.height != ctx->swapchain.extent.height) {
+            if (!VK_CreateDeviceLocalImage(ctx,
+                                           &presentation_depth_image_info,
+                                           &frame->presentation_depth_image,
+                                           &frame->presentation_depth_memory,
+                                           "vkCreateImage(presentation depth)")) {
+                VK_DestroySwapchain(ctx);
+                return false;
+            }
+            depth_view_info.image = frame->presentation_depth_image;
+            result = vkCreateImageView(ctx->device, &depth_view_info, NULL,
+                                       &frame->presentation_depth_view);
+            if (result != VK_SUCCESS) {
+                VK_DestroySwapchain(ctx);
+                return VK_Check(result,
+                                "vkCreateImageView(presentation depth)");
+            }
+        }
         if (vk_dof_supported) {
+            depth_view_info.image = frame->depth_image;
             VkImageViewCreateInfo sample_view_info = depth_view_info;
             sample_view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
             result = vkCreateImageView(ctx->device, &sample_view_info, NULL,
@@ -2373,9 +3068,53 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
         .pDependencies = dependencies,
     };
 
-    result = vkCreateRenderPass(ctx->device, &render_pass_info, NULL,
-                                &ctx->scene_render_pass);
-    if (result != VK_SUCCESS) {
+    if (scene_multisampled) {
+        if (!VK_CreateMSAASceneRenderPass(
+                ctx, linear_scene ? ctx->scene_format : ctx->swapchain.format,
+                ctx->swapchain.depth_format, VK_ATTACHMENT_LOAD_OP_CLEAR,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                linear_scene ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                             : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_ATTACHMENT_LOAD_OP_CLEAR, true, &ctx->scene_render_pass,
+                "vkCreateRenderPass2(scene MSAA)")) {
+            VK_DestroySwapchain(ctx);
+            return false;
+        }
+        // Keep the same attachment set and sample counts as scene_render_pass
+        // so ordinary native scene pipelines and framebuffers remain usable.
+        // The only difference is the depth/stencil resolve mode, which is
+        // selected per frame after all depth consumers are known.
+        if (!VK_CreateMSAASceneRenderPass(
+                ctx, linear_scene ? ctx->scene_format : ctx->swapchain.format,
+                ctx->swapchain.depth_format, VK_ATTACHMENT_LOAD_OP_CLEAR,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                linear_scene ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                             : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_ATTACHMENT_LOAD_OP_CLEAR, false,
+                &ctx->scene_no_depth_resolve_render_pass,
+                "vkCreateRenderPass2(scene MSAA no depth resolve)")) {
+            // Resolving depth is always correct and remains the native
+            // fallback if a driver rejects the optional no-resolve variant.
+            Com_WPrintf("Vulkan: MSAA no-depth-resolve pass unavailable; "
+                        "keeping depth resolve enabled.\n");
+            ctx->scene_no_depth_resolve_render_pass = VK_NULL_HANDLE;
+        }
+        // Keep an entirely native one-sample companion ready for frames whose
+        // depth-aware post process must consume the same scene representation
+        // as OpenGL's single-sample FBO chain. Ordinary frames retain the
+        // requested MSAA render pass and never pay this path's cost.
+        result = vkCreateRenderPass(ctx->device, &render_pass_info, NULL,
+                                    &ctx->scene_single_sample_render_pass);
+        if (result != VK_SUCCESS) {
+            VK_DestroySwapchain(ctx);
+            return VK_Check(result,
+                            "vkCreateRenderPass(scene single sample)");
+        }
+    } else {
+        result = vkCreateRenderPass(ctx->device, &render_pass_info, NULL,
+                                    &ctx->scene_render_pass);
+    }
+    if (!ctx->scene_render_pass) {
         VK_DestroySwapchain(ctx);
         return VK_Check(result, "vkCreateRenderPass(scene)");
     }
@@ -2431,9 +3170,31 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
     // Keep this pass compatible with the base scene pipelines. Explicit image
     // barriers bracket the scene copy and the preserved depth attachment.
     liquid_render_pass_info.pDependencies = dependencies;
-    result = vkCreateRenderPass(ctx->device, &liquid_render_pass_info, NULL,
-                                &ctx->scene_load_render_pass);
-    if (result != VK_SUCCESS) {
+    if (scene_multisampled) {
+        if (!VK_CreateMSAASceneRenderPass(
+                ctx, linear_scene ? ctx->scene_format : ctx->swapchain.format,
+                ctx->swapchain.depth_format, VK_ATTACHMENT_LOAD_OP_LOAD,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                linear_scene ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                             : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VK_ATTACHMENT_LOAD_OP_LOAD, true, &ctx->scene_load_render_pass,
+                "vkCreateRenderPass2(scene load MSAA)")) {
+            VK_DestroySwapchain(ctx);
+            return false;
+        }
+        result = vkCreateRenderPass(
+            ctx->device, &liquid_render_pass_info, NULL,
+            &ctx->scene_single_sample_load_render_pass);
+        if (result != VK_SUCCESS) {
+            VK_DestroySwapchain(ctx);
+            return VK_Check(result,
+                            "vkCreateRenderPass(scene single sample load)");
+        }
+    } else {
+        result = vkCreateRenderPass(ctx->device, &liquid_render_pass_info,
+                                    NULL, &ctx->scene_load_render_pass);
+    }
+    if (!ctx->scene_load_render_pass) {
         VK_DestroySwapchain(ctx);
         return VK_Check(result, "vkCreateRenderPass(scene load)");
     }
@@ -2443,11 +3204,17 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
     presentation_load_attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     presentation_load_attachments[0].initialLayout =
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    presentation_load_attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    presentation_load_attachments[1].initialLayout =
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    liquid_render_pass_info.pAttachments = presentation_load_attachments;
-    result = vkCreateRenderPass(ctx->device, &liquid_render_pass_info, NULL,
+    // Final fullscreen composition never depth-tests. A scaled scene uses a
+    // smaller resolved depth image, so its full-size presentation attachment
+    // deliberately starts undefined and is cleared only by the later UI/
+    // preview overlay when that pass needs depth.
+    presentation_load_attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    presentation_load_attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VkRenderPassCreateInfo presentation_load_render_pass_info = render_pass_info;
+    presentation_load_render_pass_info.pAttachments = presentation_load_attachments;
+    presentation_load_render_pass_info.pDependencies = dependencies;
+    result = vkCreateRenderPass(ctx->device,
+                                &presentation_load_render_pass_info, NULL,
                                 &ctx->presentation_load_render_pass);
     if (result != VK_SUCCESS) {
         VK_DestroySwapchain(ctx);
@@ -2473,10 +3240,19 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
             VK_DestroySwapchain(ctx);
             return false;
         }
+        if (scene_multisampled && !linear_scene) {
+            frame->msaa_framebuffers = VK_AllocArray(
+                image_count, sizeof(*frame->msaa_framebuffers),
+                "frame-context MSAA swapchain framebuffers");
+            if (!frame->msaa_framebuffers) {
+                VK_DestroySwapchain(ctx);
+                return false;
+            }
+        }
         for (uint32_t image_index = 0; image_index < image_count; ++image_index) {
             VkImageView framebuffer_attachments[] = {
                 ctx->swapchain.views[image_index],
-                frame->depth_view,
+                VK_PresentationDepthView(frame),
             };
             VkFramebufferCreateInfo framebuffer_info = {
                 .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -2493,7 +3269,25 @@ static bool VK_CreateSwapchain(uint32_t width, uint32_t height)
                 VK_DestroySwapchain(ctx);
                 return VK_Check(result, "vkCreateFramebuffer");
             }
-
+            if (frame->msaa_framebuffers) {
+                VkImageView msaa_attachments[] = {
+                    frame->msaa_color_view,
+                    frame->msaa_depth_view,
+                    ctx->swapchain.views[image_index],
+                    frame->depth_view,
+                };
+                framebuffer_info.renderPass = ctx->scene_render_pass;
+                framebuffer_info.attachmentCount = q_countof(msaa_attachments);
+                framebuffer_info.pAttachments = msaa_attachments;
+                result = vkCreateFramebuffer(ctx->device, &framebuffer_info,
+                                             NULL,
+                                             &frame->msaa_framebuffers[image_index]);
+                if (result != VK_SUCCESS) {
+                    VK_DestroySwapchain(ctx);
+                    return VK_Check(result,
+                                    "vkCreateFramebuffer(scene MSAA)");
+                }
+            }
         }
     }
 
@@ -3254,7 +4048,9 @@ static void VK_DepthToAttachment(VkCommandBuffer cmd,
 static void VK_DepthAttachmentBarrier(VkCommandBuffer cmd,
                                       const vk_frame_context_t *frame)
 {
-    if (!cmd || !frame || !frame->depth_image) {
+    const VkImage depth_image =
+        VK_SceneDepthAttachmentImage(&vk_state.ctx, frame);
+    if (!cmd || !frame || !depth_image) {
         return;
     }
     VkImageMemoryBarrier barrier = {
@@ -3266,7 +4062,7 @@ static void VK_DepthAttachmentBarrier(VkCommandBuffer cmd,
         .newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = frame->depth_image,
+        .image = depth_image,
         .subresourceRange = {
             .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT |
                 (VK_DepthFormatHasStencil(vk_state.ctx.swapchain.depth_format)
@@ -3578,9 +4374,13 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
         frame->linear_scene_copy_descriptor_set &&
         frame->linear_scene_copy_base_descriptor_set &&
         frame->linear_scene_descriptor_set;
+    const bool scene_multisampled =
+        ctx->scene_samples != VK_SAMPLE_COUNT_1_BIT;
     if (!frame->framebuffers || image_index >= ctx->swapchain.image_count ||
         !frame->framebuffers[image_index] ||
-        (linear_scene && !frame->linear_scene_framebuffer)) {
+        (linear_scene && !frame->linear_scene_framebuffer) ||
+        (!linear_scene && scene_multisampled &&
+         (!frame->msaa_framebuffers || !frame->msaa_framebuffers[image_index]))) {
         Com_SetLastError("Vulkan: frame-context framebuffer unavailable");
         return false;
     }
@@ -3611,7 +4411,8 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass = ctx->scene_render_pass,
         .framebuffer = linear_scene ? frame->linear_scene_framebuffer
-                                    : frame->framebuffers[image_index],
+                     : scene_multisampled ? frame->msaa_framebuffers[image_index]
+                                          : frame->framebuffers[image_index],
         .renderArea = {
             .offset = { 0, 0 },
             .extent = linear_scene ? ctx->scene_extent : ctx->swapchain.extent,
@@ -3637,6 +4438,33 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
     const bool entity_overlay = VK_Entity_IsNoWorldSubview();
 
     const bool depth_dof = !entity_overlay && VK_PostProcess_UsesDof();
+    const bool scene_scaled = ctx->scene_extent.width != ctx->swapchain.extent.width ||
+        ctx->scene_extent.height != ctx->swapchain.extent.height;
+    // OpenGL's post-process scene textures are single-sample even when its
+    // presentation context has MSAA. Select a native Vulkan companion for
+    // depth-aware DOF and for resolution-scaled offscreen scenes; direct
+    // native presentation still retains the requested MSAA path.
+    const bool single_sample_dof_scene = scene_multisampled && depth_dof &&
+        ctx->scene_single_sample_render_pass &&
+        (!linear_scene || frame->linear_scene_single_sample_framebuffer);
+    const bool single_sample_scaled_scene = scene_multisampled && scene_scaled &&
+        ctx->scene_single_sample_render_pass &&
+        (!linear_scene || frame->linear_scene_single_sample_framebuffer);
+    const bool single_sample_postprocess_scene = single_sample_dof_scene ||
+        single_sample_scaled_scene;
+    ctx->scene_single_sample_active = single_sample_postprocess_scene;
+    if (single_sample_postprocess_scene) {
+        if (single_sample_dof_scene) {
+            VK_Debug_RecordMSAASingleSampleDofScene();
+        }
+        if (single_sample_scaled_scene) {
+            VK_Debug_RecordMSAASingleSampleScaledScene();
+        }
+        render_info.renderPass = ctx->scene_single_sample_render_pass;
+        render_info.framebuffer = linear_scene
+            ? frame->linear_scene_single_sample_framebuffer
+            : frame->framebuffers[image_index];
+    }
     const bool draw_world = !vk_draw_world || vk_draw_world->integer;
     const bool draw_entities = (!entity_overlay || linear_scene) &&
         (!vk_draw_entities || vk_draw_entities->integer);
@@ -3658,13 +4486,28 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
         VK_PostProcess_UsesFinalPass();
     const bool scaled_scene_blit = linear_scene &&
         !ctx->scene_is_float && ctx->scaled_scene_blit_supported &&
-        (ctx->scene_extent.width != ctx->swapchain.extent.width ||
-         ctx->scene_extent.height != ctx->swapchain.extent.height) &&
+        scene_scaled &&
         !liquid_refraction && VK_PostProcess_AllowsScaledSceneBlit();
     const bool bloom_emission = final_postprocess &&
         VK_PostProcess_UsesBloomEmission() &&
         ctx->bloom_extract_render_pass && frame->bloom_emission_image &&
         frame->bloom_emission_framebuffer;
+    const bool sampled_rim_bloom = bloom_emission && draw_entities &&
+        ctx->bloom_rim_extract_render_pass &&
+        frame->bloom_rim_emission_framebuffer &&
+        VK_Entity_HasBloomRimDepthSampling(liquid_refraction);
+    // The resolved depth image exists for every MSAA frame, but is meaningful
+    // only to native liquid continuation, DOF, and depth-sampled rim bloom.
+    // When none is active, skip the expensive sample-zero depth/stencil
+    // resolve while retaining the colour resolve and identical scene draws.
+    const bool elide_msaa_depth_resolve = scene_multisampled &&
+        !ctx->scene_single_sample_active &&
+        !liquid_refraction && !depth_dof && !sampled_rim_bloom &&
+        ctx->scene_no_depth_resolve_render_pass;
+    if (elide_msaa_depth_resolve) {
+        render_info.renderPass = ctx->scene_no_depth_resolve_render_pass;
+        VK_Debug_RecordMSAADepthResolveElision();
+    }
 
     vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);
     if (draw_world) {
@@ -3687,7 +4530,15 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
         VK_Debug_RecordShowTris(cmd, &ctx->scene_extent);
         VK_Debug_Record(cmd, &ctx->scene_extent);
         if (!final_postprocess && (!vk_draw_ui || vk_draw_ui->integer)) {
-            VK_UI_Record(cmd, &ctx->swapchain.extent);
+            VK_UI_RecordScene(cmd, &ctx->swapchain.extent);
+        }
+        if (entity_overlay && !linear_scene && scene_multisampled &&
+            (!vk_draw_entities || vk_draw_entities->integer)) {
+            // The normal entity pipelines target the scene render pass.  Keep
+            // no-world previews there under MSAA so their resolved output is
+            // composited natively, rather than binding an incompatible
+            // single-sample presentation pass.
+            VK_Entity_Record(cmd, &ctx->scene_extent);
         }
     }
     vkCmdEndRenderPass(cmd);
@@ -3695,10 +4546,6 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
     if (bloom_emission) {
         VK_BloomEmission_Record(cmd, frame, &ctx->scene_extent,
                                 draw_entities, liquid_refraction, false);
-        const bool sampled_rim_bloom = draw_entities &&
-            ctx->bloom_rim_extract_render_pass &&
-            frame->bloom_rim_emission_framebuffer &&
-            VK_Entity_HasBloomRimDepthSampling(liquid_refraction);
         if (sampled_rim_bloom) {
             VK_DepthToShaderRead(cmd, frame);
             VK_BloomEmission_Record(cmd, frame, &ctx->scene_extent,
@@ -3716,7 +4563,9 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
         VK_DepthAttachmentBarrier(cmd, frame);
 
         VkRenderPassBeginInfo liquid_info = render_info;
-        liquid_info.renderPass = ctx->scene_load_render_pass;
+        liquid_info.renderPass = ctx->scene_single_sample_active
+            ? ctx->scene_single_sample_load_render_pass
+            : ctx->scene_load_render_pass;
         vkCmdBeginRenderPass(cmd, &liquid_info, VK_SUBPASS_CONTENTS_INLINE);
         VK_World_RecordAlpha(cmd, &ctx->scene_extent,
                              liquid_scene_descriptor_set);
@@ -3726,7 +4575,7 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
         VK_Debug_RecordShowTris(cmd, &ctx->scene_extent);
         VK_Debug_Record(cmd, &ctx->scene_extent);
         if (!final_postprocess && (!vk_draw_ui || vk_draw_ui->integer)) {
-            VK_UI_Record(cmd, &ctx->swapchain.extent);
+            VK_UI_RecordScene(cmd, &ctx->swapchain.extent);
         }
         vkCmdEndRenderPass(cmd);
     }
@@ -3738,6 +4587,7 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
     }
 
     VK_Debug_MarkGpuPhase(cmd, VK_DEBUG_GPU_PHASE_SCENE);
+    ctx->scene_single_sample_active = false;
 
     if (scaled_scene_blit && VK_BlitScaledSceneToPresentation(cmd, image_index)) {
         // The native transfer path already prepared presentation for the
@@ -3809,7 +4659,7 @@ static bool VK_RecordCommandBuffer(VkCommandBuffer cmd, uint32_t image_index)
         vkCmdEndRenderPass(cmd);
     }
 
-    if (entity_overlay && !linear_scene &&
+    if (entity_overlay && !linear_scene && !scene_multisampled &&
         (!vk_draw_entities || vk_draw_entities->integer)) {
         VkRenderPassBeginInfo overlay_info = render_info;
         overlay_info.renderPass = ctx->presentation_overlay_render_pass;
@@ -4120,6 +4970,12 @@ static void VK_ShadowDump_f(void)
 
 bool R_Init(bool total)
 {
+    if (!vk_r_vsync) {
+        VK_RegisterVSyncCvars();
+    }
+    if (!vk_r_multisamples) {
+        VK_RegisterMultisampleCvars();
+    }
     if (!vk_draw_world) {
         vk_draw_world = Cvar_Get("vk_draw_world", "1", 0);
     }
@@ -4279,6 +5135,10 @@ bool R_Init(bool total)
 void R_Shutdown(bool total)
 {
     if (!vk_state.initialized) {
+        if (total) {
+            VK_UnregisterVSyncCvars();
+            VK_UnregisterMultisampleCvars();
+        }
         return;
     }
 
@@ -4295,6 +5155,8 @@ void R_Shutdown(bool total)
         vkDeviceWaitIdle(vk_state.ctx.device);
     }
     VK_Shadow_Shutdown(&vk_state.ctx);
+    VK_UnregisterVSyncCvars();
+    VK_UnregisterMultisampleCvars();
     VK_DestroyContext();
     ShadowFrontend_Shutdown(&vk_shadow_frontend);
     Cmd_RemoveCommand("r_shadow_dump");
@@ -4864,7 +5726,8 @@ r_opengl_config_t R_GetGLConfig(void)
         .colorbits = 24,
         .depthbits = 24,
         .stencilbits = stencil_available ? 8 : 0,
-        .multisamples = 0,
+        .multisamples = vk_state.initialized
+            ? VK_SampleCountValue(vk_state.ctx.scene_samples) : 0,
         .debug = false,
         .profile = QGL_PROFILE_NONE,
         .major_ver = 0,

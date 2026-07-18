@@ -37,11 +37,11 @@
           "label": "multi-monitor settings",
           "command": "pushmenu multimonitor"
         },
-        { "type": "checkbox", "label": "vertical sync", "cvar": "gl_swapinterval" },
+        { "type": "checkbox", "label": "vertical sync", "cvar": "r_vsync" },
         {
           "type": "dropdown",
           "label": "anti-aliasing",
-          "cvar": "gl_multisamples",
+          "cvar": "r_multisamples",
           "pairs": [
             { "label": "no", "value": "0" },
             { "label": "2x MSAA", "value": "2" },
@@ -75,24 +75,28 @@
             { "label": "16x", "value": "16" }
           ]
         },
-        { "type": "range", "label": "texture saturation", "cvar": "gl_saturation", "min": 0, "max": 1 },
+        { "type": "range", "label": "texture saturation", "cvar": "r_texture_saturation", "min": 0, "max": 1 },
         {
           "type": "dropdown",
           "label": "texture intensity",
-          "cvar": "intensity",
+          "cvar": "r_intensity",
           "pairs": [
             { "label": "1x", "value": "1" },
             { "label": "2x", "value": "2" },
             { "label": "3x", "value": "3" }
           ]
         },
-        { "type": "range", "label": "lightmap saturation", "cvar": "gl_coloredlightmaps", "min": 0, "max": 1 },
-        { "type": "range", "label": "lightmap brightness", "cvar": "gl_brightness", "min": 0, "max": 0.3 },
+        { "type": "range", "label": "lightmap saturation", "cvar": "r_lightmap_saturation", "min": 0, "max": 1 },
+        { "type": "range", "label": "lightmap brightness", "cvar": "r_lightmap_brightness", "min": 0, "max": 0.3 },
         {
           "type": "dropdown",
           "label": "rendering backend",
-          "cvar": "gl_shaders",
-          "items": ["legacy", "shaders"]
+          "cvar": "r_renderer",
+          "pairs": [
+            { "label": "OpenGL", "value": "opengl" },
+            { "label": "Vulkan", "value": "vulkan" },
+            { "label": "Vulkan RTX", "value": "rtx" }
+          ]
         }
       ]
     },

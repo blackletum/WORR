@@ -18,6 +18,10 @@ int main(void)
                    WORR_EVENT_PAYLOAD_LEGACY_TEMP_V1 == 8 &&
                    WORR_EVENT_PAYLOAD_MUZZLE_V1 == 9 &&
                    WORR_EVENT_PAYLOAD_SPATIAL_AUDIO_V1 == 10 &&
+                   WORR_EVENT_PAYLOAD_LOCAL_INTERACTION_AUTHORITY_V1 == 11 &&
+                   WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1 == 12 &&
+                   sizeof(worr_local_action_shadow_authority_receipt_v1) ==
+                       64 &&
                    WORR_EVENT_LEGACY_TEMP_BOSSTPORT == 22 &&
                    WORR_EVENT_LEGACY_TEMP_BLUEHYPERBLASTER_BROKEN == 27 &&
                    WORR_EVENT_LEGACY_TEMP_FLAME_RESERVED == 32 &&

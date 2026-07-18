@@ -1316,6 +1316,145 @@ extern "C" worr_snapshot_q2proto_result_v2 Worr_SnapshotQ2ProtoViewV2(
     return WORR_SNAPSHOT_Q2PROTO_OK;
 }
 
+namespace {
+
+bool stage_epoch_rebind(
+    const worr_snapshot_q2proto_context_v2 *context,
+    uint32_t slot_index, uint32_t new_snapshot_epoch,
+    worr_snapshot_v2 *snapshot_out,
+    worr_snapshot_projection_hashes_v2 *hashes_out)
+{
+    if (snapshot_out == nullptr || hashes_out == nullptr ||
+        slot_index >= context->storage.slot_capacity) {
+        return false;
+    }
+    const auto &slot = context->storage.slots[slot_index];
+    if (slot.committed != 1 || slot.generation == 0 ||
+        slot.snapshot.snapshot_id.epoch !=
+            context->profile.snapshot_epoch) {
+        return false;
+    }
+
+    worr_snapshot_projection_view_v2 current_view{};
+    current_view.struct_size = sizeof(current_view);
+    current_view.schema_version = WORR_SNAPSHOT_PROJECTION_VERSION;
+    current_view.snapshot = &slot.snapshot;
+    current_view.player = &slot.player;
+    current_view.entities = slot_entities(context, slot_index);
+    current_view.area_bytes =
+        context->storage.area_bytes_per_slot == 0
+            ? nullptr
+            : context->storage.area_bytes +
+                  static_cast<size_t>(slot_index) *
+                      context->storage.area_bytes_per_slot;
+    current_view.event_refs =
+        context->storage.event_refs_per_slot == 0
+            ? nullptr
+            : context->storage.event_refs +
+                  static_cast<size_t>(slot_index) *
+                      context->storage.event_refs_per_slot;
+    current_view.entity_count = slot.entity_count;
+    current_view.area_byte_count = slot.area_byte_count;
+    current_view.event_ref_count = slot.event_ref_count;
+    worr_snapshot_projection_hashes_v2 verified{};
+    if (!Worr_SnapshotProjectionHashesV2(
+            &current_view, context->profile.max_entities, &verified) ||
+        std::memcmp(&verified, &slot.hashes, sizeof(verified)) != 0) {
+        return false;
+    }
+
+    worr_snapshot_v2 snapshot = slot.snapshot;
+    snapshot.snapshot_id.epoch = new_snapshot_epoch;
+    if (snapshot.base_id.epoch != 0) {
+        if (snapshot.base_id.epoch != context->profile.snapshot_epoch)
+            return false;
+        snapshot.base_id.epoch = new_snapshot_epoch;
+    }
+    if (snapshot.discontinuity.previous.epoch != 0) {
+        if (snapshot.discontinuity.previous.epoch !=
+            context->profile.snapshot_epoch) {
+            return false;
+        }
+        snapshot.discontinuity.previous.epoch = new_snapshot_epoch;
+    }
+    if (!Worr_SnapshotCalculateHashV2(
+            &snapshot, context->profile.max_entities,
+            &snapshot.snapshot_hash)) {
+        return false;
+    }
+
+    auto rebound_view = current_view;
+    rebound_view.snapshot = &snapshot;
+    worr_snapshot_projection_hashes_v2 rebound_hashes{};
+    if (!Worr_SnapshotProjectionHashesV2(
+            &rebound_view, context->profile.max_entities,
+            &rebound_hashes)) {
+        return false;
+    }
+    *snapshot_out = snapshot;
+    *hashes_out = rebound_hashes;
+    return true;
+}
+
+} // namespace
+
+extern "C" worr_snapshot_q2proto_result_v2
+Worr_SnapshotQ2ProtoRebindEpochV2(
+    worr_snapshot_q2proto_context_v2 *context,
+    uint32_t new_snapshot_epoch)
+{
+    if (!context_valid(context))
+        return WORR_SNAPSHOT_Q2PROTO_INVALID_CONTEXT;
+    if (new_snapshot_epoch == 0)
+        return WORR_SNAPSHOT_Q2PROTO_INVALID_ARGUMENT;
+    if (new_snapshot_epoch == context->profile.snapshot_epoch)
+        return WORR_SNAPSHOT_Q2PROTO_OK;
+    if ((context->last_observed.epoch == 0) !=
+            (context->last_observed.sequence == 0) ||
+        (context->last_observed.epoch != 0 &&
+         context->last_observed.epoch !=
+             context->profile.snapshot_epoch)) {
+        return WORR_SNAPSHOT_Q2PROTO_INVALID_CONTEXT;
+    }
+
+    /* Preflight every retained slot before mutating any caller-owned state. */
+    for (uint32_t i = 0; i < context->storage.slot_capacity; ++i) {
+        const auto &slot = context->storage.slots[i];
+        if (slot.committed > 1 ||
+            (slot.committed != 0 && slot.generation == 0)) {
+            return WORR_SNAPSHOT_Q2PROTO_INVALID_CONTEXT;
+        }
+        if (slot.committed == 0)
+            continue;
+        worr_snapshot_v2 snapshot{};
+        worr_snapshot_projection_hashes_v2 hashes{};
+        if (!stage_epoch_rebind(
+                context, i, new_snapshot_epoch, &snapshot, &hashes)) {
+            return WORR_SNAPSHOT_Q2PROTO_INVALID_CONTEXT;
+        }
+    }
+
+    /* Recompute deterministically while the source epoch is still current,
+     * then commit the staged identity and derived hashes in place. */
+    for (uint32_t i = 0; i < context->storage.slot_capacity; ++i) {
+        auto &slot = context->storage.slots[i];
+        if (slot.committed == 0)
+            continue;
+        worr_snapshot_v2 snapshot{};
+        worr_snapshot_projection_hashes_v2 hashes{};
+        if (!stage_epoch_rebind(
+                context, i, new_snapshot_epoch, &snapshot, &hashes)) {
+            return WORR_SNAPSHOT_Q2PROTO_INVALID_CONTEXT;
+        }
+        slot.snapshot = snapshot;
+        slot.hashes = hashes;
+    }
+    context->profile.snapshot_epoch = new_snapshot_epoch;
+    if (context->last_observed.epoch != 0)
+        context->last_observed.epoch = new_snapshot_epoch;
+    return WORR_SNAPSHOT_Q2PROTO_OK;
+}
+
 extern "C" worr_snapshot_q2proto_result_v2 Worr_SnapshotQ2ProtoResetV2(
     worr_snapshot_q2proto_context_v2 *context,
     uint32_t new_snapshot_epoch)

@@ -312,6 +312,8 @@ static bool test_fail_closed_inputs_and_backlog_capacity(void) {
       WORR_NET_CAP_LEGACY_STAGE_MASK |
       WORR_NET_CAP_NATIVE_ENVELOPE_V1 |
       WORR_NET_CAP_NATIVE_EVENT_STREAM_V1);
+  worr_native_session_binding_v1 combined_binding = make_binding(
+      WORR_NET_CAP_NATIVE_EVENT_SNAPSHOT_PRIVATE_MASK);
   worr_event_stream_descriptor_v1 descriptor;
   worr_native_event_sender_v1 sender;
   worr_event_record_v1 candidates[WORR_NATIVE_EVENT_SENDER_BACKLOG_CAPACITY];
@@ -329,6 +331,13 @@ static bool test_fail_closed_inputs_and_backlog_capacity(void) {
             &sender, &uncancelled_binding, &descriptor, 1024, 872,
             3000) == WORR_NATIVE_EVENT_SENDER_INVALID_ARGUMENT);
   CHECK(((const uint8_t *)&sender)[0] == 0x7a);
+
+  CHECK(Worr_NativeEventSenderInitV1(
+            &sender, &combined_binding, &descriptor, 1024, 872,
+            3000) == WORR_NATIVE_EVENT_SENDER_OK);
+  CHECK(Worr_NativeEventSenderValidateV1(&sender));
+  CHECK(sender.tx_slots[0].message_sequence == 1u &&
+        sender.tx.next_message_sequence == 2u);
 
   CHECK(Worr_NativeEventSenderInitV1(&sender, &binding, &descriptor, 1024, 872,
                                      3000) == WORR_NATIVE_EVENT_SENDER_OK);

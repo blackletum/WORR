@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "task_id": "FR-02-T13",
+  "scenes": [
+    {
+      "id": "native_multisample_depth_aware_dof_fixed_half_resolution",
+      "config": "renderer_parity/fr01_dof.cfg",
+      "capture": "fr01_dof.tga",
+      "launch_cvars": {
+        "r_dof": "1",
+        "r_multisamples": "4",
+        "r_resolutionscale": "1",
+        "r_resolutionscale_fixedscale_w": "0.5",
+        "r_resolutionscale_fixedscale_h": "0.5"
+      },
+      "crop": [160, 120, 640, 480],
+      "metrics": {
+        "pixel_threshold": 1,
+        "max_mean_absolute_rgb": [0.01, 0.05, 0.01],
+        "max_pixels_over_threshold_percent": 0.3
+      }
+    },
+    {
+      "id": "native_multisample_depth_dof_disabled_fixed_half_resolution",
+      "config": "renderer_parity/fr01_dof_disabled.cfg",
+      "capture": "fr01_dof_disabled.tga",
+      "launch_cvars": {
+        "r_dof": "0",
+        "r_multisamples": "4",
+        "r_resolutionscale": "1",
+        "r_resolutionscale_fixedscale_w": "0.5",
+        "r_resolutionscale_fixedscale_h": "0.5"
+      },
+      "crop": [160, 120, 640, 480],
+      "metrics": {
+        "pixel_threshold": 1,
+        "max_mean_absolute_rgb": [0, 0, 0],
+        "max_pixels_over_threshold_percent": 0
+      }
+    }
+  ]
+}

@@ -467,9 +467,12 @@ static int test_stale_snapshot_and_unsent_ack(void)
     worr_native_tx_session_v1 tx;
     worr_native_tx_slot_v1 slots[TEST_TX_CAPACITY];
     worr_native_carrier_tx_gate_v1 gate;
+    worr_native_carrier_tx_gate_v1 gate_before;
     worr_native_carrier_dispatch_v1 dispatch;
+    worr_native_carrier_dispatch_v1 dispatch_before;
     uint8_t old_payload[PAYLOAD_BYTES];
     uint8_t new_payload[PAYLOAD_BYTES];
+    uint8_t blocked_legacy = 0x5a;
     test_packet packet;
     worr_native_carrier_entry_v1 ack;
     uint16_t datagram_budget = 0;
@@ -506,6 +509,20 @@ static int test_stale_snapshot_and_unsent_ack(void)
               &gate, &tx, slots, TEST_TX_CAPACITY, &dispatch, 2,
               packet.bytes, packet.count) == WORR_NATIVE_CARRIER_SESSION_OK);
     CHECK(slots[0].send_attempts == 0);
+
+    /* A burst selected by an async zero-legacy packet must defer, not fail,
+     * if an ordinary packet later offers a larger legacy prefix. */
+    gate_before = gate;
+    dispatch_before = dispatch;
+    packet.count = UINT16_MAX;
+    CHECK(Worr_NativeCarrierSessionDispatchPreparePacketV1(
+              &gate, &tx, slots, TEST_TX_CAPACITY, &dispatch, 3001,
+              old_payload, PAYLOAD_BYTES, &blocked_legacy, 1,
+              packet.bytes, sizeof(packet.bytes), &packet.count) ==
+          WORR_NATIVE_CARRIER_SESSION_OUTPUT_TOO_SMALL);
+    CHECK(memcmp(&gate, &gate_before, sizeof(gate)) == 0 &&
+          memcmp(&dispatch, &dispatch_before, sizeof(dispatch)) == 0 &&
+          packet.count == UINT16_MAX);
 
     CHECK(Worr_NativeTxSessionEnqueueV1(
               &tx, slots, TEST_TX_CAPACITY,

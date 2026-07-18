@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "task_id": "FR-02-T13",
+  "scenes": [
+    {
+      "id": "native_multisample_static_world",
+      "config": "renderer_parity/fr01_multisample_static_world.cfg",
+      "capture": "fr01_multisample_static_world.tga",
+      "launch_cvars": {
+        "r_multisamples": "4"
+      },
+      "crop": [200, 140, 560, 420],
+      "metrics": {
+        "pixel_threshold": 12,
+        "max_mean_absolute_rgb": [3, 3, 3],
+        "max_pixels_over_threshold_percent": 1.0
+      }
+    }
+  ]
+}

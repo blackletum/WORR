@@ -53,6 +53,37 @@ static bool record_ref_equal(worr_native_record_ref_v1 left,
            left.object_sequence == right.object_sequence;
 }
 
+static bool combined_binding(
+    const worr_native_session_binding_v1 *binding)
+{
+    return binding != NULL &&
+           (binding->negotiated_capabilities &
+            WORR_NET_CAP_NATIVE_EVENT_SNAPSHOT_PRIVATE_MASK) ==
+               WORR_NET_CAP_NATIVE_EVENT_SNAPSHOT_PRIVATE_MASK;
+}
+
+static bool combined_event_sequence_space_valid(
+    const worr_native_event_sender_v1 *sender)
+{
+    uint32_t index;
+
+    if (!combined_binding(&sender->binding))
+        return true;
+    if (sender->tx.next_message_sequence >
+        WORR_NATIVE_COMBINED_SNAPSHOT_MESSAGE_SEQUENCE_FIRST) {
+        return false;
+    }
+    for (index = 0; index < WORR_NATIVE_EVENT_SENDER_TX_CAPACITY; ++index) {
+        if ((sender->tx_slots[index].state_flags &
+             WORR_NATIVE_TX_SLOT_OCCUPIED) != 0 &&
+            sender->tx_slots[index].message_sequence >
+                WORR_NATIVE_COMBINED_EVENT_MESSAGE_SEQUENCE_LAST) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static uint32_t payload_handle(uint32_t generation, uint32_t index)
 {
     return (generation << WORR_NATIVE_EVENT_SENDER_PAYLOAD_INDEX_BITS) | index;
@@ -240,9 +271,10 @@ bool Worr_NativeEventSenderValidateV1(
           sender->tx.retained_count != 0 || sender->payload_occupied != 0 ||
           (sender->tx_gate.state_flags &
            WORR_NATIVE_CARRIER_TX_GATE_ACTIVE) != 0)) ||
-        !Worr_NativeTxSessionValidateV1(
-            &sender->tx, sender->tx_slots,
-            WORR_NATIVE_EVENT_SENDER_TX_CAPACITY) ||
+         !Worr_NativeTxSessionValidateV1(
+             &sender->tx, sender->tx_slots,
+             WORR_NATIVE_EVENT_SENDER_TX_CAPACITY) ||
+         !combined_event_sequence_space_valid(sender) ||
         !Worr_NativeCarrierTxGateValidateV1(&sender->tx_gate) ||
         sender->tx.transport_epoch != sender->binding.transport_epoch ||
         sender->tx.connection_owner_id != sender->binding.connection_owner_id ||
@@ -556,6 +588,12 @@ worr_native_event_sender_result_v1 Worr_NativeEventSenderPumpV1(
             !payload_select(sender, &payload_index, &handle)) {
             capacity_stall = true;
             break;
+        }
+        if (combined_binding(&sender->binding) &&
+            sender->tx.next_message_sequence >
+                WORR_NATIVE_COMBINED_EVENT_MESSAGE_SEQUENCE_LAST) {
+            *promoted_out = promoted;
+            return WORR_NATIVE_EVENT_SENDER_INVALID_STATE;
         }
 
         event = sender->backlog[sender->backlog_head];

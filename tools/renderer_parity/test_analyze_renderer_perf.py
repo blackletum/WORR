@@ -11,6 +11,11 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).with_name("analyze_renderer_perf.py")
+ROOT = SCRIPT.parents[2]
+DENSE_INLINE_BSP_GPU_BUDGET = json.loads(
+    (ROOT / "assets/renderer_parity/fr01_renderer_perf_bmodel_instances_gpu_budget.json")
+    .read_text(encoding="utf-8")
+)
 SPEC = importlib.util.spec_from_file_location("renderer_perf", SCRIPT)
 assert SPEC and SPEC.loader
 PERF = importlib.util.module_from_spec(SPEC)
@@ -38,8 +43,8 @@ class RendererPerfTests(unittest.TestCase):
             vk = root / "vk.log"
             gl = root / "gl.log"
             vk.write_text(
-                "VK_STATS frame=1 draws=10 post_draws=2 uploads=100 cpu_ms=4.0 gpu_ms=3.0 gpu_frame_ms=3.0 gpu_opaque_world_ms=1.0 gpu_opaque_entity_ms=0.5 gpu_post_ms=2.0 world_fast_lit_draws=1 world_fast_lit_no_fog_draws=1 world_texture_replace_draws=2 world_texture_replace_no_fog_draws=2 entity_fast_lit_draws=2 entity_fast_lit_no_fog_draws=2 entity_texture_replace_draws=3 entity_texture_replace_no_fog_draws=3 world_fast_lit_candidates=4 world_fast_lit_material_ineligible=1 gpu_frame_valid=1 gpu_valid=1\n"
-                "VK_STATS frame=2 draws=12 post_draws=4 uploads=120 cpu_ms=2.0 gpu_ms=1.0 gpu_frame_ms=1.0 gpu_opaque_world_ms=0.5 gpu_opaque_entity_ms=0.25 gpu_post_ms=1.0 world_fast_lit_draws=3 world_fast_lit_no_fog_draws=3 world_texture_replace_draws=4 world_texture_replace_no_fog_draws=4 entity_fast_lit_draws=4 entity_fast_lit_no_fog_draws=4 entity_texture_replace_draws=5 entity_texture_replace_no_fog_draws=5 world_fast_lit_candidates=6 world_fast_lit_material_ineligible=3 gpu_frame_valid=1 gpu_valid=1\n",
+                "VK_STATS frame=1 draws=10 post_draws=2 uploads=100 cpu_ms=4.0 gpu_ms=3.0 gpu_frame_ms=3.0 gpu_opaque_world_ms=1.0 gpu_opaque_entity_ms=0.5 gpu_scene_ms=0.75 gpu_post_ms=2.0 world_fast_lit_draws=1 world_fast_lit_no_fog_draws=1 world_texture_replace_draws=2 world_texture_replace_no_fog_draws=2 msaa_depth_resolve_elisions=1 msaa_single_sample_dof_scene_frames=0 msaa_single_sample_scaled_scene_frames=0 entity_fast_lit_draws=2 entity_fast_lit_no_fog_draws=2 entity_texture_replace_draws=3 entity_texture_replace_no_fog_draws=3 world_fast_lit_candidates=4 world_fast_lit_material_ineligible=1 gpu_frame_valid=1 gpu_valid=1\n"
+                "VK_STATS frame=2 draws=12 post_draws=4 uploads=120 cpu_ms=2.0 gpu_ms=1.0 gpu_frame_ms=1.0 gpu_opaque_world_ms=0.5 gpu_opaque_entity_ms=0.25 gpu_scene_ms=0.25 gpu_post_ms=1.0 world_fast_lit_draws=3 world_fast_lit_no_fog_draws=3 world_texture_replace_draws=4 world_texture_replace_no_fog_draws=4 msaa_depth_resolve_elisions=3 msaa_single_sample_dof_scene_frames=1 msaa_single_sample_scaled_scene_frames=1 entity_fast_lit_draws=4 entity_fast_lit_no_fog_draws=4 entity_texture_replace_draws=5 entity_texture_replace_no_fog_draws=5 world_fast_lit_candidates=6 world_fast_lit_material_ineligible=3 gpu_frame_valid=1 gpu_valid=1\n",
                 encoding="utf-8",
             )
             gl.write_text(
@@ -61,6 +66,9 @@ class RendererPerfTests(unittest.TestCase):
             self.assertEqual(
                 vk_summary["world_texture_replace_no_fog_draws_mean"], 3.0
             )
+            self.assertEqual(vk_summary["msaa_depth_resolve_elisions_mean"], 2.0)
+            self.assertEqual(vk_summary["msaa_single_sample_dof_scene_frames_mean"], 0.5)
+            self.assertEqual(vk_summary["msaa_single_sample_scaled_scene_frames_mean"], 0.5)
             self.assertEqual(vk_summary["entity_fast_lit_draws_mean"], 3.0)
             self.assertEqual(vk_summary["entity_fast_lit_no_fog_draws_mean"], 3.0)
             self.assertEqual(vk_summary["entity_texture_replace_draws_mean"], 4.0)
@@ -73,6 +81,7 @@ class RendererPerfTests(unittest.TestCase):
             )
             self.assertEqual(vk_summary["gpu_opaque_world_ms_mean"], 0.75)
             self.assertEqual(vk_summary["gpu_opaque_entity_ms_mean"], 0.375)
+            self.assertEqual(vk_summary["gpu_scene_ms_mean"], 0.5)
             self.assertEqual(vk_summary["gpu_post_ms_mean"], 1.5)
             ratios = PERF.ratios(vk_summary, gl_summary)
             self.assertEqual(ratios["gpu_ms_mean"], 2 / 3)
@@ -121,6 +130,20 @@ class RendererPerfTests(unittest.TestCase):
             self.assertEqual(len(failures), 2)
             self.assertIn("vulkan is missing valid full-frame GPU timing", failures[0])
             self.assertIn("gpu_frame_ms_mean ratio=1.2000", failures[1])
+
+    def test_dense_inline_bsp_gpu_budget_is_provenance_bound(self) -> None:
+        self.assertEqual(DENSE_INLINE_BSP_GPU_BUDGET["schema_version"], 1)
+        self.assertEqual(DENSE_INLINE_BSP_GPU_BUDGET["min_samples"], 100)
+        self.assertTrue(DENSE_INLINE_BSP_GPU_BUDGET["require_gpu_valid"])
+        self.assertTrue(DENSE_INLINE_BSP_GPU_BUDGET["require_gpu_frame_valid"])
+        contract = DENSE_INLINE_BSP_GPU_BUDGET["capture_contract"]
+        self.assertEqual(contract["scenario_id"], "fr01-bmodel-instance-grid-current")
+        self.assertEqual(contract["hardware_id"], "Intel(R) Iris(R) Xe Graphics")
+        self.assertEqual(contract["driver"], "local-headless")
+        limits = DENSE_INLINE_BSP_GPU_BUDGET["vulkan_max"]
+        self.assertEqual(limits["gpu_frame_ms_p50"], 0.65)
+        self.assertEqual(limits["draws_p95"], 18)
+        self.assertEqual(limits["uploads_p95"], 4800)
 
     def test_budget_rejects_capture_contract_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

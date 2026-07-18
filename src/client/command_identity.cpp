@@ -142,6 +142,32 @@ extern "C" bool CL_CommandIdentityRecordForNumber(
     return true;
 }
 
+extern "C" bool CL_CommandIdentityRecordForId(
+    worr_command_id_v1 command_id,
+    uint32_t *legacy_command_number_out,
+    worr_command_record_v1 *record_out)
+{
+    if (!legacy_command_number_out || !record_out || !identity.initialized ||
+        !Worr_CommandIdValidV1(command_id, false) ||
+        command_id.epoch != identity.epoch) {
+        return false;
+    }
+    for (std::uint32_t slot = 0; slot < identity.records.size(); ++slot) {
+        if (!identity.valid[slot] || !identity.record_valid[slot] ||
+            !id_equal(identity.ids[slot], command_id) ||
+            !Worr_CommandRecordValidateV1(
+                &identity.records[slot],
+                WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS) ||
+            !id_equal(identity.records[slot].command_id, command_id)) {
+            continue;
+        }
+        *legacy_command_number_out = identity.legacy_numbers[slot];
+        *record_out = identity.records[slot];
+        return true;
+    }
+    return false;
+}
+
 extern "C" bool CL_CommandIdentityGetState(
     uint32_t *initial_epoch_out,
     uint32_t *baseline_legacy_sequence_out)

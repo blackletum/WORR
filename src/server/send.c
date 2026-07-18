@@ -560,7 +560,8 @@ static void queue_native_spatial_audio(
     sv_snapshot_shadow_ref_v1 snapshot_ref;
 
     if (!client->worr_native_shadow || !client->worr_snapshot_shadow ||
-        client->worr_native_shadow->mode != SV_NATIVE_SHADOW_MODE_EVENT ||
+        !SV_NativeShadowModeHasEventV1(
+            client->worr_native_shadow->mode) ||
         !client->csr || client->csr->max_edicts <= 0 ||
         client->framenum < 0) {
         return;
@@ -598,7 +599,8 @@ static void queue_visible_native_game_events(client_t *client,
 
     if (!client || !msg || client->netchan.type != NETCHAN_NEW ||
         !client->worr_native_shadow || !client->worr_snapshot_shadow ||
-        client->worr_native_shadow->mode != SV_NATIVE_SHADOW_MODE_EVENT ||
+        !SV_NativeShadowModeHasEventV1(
+            client->worr_native_shadow->mode) ||
         !client->csr || client->csr->max_edicts <= 0 ||
         client->framenum < 0 || msg->cursize == SOUND_PACKET ||
         Worr_LegacyGameEventDecodeRawSequenceV1(

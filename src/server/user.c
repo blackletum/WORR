@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "server.h"
 #include "server/command_context.h"
 #include "server/local_interaction_authority.h"
+#include "server/local_action_shadow_authority.h"
 #include "server/native_shadow.h"
 #include "server/snapshot_shadow.h"
 #include "common/net/usercmd_delta.h"
@@ -112,8 +113,12 @@ static void reset_snapshot_shadow(void)
 
     SV_SnapshotShadowDestroyV1(sv_client->worr_snapshot_shadow);
     sv_client->worr_snapshot_shadow = NULL;
-    if (!enabled || !enabled->integer)
+    if (!enabled || !enabled->integer) {
+        Com_DPrintf(
+            "Snapshot emission shadow disabled for %s (sv_snapshot_shadow=%d)\n",
+            sv_client->name, enabled ? enabled->integer : -1);
         return;
+    }
 
     memset(&config, 0, sizeof(config));
     config.struct_size = sizeof(config);
@@ -133,8 +138,17 @@ static void reset_snapshot_shadow(void)
     sv_client->worr_snapshot_shadow =
         SV_SnapshotShadowCreateV1(&config);
     if (!sv_client->worr_snapshot_shadow) {
-        Com_DPrintf("Unable to allocate snapshot emission shadow for %s\n",
-                    sv_client->name);
+        Com_DPrintf(
+            "Unable to allocate snapshot emission shadow for %s "
+            "(epoch=%u max_entities=%u entities_per_slot=%u slots=%u)\n",
+            sv_client->name, config.snapshot_epoch, config.max_entities,
+            config.entities_per_slot, config.slot_capacity);
+    } else {
+        Com_DPrintf(
+            "Snapshot emission shadow active for %s "
+            "(epoch=%u max_entities=%u entities_per_slot=%u slots=%u)\n",
+            sv_client->name, config.snapshot_epoch, config.max_entities,
+            config.entities_per_slot, config.slot_capacity);
     }
 }
 
@@ -358,7 +372,7 @@ bool SV_TryQueueNativeShadowChallenge(client_t *client)
             pilot, client->worr_capability_epoch,
             client->worr_capabilities_supported,
             client->worr_capabilities_negotiated,
-            pilot->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT
+            SV_NativeShadowModeHasSnapshotV1(pilot->mode)
                 ? sv.worr_snapshot_epoch
                 : 0,
             svs.realtime, &challenge)) {
@@ -1684,6 +1698,52 @@ static void SV_WorrQueueLocalInteractionAuthorityReceipt(
         sv_client->worr_native_shadow, &candidate, 1, svs.realtime);
 }
 
+static void SV_WorrQueueLocalActionShadowAuthorityReceipts(void)
+{
+    worr_local_action_shadow_authority_receipt_v1 receipt;
+    worr_event_record_v1 candidate;
+    ptrdiff_t client_index;
+    uint32_t drained;
+
+    if (!sv_client || !svs.client_pool || sv_client < svs.client_pool ||
+        sv_client >= svs.client_pool + svs.maxclients) {
+        return;
+    }
+    client_index = sv_client - svs.client_pool;
+    for (drained = 0; drained < 32; ++drained) {
+        if (!SV_LocalActionShadowAuthorityPeekNextReceipt(
+                (uint32_t)client_index, &receipt)) {
+            return;
+        }
+
+        memset(&candidate, 0, sizeof(candidate));
+        candidate.struct_size = sizeof(candidate);
+        candidate.schema_version = WORR_EVENT_ABI_VERSION;
+        candidate.model_revision = WORR_EVENT_MODEL_REVISION;
+        candidate.flags = WORR_EVENT_FLAG_CRITICAL;
+        candidate.source_tick = sv.framenum > 0 ? (uint32_t)(sv.framenum - 1)
+                                                : 0;
+        candidate.source_time_us = sv.worr_server_time_us;
+        candidate.source_entity.index = WORR_EVENT_NO_ENTITY;
+        candidate.subject_entity.index = WORR_EVENT_NO_ENTITY;
+        candidate.event_type = WORR_EVENT_TYPE_AUTHORITY_RECEIPT;
+        candidate.delivery_class = WORR_EVENT_DELIVERY_RELIABLE_ORDERED;
+        candidate.prediction_class = WORR_EVENT_PREDICTION_AUTHORITATIVE_ONLY;
+        candidate.payload_kind =
+            WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1;
+        candidate.payload_size = sizeof(receipt);
+        memcpy(candidate.payload, &receipt, sizeof(receipt));
+        if (!SV_NativeShadowQueueEventCandidatesV1(
+                sv_client->worr_native_shadow, &candidate, 1, svs.realtime)) {
+            return;
+        }
+        if (!SV_LocalActionShadowAuthorityConsumeNextReceipt(
+                (uint32_t)client_index, &receipt)) {
+            return;
+        }
+    }
+}
+
 static bool SV_WorrConsumeCommand(worr_command_id_v1 command_id,
                                   usercmd_t *command,
                                   bool simulate)
@@ -1732,6 +1792,7 @@ static bool SV_WorrConsumeCommand(worr_command_id_v1 command_id,
         SV_ClientThink(command, true);
         SV_CommandContextEnd();
         SV_WorrQueueLocalInteractionAuthorityReceipt(command_id);
+        SV_WorrQueueLocalActionShadowAuthorityReceipts();
     }
     result = Worr_CommandStreamConsumeV1(
         &sv_client->worr_command_stream, command_id, NULL);

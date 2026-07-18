@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "min_samples": 100,
+  "require_gpu_valid": true,
+  "require_gpu_frame_valid": true,
+  "capture_contract": {
+    "scenario_id": "fr01-bmodel-instance-grid-current",
+    "fixture_sha256": "3c211952df975e03a8ac0b8cdf3dd162e86d88c5e52b343ea07ed9385b83404b",
+    "config_sha256": "c3e9b06a94977b0474c166d54cf5619f1a6075ae53fe57bceb1b8175565aefc1",
+    "hardware_id": "Intel(R) Iris(R) Xe Graphics",
+    "driver": "local-headless"
+  },
+  "vulkan_max": {
+    "cpu_ms_mean": 0.4,
+    "cpu_ms_p95": 0.5,
+    "gpu_frame_ms_mean": 0.8,
+    "gpu_frame_ms_p50": 0.65,
+    "gpu_frame_ms_p95": 1.5,
+    "gpu_scene_ms_p50": 0.6,
+    "gpu_opaque_world_ms_p50": 0.4,
+    "gpu_opaque_entity_ms_p50": 0.225,
+    "draws_mean": 18,
+    "draws_p95": 18,
+    "uploads_mean": 4800,
+    "uploads_p95": 4800
+  }
+}

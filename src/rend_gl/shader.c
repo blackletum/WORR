@@ -1695,7 +1695,9 @@ static void shader_setup_3d(void) {
   gls.u_block.time = glr.fd.time;
   gls.u_block.modulate =
       modulate * world_modulate * gl_static.identity_light;
-  gls.u_block.add = Cvar_ClampValue(gl_brightness, -1.0f, 1.0f);
+  gls.u_block.add = Cvar_ClampValue(
+      r_lightmap_brightness ? r_lightmap_brightness : gl_brightness, -1.0f,
+      1.0f);
   gls.u_block.intensity = intensity;
   gls.u_block.intensity2 = intensity * glow_intensity;
   gls.u_block.refract_scale = Cvar_ClampValue(gl_warp_refraction, 0.0f, 2.0f);

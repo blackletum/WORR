@@ -22,6 +22,11 @@
 client_static_t cls{};
 client_state_t cl{};
 unsigned com_localTime{};
+cvar_t *developer{};
+
+extern "C" void Com_LPrintf(print_type_t, const char *, ...)
+{
+}
 
 namespace {
 
@@ -31,9 +36,12 @@ constexpr uint32_t kEventPrivateCapabilities =
     WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK;
 constexpr uint32_t kSnapshotPrivateCapabilities =
     WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK;
+constexpr uint32_t kEventSnapshotPrivateCapabilities =
+    WORR_NET_CAP_NATIVE_EVENT_SNAPSHOT_PRIVATE_MASK;
 static_assert(kPrivateCapabilities == UINT32_C(0x53));
 static_assert(kEventPrivateCapabilities == UINT32_C(0x73));
 static_assert(kSnapshotPrivateCapabilities == UINT32_C(0x57));
+static_assert(kEventSnapshotPrivateCapabilities == UINT32_C(0x77));
 constexpr size_t kEncodedReadinessBytes =
     WORR_NATIVE_READINESS_SIDEBAND_PAIR_COUNT * 5u;
 static_assert(kEncodedReadinessBytes == 75u);
@@ -48,6 +56,7 @@ cvar_t pilot_cvar{};
 cvar_t event_pilot_cvar{};
 cvar_t snapshot_pilot_cvar{};
 cvar_t probe_hold_cvar{};
+cvar_t snapshot_timeline_owned_cvar{};
 std::array<byte, 512> reliable_storage{};
 
 struct fake_event_runtime_t {
@@ -549,6 +558,18 @@ bool begin_snapshot_enabled(
     return CL_NativeReadinessPilotBeginConnection(&cls.netchan);
 }
 
+bool begin_combined_enabled(
+    uint32_t raw_time,
+    size_t reliable_capacity = reliable_storage.size())
+{
+    reset_environment(raw_time, reliable_capacity);
+    pilot_cvar.integer = 1;
+    event_pilot_cvar.integer = 1;
+    snapshot_pilot_cvar.integer = 1;
+    CHECK(CL_CGameEventRuntimeSetConsumer(&fake_event_export));
+    return CL_NativeReadinessPilotBeginConnection(&cls.netchan);
+}
+
 worr_net_capability_state_v1 confirmed_capability(uint32_t epoch)
 {
     worr_net_capability_state_v1 state{};
@@ -631,11 +652,13 @@ worr_native_readiness_record_v1 server_challenge(
 {
     worr_native_readiness_record_v1 challenge{};
     const uint32_t private_capabilities =
-        event_pilot_cvar.integer
-            ? kEventPrivateCapabilities
-            : snapshot_pilot_cvar.integer
-                  ? kSnapshotPrivateCapabilities
-                  : kPrivateCapabilities;
+        event_pilot_cvar.integer && snapshot_pilot_cvar.integer
+            ? kEventSnapshotPrivateCapabilities
+            : (event_pilot_cvar.integer
+                   ? kEventPrivateCapabilities
+                   : (snapshot_pilot_cvar.integer
+                          ? kSnapshotPrivateCapabilities
+                          : kPrivateCapabilities));
     const auto result = snapshot_pilot_cvar.integer
         ? (advance
                ? Worr_NativeReadinessServerAdvanceEpochBoundV1(
@@ -737,6 +760,35 @@ void complete_snapshot_handshake(
           state.client_active_confirm_queued);
     CHECK(state.private_capabilities ==
           kSnapshotPrivateCapabilities);
+    CHECK(state.snapshot_epoch == snapshot_epoch);
+    CHECK((state.snapshot_receiver_flags &
+           WORR_NATIVE_SNAPSHOT_RECEIVER_INITIALIZED) != 0);
+}
+
+void complete_combined_handshake(
+    worr_native_readiness_state_v1 &server,
+    const worr_native_readiness_record_v1 &server_active,
+    uint32_t snapshot_epoch)
+{
+    const size_t confirm_offset = cls.netchan.message.cursize;
+    complete_handshake(server_active);
+    CHECK(cls.netchan.message.cursize ==
+          confirm_offset + kEncodedReadinessBytes);
+    const auto confirm = decode_client_record(confirm_offset);
+    CHECK(confirm.record_kind ==
+          WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM);
+    CHECK(confirm.negotiated_capabilities ==
+          kEventSnapshotPrivateCapabilities);
+    CHECK(confirm.snapshot_epoch == snapshot_epoch);
+    CHECK(Worr_NativeReadinessServerObserveClientActiveConfirmV1(
+              &server, &confirm, com_localTime) ==
+          WORR_NATIVE_READINESS_OK);
+    CHECK(server.phase == WORR_NATIVE_READINESS_PHASE_SERVER_ACTIVE);
+    const auto state = pilot_state();
+    CHECK(state.event_enabled && state.snapshot_enabled &&
+          state.client_active_confirm_queued);
+    CHECK(state.private_capabilities ==
+          kEventSnapshotPrivateCapabilities);
     CHECK(state.snapshot_epoch == snapshot_epoch);
     CHECK((state.snapshot_receiver_flags &
            WORR_NATIVE_SNAPSHOT_RECEIVER_INITIALIZED) != 0);
@@ -1132,15 +1184,17 @@ void test_default_off_demo_and_hook_ownership()
     CHECK(!CL_NativeReadinessPilotBeginConnection(&cls.netchan));
     CHECK(!cls.netchan.app_tx_prepare && !cls.netchan.app_rx);
 
-    /* Event and full-snapshot semantic S2C modes intentionally remain
-     * mutually exclusive until their independent sequence spaces can be
-     * negotiated together. */
+    /* Combined mode is an explicit private capability tuple.  The two S2C
+     * semantic lanes use disjoint transport-sequence partitions under one
+     * readiness epoch. */
     reset_environment(10, reliable_storage.size());
     pilot_cvar.integer = 1;
     event_pilot_cvar.integer = 1;
     snapshot_pilot_cvar.integer = 1;
-    CHECK(!CL_NativeReadinessPilotBeginConnection(&cls.netchan));
-    CHECK(!cls.netchan.app_tx_prepare && !cls.netchan.app_rx);
+    CHECK(CL_NativeReadinessPilotBeginConnection(&cls.netchan));
+    CHECK(cls.netchan.app_tx_prepare && cls.netchan.app_rx);
+    CHECK(pilot_status().private_mask ==
+          kEventSnapshotPrivateCapabilities);
 
     reset_environment(11, reliable_storage.size());
     pilot_cvar.integer = 1;
@@ -2102,6 +2156,85 @@ void test_event_repeat_requires_fresh_cgame_receipt()
            WORR_EVENT_STREAM_OWNER_REQUIRES_RESYNC) != 0);
 }
 
+void test_combined_event_snapshot_disjoint_sequence_and_ack_fairness()
+{
+    constexpr uint32_t kCommandEpoch = 95;
+    constexpr uint32_t kTransportEpoch = 1951;
+    constexpr uint32_t kSnapshotEpoch = 4951;
+    constexpr uint32_t kStreamEpoch = 9251;
+    constexpr uint32_t kSnapshotMessageSequence =
+        WORR_NATIVE_COMBINED_SNAPSHOT_MESSAGE_SEQUENCE_FIRST;
+
+    CHECK(begin_combined_enabled(1950));
+    CHECK(pilot_status().private_mask ==
+          kEventSnapshotPrivateCapabilities);
+    confirm_capability(kCommandEpoch);
+    worr_native_readiness_state_v1 server{};
+    const auto active = begin_handshake(
+        server, kTransportEpoch, 2950, false, kSnapshotEpoch);
+    complete_combined_handshake(server, active, kSnapshotEpoch);
+
+    worr_event_stream_descriptor_v1 descriptor{};
+    CHECK(Worr_EventStreamDescriptorInitV1(
+        &descriptor, kStreamEpoch, 1));
+    const auto descriptor_data = descriptor_packet(
+        kTransportEpoch, 1, descriptor);
+    netchan_app_rx_output_v1_t output{};
+    CHECK(receive_packet(descriptor_data, output) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+
+    prepare_snapshot_projection(kSnapshotEpoch, 1);
+    fake_snapshot_shadow.expectation_result =
+        CL_SNAPSHOT_SHADOW_NATIVE_EXPECTATION_AVAILABLE;
+    const auto packets = snapshot_packets(
+        kTransportEpoch, kSnapshotMessageSequence);
+    CHECK(!packets.empty());
+    for (const auto &packet : packets) {
+        CHECK(receive_packet(packet, output) ==
+              NETCHAN_APP_RX_EXPOSE_LEGACY);
+    }
+
+    auto state = pilot_state();
+    CHECK(state.mode == 2u && state.event_enabled &&
+          state.snapshot_enabled);
+    CHECK(state.event_ack_receipts == 1u &&
+          state.snapshot_ack_receipts == 1u);
+    CHECK(fake_event_runtime.active &&
+          fake_event_runtime.stream_epoch == kStreamEpoch);
+    CHECK(fake_snapshot_shadow.consume_calls == 1u);
+
+    const auto event_ack = prepare_tx(0);
+    CHECK(event_ack.result == NETCHAN_APP_TX_PREPARE_PREPARED);
+    worr_native_carrier_view_v1 view{};
+    CHECK(Worr_NativeCarrierDecodeV1(
+              event_ack.candidate.data(),
+              event_ack.output.application_bytes, &view) ==
+          WORR_NATIVE_CARRIER_OK);
+    CHECK(view.entry_count == 1u &&
+          view.entries[0].entry_type ==
+              WORR_NATIVE_CARRIER_ENTRY_ACK_V1 &&
+          view.entries[0].first_message_sequence == 1u &&
+          view.entries[0].last_message_sequence == 1u);
+    complete_tx(event_ack, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+
+    const auto snapshot_ack = prepare_tx(0);
+    CHECK(snapshot_ack.result == NETCHAN_APP_TX_PREPARE_PREPARED);
+    view = {};
+    CHECK(Worr_NativeCarrierDecodeV1(
+              snapshot_ack.candidate.data(),
+              snapshot_ack.output.application_bytes, &view) ==
+          WORR_NATIVE_CARRIER_OK);
+    CHECK(view.entry_count == 1u &&
+          view.entries[0].entry_type ==
+              WORR_NATIVE_CARRIER_ENTRY_ACK_V1 &&
+          view.entries[0].first_message_sequence ==
+              kSnapshotMessageSequence &&
+          view.entries[0].last_message_sequence ==
+              kSnapshotMessageSequence);
+    complete_tx(snapshot_ack, NETCHAN_APP_TX_COMPLETION_ACCEPTED);
+    CHECK(!CL_NativeReadinessPilotOutputDue());
+}
+
 void test_snapshot_epoch_deferred_admission_ack_and_conflict_drain()
 {
     constexpr uint32_t kCommandEpoch = 100;
@@ -2259,6 +2392,7 @@ void test_snapshot_hook_loss_preserves_timeline_until_boundary()
     complete_snapshot_handshake(
         server, active, kSnapshotEpoch);
     CHECK(CL_NativeReadinessPilotOwnsSnapshotTimeline());
+    CHECK(snapshot_timeline_owned_cvar.integer == 1);
     CHECK(pilot_status().hooks == 1u);
 
     /*
@@ -2291,6 +2425,7 @@ void test_snapshot_hook_loss_preserves_timeline_until_boundary()
 
     CL_NativeReadinessPilotQuiesceMap();
     CHECK(!CL_NativeReadinessPilotOwnsSnapshotTimeline());
+    CHECK(snapshot_timeline_owned_cvar.integer == 0);
     CHECK(pilot_status().enabled == 0u);
     CHECK(cls.netchan.app_rx == occupied_rx &&
           cls.netchan.app_rx_opaque == &reliable_storage);
@@ -2310,6 +2445,7 @@ void test_snapshot_hook_loss_preserves_timeline_until_boundary()
     CHECK(CL_NativeReadinessPilotOwnsSnapshotTimeline());
     CL_NativeReadinessPilotServerDataReset();
     CHECK(!CL_NativeReadinessPilotOwnsSnapshotTimeline());
+    CHECK(snapshot_timeline_owned_cvar.integer == 0);
     CHECK(pilot_status().enabled == 0u);
     CHECK(cls.netchan.app_rx == occupied_rx &&
           cls.netchan.app_rx_opaque == &reliable_storage);
@@ -2336,6 +2472,7 @@ void test_snapshot_hook_loss_preserves_timeline_until_boundary()
           pilot_status().mode == 3u);
     CL_NativeReadinessPilotBeforeNetchanClose(&cls.netchan);
     CHECK(!CL_NativeReadinessPilotOwnsSnapshotTimeline());
+    CHECK(snapshot_timeline_owned_cvar.integer == 0);
     CHECK(pilot_status().enabled == 0u);
     CHECK(cls.netchan.app_rx == occupied_rx &&
           cls.netchan.app_rx_opaque == &reliable_storage);
@@ -2448,6 +2585,14 @@ extern "C" bool CL_SnapshotShadowLatest(
     return true;
 }
 
+extern "C" bool CL_SnapshotShadowGetStatus(
+    cl_snapshot_shadow_status_v1 *status_out)
+{
+    if (status_out)
+        *status_out = {};
+    return false;
+}
+
 extern "C"
 cl_snapshot_shadow_native_expectation_result_v1
 CL_SnapshotShadowGetNativeExpectation(
@@ -2507,7 +2652,19 @@ extern "C" cvar_t *Cvar_Get(const char *name, const char *, int)
     }
     if (name && std::strcmp(name, "cl_worr_native_event_shadow") == 0)
         return &event_pilot_cvar;
+    if (name &&
+        std::strcmp(
+            name, "cl_worr_native_snapshot_timeline_owned") == 0) {
+        return &snapshot_timeline_owned_cvar;
+    }
     return &pilot_cvar;
+}
+
+extern "C" void Cvar_SetByVar(cvar_t *var, const char *value, from_t)
+{
+    CHECK(var != nullptr && value != nullptr);
+    var->integer = value[0] == '1' ? 1 : 0;
+    var->value = static_cast<float>(var->integer);
 }
 
 extern "C" bool Netchan_SetApplicationTxHook(
@@ -2601,6 +2758,7 @@ int main()
     test_event_opt_in_semantic_admission_and_mixed_egress();
     test_event_ack_exhaustion_cancellation_and_stale_floor();
     test_event_repeat_requires_fresh_cgame_receipt();
+    test_combined_event_snapshot_disjoint_sequence_and_ack_fairness();
     test_snapshot_epoch_deferred_admission_ack_and_conflict_drain();
     test_snapshot_map_barrier_cancels_retained_receipt();
     test_snapshot_hook_loss_preserves_timeline_until_boundary();

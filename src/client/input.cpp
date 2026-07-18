@@ -1395,6 +1395,7 @@ static void CL_NativeReadinessPilotStatus_f(void)
         (unsigned long long)status.drains,
         (unsigned long long)status.failures,
         (unsigned)status.last_failure);
+    CL_NativeReadinessPilotSnapshotStatus_f();
 }
 
 static void CL_AdaptiveInputStatus_f(void)

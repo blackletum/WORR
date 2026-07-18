@@ -12,6 +12,7 @@ the Free Software Foundation; either version 2 of the License, or
 
 #include "renderer/ui_scale.h"
 #include "renderer/dds.h"
+#include "refresh/images.h"
 #include "format/pcx.h"
 #include "format/wal.h"
 #include "refresh/stb/stb_image.h"
@@ -123,6 +124,8 @@ typedef struct {
     VkPipelineLayout pipeline_layout;
     VkPipeline pipeline;
     VkPipeline showtris_pipeline;
+    VkPipeline scene_pipeline;
+    VkPipeline scene_showtris_pipeline;
 
     vk_ui_frame_buffers_t frame_buffers[VK_MAX_FRAMES_IN_FLIGHT];
 
@@ -153,12 +156,18 @@ static cvar_t *r_picmip;
 static cvar_t *r_nomip;
 static cvar_t *r_picmip_filter;
 static cvar_t *vk_gl_downsample_skins;
+static cvar_t *vk_gl_saturation_legacy;
+static cvar_t *r_texture_saturation;
+static cvar_t *vk_r_gamma;
+static cvar_t *vk_vid_gamma_legacy;
 static cvar_t *vk_bilerp_chars;
 static cvar_t *vk_bilerp_pics;
 static cvar_t *vk_bilerp_skies;
 extern uint32_t d_8to24table[256];
 static bool vk_anisotropy_syncing;
 static bool vk_texture_filter_syncing;
+static bool vk_texture_saturation_syncing;
+static bool vk_gamma_syncing;
 
 static inline bool VK_UI_Check(VkResult result, const char *what)
 {
@@ -209,6 +218,107 @@ static bool VK_UI_ShouldPicmip(const vk_ui_image_t *image)
     const bool player_skin = VK_UI_IsPlayerSkin(image);
     return !((filter & 1) && !player_skin) &&
            !((filter & 2) && player_skin);
+}
+
+static bool VK_UI_ShouldApplyTextureSaturation(const vk_ui_image_t *image)
+{
+    if (!image || image->type != IT_WALL ||
+        (image->flags & (IF_TURBULENT | IF_NO_COLOR_ADJUST)) ||
+        !r_texture_saturation) {
+        return false;
+    }
+
+    return Cvar_ClampValue(r_texture_saturation, 0, 1) != 1.0f;
+}
+
+static bool VK_UI_ApplyTextureSaturation(const vk_ui_image_t *image,
+                                         int width, int height,
+                                         const byte *rgba, byte **out_rgba)
+{
+    *out_rgba = NULL;
+    if (!VK_UI_ShouldApplyTextureSaturation(image)) {
+        return true;
+    }
+
+    size_t bytes;
+    if (!VK_UI_TextureByteSize(width, height, 4, &bytes)) {
+        Com_SetLastError("Vulkan UI: texture saturation size overflow");
+        return false;
+    }
+
+    byte *adjusted = malloc(bytes);
+    if (!adjusted) {
+        Com_SetLastError("Vulkan UI: texture saturation allocation failed");
+        return false;
+    }
+    memcpy(adjusted, rgba, bytes);
+
+    const float colorscale = Cvar_ClampValue(r_texture_saturation, 0, 1);
+    for (size_t offset = 0; offset < bytes; offset += 4) {
+        byte *pixel = adjusted + offset;
+        const float r = pixel[0];
+        const float g = pixel[1];
+        const float b = pixel[2];
+        const float y = LUMINANCE(r, g, b);
+        pixel[0] = (byte)(y + (r - y) * colorscale);
+        pixel[1] = (byte)(y + (g - y) * colorscale);
+        pixel[2] = (byte)(y + (b - y) * colorscale);
+    }
+
+    *out_rgba = adjusted;
+    return true;
+}
+
+static bool VK_UI_ShouldApplyTextureGamma(const vk_ui_image_t *image)
+{
+    if (!image || (image->type != IT_WALL && image->type != IT_SKIN) ||
+        (image->flags & IF_NO_COLOR_ADJUST) || !vk_r_gamma ||
+        (r_config.flags & QVF_GAMMARAMP)) {
+        return false;
+    }
+
+    return Cvar_ClampValue(vk_r_gamma, 0.3f, 3.0f) != 1.0f;
+}
+
+static byte VK_UI_GammaByte(byte value, float gamma)
+{
+    const double normalized = ((double)value + 0.5) / 255.5;
+    const int adjusted = (int)(255.0 * pow(normalized, gamma) + 0.5);
+    return (byte)max(0, min(adjusted, 255));
+}
+
+static bool VK_UI_ApplyTextureGamma(const vk_ui_image_t *image,
+                                    int width, int height,
+                                    const byte *rgba, byte **out_rgba)
+{
+    *out_rgba = NULL;
+    if (!VK_UI_ShouldApplyTextureGamma(image)) {
+        return true;
+    }
+
+    size_t bytes;
+    if (!VK_UI_TextureByteSize(width, height, 4, &bytes)) {
+        Com_SetLastError("Vulkan UI: texture gamma size overflow");
+        return false;
+    }
+
+    byte *adjusted = malloc(bytes);
+    if (!adjusted) {
+        Com_SetLastError("Vulkan UI: texture gamma allocation failed");
+        return false;
+    }
+    memcpy(adjusted, rgba, bytes);
+
+    const float gamma = Cvar_ClampValue(vk_r_gamma, 0.3f, 3.0f);
+    for (size_t offset = 0; offset < bytes; offset += 4) {
+        byte *pixel = adjusted + offset;
+        pixel[0] = VK_UI_GammaByte(pixel[0], gamma);
+        pixel[1] = VK_UI_GammaByte(pixel[1], gamma);
+        pixel[2] = VK_UI_GammaByte(pixel[2], gamma);
+    }
+
+    *out_rgba = adjusted;
+    return true;
 }
 
 static void VK_UI_MipMapRgba(const byte *in, int width, int height, byte *out)
@@ -1676,6 +1786,129 @@ static void VK_UI_UnregisterTextureFilterCvars(void)
     vk_texture_filter_syncing = false;
 }
 
+static void VK_UI_TextureSaturationChanged(cvar_t *self)
+{
+    if (vk_texture_saturation_syncing || !self) {
+        return;
+    }
+
+    vk_texture_saturation_syncing = true;
+    if (self == r_texture_saturation && vk_gl_saturation_legacy) {
+        Cvar_SetByVar(vk_gl_saturation_legacy, self->string, FROM_CODE);
+    } else if (self == vk_gl_saturation_legacy && r_texture_saturation) {
+        Cvar_SetByVar(r_texture_saturation, self->string, FROM_CODE);
+    }
+    vk_texture_saturation_syncing = false;
+}
+
+static void VK_UI_RegisterTextureSaturationCvars(void)
+{
+    vk_gl_saturation_legacy = Cvar_Get("gl_saturation", "1", CVAR_FILES);
+    r_texture_saturation = Cvar_Get("r_texture_saturation",
+                                    vk_gl_saturation_legacy->string,
+                                    CVAR_ARCHIVE | CVAR_FILES);
+
+    if (!(r_texture_saturation->flags & CVAR_MODIFIED) &&
+        (vk_gl_saturation_legacy->flags & CVAR_MODIFIED)) {
+        Cvar_SetByVar(r_texture_saturation,
+                      vk_gl_saturation_legacy->string, FROM_CODE);
+    } else {
+        Cvar_SetByVar(vk_gl_saturation_legacy,
+                      r_texture_saturation->string, FROM_CODE);
+    }
+
+    vk_gl_saturation_legacy->changed = VK_UI_TextureSaturationChanged;
+    r_texture_saturation->changed = VK_UI_TextureSaturationChanged;
+}
+
+static void VK_UI_UnregisterTextureSaturationCvars(void)
+{
+    if (vk_gl_saturation_legacy &&
+        vk_gl_saturation_legacy->changed == VK_UI_TextureSaturationChanged) {
+        vk_gl_saturation_legacy->changed = NULL;
+    }
+    if (r_texture_saturation &&
+        r_texture_saturation->changed == VK_UI_TextureSaturationChanged) {
+        r_texture_saturation->changed = NULL;
+    }
+
+    vk_gl_saturation_legacy = NULL;
+    r_texture_saturation = NULL;
+    vk_texture_saturation_syncing = false;
+}
+
+static void VK_UI_UpdateHardwareGamma(void)
+{
+    if (!(r_config.flags & QVF_GAMMARAMP) || !vk_r_gamma || !vid ||
+        !vid->update_gamma) {
+        return;
+    }
+
+    byte table[256];
+    const float gamma = Cvar_ClampValue(vk_r_gamma, 0.3f, 3.0f);
+    for (int i = 0; i < 256; ++i) {
+        table[i] = VK_UI_GammaByte((byte)i, gamma);
+    }
+    vid->update_gamma(table);
+}
+
+static void VK_UI_GammaChanged(cvar_t *self)
+{
+    if (vk_gamma_syncing || !self) {
+        return;
+    }
+
+    vk_gamma_syncing = true;
+    if (self == vk_r_gamma && vk_vid_gamma_legacy) {
+        Cvar_SetByVar(vk_vid_gamma_legacy, self->string, FROM_CODE);
+    } else if (self == vk_vid_gamma_legacy && vk_r_gamma) {
+        Cvar_SetByVar(vk_r_gamma, self->string, FROM_CODE);
+    }
+    VK_UI_UpdateHardwareGamma();
+    vk_gamma_syncing = false;
+}
+
+static void VK_UI_RegisterGammaCvars(void)
+{
+    vk_r_gamma = Cvar_Get("r_gamma", "1", CVAR_ARCHIVE);
+    vk_vid_gamma_legacy = Cvar_Get("vid_gamma", vk_r_gamma->string,
+                                   CVAR_ARCHIVE | CVAR_NOARCHIVE);
+
+    if (r_config.flags & QVF_GAMMARAMP) {
+        vk_r_gamma->flags &= ~CVAR_FILES;
+        vk_vid_gamma_legacy->flags &= ~CVAR_FILES;
+    } else {
+        vk_r_gamma->flags |= CVAR_FILES;
+        vk_vid_gamma_legacy->flags |= CVAR_FILES;
+    }
+
+    if (!(vk_r_gamma->flags & CVAR_MODIFIED) &&
+        (vk_vid_gamma_legacy->flags & CVAR_MODIFIED)) {
+        Cvar_SetByVar(vk_r_gamma, vk_vid_gamma_legacy->string, FROM_CODE);
+    } else {
+        Cvar_SetByVar(vk_vid_gamma_legacy, vk_r_gamma->string, FROM_CODE);
+    }
+
+    vk_r_gamma->changed = VK_UI_GammaChanged;
+    vk_vid_gamma_legacy->changed = VK_UI_GammaChanged;
+    VK_UI_UpdateHardwareGamma();
+}
+
+static void VK_UI_UnregisterGammaCvars(void)
+{
+    if (vk_r_gamma && vk_r_gamma->changed == VK_UI_GammaChanged) {
+        vk_r_gamma->changed = NULL;
+    }
+    if (vk_vid_gamma_legacy &&
+        vk_vid_gamma_legacy->changed == VK_UI_GammaChanged) {
+        vk_vid_gamma_legacy->changed = NULL;
+    }
+
+    vk_r_gamma = NULL;
+    vk_vid_gamma_legacy = NULL;
+    vk_gamma_syncing = false;
+}
+
 static void VK_UI_TransitionImageMipRange(
     VkCommandBuffer cmd, VkImage image, VkImageLayout old_layout,
     VkImageLayout new_layout, uint32_t base_mip_level, uint32_t level_count,
@@ -2441,26 +2674,53 @@ static qhandle_t VK_UI_CreateImage(const char *name, imagetype_t type, imageflag
         image->flags |= IF_OPAQUE;
     }
 
+    byte *saturation_rgba = NULL;
+    if (!VK_UI_ApplyTextureSaturation(image, width, height, rgba,
+                                       &saturation_rgba)) {
+        VK_UI_DestroyImageResources(image);
+        memset(image, 0, sizeof(*image));
+        return 0;
+    }
+
+    const byte *upload_rgba = saturation_rgba ? saturation_rgba : rgba;
+    byte *gamma_rgba = NULL;
+    if (!VK_UI_ApplyTextureGamma(image, width, height, upload_rgba,
+                                 &gamma_rgba)) {
+        free(saturation_rgba);
+        VK_UI_DestroyImageResources(image);
+        memset(image, 0, sizeof(*image));
+        return 0;
+    }
+    if (gamma_rgba) {
+        upload_rgba = gamma_rgba;
+    }
     byte *picmip_rgba = NULL;
-    if (!VK_UI_ApplyPicmip(image, &width, &height, rgba, &picmip_rgba)) {
+    if (!VK_UI_ApplyPicmip(image, &width, &height, upload_rgba,
+                           &picmip_rgba)) {
+        free(gamma_rgba);
+        free(saturation_rgba);
         VK_UI_DestroyImageResources(image);
         memset(image, 0, sizeof(*image));
         return 0;
     }
     if (picmip_rgba) {
-        rgba = picmip_rgba;
+        upload_rgba = picmip_rgba;
         image->transparent = VK_UI_ImageHasTransparency(
-            rgba, (size_t)width * (size_t)height);
+            upload_rgba, (size_t)width * (size_t)height);
     }
 
-    if (!VK_UI_SetImagePixels(image, width, height, rgba)) {
+    if (!VK_UI_SetImagePixels(image, width, height, upload_rgba)) {
         free(picmip_rgba);
+        free(gamma_rgba);
+        free(saturation_rgba);
         VK_UI_DestroyImageResources(image);
         memset(image, 0, sizeof(*image));
         return 0;
     }
 
     free(picmip_rgba);
+    free(gamma_rgba);
+    free(saturation_rgba);
 
     return handle;
 }
@@ -2513,7 +2773,10 @@ static void VK_UI_AssociateGlowmap(qhandle_t base_handle)
     // the allocation. Reuse its material flags/type for matching sampler
     // wrapping, as OpenGL does for a paired skin or wall texture.
     const imagetype_t type = base->type;
-    const imageflags_t flags = base->flags;
+    // GL uploads glow companions as turbulent to skip material colour
+    // adjustment. Keep that native data contract so desaturation applies only
+    // to the base wall material.
+    const imageflags_t flags = base->flags | IF_TURBULENT;
     qhandle_t glow_handle = VK_UI_CreateImage(glow_name, type, flags,
                                               width, height, rgba);
     free(rgba);
@@ -3026,6 +3289,8 @@ bool VK_UI_Init(vk_context_t *ctx)
     // Vulkan-specific compatibility alias for existing configs and scripts.
     VK_UI_RegisterAnisotropyCvars(ctx);
     VK_UI_RegisterTextureFilterCvars();
+    VK_UI_RegisterTextureSaturationCvars();
+    VK_UI_RegisterGammaCvars();
     // Match the shared OpenGL material upload-quality policy. These values
     // are consumed at native image registration, so CVAR_FILES requests the
     // normal image refresh when a player changes quality.
@@ -3144,6 +3409,14 @@ void VK_UI_DestroySwapchainResources(vk_context_t *ctx)
     if (vk_ui.showtris_pipeline) {
         vkDestroyPipeline(vk_ui.ctx->device, vk_ui.showtris_pipeline, NULL);
         vk_ui.showtris_pipeline = VK_NULL_HANDLE;
+    }
+    if (vk_ui.scene_pipeline) {
+        vkDestroyPipeline(vk_ui.ctx->device, vk_ui.scene_pipeline, NULL);
+        vk_ui.scene_pipeline = VK_NULL_HANDLE;
+    }
+    if (vk_ui.scene_showtris_pipeline) {
+        vkDestroyPipeline(vk_ui.ctx->device, vk_ui.scene_showtris_pipeline, NULL);
+        vk_ui.scene_showtris_pipeline = VK_NULL_HANDLE;
     }
 
     vk_ui.swapchain_ready = false;
@@ -3331,10 +3604,32 @@ bool VK_UI_CreateSwapchainResources(vk_context_t *ctx)
                          "vkCreateGraphicsPipelines(show-tris)");
     }
 
+    // The scene pass uses native multisampled colour/depth attachments and
+    // resolves them before post-processing/presentation.  A Vulkan graphics
+    // pipeline's rasterization sample count must match its render pass, so UI
+    // recorded directly into that scene needs a matching pipeline pair.
+    if (ok && ctx->scene_samples != VK_SAMPLE_COUNT_1_BIT) {
+        multisample.rasterizationSamples = ctx->scene_samples;
+        pipeline_info.renderPass = ctx->scene_render_pass;
+        input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        ok = VK_UI_Check(vkCreateGraphicsPipelines(ctx->device, VK_NULL_HANDLE,
+                                                    1, &pipeline_info, NULL,
+                                                    &vk_ui.scene_pipeline),
+                         "vkCreateGraphicsPipelines(scene)");
+        if (ok) {
+            input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+            ok = VK_UI_Check(vkCreateGraphicsPipelines(ctx->device, VK_NULL_HANDLE,
+                                                        1, &pipeline_info, NULL,
+                                                        &vk_ui.scene_showtris_pipeline),
+                             "vkCreateGraphicsPipelines(scene show-tris)");
+        }
+    }
+
     vkDestroyShaderModule(ctx->device, vert_shader, NULL);
     vkDestroyShaderModule(ctx->device, frag_shader, NULL);
 
     if (!ok) {
+        VK_UI_DestroySwapchainResources(ctx);
         return false;
     }
 
@@ -3350,6 +3645,8 @@ void VK_UI_Shutdown(vk_context_t *ctx)
 
     VK_UI_UnregisterAnisotropyCvars();
     VK_UI_UnregisterTextureFilterCvars();
+    VK_UI_UnregisterTextureSaturationCvars();
+    VK_UI_UnregisterGammaCvars();
 
     if (!ctx) {
         ctx = vk_ui.ctx;
@@ -3554,10 +3851,13 @@ void VK_UI_RecordUploads(VkCommandBuffer cmd)
                          barrier_count, barriers, 0, NULL);
 }
 
-void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
+static void VK_UI_RecordWithPipelines(VkCommandBuffer cmd,
+                                      const VkExtent2D *extent,
+                                      VkPipeline pipeline,
+                                      VkPipeline showtris_pipeline)
 {
     vk_ui_frame_buffers_t *frame = VK_UI_CurrentFrameBuffers();
-    if (!vk_ui.initialized || !vk_ui.swapchain_ready || !vk_ui.pipeline ||
+    if (!vk_ui.initialized || !vk_ui.swapchain_ready || !pipeline ||
         !extent || !vk_ui.draw_count || !vk_ui.vertex_count || !vk_ui.index_count ||
         !frame || !frame->vertex_buffer || !frame->index_buffer ||
         !frame->vertex_upload_bytes || !frame->index_upload_bytes) {
@@ -3573,7 +3873,7 @@ void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
         .maxDepth = 1.0f,
     };
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_ui.pipeline);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdSetViewport(cmd, 0, 1, &viewport);
 
     VkDeviceSize offset = 0;
@@ -3604,7 +3904,7 @@ void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
     }
 
     if (!VK_Debug_ShowTris(VK_DEBUG_SHOWTRIS_PIC) ||
-        !vk_ui.showtris_pipeline || !vk_ui.showtris_vertex_count ||
+        !showtris_pipeline || !vk_ui.showtris_vertex_count ||
         !frame->showtris_vertex_buffer ||
         !frame->showtris_vertex_upload_bytes) {
         return;
@@ -3616,7 +3916,7 @@ void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
         return;
     }
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      vk_ui.showtris_pipeline);
+                      showtris_pipeline);
     vkCmdBindVertexBuffers(cmd, 0, 1, &frame->showtris_vertex_buffer,
                            &offset);
     for (uint32_t i = 0; i < vk_ui.draw_count; ++i) {
@@ -3637,6 +3937,23 @@ void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
         VK_Debug_RecordDraw(VK_DEBUG_DOMAIN_UI,
                             draw->showtris_vertex_count, 0);
     }
+}
+
+void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
+{
+    VK_UI_RecordWithPipelines(cmd, extent, vk_ui.pipeline,
+                              vk_ui.showtris_pipeline);
+}
+
+void VK_UI_RecordScene(VkCommandBuffer cmd, const VkExtent2D *extent)
+{
+    const bool multisampled_scene = vk_ui.ctx &&
+        vk_ui.ctx->scene_samples != VK_SAMPLE_COUNT_1_BIT &&
+        !vk_ui.ctx->scene_single_sample_active;
+    VK_UI_RecordWithPipelines(cmd, extent,
+                              multisampled_scene ? vk_ui.scene_pipeline : vk_ui.pipeline,
+                              multisampled_scene ? vk_ui.scene_showtris_pipeline :
+                                                   vk_ui.showtris_pipeline);
 }
 
 float VK_UI_ClampScale(cvar_t *var)

@@ -29,19 +29,44 @@ constexpr std::uint32_t CG_CANONICAL_SNAPSHOT_TIMELINE_ENTITY_CAPACITY = 512u;
 constexpr std::uint32_t CG_CANONICAL_SNAPSHOT_TIMELINE_AREA_CAPACITY = 32u;
 constexpr std::uint32_t CG_CANONICAL_SNAPSHOT_TIMELINE_EVENT_CAPACITY =
     CG_CANONICAL_SNAPSHOT_TIMELINE_ENTITY_CAPACITY;
-constexpr std::uint32_t CG_CANONICAL_PREDICTION_SNAPSHOT_VERSION = 1u;
+constexpr std::uint32_t CG_CANONICAL_PREDICTION_RECEIPT_VERSION = 1u;
+constexpr std::uint32_t CG_CANONICAL_PREDICTION_SNAPSHOT_VERSION = 2u;
+
+/*
+ * Immutable proof that one exact timeline generation passed both canonical
+ * publication and the snapshot-event fence.  Prediction never derives this
+ * receipt from mutable "latest" status and never accepts a timeline-only
+ * publication as movement authority.
+ */
+struct cg_canonical_prediction_receipt_v1 {
+    std::uint32_t struct_size;
+    std::uint32_t schema_version;
+    std::uint64_t admission_generation;
+    std::uint32_t receipt_flags;
+    std::uint32_t reserved0;
+    worr_snapshot_timeline_ref_v1 ref;
+    worr_snapshot_id_v2 snapshot_id;
+    std::uint64_t snapshot_hash;
+    worr_snapshot_consumed_command_v2 consumed_command;
+    std::uint32_t server_tick;
+    std::uint32_t controlled_entity_index;
+    std::uint32_t controlled_entity_generation;
+    std::uint32_t controlled_entity_provenance;
+    std::uint64_t server_time_us;
+};
 
 /*
  * One transactional, value-only prediction copy.  The records are the
  * canonical snapshot/player ABIs themselves rather than a parallel state
  * schema; the wrapper only binds them to one generation-checked timeline ref.
  */
-struct cg_canonical_prediction_snapshot_v1 {
+struct cg_canonical_prediction_snapshot_v2 {
     std::uint32_t struct_size;
     std::uint32_t schema_version;
     std::uint32_t active_epoch;
     std::uint32_t reserved0;
     worr_snapshot_timeline_ref_v1 ref;
+    cg_canonical_prediction_receipt_v1 receipt;
     worr_snapshot_v2 snapshot;
     worr_snapshot_player_v2 player;
 };
@@ -94,7 +119,7 @@ worr_snapshot_timeline_result_v1 CG_CanonicalSnapshotTimelineCopyPlayer(
 worr_snapshot_timeline_result_v1
 CG_CanonicalSnapshotTimelineCopyPredictionSnapshot(
     std::uint32_t snapshot_sequence,
-    cg_canonical_prediction_snapshot_v1 *snapshot_out);
+    cg_canonical_prediction_snapshot_v2 *snapshot_out);
 worr_snapshot_timeline_result_v1 CG_CanonicalSnapshotTimelineEventCursorBegin(
     worr_snapshot_timeline_event_cursor_v1 *cursor_out);
 worr_snapshot_timeline_result_v1 CG_CanonicalSnapshotTimelineEventNext(

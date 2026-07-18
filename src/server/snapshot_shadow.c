@@ -62,6 +62,37 @@ static void set_result(sv_snapshot_shadow_peer_v1 *peer,
         peer->status.last_result = (uint32_t)result;
 }
 
+/* The server-facing q2proto structs carry maybe-diff coordinates through the
+ * write union (previous/current), while the protocol-independent projector
+ * consumes the read union (absolute/difference plus component bits).  Copy
+ * the exact current semantic value before changing the active union member.
+ * Absolute values make the projection independent of protocol-specific wire
+ * delta choices while reconstructing the same decoded endpoint. */
+static void canonicalize_write_coords(
+    q2proto_maybe_diff_coords_t *coords)
+{
+    q2proto_vec3_t current;
+
+    q2proto_var_coords_get_float(&coords->write.current, current);
+    memset(coords, 0, sizeof(*coords));
+    coords->read.value.delta_bits = 7;
+    q2proto_var_coords_set_float(&coords->read.value.values, current);
+}
+
+static void canonicalize_entity_delta(
+    q2proto_entity_state_delta_t *delta)
+{
+    canonicalize_write_coords(&delta->origin);
+    /* Extended loop parameters are nested under the wire sound carrier in
+     * q2repro/q2pro/kex.  The generic server delta can notice their source
+     * state changing while sound itself is unchanged, but the writer emits
+     * neither field in that case.  Project only bytes the client receives. */
+    if ((delta->delta_bits & Q2P_ESD_SOUND) == 0) {
+        delta->delta_bits &=
+            ~(Q2P_ESD_LOOP_VOLUME | Q2P_ESD_LOOP_ATTENUATION);
+    }
+}
+
 static bool checked_product_u32(uint32_t left, uint32_t right,
                                 uint32_t *product_out)
 {
@@ -121,7 +152,7 @@ static bool config_valid(const sv_snapshot_shadow_config_v1 *config)
         config->snapshot_epoch == 0 || config->max_entities < 2 ||
         config->max_models == 0 || config->max_sounds == 0 ||
         config->slot_capacity < 2 || config->entities_per_slot == 0 ||
-        config->entities_per_slot >= config->max_entities ||
+        config->entities_per_slot > config->max_entities ||
         config->area_bytes_per_slot == 0 || config->reserved0[0] != 0 ||
         config->reserved0[1] != 0 || config->reserved0[2] != 0 ||
         config->extended_entity_state > 1) {
@@ -270,6 +301,7 @@ sv_snapshot_shadow_result_v1 SV_SnapshotShadowSetBaselineV1(
     sv_snapshot_shadow_peer_v1 *peer, uint32_t entity_index,
     const q2proto_entity_state_delta_t *baseline_delta)
 {
+    q2proto_entity_state_delta_t canonical_delta;
     worr_snapshot_q2proto_result_v2 result;
 
     if (!peer || !baseline_delta) {
@@ -281,8 +313,10 @@ sv_snapshot_shadow_result_v1 SV_SnapshotShadowSetBaselineV1(
         return SV_SNAPSHOT_SHADOW_NOT_ACTIVE;
     }
     increment_saturating(&peer->status.baseline_attempts);
+    canonical_delta = *baseline_delta;
+    canonicalize_entity_delta(&canonical_delta);
     result = Worr_SnapshotQ2ProtoSetBaselineV2(
-        &peer->context, entity_index, baseline_delta);
+        &peer->context, entity_index, &canonical_delta);
     peer->status.last_project_result = (uint32_t)result;
     if (result != WORR_SNAPSHOT_Q2PROTO_OK) {
         increment_saturating(&peer->status.baseline_failures);
@@ -335,6 +369,10 @@ sv_snapshot_shadow_result_v1 SV_SnapshotShadowBeginFrameV1(
 
     peer->pending_input = *frame;
     peer->pending_frame = *frame->wire_frame;
+    canonicalize_write_coords(
+        &peer->pending_frame.playerstate.pm_origin);
+    canonicalize_write_coords(
+        &peer->pending_frame.playerstate.pm_velocity);
     if (peer->pending_frame.areabits_len != 0) {
         memcpy(peer->pending_area_bytes, peer->pending_frame.areabits,
                peer->pending_frame.areabits_len);
@@ -370,7 +408,10 @@ sv_snapshot_shadow_result_v1 SV_SnapshotShadowCaptureEntityDeltaV1(
         set_result(peer, SV_SNAPSHOT_SHADOW_DELTA_CAPACITY);
         return SV_SNAPSHOT_SHADOW_DELTA_CAPACITY;
     }
-    peer->pending_deltas[peer->pending_delta_count++] = *delta;
+    peer->pending_deltas[peer->pending_delta_count] = *delta;
+    canonicalize_entity_delta(
+        &peer->pending_deltas[peer->pending_delta_count].entity_delta);
+    ++peer->pending_delta_count;
     peer->status.pending_delta_count = peer->pending_delta_count;
     increment_saturating(&peer->status.delta_captures);
     set_result(peer, SV_SNAPSHOT_SHADOW_OK);

@@ -134,6 +134,17 @@ bool Worr_CommandRecordSemanticHashV1(
     const worr_command_record_v1 *record,
     uint16_t max_duration_ms,
     uint64_t *hash_out);
+/*
+ * Cross-process input identity deliberately excludes render-watermark
+ * provenance.  The client retains a command before legacy packet placement
+ * is known, while the server later annotates that same input with a
+ * packet-shared watermark.  Command ID, cumulative sample time, movement
+ * revision, and the canonical prediction command remain exact on both ends.
+ */
+bool Worr_CommandRecordInputHashV1(
+    const worr_command_record_v1 *record,
+    uint16_t max_duration_ms,
+    uint64_t *hash_out);
 bool Worr_CommandRecordContentHashV1(
     const worr_command_record_v1 *record,
     uint16_t max_duration_ms,

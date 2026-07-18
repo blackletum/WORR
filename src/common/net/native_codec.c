@@ -704,6 +704,9 @@ static uint32_t event_payload_wire_bytes(uint16_t payload_kind)
     case WORR_EVENT_PAYLOAD_LOCAL_INTERACTION_AUTHORITY_V1:
         return (uint32_t)sizeof(
             worr_local_interaction_authority_receipt_v1);
+    case WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1:
+        return (uint32_t)sizeof(
+            worr_local_action_shadow_authority_receipt_v1);
     default:
         return UINT32_MAX;
     }
@@ -825,6 +828,24 @@ static void write_event_payload(byte_writer *writer,
         put_u32(writer, payload.state_flags);
         put_u32(writer, payload.outcome_flags);
         put_u32(writer, payload.reserved0);
+        break;
+    }
+    case WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1: {
+        worr_local_action_shadow_authority_receipt_v1 payload;
+        memcpy(&payload, record->payload, sizeof(payload));
+        put_u32(writer, payload.struct_size);
+        put_u32(writer, payload.schema_version);
+        put_u32(writer, payload.model_revision);
+        put_u32(writer, payload.reserved0);
+        put_u32(writer, payload.command_id.epoch);
+        put_u32(writer, payload.command_id.sequence);
+        put_u32(writer, payload.catalog_id);
+        put_u32(writer, payload.flags);
+        put_u32(writer, payload.v2_blockers);
+        put_u32(writer, payload.reserved1);
+        put_u64(writer, payload.command_hash);
+        put_u64(writer, payload.descriptor_hash);
+        put_u64(writer, payload.record_hash);
         break;
     }
     default:
@@ -977,6 +998,27 @@ static bool read_event_payload(byte_reader *reader,
             !get_u32(reader, &payload.state_flags) ||
             !get_u32(reader, &payload.outcome_flags) ||
             !get_u32(reader, &payload.reserved0)) {
+            return false;
+        }
+        memcpy(record->payload, &payload, sizeof(payload));
+        return true;
+    }
+    case WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1: {
+        worr_local_action_shadow_authority_receipt_v1 payload;
+        memset(&payload, 0, sizeof(payload));
+        if (!get_u32(reader, &payload.struct_size) ||
+            !get_u32(reader, &payload.schema_version) ||
+            !get_u32(reader, &payload.model_revision) ||
+            !get_u32(reader, &payload.reserved0) ||
+            !get_u32(reader, &payload.command_id.epoch) ||
+            !get_u32(reader, &payload.command_id.sequence) ||
+            !get_u32(reader, &payload.catalog_id) ||
+            !get_u32(reader, &payload.flags) ||
+            !get_u32(reader, &payload.v2_blockers) ||
+            !get_u32(reader, &payload.reserved1) ||
+            !get_u64(reader, &payload.command_hash) ||
+            !get_u64(reader, &payload.descriptor_hash) ||
+            !get_u64(reader, &payload.record_hash)) {
             return false;
         }
         memcpy(record->payload, &payload, sizeof(payload));
@@ -1417,20 +1459,22 @@ static bool snapshot_event_range_matches(
            range->reserved0 == 0;
 }
 
-static bool snapshot_view_transport_valid(
+uint32_t Worr_NativeCodecSnapshotTransportFailureFlagsV1(
     const worr_snapshot_projection_view_v2 *view,
     uint32_t max_entities)
 {
     worr_snapshot_projection_hashes_v2 hashes;
     bool authoritative;
     uint32_t expected_source;
+    uint32_t failures = 0;
     uint32_t index;
 
-    if (view == NULL || view->snapshot == NULL || view->player == NULL ||
+    if (view == NULL || max_entities == 0 ||
+        view->snapshot == NULL || view->player == NULL ||
         (view->entity_count != 0 && view->entities == NULL) ||
         (view->area_byte_count != 0 && view->area_bytes == NULL) ||
         (view->event_ref_count != 0 && view->event_refs == NULL)) {
-        return false;
+        return WORR_NATIVE_SNAPSHOT_TRANSPORT_INVALID_VIEW;
     }
     authoritative =
         (view->snapshot->flags &
@@ -1438,32 +1482,40 @@ static bool snapshot_view_transport_valid(
     expected_source =
         authoritative ? WORR_SNAPSHOT_GENERATION_AUTHORITATIVE
                       : WORR_SNAPSHOT_GENERATION_LEGACY_INFERRED;
-    if (!Worr_SnapshotProjectionHashesV2(view, max_entities, &hashes) ||
-        view->entity_count > WORR_NATIVE_CODEC_MAX_SNAPSHOT_ENTITIES ||
+    if (!Worr_SnapshotProjectionHashesV2(view, max_entities, &hashes))
+        failures |= WORR_NATIVE_SNAPSHOT_TRANSPORT_INVALID_PROJECTION;
+    if (view->entity_count > WORR_NATIVE_CODEC_MAX_SNAPSHOT_ENTITIES ||
         view->area_byte_count >
             WORR_NATIVE_CODEC_MAX_SNAPSHOT_AREA_BYTES ||
         view->event_ref_count >
-            WORR_NATIVE_CODEC_MAX_SNAPSHOT_EVENT_REFS ||
-        !generation_equal(view->snapshot->controlled_entity,
-                          view->player->controlled_entity) ||
-        primary_generation_source(view->player->controlled_entity) !=
-            expected_source ||
-        !snapshot_event_range_matches(&view->snapshot->event_range,
+            WORR_NATIVE_CODEC_MAX_SNAPSHOT_EVENT_REFS)
+        failures |= WORR_NATIVE_SNAPSHOT_TRANSPORT_LIMIT;
+    if (!generation_equal(view->snapshot->controlled_entity,
+                          view->player->controlled_entity))
+        failures |=
+            WORR_NATIVE_SNAPSHOT_TRANSPORT_CONTROLLED_PLAYER_MISMATCH;
+    if (primary_generation_source(view->player->controlled_entity) !=
+        expected_source)
+        failures |= WORR_NATIVE_SNAPSHOT_TRANSPORT_PLAYER_SOURCE_MISMATCH;
+    if (!snapshot_event_range_matches(&view->snapshot->event_range,
                                       view->event_refs,
-                                      view->event_ref_count)) {
-        return false;
-    }
-    for (index = 0; index < view->entity_count; ++index) {
-        if (primary_generation_source(view->entities[index].generation) !=
-                expected_source ||
-            (view->entities[index].generation.identity.index ==
-                 view->snapshot->controlled_entity.identity.index &&
-             !generation_equal(view->entities[index].generation,
-                               view->snapshot->controlled_entity))) {
-            return false;
+                                      view->event_ref_count))
+        failures |= WORR_NATIVE_SNAPSHOT_TRANSPORT_EVENT_RANGE_MISMATCH;
+    if ((failures & WORR_NATIVE_SNAPSHOT_TRANSPORT_LIMIT) == 0) {
+        for (index = 0; index < view->entity_count; ++index) {
+            if (primary_generation_source(
+                    view->entities[index].generation) != expected_source)
+                failures |=
+                    WORR_NATIVE_SNAPSHOT_TRANSPORT_ENTITY_SOURCE_MISMATCH;
+            if (view->entities[index].generation.identity.index ==
+                    view->snapshot->controlled_entity.identity.index &&
+                !generation_equal(view->entities[index].generation,
+                                  view->snapshot->controlled_entity))
+                failures |=
+                    WORR_NATIVE_SNAPSHOT_TRANSPORT_CONTROLLED_ENTITY_MISMATCH;
         }
     }
-    return true;
+    return failures;
 }
 
 static bool snapshot_encoded_size(
@@ -2076,7 +2128,8 @@ worr_native_codec_result_v1 Worr_NativeCodecSnapshotPreflightV1(
             WORR_NATIVE_CODEC_MAX_SNAPSHOT_EVENT_REFS) {
         return WORR_NATIVE_CODEC_LIMIT;
     }
-    if (!snapshot_view_transport_valid(view, max_entities))
+    if (Worr_NativeCodecSnapshotTransportFailureFlagsV1(
+            view, max_entities) != 0)
         return WORR_NATIVE_CODEC_INVALID_RECORD;
     entity_bytes =
         (size_t)view->entity_count * sizeof(*view->entities);

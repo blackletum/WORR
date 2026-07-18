@@ -4,7 +4,7 @@ layout(set = 0, binding = 0) uniform sampler2D scene_sampler;
 layout(set = 0, binding = 1) uniform sampler2D emission_sampler;
 
 layout(std140, set = 1, binding = 0) uniform BloomKernel {
-    // x = paired bilinear offset, y = unnormalised Gaussian pair weight.
+    // x = paired bilinear offset, y = pre-normalized Gaussian pair weight.
     vec4 offset_weight[51];
 } bloom_kernel;
 
@@ -83,12 +83,10 @@ void main() {
     float sigma = max(push_data.params.w, 0.5);
     int radius = min(int(sigma * 2.0 + 0.5), 50);
     vec3 sum = vec3(0.0);
-    float weight_sum = 0.0;
     int pair = 0;
     for (int i = -radius; i <= radius; i += 2, ++pair) {
         vec2 tap = bloom_kernel.offset_weight[pair].xy;
         sum += texture(scene_sampler, tc + direction * tap.x).rgb * tap.y;
-        weight_sum += tap.y;
     }
-    out_color = vec4(sum / max(weight_sum, 1e-5), 1.0);
+    out_color = vec4(sum, 1.0);
 }

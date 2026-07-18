@@ -60,14 +60,14 @@
       "control": "select",
       "cvar": "r_renderer",
       "label": "Renderer",
-      "value": "vk",
-      "default_value": "vk",
+      "value": "vulkan",
+      "default_value": "opengl",
       "archive": true,
       "requires_restart": true,
       "dirty": false,
       "options": [
-        { "value": "gl", "label": "OpenGL" },
-        { "value": "vk", "label": "Vulkan" },
+        { "value": "opengl", "label": "OpenGL" },
+        { "value": "vulkan", "label": "Vulkan" },
         { "value": "rtx", "label": "Vulkan RTX" }
       ]
     }

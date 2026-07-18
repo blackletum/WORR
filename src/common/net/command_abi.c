@@ -363,6 +363,21 @@ bool Worr_CommandRecordSemanticHashV1(
     return true;
 }
 
+bool Worr_CommandRecordInputHashV1(
+    const worr_command_record_v1 *record,
+    uint16_t max_duration_ms,
+    uint64_t *hash_out)
+{
+    uint64_t hash;
+    if (!hash_out ||
+        !Worr_CommandRecordValidateV1(record, max_duration_ms)) {
+        return false;
+    }
+    hash = begin_hash(UINT32_C(0x54504e49)); /* INPT */
+    *hash_out = append_record_core(hash, record);
+    return true;
+}
+
 bool Worr_CommandRecordContentHashV1(
     const worr_command_record_v1 *record,
     uint16_t max_duration_ms,

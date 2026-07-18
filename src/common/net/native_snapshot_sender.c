@@ -75,6 +75,37 @@ static bool record_ref_equal(worr_native_record_ref_v1 left,
            left.object_sequence == right.object_sequence;
 }
 
+static bool combined_binding(
+    const worr_native_session_binding_v1 *binding)
+{
+    return binding != NULL &&
+           (binding->negotiated_capabilities &
+            WORR_NET_CAP_NATIVE_EVENT_SNAPSHOT_PRIVATE_MASK) ==
+               WORR_NET_CAP_NATIVE_EVENT_SNAPSHOT_PRIVATE_MASK;
+}
+
+static bool combined_snapshot_sequence_space_valid(
+    const worr_native_snapshot_sender_v1 *sender)
+{
+    uint32_t index;
+
+    if (!combined_binding(&sender->binding))
+        return true;
+    if (sender->tx.next_message_sequence <
+        WORR_NATIVE_COMBINED_SNAPSHOT_MESSAGE_SEQUENCE_FIRST) {
+        return false;
+    }
+    for (index = 0; index < WORR_NATIVE_SNAPSHOT_SENDER_TX_CAPACITY; ++index) {
+        if ((sender->tx_slots[index].state_flags &
+             WORR_NATIVE_TX_SLOT_OCCUPIED) != 0 &&
+            sender->tx_slots[index].message_sequence <
+                WORR_NATIVE_COMBINED_SNAPSHOT_MESSAGE_SEQUENCE_FIRST) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool projection_hashes_equal(
     const worr_snapshot_projection_hashes_v2 *left,
     const worr_snapshot_projection_hashes_v2 *right)
@@ -308,7 +339,8 @@ bool Worr_NativeSnapshotSenderValidateV1(
         (sender->state_flags &
          WORR_NATIVE_SNAPSHOT_SENDER_INITIALIZED) == 0 ||
         !Worr_NativeSessionBindingValidateV1(&sender->binding) ||
-        sender->binding.negotiated_capabilities !=
+        (sender->binding.negotiated_capabilities &
+         WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK) !=
             WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK ||
         sender->max_entities == 0 ||
         sender->max_datagram_bytes <=
@@ -323,9 +355,10 @@ bool Worr_NativeSnapshotSenderValidateV1(
             WORR_NATIVE_SNAPSHOT_SENDER_PAYLOAD_BANKS ||
         sender->reserved0 != 0 ||
         sender->last_tick < sender->tx.last_tick ||
-        !Worr_NativeTxSessionValidateV1(
-            &sender->tx, sender->tx_slots,
-            WORR_NATIVE_SNAPSHOT_SENDER_TX_CAPACITY) ||
+         !Worr_NativeTxSessionValidateV1(
+             &sender->tx, sender->tx_slots,
+             WORR_NATIVE_SNAPSHOT_SENDER_TX_CAPACITY) ||
+         !combined_snapshot_sequence_space_valid(sender) ||
         !Worr_NativeCarrierTxGateValidateV1(&sender->tx_gate) ||
         sender->tx.transport_epoch != sender->binding.transport_epoch ||
         sender->tx.connection_owner_id !=
@@ -646,7 +679,8 @@ worr_native_snapshot_sender_result_v1 Worr_NativeSnapshotSenderInitV1(
         ranges_overlap(sender, sizeof(*sender), binding, sizeof(*binding)))
         return WORR_NATIVE_SNAPSHOT_SENDER_INVALID_ARGUMENT;
     if (!Worr_NativeSessionBindingValidateV1(binding) ||
-        binding->negotiated_capabilities !=
+        (binding->negotiated_capabilities &
+         WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK) !=
             WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK ||
         max_entities == 0 ||
         max_datagram_bytes <=
@@ -663,6 +697,10 @@ worr_native_snapshot_sender_result_v1 Worr_NativeSnapshotSenderInitV1(
             WORR_NATIVE_SNAPSHOT_SENDER_TX_CAPACITY, binding) ||
         !Worr_NativeCarrierTxGateInitV1(&gate, binding))
         return WORR_NATIVE_SNAPSHOT_SENDER_INVALID_STATE;
+    if (combined_binding(binding)) {
+        tx.next_message_sequence =
+            WORR_NATIVE_COMBINED_SNAPSHOT_MESSAGE_SEQUENCE_FIRST;
+    }
 
     memset(sender, 0, sizeof(*sender));
     sender->struct_size = sizeof(*sender);
@@ -694,6 +732,7 @@ worr_native_snapshot_sender_result_v1 Worr_NativeSnapshotSenderQueueV1(
     worr_native_record_ref_v1 record;
     uint32_t encoded_bytes;
     int identity_order;
+    bool sent_ack_wait_active;
     uint32_t index;
     uint32_t handle;
     worr_native_snapshot_sender_payload_v1 *payload;
@@ -756,8 +795,46 @@ worr_native_snapshot_sender_result_v1 Worr_NativeSnapshotSenderQueueV1(
         return WORR_NATIVE_SNAPSHOT_SENDER_STALE_SNAPSHOT;
     }
 
+    /* A receiver may expire an incomplete snapshot and therefore never
+     * authorize its semantic ACK. Preserve ordinary ACK-before-promotion, but
+     * after the shared bounded expiry horizon allow the newest pending view
+     * to supersede the abandoned transport identity. Promoting first frees
+     * the old payload bank; the current queue call can then supersede that
+     * unsent promotion transactionally through the normal path below. */
     if ((sender->tx_gate.state_flags &
-         WORR_NATIVE_CARRIER_TX_GATE_ACTIVE) != 0) {
+         WORR_NATIVE_CARRIER_TX_GATE_ACTIVE) == 0 &&
+        (sender->state_flags &
+         WORR_NATIVE_SNAPSHOT_SENDER_PACKET_PREPARED) == 0 &&
+        sender->tx.retained_count != 0 &&
+        sender->tx_slots[0].send_attempts != 0 &&
+        now_tick >= sender->tx_slots[0].last_send_tick &&
+        now_tick - sender->tx_slots[0].last_send_tick >=
+            WORR_NATIVE_SNAPSHOT_SENDER_MAX_ACK_WAIT_TICKS &&
+        sender->pending_bank !=
+            WORR_NATIVE_SNAPSHOT_SENDER_NO_BANK) {
+        const worr_native_snapshot_sender_result_v1 promoted =
+            promote_pending(sender, now_tick);
+        if (promoted != WORR_NATIVE_SNAPSHOT_SENDER_RETAINED &&
+            promoted != WORR_NATIVE_SNAPSHOT_SENDER_SUPERSEDED) {
+            return promoted;
+        }
+    }
+
+    sent_ack_wait_active = sender->tx.retained_count != 0 &&
+        sender->tx_slots[0].send_attempts != 0 &&
+        now_tick >= sender->tx_slots[0].last_send_tick &&
+        now_tick - sender->tx_slots[0].last_send_tick <
+            WORR_NATIVE_SNAPSHOT_SENDER_MAX_ACK_WAIT_TICKS;
+
+    /* Once any part of a snapshot has reached the transport, retain that
+     * exact message until ACK instead of superseding it at server-frame
+     * cadence.  Otherwise an ordinary RTT longer than one frame makes every
+     * receipt stale before it can return.  The second payload bank keeps only
+     * the newest pending projection and is promoted when the active message
+     * is acknowledged. */
+    if ((sender->tx_gate.state_flags &
+         WORR_NATIVE_CARRIER_TX_GATE_ACTIVE) != 0 ||
+        sent_ack_wait_active) {
         const bool coalescing =
             sender->pending_bank !=
             WORR_NATIVE_SNAPSHOT_SENDER_NO_BANK;
@@ -887,7 +964,6 @@ worr_native_snapshot_sender_result_v1 Worr_NativeSnapshotSenderApplyAcksV1(
     worr_native_carrier_dispatch_v1 staged_dispatch;
     uint32_t old_handle = 0;
     uint32_t acknowledged = 0;
-    bool dispatch_aborted = false;
 
     if (sender == NULL || packet == NULL || packet_bytes == 0 ||
         acknowledged_out == NULL ||
@@ -933,7 +1009,6 @@ worr_native_snapshot_sender_result_v1 Worr_NativeSnapshotSenderApplyAcksV1(
                 &staged_gate, &staged_dispatch) !=
             WORR_NATIVE_CARRIER_SESSION_OK)
             return WORR_NATIVE_SNAPSHOT_SENDER_INVALID_STATE;
-        dispatch_aborted = true;
     }
 
     sender->tx = staged_tx;
@@ -946,7 +1021,9 @@ worr_native_snapshot_sender_result_v1 Worr_NativeSnapshotSenderApplyAcksV1(
         return WORR_NATIVE_SNAPSHOT_SENDER_INVALID_STATE;
     if (!release_unreferenced_payloads(sender))
         return WORR_NATIVE_SNAPSHOT_SENDER_INVALID_STATE;
-    if (dispatch_aborted)
+    if (acknowledged != 0 &&
+        sender->pending_bank !=
+            WORR_NATIVE_SNAPSHOT_SENDER_NO_BANK)
         (void)promote_pending(sender, sender->last_tick);
     saturating_add(
         &sender->telemetry.acknowledgements_applied,
@@ -1191,6 +1268,8 @@ worr_native_snapshot_sender_result_v1 Worr_NativeSnapshotSenderConfirmMixedV1(
         return WORR_NATIVE_SNAPSHOT_SENDER_OK;
     if (!release_unreferenced_payloads(sender))
         return WORR_NATIVE_SNAPSHOT_SENDER_INVALID_STATE;
+    if (sender->tx.retained_count != 0)
+        return WORR_NATIVE_SNAPSHOT_SENDER_OK;
     promoted = promote_pending(sender, handoff_tick);
     if (promoted == WORR_NATIVE_SNAPSHOT_SENDER_RETAINED ||
         promoted == WORR_NATIVE_SNAPSHOT_SENDER_SUPERSEDED ||
@@ -1246,6 +1325,8 @@ worr_native_snapshot_sender_result_v1 Worr_NativeSnapshotSenderRejectMixedV1(
     saturating_increment(&sender->telemetry.packets_rejected);
     if (!release_unreferenced_payloads(sender))
         return WORR_NATIVE_SNAPSHOT_SENDER_INVALID_STATE;
+    if (sender->tx.retained_count != 0)
+        return WORR_NATIVE_SNAPSHOT_SENDER_OK;
     promoted = promote_pending(sender, sender->last_tick);
     if (promoted == WORR_NATIVE_SNAPSHOT_SENDER_RETAINED ||
         promoted == WORR_NATIVE_SNAPSHOT_SENDER_SUPERSEDED ||

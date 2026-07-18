@@ -10,7 +10,7 @@ layout(push_constant) uniform DofPush {
     vec4 params;
     // x = OpenGL-style projection matrix [14].
     vec4 projection;
-    // xy = inclusive rect origin, zw = exclusive rect limit in scene UVs.
+    // xy = inclusive rect origin, zw = exclusive rect limit in target UVs.
     vec4 rect;
 } push_data;
 
@@ -24,9 +24,14 @@ float linearize_depth(float depth) {
 void main() {
     vec2 output_size = max(vec2(textureSize(scene_sampler, 0)), vec2(1.0));
     vec2 tc = gl_FragCoord.xy / output_size;
+    vec2 rect_size = max(push_data.rect.zw - push_data.rect.xy,
+                         vec2(0.000001));
+    // OpenGL assigns full-range texture coordinates to its virtual 2D quad,
+    // including when that quad is clipped by a reduced resolution target.
+    // Rebase native fragment coordinates to the same un-clipped quad range.
+    tc = (tc - push_data.rect.xy) / rect_size;
 
     vec4 scene = texture(scene_sampler, tc);
-
     float focus_dist = push_data.params.x;
     if (focus_dist <= 0.0) {
         focus_dist = linearize_depth(texture(depth_sampler, vec2(0.5)).r);

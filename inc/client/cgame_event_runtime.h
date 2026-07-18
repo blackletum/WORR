@@ -42,6 +42,20 @@ bool CL_CGameEventRuntimeGetStatus(
     worr_cgame_event_runtime_status_v1 *status_out);
 bool CL_CGameEventRuntimeRequiresResync(void);
 
+typedef struct cl_cgame_event_runtime_diagnostic_v1_s {
+    uint32_t reset_epoch;
+    uint32_t reset_sequence;
+    uint32_t reset_result;
+    uint32_t reset_consumer_attached;
+    uint32_t status_valid;
+    uint32_t status_consumer_attached;
+    uint32_t status_owner_failure;
+    worr_cgame_event_runtime_status_v1 status;
+} cl_cgame_event_runtime_diagnostic_v1;
+
+bool CL_CGameEventRuntimeGetDiagnosticV1(
+    cl_cgame_event_runtime_diagnostic_v1 *diagnostic_out);
+
 /* Builds the callback table consumed by the transport-neutral admission core. */
 bool CL_CGameEventRuntimeGetNativeConsumerV1(
     worr_native_event_consumer_v1 *consumer_out);

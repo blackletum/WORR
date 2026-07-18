@@ -27,6 +27,17 @@ extern "C" {
  * Canonical payloads remain opaque and caller-owned throughout.
  */
 #define WORR_NATIVE_SESSION_ABI_VERSION 1u
+/*
+ * Combined event+snapshot sessions share one carrier and ACK wire format.
+ * ACK entries identify only message sequences, not record classes, so the
+ * two semantic senders use disjoint sequence halves.  Event messages remain
+ * in the low half and snapshot messages begin in the high half; a range may
+ * never cross the boundary.
+ */
+#define WORR_NATIVE_COMBINED_EVENT_MESSAGE_SEQUENCE_LAST \
+    UINT32_C(0x7fffffff)
+#define WORR_NATIVE_COMBINED_SNAPSHOT_MESSAGE_SEQUENCE_FIRST \
+    UINT32_C(0x80000000)
 #define WORR_NATIVE_SESSION_MAX_TX_SLOTS 64u
 #define WORR_NATIVE_SESSION_MAX_RX_SLOTS 16u
 #define WORR_NATIVE_SESSION_RECEIPT_HISTORY_CAPACITY 64u

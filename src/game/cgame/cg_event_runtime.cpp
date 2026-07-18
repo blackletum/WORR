@@ -15,6 +15,8 @@ the Free Software Foundation; either version 2 of the License, or
 
 namespace {
 
+cg_local_action_shadow_report_callback_v1 local_action_shadow_report_callback;
+
 enum : std::uint32_t {
     BODY_REQUIRES_SNAPSHOT_REF = 1u << 0,
     BODY_HAS_SNAPSHOT_REF = 1u << 1,
@@ -196,6 +198,22 @@ bool is_local_interaction_authority_receipt(
                sizeof(worr_local_interaction_authority_receipt_v1);
 }
 
+bool is_local_action_shadow_authority_receipt(
+    const worr_event_record_v1 &record)
+{
+    return record.event_type == WORR_EVENT_TYPE_AUTHORITY_RECEIPT &&
+           record.payload_kind ==
+               WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1 &&
+           record.payload_size ==
+               sizeof(worr_local_action_shadow_authority_receipt_v1);
+}
+
+bool is_private_authority_receipt(const worr_event_record_v1 &record)
+{
+    return is_local_interaction_authority_receipt(record) ||
+           is_local_action_shadow_authority_receipt(record);
+}
+
 bool local_interaction_receipt_accepted(
     cg_local_interaction_receipt_result_v1 result)
 {
@@ -215,11 +233,30 @@ bool local_interaction_receipt_accepted(
     return false;
 }
 
+bool local_action_shadow_receipt_accepted(
+    cg_local_action_shadow_receipt_result_v1 result)
+{
+    switch (result) {
+    case cg_local_action_shadow_receipt_result_v1::accepted_unmatched:
+    case cg_local_action_shadow_receipt_result_v1::duplicate:
+    case cg_local_action_shadow_receipt_result_v1::command_matched:
+        return true;
+    case cg_local_action_shadow_receipt_result_v1::command_mismatch:
+    case cg_local_action_shadow_receipt_result_v1::invalid:
+    case cg_local_action_shadow_receipt_result_v1::conflict:
+    case cg_local_action_shadow_receipt_result_v1::capacity:
+    case cg_local_action_shadow_receipt_result_v1::requires_resync:
+        return false;
+    }
+    return false;
+}
+
 void latch_local_interaction_resync()
 {
     if (!runtime.authority_initialized ||
         runtime.status.authority_requires_resync != 0 ||
-        !CG_LocalInteractionRequiresResync()) {
+        (!CG_LocalInteractionRequiresResync() &&
+         !CG_LocalActionShadowRequiresResync())) {
         return;
     }
     runtime.status.authority_requires_resync = 1;
@@ -769,7 +806,7 @@ cg_event_runtime_result_v1 insert_authority(runtime_state_t &state,
     binding->occupied = true;
     if (prediction && prediction->presented)
         binding->state |= AUTHORITY_SIDE_EFFECT_PRESENTED;
-    if (is_local_interaction_authority_receipt(record)) {
+    if (is_private_authority_receipt(record)) {
         /* Authority receipts carry reconciliation evidence only. They are
          * never snapshot-fenced or presented by the generic event runtime. */
         binding->state |= AUTHORITY_SKIP;
@@ -1286,6 +1323,12 @@ cg_event_runtime_result_v1 combine_advance_result(
 
 } // namespace
 
+void CG_EventRuntimeSetLocalActionShadowReportCallback(
+    cg_local_action_shadow_report_callback_v1 callback)
+{
+    local_action_shadow_report_callback = callback;
+}
+
 cg_event_runtime_result_v1
 CG_EventRuntimeResetLegacy(std::uint32_t stream_epoch)
 {
@@ -1467,15 +1510,31 @@ cg_event_runtime_result_v1 CG_EventRuntimeSubmitAuthoritativeBatch(
     commit_staging();
     for (std::uint32_t index = 0; index < count; ++index) {
         const auto &record = records[index];
-        if (!is_local_interaction_authority_receipt(record))
-            continue;
-        worr_local_interaction_authority_receipt_v1 receipt{};
-        std::memcpy(&receipt, record.payload, sizeof(receipt));
-        if (!local_interaction_receipt_accepted(
-                CG_LocalInteractionSubmitAuthorityReceipt(&receipt))) {
-            runtime.status.authority_requires_resync = 1;
-            mark_authority_degraded(runtime);
-            aggregate = CG_EVENT_RUNTIME_DEGRADED;
+        if (is_local_interaction_authority_receipt(record)) {
+            worr_local_interaction_authority_receipt_v1 receipt{};
+            std::memcpy(&receipt, record.payload, sizeof(receipt));
+            if (!local_interaction_receipt_accepted(
+                    CG_LocalInteractionSubmitAuthorityReceipt(&receipt))) {
+                runtime.status.authority_requires_resync = 1;
+                mark_authority_degraded(runtime);
+                aggregate = CG_EVENT_RUNTIME_DEGRADED;
+            }
+        } else if (is_local_action_shadow_authority_receipt(record)) {
+            worr_local_action_shadow_authority_receipt_v1 receipt{};
+            std::memcpy(&receipt, record.payload, sizeof(receipt));
+            const auto receipt_result =
+                CG_LocalActionShadowSubmitAuthorityReceipt(&receipt);
+            if (!local_action_shadow_receipt_accepted(receipt_result)) {
+                runtime.status.authority_requires_resync = 1;
+                mark_authority_degraded(runtime);
+                aggregate = CG_EVENT_RUNTIME_DEGRADED;
+            }
+            // Report at the receipt boundary as well as the prediction pass.
+            // A receipt can complete a pair after the last replay in a frame;
+            // waiting for another replay would make live parity evidence
+            // dependent on renderer/client cadence rather than reconciliation.
+            if (local_action_shadow_report_callback)
+                local_action_shadow_report_callback();
         }
     }
     if (aggregate == CG_EVENT_RUNTIME_DEGRADED)

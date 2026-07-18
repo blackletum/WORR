@@ -26,6 +26,7 @@ which holds all of a player's game-related state.*/
 #include "../menu/menu_ui_helpers.hpp"
 #include "../monsters/m_player.hpp"
 #include "../network/lag_compensation.hpp"
+#include "../network/local_action_observation.hpp"
 #include "p_client_shared.hpp"
 #include "team_join_capacity.hpp"
 
@@ -4256,6 +4257,7 @@ new entry point can gradually replace this procedural implementation.
 */
 bool ClientConnect(gentity_t *ent, char *userInfo, const char *socialID,
                    bool isBot) {
+  SG_LocalActionObservationResetClient(ent);
   LagCompensation_ResetClient(ent);
   auto &service = worr::server::client::GetClientSessionService();
   return service.ClientConnect(gi, game, level, ent, userInfo, socialID, isBot);
@@ -4270,6 +4272,7 @@ Will not be called between levels.
 ============
 */
 void ClientDisconnect(gentity_t *ent) {
+  SG_LocalActionObservationResetClient(ent);
   LagCompensation_ResetClient(ent);
   auto &service = worr::server::client::GetClientSessionService();
   const auto result = service.ClientDisconnect(gi, game, level, ent);

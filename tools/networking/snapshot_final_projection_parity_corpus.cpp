@@ -153,6 +153,35 @@ struct frame_carrier_t {
     std::vector<q2proto_svc_frame_entity_delta_t> deltas;
 };
 
+void decoded_coords_to_server_write(q2proto_maybe_diff_coords_t &coords)
+{
+    q2proto_vec3_t current;
+    q2proto_var_coords_get_float(&coords.read.value.values, current);
+    std::memset(&coords, 0, sizeof(coords));
+    q2proto_var_coords_set_float(&coords.write.prev, current);
+    q2proto_var_coords_set_float(&coords.write.current, current);
+}
+
+q2proto_entity_state_delta_t server_write_delta(
+    const q2proto_entity_state_delta_t &decoded)
+{
+    auto result = decoded;
+    decoded_coords_to_server_write(result.origin);
+    return result;
+}
+
+frame_carrier_t server_write_carrier(const frame_carrier_t &decoded)
+{
+    auto result = decoded;
+    result.frame.areabits = result.area.data();
+    decoded_coords_to_server_write(result.frame.playerstate.pm_origin);
+    decoded_coords_to_server_write(result.frame.playerstate.pm_velocity);
+    for (auto &delta : result.deltas) {
+        delta.entity_delta = server_write_delta(delta.entity_delta);
+    }
+    return result;
+}
+
 q2proto_entity_state_delta_t full_entity_delta(
     const entity_model_t &model, uint8_t event)
 {
@@ -471,10 +500,14 @@ sv_snapshot_shadow_ref_v1 publish_server(
     uint32_t movement_type, uint16_t movement_flags, uint8_t team_id,
     uint32_t ordinal, bool truncated, bool fragment_stall)
 {
+    /* q2proto exposes direction-specific union members: the independent
+     * receiver consumes decoded read coordinates, while the production server
+     * adapter observes write.previous/current coordinates before emission. */
+    auto server_carrier = server_write_carrier(carrier);
     sv_snapshot_shadow_frame_v1 input{};
     input.struct_size = sizeof(input);
     input.schema_version = SV_SNAPSHOT_SHADOW_VERSION;
-    input.wire_frame = &carrier.frame;
+    input.wire_frame = &server_carrier.frame;
     input.authoritative_server_tick = server_tick;
     input.authoritative_tick_delta = tick_delta;
     input.authoritative_server_time_us = server_time_us;
@@ -490,7 +523,7 @@ sv_snapshot_shadow_ref_v1 publish_server(
     }
     CHECK(SV_SnapshotShadowBeginFrameV1(peer, &input) ==
           SV_SNAPSHOT_SHADOW_OK);
-    for (const auto &delta : carrier.deltas) {
+    for (const auto &delta : server_carrier.deltas) {
         CHECK(SV_SnapshotShadowCaptureEntityDeltaV1(peer, &delta) ==
               SV_SNAPSHOT_SHADOW_OK);
     }
@@ -664,17 +697,18 @@ void reject_overwritten_base(
         current_wire, overwritten_base, ordinal, 1, false, empty, empty,
         false, false);
     carrier.frame.areabits = carrier.area.data();
+    auto server_carrier = server_write_carrier(carrier);
     sv_snapshot_shadow_frame_v1 server_input{};
     server_input.struct_size = sizeof(server_input);
     server_input.schema_version = SV_SNAPSHOT_SHADOW_VERSION;
-    server_input.wire_frame = &carrier.frame;
+    server_input.wire_frame = &server_carrier.frame;
     server_input.authoritative_server_tick = server_tick;
     server_input.authoritative_tick_delta = 1;
     server_input.authoritative_server_time_us = server_time_us;
     server_input.controlled_entity_index = controlled_entity;
     CHECK(SV_SnapshotShadowBeginFrameV1(peer, &server_input) ==
           SV_SNAPSHOT_SHADOW_OK);
-    for (const auto &delta : carrier.deltas) {
+    for (const auto &delta : server_carrier.deltas) {
         CHECK(SV_SnapshotShadowCaptureEntityDeltaV1(peer, &delta) ==
               SV_SNAPSHOT_SHADOW_OK);
     }
@@ -702,7 +736,9 @@ void run_session(uint32_t count, int32_t first_wire, uint32_t epoch,
     CHECK(peer != nullptr);
     projector_t receiver(options.retention_slots, epoch);
     const auto baseline = baseline_delta();
-    CHECK(SV_SnapshotShadowSetBaselineV1(peer, baseline_entity, &baseline) ==
+    const auto server_baseline = server_write_delta(baseline);
+    CHECK(SV_SnapshotShadowSetBaselineV1(
+              peer, baseline_entity, &server_baseline) ==
           SV_SNAPSHOT_SHADOW_OK);
     CHECK(Worr_SnapshotQ2ProtoSetBaselineV2(
               &receiver.context, baseline_entity, &baseline) ==

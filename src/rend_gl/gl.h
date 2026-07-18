@@ -370,6 +370,7 @@ extern cvar_t *r_overBrightBits;
 extern cvar_t *r_mapOverBrightBits;
 extern cvar_t *r_mapOverBrightCap;
 extern cvar_t *gl_brightness;
+extern cvar_t *r_lightmap_brightness;
 extern cvar_t *gl_dynamic;
 extern cvar_t *gl_dlight_falloff;
 extern cvar_t *gl_modulate_entities;

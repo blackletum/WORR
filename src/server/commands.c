@@ -812,15 +812,30 @@ Stable, scalar-only rows consumed by the staged two-process impairment gate.
 static void SV_WorrNativeShadowStatus_f(void)
 {
     client_t *client;
+    int requested_slot = -1;
 
     if (!svs.initialized) {
         Com_Printf("No server running.\n");
         return;
     }
+    if (Cmd_Argc() > 2 ||
+        (Cmd_Argc() == 2 && !COM_IsUint(Cmd_Argv(1)))) {
+        Com_Printf("Usage: sv_worr_native_shadow_status [slot]\n");
+        return;
+    }
+    if (Cmd_Argc() == 2) {
+        requested_slot = Q_atoi(Cmd_Argv(1));
+        if (requested_slot < 0 || requested_slot >= svs.maxclients) {
+            Com_Printf("sv_worr_native_shadow_status: invalid slot\n");
+            return;
+        }
+    }
 
     FOR_EACH_CLIENT(client) {
         sv_native_shadow_status_v1 status;
 
+        if (requested_slot >= 0 && client->number != requested_slot)
+            continue;
         if (client->state <= cs_zombie || !client->worr_native_shadow)
             continue;
         memset(&status, 0, sizeof(status));
@@ -847,7 +862,7 @@ static void SV_WorrNativeShadowStatus_f(void)
             "cancelled_receipts=%llu cancelled_event_records=%llu "
             "stale_cancelled_carriers=%llu "
             "stale_cancelled_readiness_records=%llu "
-            "last_failure=%u\n",
+            "last_failure=%u last_failure_detail=0x%08x\n",
             status.schema_version, client->number, client->protocol,
             status.enabled, status.lifecycle, status.hooks_attached,
             status.readiness_phase, status.official_connection_epoch,
@@ -886,11 +901,37 @@ static void SV_WorrNativeShadowStatus_f(void)
             (unsigned long long)status.cancelled_event_records,
             (unsigned long long)status.stale_cancelled_carriers,
             (unsigned long long)status.stale_cancelled_readiness_records,
-            status.last_failure);
+            status.last_failure, status.last_failure_detail);
 
-        if (client->worr_native_shadow->mode ==
-            SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
+        if (SV_NativeShadowModeHasSnapshotV1(
+                client->worr_native_shadow->mode)) {
             sv_native_shadow_snapshot_status_v1 snapshot_status;
+            sv_snapshot_shadow_status_v1 emission_status;
+
+            memset(&emission_status, 0, sizeof(emission_status));
+            if (SV_SnapshotShadowGetStatusV1(
+                    client->worr_snapshot_shadow, &emission_status)) {
+                Com_Printf(
+                    "WORR_SNAPSHOT_EMISSION_STATUS_V1 schema=%u "
+                    "slot=%d active=%u pending=%u last_result=%u "
+                    "last_project_result=%u pending_deltas=%u "
+                    "retained=%u snapshot_epoch=%u attempts=%llu "
+                    "captures=%llu aborts=%llu project_failures=%llu "
+                    "base_failures=%llu committed=%llu\n",
+                    emission_status.schema_version, client->number,
+                    emission_status.active, emission_status.pending,
+                    emission_status.last_result,
+                    emission_status.last_project_result,
+                    emission_status.pending_delta_count,
+                    emission_status.retained_count,
+                    emission_status.snapshot_epoch,
+                    (unsigned long long)emission_status.frame_attempts,
+                    (unsigned long long)emission_status.delta_captures,
+                    (unsigned long long)emission_status.pending_aborts,
+                    (unsigned long long)emission_status.project_failures,
+                    (unsigned long long)emission_status.base_ref_failures,
+                    (unsigned long long)emission_status.frames_committed);
+            }
 
             memset(&snapshot_status, 0, sizeof(snapshot_status));
             if (SV_NativeShadowGetSnapshotStatusV1(

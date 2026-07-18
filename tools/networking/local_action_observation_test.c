@@ -121,11 +121,49 @@ static int test_fail_closed_and_corruption(void)
     return 0;
 }
 
+static int test_bounded_timer_decay_continuity(void)
+{
+    worr_local_action_observation_state_v1 earlier = make_state();
+    worr_local_action_observation_state_v1 later = earlier;
+
+    earlier.think_remaining_ms = 120;
+    earlier.fire_remaining_ms = 80;
+    later.think_remaining_ms = 104;
+    later.fire_remaining_ms = 64;
+    CHECK(Worr_LocalActionObservationStatesContiguousV1(
+        &earlier, &later, 16));
+
+    later.presentation_frame++;
+    CHECK(!Worr_LocalActionObservationStatesContiguousV1(
+        &earlier, &later, 16));
+    later = earlier;
+    later.think_remaining_ms -= 16;
+    later.fire_remaining_ms -= 15;
+    CHECK(!Worr_LocalActionObservationStatesContiguousV1(
+        &earlier, &later, 16));
+    later = earlier;
+    later.think_remaining_ms += 1;
+    later.fire_remaining_ms += 1;
+    CHECK(!Worr_LocalActionObservationStatesContiguousV1(
+        &earlier, &later, 16));
+    later = earlier;
+    later.think_remaining_ms -= 17;
+    later.fire_remaining_ms -= 17;
+    CHECK(!Worr_LocalActionObservationStatesContiguousV1(
+        &earlier, &later, 16));
+    CHECK(!Worr_LocalActionObservationStatesContiguousV1(
+        &earlier, &earlier, 0));
+    return 0;
+}
+
 int main(void)
 {
     int result;
     result = test_valid_record_and_differences();
     if (result)
         return result;
-    return test_fail_closed_and_corruption();
+    result = test_fail_closed_and_corruption();
+    if (result)
+        return result;
+    return test_bounded_timer_decay_continuity();
 }

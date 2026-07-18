@@ -2,6 +2,7 @@
 // Licensed under the GNU General Public License 2.0.
 
 #include "lag_compensation.hpp"
+#include "local_action_observation.hpp"
 #include "rewind_collision_import.hpp"
 #include "shared/command_context.h"
 
@@ -257,6 +258,16 @@ struct CanonicalRailProbeState {
   // world projectile proof tracks that authenticated firing command without
   // weakening the initial attack admission proof.
   worr_command_id_v1 projectile_command_id{};
+  // The observation ledger is intentionally bounded.  Retain an immutable
+  // value-copy once this probe has proved the exact scoped/leased join so a
+  // slow diagnostic transport cannot miss the short-lived ledger row.  This
+  // is fixture evidence only and never feeds weapon or receipt authority.
+  bool local_action_proof_ready = false;
+  worr_command_id_v1 local_action_proof_command_id{};
+  worr_local_action_observation_record_v1 local_action_proof_scoped{};
+  worr_local_action_observation_record_v1 local_action_proof_leased{};
+  worr_local_action_observation_record_v1 local_action_proof_joined{};
+  worr_local_action_shadow_v1 local_action_proof_shadow{};
   Vector3 shooter_origin{};
   Vector3 historical_target_origin{64.0f, 192.0f, 64.0f};
   Vector3 current_target_origin{};
@@ -2499,7 +2510,91 @@ void CanonicalRailProbePublish() {
     status = "pending";
   const uint32_t armed = canonicalRailProbe.stage != CanonicalRailProbeStage::Idle;
   const uint32_t damageApplied = CanonicalRailProbeDamageApplied();
-  char value[640]{};
+  SG_LocalActionObservationCatalogTelemetry localActionTelemetry{};
+  const bool localActionTelemetryReady =
+      SG_LocalActionObservationCopyCatalogTelemetry(&localActionTelemetry);
+  worr_local_action_observation_record_v1 localActionScoped =
+      canonicalRailProbe.local_action_proof_scoped;
+  worr_local_action_observation_record_v1 localActionLeased =
+      canonicalRailProbe.local_action_proof_leased;
+  worr_local_action_observation_record_v1 localActionJoined =
+      canonicalRailProbe.local_action_proof_joined;
+  worr_local_action_shadow_v1 localActionShadow =
+      canonicalRailProbe.local_action_proof_shadow;
+  const std::size_t shooterIndex = ClientIndex(canonicalRailProbe.shooter);
+  worr_command_id_v1 localActionCommandId =
+      canonicalRailProbe.local_action_proof_ready
+          ? canonicalRailProbe.local_action_proof_command_id
+          : canonicalRailProbe.projectile_command_id;
+  bool localActionCommandValid =
+      (canonicalRailProbe.local_action_proof_ready ||
+       shooterIndex < static_cast<std::size_t>(MAX_CLIENTS_KEX)) &&
+      Worr_CommandIdValidV1(localActionCommandId, false);
+  bool localActionShadowReady =
+      canonicalRailProbe.local_action_proof_ready ||
+      (localActionCommandValid &&
+      SG_LocalActionObservationCopyShadowForCommand(
+          static_cast<uint32_t>(shooterIndex), localActionCommandId,
+          &localActionShadow));
+  if (!canonicalRailProbe.local_action_proof_ready &&
+      !localActionShadowReady && localActionCommandValid &&
+      Worr_CommandIdValidV1(canonicalRailProbe.command_id, false)) {
+    /* Generic weapon callbacks may run in the next server frame under the
+     * preceding command's bounded lease.  Select only an exact joined,
+     * attack-bearing shadow inside this probe's already-admitted command
+     * interval; projectile authority remains bound to its original ID. */
+    worr_command_id_v1 leasedCommandId{};
+    worr_local_action_shadow_v1 leasedShadow{};
+    if (SG_LocalActionObservationCopyLatestAttackShadowInRange(
+            static_cast<uint32_t>(shooterIndex),
+            canonicalRailProbe.command_id,
+            canonicalRailProbe.projectile_command_id, &leasedCommandId,
+            &leasedShadow)) {
+      localActionCommandId = leasedCommandId;
+      localActionShadow = leasedShadow;
+      localActionShadowReady = true;
+      localActionCommandValid =
+          Worr_CommandIdValidV1(localActionCommandId, false);
+    }
+  }
+  bool localActionScopedReady =
+      canonicalRailProbe.local_action_proof_ready ||
+      (localActionCommandValid &&
+      SG_LocalActionObservationCopyScopedRecordForCommand(
+          static_cast<uint32_t>(shooterIndex),
+          localActionCommandId, &localActionScoped));
+  bool localActionLeasedReady =
+      canonicalRailProbe.local_action_proof_ready ||
+      (localActionCommandValid &&
+      SG_LocalActionObservationCopyLeasedRecordForCommand(
+          static_cast<uint32_t>(shooterIndex),
+          localActionCommandId, &localActionLeased));
+  bool localActionContinuityExact =
+      localActionScopedReady && localActionLeasedReady &&
+      Worr_CommandRecordSemanticallyEqualV1(
+          &localActionScoped.command, &localActionLeased.command,
+          WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS) &&
+      Worr_LocalActionObservationStatesContiguousV1(
+          &localActionScoped.state_after, &localActionLeased.state_before,
+          WORR_LOCAL_ACTION_OBSERVATION_MAX_CONTINUITY_ELAPSED_MS);
+  bool localActionJoinedReady =
+      canonicalRailProbe.local_action_proof_ready ||
+      (localActionCommandValid &&
+      SG_LocalActionObservationCopyJoinedRecordForCommand(
+          static_cast<uint32_t>(shooterIndex),
+          localActionCommandId, &localActionJoined));
+  if (!canonicalRailProbe.local_action_proof_ready &&
+      localActionCommandValid && localActionScopedReady &&
+      localActionLeasedReady && localActionContinuityExact &&
+      localActionJoinedReady && localActionShadowReady) {
+    canonicalRailProbe.local_action_proof_ready = true;
+    canonicalRailProbe.local_action_proof_command_id = localActionCommandId;
+    canonicalRailProbe.local_action_proof_scoped = localActionScoped;
+    canonicalRailProbe.local_action_proof_leased = localActionLeased;
+    canonicalRailProbe.local_action_proof_joined = localActionJoined;
+    canonicalRailProbe.local_action_proof_shadow = localActionShadow;
+  }
+  char value[1024]{};
   std::snprintf(
       value, sizeof(value),
       "%s:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%llu:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%llu:%llu:%llu:%llu:%llu:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%llu:%llu:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u:%u", status, armed,
@@ -2565,6 +2660,31 @@ void CanonicalRailProbePublish() {
       canonicalRailProbe.historical_mover_occlusion_observed ? 1u : 0u,
       canonicalRailProbe.historical_mover_target_undamaged ? 1u : 0u,
       canonicalRailProbe.historical_mover_history_count);
+  const std::size_t valueLength = std::strlen(value);
+  std::snprintf(
+      value + valueLength, sizeof(value) - valueLength,
+      ":%u:%u:%llu:%llu:%llu:%llu:%llu:%llu:%llu:%u:%u:%u:%u:%u:%u"
+      ":%u:%u:%u:%u:%llu",
+      localActionTelemetryReady && localActionTelemetry.catalog_ready ? 1u : 0u,
+      localActionTelemetryReady && localActionTelemetry.lease_ready ? 1u : 0u,
+      static_cast<unsigned long long>(localActionTelemetry.lease_offers),
+      static_cast<unsigned long long>(localActionTelemetry.lease_supersedes),
+      static_cast<unsigned long long>(localActionTelemetry.lease_duplicates),
+      static_cast<unsigned long long>(localActionTelemetry.lease_rebases),
+      static_cast<unsigned long long>(localActionTelemetry.lease_claims),
+      static_cast<unsigned long long>(localActionTelemetry.lease_expired),
+      static_cast<unsigned long long>(localActionTelemetry.lease_rejected),
+      localActionCommandId.epoch,
+      localActionCommandId.sequence,
+      localActionScopedReady ? 1u : 0u,
+      localActionLeasedReady ? 1u : 0u,
+      localActionContinuityExact ? 1u : 0u,
+      localActionJoinedReady ? 1u : 0u,
+      localActionShadowReady ? 1u : 0u,
+      localActionShadow.catalog_id,
+      localActionShadow.flags,
+      localActionShadow.semantics.v2_blockers,
+      static_cast<unsigned long long>(localActionShadow.record_hash));
   gi.cvarForceSet("sg_worr_rewind_canonical_rail_damage_status", value);
   gi.cvarForceSet("sg_worr_rewind_canonical_rail_mover_occlusion_status",
                   value);
@@ -6005,6 +6125,11 @@ bool LagCompensation_ArmCanonicalShotgunDamageRuntimeProbe() {
 void LagCompensation_PrepareCanonicalWeaponDamageCommand(gentity_t *entity,
                                                           usercmd_t *command) {
   CanonicalRailProbePrepareCommand(entity, command);
+}
+
+void LagCompensation_RefreshCanonicalWeaponDamageRuntimeProof() {
+  if (canonicalRailProbe.stage != CanonicalRailProbeStage::Idle)
+    CanonicalRailProbePublish();
 }
 
 void LagCompensation_RecordDeferredProjectileForwardCommand(

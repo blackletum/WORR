@@ -13,6 +13,7 @@ the Free Software Foundation; either version 2 of the License, or
 #include "vk_shadow.h"
 #include "vk_ui.h"
 #include "vk_world_spv.h"
+#include "refresh/images.h"
 #include "renderer/view_setup.h"
 
 #include <math.h>
@@ -183,6 +184,9 @@ static cvar_t *vk_gl_modulate;
 static cvar_t *vk_gl_modulate_world;
 static cvar_t *vk_gl_modulate_entities;
 static cvar_t *vk_gl_brightness;
+static cvar_t *vk_r_lightmap_brightness;
+static cvar_t *vk_gl_coloredlightmaps;
+static cvar_t *vk_r_lightmap_saturation;
 static cvar_t *vk_map_overbright_bits;
 static cvar_t *vk_map_overbright_cap;
 static cvar_t *vk_r_intensity;
@@ -190,6 +194,8 @@ static cvar_t *vk_intensity_legacy;
 static cvar_t *vk_r_fullbright;
 static cvar_t *vk_r_glowmap_intensity;
 static bool vk_intensity_syncing;
+static bool vk_lightmap_brightness_syncing;
+static bool vk_lightmap_saturation_syncing;
 
 static void VK_World_IntensityChanged(cvar_t *self)
 {
@@ -209,7 +215,8 @@ static void VK_World_IntensityChanged(cvar_t *self)
 static void VK_World_RegisterIntensityCvars(void)
 {
     vk_intensity_legacy = Cvar_Get("intensity", "1", 0);
-    vk_r_intensity = Cvar_Get("r_intensity", vk_intensity_legacy->string, 0);
+    vk_r_intensity = Cvar_Get("r_intensity", vk_intensity_legacy->string,
+                              CVAR_ARCHIVE);
 
     // Native Vulkan applies intensity in the receiver shaders, so neither
     // spelling requires a texture reload.
@@ -237,6 +244,112 @@ static void VK_World_UnregisterIntensityCvars(void)
         vk_r_intensity->changed = NULL;
     }
     vk_intensity_syncing = false;
+}
+
+static void VK_World_LightmapBrightnessChanged(cvar_t *self)
+{
+    if (vk_lightmap_brightness_syncing || !self) {
+        return;
+    }
+
+    vk_lightmap_brightness_syncing = true;
+    if (self == vk_r_lightmap_brightness && vk_gl_brightness) {
+        Cvar_SetByVar(vk_gl_brightness, self->string, FROM_CODE);
+    } else if (self == vk_gl_brightness && vk_r_lightmap_brightness) {
+        Cvar_SetByVar(vk_r_lightmap_brightness, self->string, FROM_CODE);
+    }
+    vk_lightmap_brightness_syncing = false;
+}
+
+static void VK_World_RegisterLightmapBrightnessCvars(void)
+{
+    vk_gl_brightness = Cvar_Get("gl_brightness", "0", 0);
+    vk_r_lightmap_brightness =
+        Cvar_Get("r_lightmap_brightness", vk_gl_brightness->string,
+                 CVAR_ARCHIVE);
+
+    if (!(vk_r_lightmap_brightness->flags & CVAR_MODIFIED) &&
+        (vk_gl_brightness->flags & CVAR_MODIFIED)) {
+        Cvar_SetByVar(vk_r_lightmap_brightness, vk_gl_brightness->string,
+                      FROM_CODE);
+    } else {
+        Cvar_SetByVar(vk_gl_brightness, vk_r_lightmap_brightness->string,
+                      FROM_CODE);
+    }
+
+    vk_gl_brightness->changed = VK_World_LightmapBrightnessChanged;
+    vk_r_lightmap_brightness->changed = VK_World_LightmapBrightnessChanged;
+}
+
+static void VK_World_UnregisterLightmapBrightnessCvars(void)
+{
+    if (vk_gl_brightness &&
+        vk_gl_brightness->changed == VK_World_LightmapBrightnessChanged) {
+        vk_gl_brightness->changed = NULL;
+    }
+    if (vk_r_lightmap_brightness &&
+        vk_r_lightmap_brightness->changed == VK_World_LightmapBrightnessChanged) {
+        vk_r_lightmap_brightness->changed = NULL;
+    }
+
+    vk_gl_brightness = NULL;
+    vk_r_lightmap_brightness = NULL;
+    vk_lightmap_brightness_syncing = false;
+}
+
+static void VK_World_LightmapSaturationChanged(cvar_t *self)
+{
+    if (vk_lightmap_saturation_syncing || !self) {
+        return;
+    }
+
+    vk_lightmap_saturation_syncing = true;
+    if (self == vk_r_lightmap_saturation && vk_gl_coloredlightmaps) {
+        Cvar_SetByVar(vk_gl_coloredlightmaps, self->string, FROM_CODE);
+    } else if (self == vk_gl_coloredlightmaps && vk_r_lightmap_saturation) {
+        Cvar_SetByVar(vk_r_lightmap_saturation, self->string, FROM_CODE);
+    }
+    vk_lightmap_saturation_syncing = false;
+
+    // Lightmap styles are rebuilt in the normal native update path. Marking
+    // the cache invalid refreshes every resident atlas face next frame.
+    vk_world.style_cache_valid = false;
+}
+
+static void VK_World_RegisterLightmapSaturationCvars(void)
+{
+    vk_gl_coloredlightmaps = Cvar_Get("gl_coloredlightmaps", "1", 0);
+    vk_r_lightmap_saturation =
+        Cvar_Get("r_lightmap_saturation", vk_gl_coloredlightmaps->string,
+                 CVAR_ARCHIVE);
+
+    if (!(vk_r_lightmap_saturation->flags & CVAR_MODIFIED) &&
+        (vk_gl_coloredlightmaps->flags & CVAR_MODIFIED)) {
+        Cvar_SetByVar(vk_r_lightmap_saturation,
+                      vk_gl_coloredlightmaps->string, FROM_CODE);
+    } else {
+        Cvar_SetByVar(vk_gl_coloredlightmaps,
+                      vk_r_lightmap_saturation->string, FROM_CODE);
+    }
+
+    vk_gl_coloredlightmaps->changed = VK_World_LightmapSaturationChanged;
+    vk_r_lightmap_saturation->changed = VK_World_LightmapSaturationChanged;
+}
+
+static void VK_World_UnregisterLightmapSaturationCvars(void)
+{
+    if (vk_gl_coloredlightmaps &&
+        vk_gl_coloredlightmaps->changed == VK_World_LightmapSaturationChanged) {
+        vk_gl_coloredlightmaps->changed = NULL;
+    }
+    if (vk_r_lightmap_saturation &&
+        vk_r_lightmap_saturation->changed == VK_World_LightmapSaturationChanged) {
+        vk_r_lightmap_saturation->changed = NULL;
+    }
+
+    vk_gl_coloredlightmaps = NULL;
+    vk_r_lightmap_saturation = NULL;
+    vk_lightmap_saturation_syncing = false;
 }
 
 static inline bool VK_World_Check(VkResult result, const char *what)
@@ -1315,10 +1428,10 @@ float VK_World_LightmapModulate(void)
 
 float VK_World_LightmapAdd(void)
 {
-    if (!vk_gl_brightness) {
+    if (!vk_r_lightmap_brightness) {
         return 0.0f;
     }
-    return Cvar_ClampValue(vk_gl_brightness, -1, 1);
+    return Cvar_ClampValue(vk_r_lightmap_brightness, -1, 1);
 }
 
 float VK_World_EntityModulate(void)
@@ -1328,6 +1441,12 @@ float VK_World_EntityModulate(void)
     }
     return Cvar_ClampValue(vk_gl_modulate, 0, 1e6f) *
            Cvar_ClampValue(vk_gl_modulate_entities, 0, 1e6f);
+}
+
+static float VK_World_LightmapSaturation(void)
+{
+    return vk_r_lightmap_saturation
+        ? Cvar_ClampValue(vk_r_lightmap_saturation, 0, 1) : 1.0f;
 }
 
 float VK_World_Intensity(void)
@@ -1415,8 +1534,9 @@ static inline void VK_World_AdjustLightColor(vec3_t color)
     VectorScale(color, 1.0f / 255.0f, color);
 }
 
-// Mirrors GL_AdjustColor for CPU-sampled entity light: brightness add and
-// entity modulate on top of the 0..255 style-accumulated sample.
+// Mirrors GL_AdjustColor for CPU-sampled entity light: brightness add,
+// entity modulate, then lightmap saturation on top of the normalized
+// style-accumulated sample.
 static inline void VK_World_AdjustEntityLightColor(vec3_t color)
 {
     float add = VK_World_LightmapAdd();
@@ -1424,6 +1544,14 @@ static inline void VK_World_AdjustEntityLightColor(vec3_t color)
 
     for (int i = 0; i < 3; i++) {
         color[i] = max((color[i] + add) * modulate, 0.0f);
+    }
+
+    const float saturation = VK_World_LightmapSaturation();
+    if (saturation != 1.0f) {
+        const float luminance = LUMINANCE(color[0], color[1], color[2]);
+        color[0] = luminance + (color[0] - luminance) * saturation;
+        color[1] = luminance + (color[1] - luminance) * saturation;
+        color[2] = luminance + (color[2] - luminance) * saturation;
     }
 }
 
@@ -1656,6 +1784,13 @@ static void VK_World_BuildFaceLightmapPixels(const mface_t *face,
             }
 
             VK_World_AdjustLightColor(light);
+            const float saturation = VK_World_LightmapSaturation();
+            if (saturation != 1.0f) {
+                const float luminance = LUMINANCE(light[0], light[1], light[2]);
+                light[0] = luminance + (light[0] - luminance) * saturation;
+                light[1] = luminance + (light[1] - luminance) * saturation;
+                light[2] = luminance + (light[2] - luminance) * saturation;
+            }
             light[0] = max(0.0f, min(8.0f, light[0]));
             light[1] = max(0.0f, min(8.0f, light[1]));
             light[2] = max(0.0f, min(8.0f, light[2]));
@@ -2817,7 +2952,8 @@ static bool VK_World_CreatePipelineVariant(vk_context_t *ctx, bool alpha_blend,
 
     VkPipelineMultisampleStateCreateInfo multisample = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .rasterizationSamples = bloom_extract ? VK_SAMPLE_COUNT_1_BIT
+                                              : ctx->scene_samples,
         .sampleShadingEnable = VK_FALSE,
     };
 
@@ -2897,6 +3033,31 @@ static bool VK_World_CreatePipelineVariant(vk_context_t *ctx, bool alpha_blend,
                                                        &info, NULL, out_pipeline),
                              pipeline_name);
 
+    // Every scene pipeline gets a native one-sample companion while the
+    // renderer has MSAA enabled. It is selected only for frames that need the
+    // OpenGL-compatible depth-aware post-process input; bloom extraction is
+    // already single-sample and therefore has no companion.
+    if (ok && !bloom_extract && ctx->scene_single_sample_render_pass) {
+        VkPipeline single_sample_pipeline = VK_NULL_HANDLE;
+        multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        info.renderPass = ctx->scene_single_sample_render_pass;
+        ok = VK_World_Check(vkCreateGraphicsPipelines(
+                                ctx->device, VK_NULL_HANDLE, 1, &info, NULL,
+                                &single_sample_pipeline),
+                            "vkCreateGraphicsPipelines(world single sample)");
+        if (ok) {
+            ok = VK_RegisterScenePipelineVariant(
+                ctx, *out_pipeline, single_sample_pipeline);
+        }
+        if (!ok) {
+            if (single_sample_pipeline) {
+                vkDestroyPipeline(ctx->device, single_sample_pipeline, NULL);
+            }
+            vkDestroyPipeline(ctx->device, *out_pipeline, NULL);
+            *out_pipeline = VK_NULL_HANDLE;
+        }
+    }
+
     vkDestroyShaderModule(ctx->device, vert_shader, NULL);
     vkDestroyShaderModule(ctx->device, frag_shader, NULL);
 
@@ -2935,9 +3096,6 @@ bool VK_World_Init(vk_context_t *ctx)
     if (!vk_gl_modulate_entities) {
         vk_gl_modulate_entities = Cvar_Get("gl_modulate_entities", "1", 0);
     }
-    if (!vk_gl_brightness) {
-        vk_gl_brightness = Cvar_Get("gl_brightness", "0", 0);
-    }
     if (!vk_map_overbright_bits) {
         vk_map_overbright_bits = Cvar_Get("r_map_overbright_bits", "0",
                                           CVAR_ARCHIVE | CVAR_FILES);
@@ -2953,6 +3111,8 @@ bool VK_World_Init(vk_context_t *ctx)
         vk_r_glowmap_intensity = Cvar_Get("r_glowmap_intensity", "1", 0);
     }
     VK_World_RegisterIntensityCvars();
+    VK_World_RegisterLightmapBrightnessCvars();
+    VK_World_RegisterLightmapSaturationCvars();
 
     if (!ctx) {
         Com_SetLastError("Vulkan world: context is missing");
@@ -3203,6 +3363,8 @@ bool VK_World_CreateSwapchainResources(vk_context_t *ctx)
 void VK_World_Shutdown(vk_context_t *ctx)
 {
     VK_World_UnregisterIntensityCvars();
+    VK_World_UnregisterLightmapBrightnessCvars();
+    VK_World_UnregisterLightmapSaturationCvars();
     if (!vk_world.initialized) {
         return;
     }
@@ -3669,7 +3831,10 @@ void VK_World_RecordOpaque(VkCommandBuffer cmd, const VkExtent2D *extent)
         // cross clip-space precision boundaries.
         const bool use_sky_array = vk_world.sky_array_descriptor_set != VK_NULL_HANDLE;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          use_sky_array ? vk_world.pipeline_sky_array : vk_world.pipeline_sky);
+                          VK_SelectScenePipeline(
+                              vk_world.ctx, use_sky_array
+                                  ? vk_world.pipeline_sky_array
+                                  : vk_world.pipeline_sky));
         VkDescriptorSet sky_lightmap_set = vk_world.sky_lightmap_white_set
             ? vk_world.sky_lightmap_white_set : vk_world.lightmap_descriptor_set;
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -3724,7 +3889,16 @@ void VK_World_RecordOpaque(VkCommandBuffer cmd, const VkExtent2D *extent)
     const uint8_t fast_lit_glowmap_vertex_flags =
         VK_WORLD_VERTEX_LIGHTMAPPED | VK_WORLD_VERTEX_INTENSITY |
         VK_WORLD_VERTEX_GLOWMAP;
-    const uint8_t texture_replace_vertex_flags = VK_WORLD_VERTEX_INTENSITY;
+    // OpenGL rebuilds ordinary opaque world surfaces as GLS_TEXTURE_REPLACE
+    // while global r_fullbright is active.  Vulkan keeps the world geometry
+    // immutable, so select the equivalent native material pipeline at draw
+    // time instead.  Lightmap and glow-map inputs are inert in that mode;
+    // alpha-tested, translucent, warped, and sky batches remain on the
+    // complete native path because they retain material-specific work.
+    const uint8_t texture_replace_vertex_flags = world_fullbright
+        ? VK_WORLD_VERTEX_LIGHTMAPPED | VK_WORLD_VERTEX_INTENSITY |
+              VK_WORLD_VERTEX_GLOWMAP
+        : VK_WORLD_VERTEX_INTENSITY;
     uint32_t fast_lit_candidates = 0;
     uint32_t fast_lit_disabled = 0;
     uint32_t fast_lit_fullbright = 0;
@@ -3790,7 +3964,7 @@ void VK_World_RecordOpaque(VkCommandBuffer cmd, const VkExtent2D *extent)
         const bool texture_replace_no_fog = texture_replace &&
             fast_lit_no_fog_enabled && !surface_fog_active &&
             vk_world.pipeline_texture_replace_no_fog_opaque;
-        const VkPipeline target_pipeline = fast_lit_glowmap_no_fog
+        const VkPipeline selected_pipeline = fast_lit_glowmap_no_fog
             ? vk_world.pipeline_fast_lit_glowmap_no_fog_opaque
             : fast_lit_glowmap
             ? vk_world.pipeline_fast_lit_glowmap_opaque
@@ -3801,6 +3975,8 @@ void VK_World_RecordOpaque(VkCommandBuffer cmd, const VkExtent2D *extent)
             : fast_lit_no_fog
             ? vk_world.pipeline_fast_lit_no_fog_opaque
             : fast_lit ? vk_world.pipeline_fast_lit_opaque : vk_world.pipeline_opaque;
+        const VkPipeline target_pipeline = VK_SelectScenePipeline(
+            vk_world.ctx, selected_pipeline);
         if (target_pipeline != bound_pipeline) {
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               target_pipeline);
@@ -3906,7 +4082,9 @@ void VK_World_RecordAlpha(VkCommandBuffer cmd, const VkExtent2D *extent,
     const uint32_t draw_count = sorted_alpha ? vk_world.alpha_batch_count :
                                                vk_world.batch_count;
     VkDescriptorSet last_set = VK_NULL_HANDLE;
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_world.pipeline_alpha);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      VK_SelectScenePipeline(vk_world.ctx,
+                                             vk_world.pipeline_alpha));
     for (uint32_t draw_index = 0; draw_index < draw_count; draw_index++) {
         const uint32_t i = sorted_alpha ? vk_world.alpha_batch_order[draw_index] : draw_index;
         const vk_world_batch_t *batch = &vk_world.batches[i];

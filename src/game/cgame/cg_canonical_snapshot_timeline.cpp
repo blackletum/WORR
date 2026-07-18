@@ -35,6 +35,9 @@ struct canonical_snapshot_timeline_state_t {
     std::array<worr_snapshot_event_ref_v2,
                CG_CANONICAL_SNAPSHOT_TIMELINE_SLOT_CAPACITY *
                    CG_CANONICAL_SNAPSHOT_TIMELINE_EVENT_CAPACITY> event_refs;
+    std::array<cg_canonical_prediction_receipt_v1,
+               CG_CANONICAL_SNAPSHOT_TIMELINE_SLOT_CAPACITY>
+        prediction_receipts;
 
     worr_cgame_snapshot_timeline_status_v2 status;
     worr_snapshot_timeline_ref_v1 latest_ref;
@@ -71,6 +74,7 @@ void clear_latest()
     canonical.status.last_event_fence_result =
         CG_EVENT_RUNTIME_UNINITIALIZED;
     canonical.status.receipt_flags = 0;
+    canonical.prediction_receipts.fill({});
 }
 
 worr_snapshot_timeline_result_v1 ensure_initialized()
@@ -328,6 +332,7 @@ bool consume_snapshot(const worr_snapshot_projection_view_v2 *view,
     }
 
     canonical.latest_ref = ref;
+    canonical.prediction_receipts[ref.slot] = {};
     increment_saturated(canonical.accepted_in_epoch);
     increment_saturated(canonical.status.accepted);
     canonical.status.last_receive_time_us = receive_time_us;
@@ -362,6 +367,26 @@ bool consume_snapshot(const worr_snapshot_projection_view_v2 *view,
         canonical.status.receipt_flags |=
             WORR_CGAME_SNAPSHOT_RECEIPT_EVENT_FENCE_ACCEPTED;
         ++canonical.status.admission_generation;
+        auto &receipt = canonical.prediction_receipts[ref.slot];
+        receipt.struct_size = sizeof(receipt);
+        receipt.schema_version =
+            CG_CANONICAL_PREDICTION_RECEIPT_VERSION;
+        receipt.admission_generation =
+            canonical.status.admission_generation;
+        receipt.receipt_flags = canonical.status.receipt_flags;
+        receipt.ref = ref;
+        receipt.snapshot_id = view->snapshot->snapshot_id;
+        receipt.snapshot_hash = view->snapshot->snapshot_hash;
+        receipt.consumed_command =
+            view->snapshot->consumed_command;
+        receipt.server_tick = view->snapshot->server_tick;
+        receipt.controlled_entity_index =
+            view->snapshot->controlled_entity.identity.index;
+        receipt.controlled_entity_generation =
+            view->snapshot->controlled_entity.identity.generation;
+        receipt.controlled_entity_provenance =
+            view->snapshot->controlled_entity.provenance_flags;
+        receipt.server_time_us = view->snapshot->server_time_us;
     }
 
     /* Publication is already durable at this point.  A terminal clock error
@@ -530,7 +555,7 @@ worr_snapshot_timeline_result_v1 CG_CanonicalSnapshotTimelineCopyPlayer(
 worr_snapshot_timeline_result_v1
 CG_CanonicalSnapshotTimelineCopyPredictionSnapshot(
     std::uint32_t snapshot_sequence,
-    cg_canonical_prediction_snapshot_v1 *snapshot_out)
+    cg_canonical_prediction_snapshot_v2 *snapshot_out)
 {
     auto result = ensure_initialized();
     if (result == WORR_SNAPSHOT_TIMELINE_OK &&
@@ -568,11 +593,26 @@ CG_CanonicalSnapshotTimelineCopyPredictionSnapshot(
     const worr_snapshot_timeline_ref_v1 ref{
         selected, slot.generation
     };
-    cg_canonical_prediction_snapshot_v1 staged{};
+    const auto &stored_receipt =
+        canonical.prediction_receipts[selected];
+    constexpr std::uint32_t required_receipt_flags =
+        WORR_CGAME_SNAPSHOT_RECEIPT_TIMELINE_ACCEPTED |
+        WORR_CGAME_SNAPSHOT_RECEIPT_EVENT_FENCE_ACCEPTED;
+    if (stored_receipt.struct_size != sizeof(stored_receipt) ||
+        stored_receipt.schema_version !=
+            CG_CANONICAL_PREDICTION_RECEIPT_VERSION ||
+        stored_receipt.admission_generation == 0 ||
+        stored_receipt.receipt_flags != required_receipt_flags ||
+        stored_receipt.ref.slot != ref.slot ||
+        stored_receipt.ref.generation != ref.generation) {
+        return record_query_result(WORR_SNAPSHOT_TIMELINE_NOT_FOUND);
+    }
+    cg_canonical_prediction_snapshot_v2 staged{};
     staged.struct_size = sizeof(staged);
     staged.schema_version = CG_CANONICAL_PREDICTION_SNAPSHOT_VERSION;
     staged.active_epoch = canonical.status.active_epoch;
     staged.ref = ref;
+    staged.receipt = stored_receipt;
 
     result = Worr_SnapshotTimelineCopySnapshotV1(
         &canonical.timeline, ref, &staged.snapshot);
@@ -587,6 +627,21 @@ CG_CanonicalSnapshotTimelineCopyPredictionSnapshot(
          !Worr_SnapshotTimelineRefValidV1(&canonical.timeline, ref) ||
          staged.snapshot.snapshot_id.epoch != staged.active_epoch ||
          staged.snapshot.snapshot_id.sequence != snapshot_sequence ||
+         staged.receipt.snapshot_id.epoch !=
+             staged.snapshot.snapshot_id.epoch ||
+         staged.receipt.snapshot_id.sequence !=
+             staged.snapshot.snapshot_id.sequence ||
+         staged.receipt.snapshot_hash !=
+             staged.snapshot.snapshot_hash ||
+         staged.receipt.server_tick != staged.snapshot.server_tick ||
+         staged.receipt.server_time_us !=
+             staged.snapshot.server_time_us ||
+         staged.receipt.controlled_entity_index !=
+             snapshot_generation.identity.index ||
+         staged.receipt.controlled_entity_generation !=
+             snapshot_generation.identity.generation ||
+         staged.receipt.controlled_entity_provenance !=
+             snapshot_generation.provenance_flags ||
          snapshot_generation.identity.index !=
              player_generation.identity.index ||
          snapshot_generation.identity.generation !=

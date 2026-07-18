@@ -1686,6 +1686,7 @@ weapon think, and bot updates.
 void ClientSessionServiceImpl::ClientBeginServerFrame(local_game_import_t& gi, GameLocals& game, LevelLocals& level,
 gentity_t* ent) {
 	gclient_t* client = ent->client;
+	SG_LocalActionObservationFrameLeaseScope localActionLease(ent);
 
 	if (gi.ServerFrame() != client->stepFrame)
 		ent->s.renderFX &= ~RF_STAIR_STEP;
@@ -1723,8 +1724,15 @@ gentity_t* ent) {
 	}
 
 	// run weapon animations if it hasn't been done by a ucmd_t
-	if (!client->weapon.thunk && ClientIsPlaying(client) && !client->eliminated)
-		Think_Weapon(ent);
+	if (!client->weapon.thunk && ClientIsPlaying(client) && !client->eliminated) {
+		{
+			SG_LocalActionObservationLeasedAdvanceScope leasedWeaponAdvance(ent);
+			Think_Weapon(ent);
+		}
+		// The fixture refresh happens only after the leased scope has appended
+		// its immutable record, so the runtime row can prove an exact join.
+		LagCompensation_RefreshCanonicalWeaponDamageRuntimeProof();
+	}
 	else
 		client->weapon.thunk = false;
 

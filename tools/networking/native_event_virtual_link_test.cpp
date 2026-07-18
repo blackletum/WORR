@@ -27,6 +27,17 @@
 client_static_t cls{};
 client_state_t cl{};
 unsigned com_localTime{};
+cvar_t *developer{};
+
+extern "C" void Com_LPrintf(print_type_t, const char *, ...)
+{
+}
+
+/* The virtual link validates receipt transport and reconciliation without
+ * linking cgame's prediction/UI reporting layer. */
+void CG_LocalActionShadowReportParity()
+{
+}
 
 namespace {
 
@@ -40,6 +51,7 @@ cvar_t shadow_cvar{};
 cvar_t event_shadow_cvar{};
 cvar_t snapshot_shadow_cvar{};
 cvar_t probe_hold_cvar{};
+cvar_t snapshot_timeline_owned_cvar{};
 std::array<byte, 1024> reliable_storage{};
 
 [[noreturn]] void fail(const char *expression, int line)
@@ -172,6 +184,38 @@ configure_interaction_prediction(bool hook_active_after)
     return receipt;
 }
 
+worr_local_action_shadow_authority_receipt_v1
+configure_action_shadow_receipt()
+{
+    /* Local-action shadow receipts are published only for attack-bearing
+     * commands.  Retain the hook bit as unrelated input to prove the filter
+     * and hash cover the actual combined button word. */
+    interaction_command_records[1].command.command.buttons |= 1u << 0;
+
+    worr_local_action_observation_state_v1 before{};
+    before.struct_size = sizeof(before);
+    before.schema_version = WORR_LOCAL_ACTION_OBSERVATION_ABI_VERSION;
+    before.flags = WORR_LOCAL_ACTION_OBSERVATION_PLAYER_ALIVE |
+                   WORR_LOCAL_ACTION_OBSERVATION_PLAYER_ELIGIBLE;
+    before.phase = WORR_LOCAL_ACTION_OBSERVATION_READY;
+    before.active_weapon_id = 9;
+    before.presentation_frame = 7;
+    before.presentation_rate = 10;
+    auto after = before;
+    after.presentation_frame = 8;
+
+    worr_local_action_observation_record_v1 observation{};
+    worr_local_action_shadow_v1 shadow{};
+    worr_local_action_shadow_authority_receipt_v1 receipt{};
+    CHECK(Worr_LocalActionObservationBuildV1(
+        0, &interaction_command_records[1].command, &before, &after,
+        &observation));
+    CHECK(Worr_LocalActionShadowBuildV1(
+        WORR_LOCAL_ACTION_CATALOG_BLASTER, &observation, &shadow));
+    CHECK(Worr_LocalActionShadowAuthorityReceiptBuildV1(&shadow, &receipt));
+    return receipt;
+}
+
 void install_configured_interaction_import()
 {
     CG_LocalInteractionSetImport(&interaction_command_import);
@@ -194,6 +238,25 @@ void predict_configured_interaction()
         interaction_command_records[1].command.command_id;
     range.commands[0].command = interaction_command_records[1].command.command;
     CG_LocalInteractionPredict(range);
+}
+
+void observe_configured_action_command()
+{
+    worr_cgame_prediction_input_range_v1 range{};
+    range.struct_size = sizeof(range);
+    range.api_version = WORR_CGAME_PREDICTION_INPUT_API_VERSION;
+    range.result = WORR_CGAME_PREDICTION_INPUT_OK;
+    range.source = WORR_CGAME_PREDICTION_INPUT_SOURCE_CANONICAL_CURSOR;
+    range.flags = WORR_CGAME_PREDICTION_INPUT_CANONICAL;
+    range.authoritative_legacy_sequence =
+        kInteractionPredecessorLegacySequence;
+    range.current_legacy_sequence = kInteractionRequestLegacySequence;
+    range.command_count = 1;
+    range.commands[0].legacy_sequence = kInteractionRequestLegacySequence;
+    range.commands[0].command_id =
+        interaction_command_records[1].command.command_id;
+    range.commands[0].command = interaction_command_records[1].command.command;
+    CG_LocalActionShadowObserveCommands(range);
 }
 
 void predict_past_configured_interaction()
@@ -764,6 +827,32 @@ worr_event_record_v1 authority_receipt_candidate(
     return candidate;
 }
 
+worr_event_record_v1 action_shadow_authority_receipt_candidate(
+    const worr_local_action_shadow_authority_receipt_v1 &receipt)
+{
+    worr_event_record_v1 candidate{};
+    CHECK(Worr_LocalActionShadowAuthorityReceiptValidateV1(&receipt));
+
+    candidate.struct_size = sizeof(candidate);
+    candidate.schema_version = WORR_EVENT_ABI_VERSION;
+    candidate.model_revision = WORR_EVENT_MODEL_REVISION;
+    candidate.flags = WORR_EVENT_FLAG_CRITICAL;
+    candidate.source_tick = 701;
+    candidate.source_time_us = UINT64_C(7010000);
+    candidate.source_entity = {WORR_EVENT_NO_ENTITY, 0};
+    candidate.subject_entity = {WORR_EVENT_NO_ENTITY, 0};
+    candidate.event_type = WORR_EVENT_TYPE_AUTHORITY_RECEIPT;
+    candidate.delivery_class = WORR_EVENT_DELIVERY_RELIABLE_ORDERED;
+    candidate.prediction_class = WORR_EVENT_PREDICTION_AUTHORITATIVE_ONLY;
+    candidate.payload_kind =
+        WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1;
+    candidate.payload_size = sizeof(receipt);
+    std::memcpy(candidate.payload, &receipt, sizeof(receipt));
+    CHECK(Worr_EventRecordCandidateValidateV1(
+        &candidate, WORR_EVENT_STREAM_MAX_ENTITIES_V1));
+    return candidate;
+}
+
 sv_native_shadow_event_status_v1 event_status(fixture_t &fixture,
                                                uint32_t now)
 {
@@ -1062,6 +1151,92 @@ void test_private_authority_receipt_conflict_forces_native_resync()
     test_private_authority_receipt_reconciles_over_native_virtual_link(false,
                                                                         false,
                                                                         true);
+}
+
+void test_private_action_shadow_receipt_over_native_virtual_link()
+{
+    fixture_t fixture{};
+    constexpr uint32_t official_epoch = 706;
+    constexpr uint32_t descriptor_time = 12010;
+    reset_fixture_with_consumer(fixture, 12000, official_epoch,
+                                CG_GetEventRuntimeAPI());
+    CG_EventRuntimeSetAuditEnabled(false);
+
+    (void)configure_interaction_prediction(false);
+    const auto receipt = configure_action_shadow_receipt();
+    const auto candidate = action_shadow_authority_receipt_candidate(receipt);
+    CHECK(SV_NativeShadowQueueEventCandidatesV1(
+        &fixture.server, &candidate, 1, descriptor_time));
+
+    auto descriptor = prepare_packet(fixture.server_channel, descriptor_time);
+    const auto descriptor_ref = data_record_ref(descriptor);
+    CHECK(descriptor_ref.record_class ==
+          WORR_NATIVE_RECORD_EVENT_STREAM_DESCRIPTOR_V1);
+    const uint32_t stream_epoch = descriptor_ref.object_epoch;
+    const uint32_t first_sequence = descriptor_ref.object_sequence;
+    accept_packet(fixture.server_channel, descriptor);
+    CHECK(deliver_to_client(fixture, descriptor, descriptor_time) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    auto descriptor_ack = prepare_packet(cls.netchan, descriptor_time + 1u);
+    accept_packet(cls.netchan, descriptor_ack);
+    CHECK(deliver_to_server(fixture, descriptor_ack, descriptor_time + 1u) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+
+    install_configured_interaction_import();
+    observe_configured_action_command();
+    cg_local_action_shadow_status_v1 action{};
+    CG_LocalActionShadowGetStatus(&action);
+    CHECK(action.observation_passes == 1 &&
+          action.canonical_commands == 1 &&
+          action.authority_receipts == 0 &&
+          action.requires_resync == 0);
+
+    cg_event_runtime_status_v1 cgame_before{};
+    CHECK(CG_EventRuntimeGetStatus(&cgame_before));
+    auto event = prepare_packet(fixture.server_channel, descriptor_time + 2u);
+    const auto event_ref = data_record_ref(event);
+    CHECK(event_ref.record_class == WORR_NATIVE_RECORD_EVENT_V1 &&
+          event_ref.object_epoch == stream_epoch &&
+          event_ref.object_sequence == first_sequence);
+    accept_packet(fixture.server_channel, event);
+    CHECK(deliver_to_client(fixture, event, descriptor_time + 2u) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+
+    CG_LocalActionShadowGetStatus(&action);
+    CHECK(action.authority_receipts == 1 &&
+          action.authority_unmatched == 0 &&
+          action.command_matches == 1 &&
+          action.command_mismatches == 0 &&
+          action.requires_resync == 0);
+    cg_event_runtime_status_v1 cgame_after{};
+    CHECK(CG_EventRuntimeGetStatus(&cgame_after));
+    CHECK(cgame_after.authority_count == 1 &&
+          cgame_after.authoritative_records ==
+              cgame_before.authoritative_records + 1u &&
+          cgame_after.authoritative_presentations == 0 &&
+          cgame_after.receipt.highest_contiguous == first_sequence);
+
+    uint32_t advanced = UINT32_MAX;
+    CHECK(CG_EventRuntimeAdvanceAudit(
+              UINT64_C(7010000), 701, 1, &advanced) ==
+          CG_EVENT_RUNTIME_OK);
+    CHECK(advanced == 0);
+    CHECK(CG_EventRuntimeGetStatus(&cgame_after));
+    CHECK(cgame_after.authoritative_presentations == 0);
+
+    auto final_ack = prepare_packet(cls.netchan, descriptor_time + 3u);
+    accept_packet(cls.netchan, final_ack);
+    CHECK(deliver_to_server(fixture, final_ack, descriptor_time + 3u) ==
+          NETCHAN_APP_RX_EXPOSE_LEGACY);
+    const auto server_status = event_status(fixture, descriptor_time + 3u);
+    CHECK(server_status.retained_count == 0 &&
+          server_status.events_acknowledged == 1);
+
+    SV_NativeShadowPeerDestroyV1(&fixture.server);
+    fixture.server_live = false;
+    CL_NativeReadinessPilotBeforeNetchanClose(&cls.netchan);
+    CHECK(CL_CGameEventRuntimeSetConsumer(nullptr));
+    CG_LocalInteractionSetImport(nullptr);
 }
 
 void test_receipt_history_loss_forces_native_resync()
@@ -1704,7 +1879,19 @@ extern "C" cvar_t *Cvar_Get(const char *name, const char *, int)
         std::strcmp(name, "cl_worr_native_shadow_probe_hold") == 0) {
         return &probe_hold_cvar;
     }
+    if (name &&
+        std::strcmp(
+            name, "cl_worr_native_snapshot_timeline_owned") == 0) {
+        return &snapshot_timeline_owned_cvar;
+    }
     return &shadow_cvar;
+}
+
+extern "C" void Cvar_SetByVar(cvar_t *var, const char *value, from_t)
+{
+    CHECK(var != nullptr && value != nullptr);
+    var->integer = value[0] == '1' ? 1 : 0;
+    var->value = static_cast<float>(var->integer);
 }
 
 extern "C" bool Netchan_SetApplicationTxHook(
@@ -1799,6 +1986,14 @@ extern "C" bool CL_SnapshotShadowLatest(
     return false;
 }
 
+extern "C" bool CL_SnapshotShadowGetStatus(
+    cl_snapshot_shadow_status_v1 *status_out)
+{
+    if (status_out)
+        *status_out = {};
+    return false;
+}
+
 extern "C" cl_snapshot_shadow_native_expectation_result_v1
 CL_SnapshotShadowGetNativeExpectation(
     worr_snapshot_id_v2,
@@ -1822,6 +2017,7 @@ int main()
     test_private_authority_receipt_rejection_over_native_virtual_link();
     test_private_authority_receipt_confirmation_over_native_virtual_link();
     test_private_authority_receipt_first_reconciliation_over_native_virtual_link();
+    test_private_action_shadow_receipt_over_native_virtual_link();
     test_receipt_history_loss_forces_native_resync();
     test_private_authority_receipt_conflict_forces_native_resync();
     diagnose_exhausted_ack_credit_lifecycle_gap();

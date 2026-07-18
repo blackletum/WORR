@@ -76,6 +76,9 @@ void VK_Debug_RecordDraw(vk_debug_domain_t domain, uint32_t vertices,
 void VK_Debug_RecordFastLitDraw(vk_debug_domain_t domain);
 void VK_Debug_RecordWorldFastLitNoFogDraw(void);
 void VK_Debug_RecordWorldTextureReplaceDraw(bool no_fog);
+void VK_Debug_RecordMSAADepthResolveElision(void);
+void VK_Debug_RecordMSAASingleSampleDofScene(void);
+void VK_Debug_RecordMSAASingleSampleScaledScene(void);
 void VK_Debug_RecordEntityFastLitNoFogDraw(void);
 void VK_Debug_RecordEntityTextureReplaceDraw(bool no_fog);
 void VK_Debug_SetWorldFastLitCoverage(uint32_t candidates, uint32_t disabled,

@@ -65,11 +65,28 @@ typedef struct vk_frame_context_s {
     // depth/stencil view so native post-process passes can sample depth
     // without exposing stencil data.
     VkImageView depth_sample_view;
+    // The native MSAA scene path keeps its multisampled depth attachment
+    // separate from the single-sample depth resolve consumed by DOF, rim
+    // bloom, and other post-process passes. The existing depth image remains
+    // that resolved scene depth in both single- and multisample modes.
+    VkImage msaa_color_image;
+    VkDeviceMemory msaa_color_memory;
+    VkImageView msaa_color_view;
+    VkImage msaa_depth_image;
+    VkDeviceMemory msaa_depth_memory;
+    VkImageView msaa_depth_view;
+    // A scaled scene can be smaller than the swapchain. Presentation passes
+    // still need a full-size single-sample depth attachment even though their
+    // UI/preview work does not consume scene depth.
+    VkImage presentation_depth_image;
+    VkDeviceMemory presentation_depth_memory;
+    VkImageView presentation_depth_view;
     // The rim-only bloom pass reads this view at the fragment's exact screen
     // coordinate, preserving scene visibility without turning the regular
     // bloom extraction into a permanent MRT path.
     VkDescriptorSet bloom_depth_descriptor_set;
     VkFramebuffer *framebuffers;
+    VkFramebuffer *msaa_framebuffers;
     VkImage liquid_scene_image;
     VkDeviceMemory liquid_scene_memory;
     VkImageView liquid_scene_view;
@@ -89,6 +106,10 @@ typedef struct vk_frame_context_s {
     VkImageView linear_scene_copy_base_view;
     VkDescriptorSet linear_scene_copy_base_descriptor_set;
     VkFramebuffer linear_scene_framebuffer;
+    // When a depth-aware post process is active on an MSAA renderer, this
+    // native one-sample framebuffer reproduces OpenGL's single-sample scene
+    // input without disabling MSAA for ordinary frames.
+    VkFramebuffer linear_scene_single_sample_framebuffer;
     bool linear_scene_copy_initialized;
     bool linear_scene_copy_mips_initialized;
     bool linear_scene_direct_sampled;
@@ -117,6 +138,13 @@ typedef struct vk_swapchain_s {
     uint32_t image_count;
 } vk_swapchain_t;
 
+typedef struct vk_scene_pipeline_variant_s {
+    VkPipeline multisample_pipeline;
+    VkPipeline single_sample_pipeline;
+} vk_scene_pipeline_variant_t;
+
+#define VK_MAX_SCENE_PIPELINE_VARIANTS 128
+
 typedef struct vk_context_s {
     VkInstance instance;
     VkPhysicalDevice physical_device;
@@ -125,6 +153,13 @@ typedef struct vk_context_s {
     // device and then consumed by native material sampler creation.
     bool sampler_anisotropy_supported;
     float max_sampler_anisotropy;
+    // Scene MSAA is enabled only when the device can natively resolve both
+    // color and depth/stencil through render-pass2. The final presentation,
+    // post-process, and sampled scene images remain single-sample targets.
+    VkSampleCountFlags scene_sample_counts;
+    VkSampleCountFlagBits scene_samples;
+    bool depth_stencil_resolve_supported;
+    PFN_vkCreateRenderPass2KHR create_render_pass2;
     VkQueue graphics_queue;
     uint32_t graphics_queue_family;
     VkSurfaceKHR surface;
@@ -132,7 +167,17 @@ typedef struct vk_context_s {
     // currently share LDR attachments, but must diverge when the frame-slot
     // floating scene target is enabled.
     VkRenderPass scene_render_pass;
+    // A compatible MSAA scene pass that resolves colour but leaves the
+    // single-sample depth attachment untouched. It is selected only when no
+    // later native pass consumes resolved scene depth.
+    VkRenderPass scene_no_depth_resolve_render_pass;
+    // Native single-sample scene companions are selected only for a frame
+    // whose depth-aware post process requires OpenGL-equivalent scene input.
+    // They coexist with the normal MSAA path rather than redirecting to GL or
+    // globally downgrading the requested sample count.
+    VkRenderPass scene_single_sample_render_pass;
     VkRenderPass scene_load_render_pass;
+    VkRenderPass scene_single_sample_load_render_pass;
     VkRenderPass presentation_render_pass;
     VkRenderPass presentation_overlay_render_pass;
     VkRenderPass presentation_load_render_pass;
@@ -143,6 +188,10 @@ typedef struct vk_context_s {
     vk_frame_context_t frames[VK_MAX_FRAMES_IN_FLIGHT];
     uint32_t frame_count;
     uint32_t current_frame;
+    bool scene_single_sample_active;
+    vk_scene_pipeline_variant_t
+        scene_pipeline_variants[VK_MAX_SCENE_PIPELINE_VARIANTS];
+    uint32_t scene_pipeline_variant_count;
     // The 3D scene may render below native presentation resolution. Its
     // frame-slot images stay independent of the swapchain, while UI and the
     // final presentation pass always retain swapchain extent.
@@ -168,3 +217,9 @@ typedef struct vk_state_s {
 } vk_state_t;
 
 extern vk_state_t vk_state;
+
+bool VK_RegisterScenePipelineVariant(vk_context_t *ctx,
+                                     VkPipeline multisample_pipeline,
+                                     VkPipeline single_sample_pipeline);
+VkPipeline VK_SelectScenePipeline(const vk_context_t *ctx,
+                                  VkPipeline multisample_pipeline);

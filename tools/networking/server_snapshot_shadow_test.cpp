@@ -37,6 +37,13 @@ q2proto_entity_state_delta_t entity_delta(uint16_t model, uint16_t frame)
     return delta;
 }
 
+void set_write_coords(q2proto_maybe_diff_coords_t &coords,
+                      const float previous[3], const float current[3])
+{
+    q2proto_var_coords_set_float(&coords.write.prev, previous);
+    q2proto_var_coords_set_float(&coords.write.current, current);
+}
+
 q2proto_svc_playerstate_t full_player()
 {
     q2proto_svc_playerstate_t player{};
@@ -354,6 +361,63 @@ void test_wire_zero_initial_and_zero_keyframe_base()
     SV_SnapshotShadowDestroyV1(peer);
 }
 
+void test_full_entity_capacity_config()
+{
+    auto full_capacity = config();
+    full_capacity.max_entities = full_capacity.entities_per_slot;
+    auto *peer = SV_SnapshotShadowCreateV1(&full_capacity);
+    CHECK(peer != nullptr);
+    SV_SnapshotShadowDestroyV1(peer);
+
+    full_capacity.max_entities = full_capacity.entities_per_slot - 1u;
+    CHECK(SV_SnapshotShadowCreateV1(&full_capacity) == nullptr);
+}
+
+void test_server_write_coordinate_union_is_canonicalized()
+{
+    const auto server_config = config();
+    auto *peer = SV_SnapshotShadowCreateV1(&server_config);
+    CHECK(peer != nullptr);
+
+    auto frame = make_frame(3, -1, true);
+    const float player_previous[3] = {0.0f, 0.0f, 0.0f};
+    const float player_current[3] = {32.0f, -16.0f, 8.0f};
+    const float velocity_previous[3] = {1.0f, 2.0f, 3.0f};
+    const float velocity_current[3] = {4.0f, 5.0f, 6.0f};
+    set_write_coords(frame.frame.playerstate.pm_origin,
+                     player_previous, player_current);
+    set_write_coords(frame.frame.playerstate.pm_velocity,
+                     velocity_previous, velocity_current);
+
+    auto delta = entity_delta(2, 1);
+    delta.delta_bits |= Q2P_ESD_LOOP_ATTENUATION;
+    delta.loop_attenuation = 255;
+    const float entity_previous[3] = {10.0f, 20.0f, 30.0f};
+    const float entity_current[3] = {11.0f, 22.0f, 33.0f};
+    set_write_coords(delta.origin, entity_previous, entity_current);
+    add_delta(frame, 2, delta);
+    const auto ref = send(peer, frame, 3, 0, UINT64_C(75000));
+
+    worr_snapshot_projection_view_v2 projected{};
+    worr_snapshot_projection_hashes_v2 hashes{};
+    CHECK(SV_SnapshotShadowViewV1(peer, ref, &projected, &hashes) ==
+          SV_SNAPSHOT_SHADOW_OK);
+    CHECK(projected.player->movement.origin[0] == 32.0f);
+    CHECK(projected.player->movement.origin[1] == -16.0f);
+    CHECK(projected.player->movement.origin[2] == 8.0f);
+    CHECK(projected.player->movement.velocity[0] == 4.0f);
+    CHECK(projected.player->movement.velocity[1] == 5.0f);
+    CHECK(projected.player->movement.velocity[2] == 6.0f);
+    CHECK(projected.entity_count == 1);
+    CHECK(projected.entities[0].origin[0] == 11.0f);
+    CHECK(projected.entities[0].origin[1] == 22.0f);
+    CHECK(projected.entities[0].origin[2] == 33.0f);
+    CHECK(projected.entities[0].loop_attenuation == 0.0f);
+    CHECK(hashes.endpoint_hash != 0);
+
+    SV_SnapshotShadowDestroyV1(peer);
+}
+
 void test_abort_failure_and_stale_ref()
 {
     const auto server_config = config();
@@ -432,6 +496,8 @@ void test_abort_failure_and_stale_ref()
 int main()
 {
     test_final_emission_refs_and_parity();
+    test_full_entity_capacity_config();
+    test_server_write_coordinate_union_is_canonicalized();
     test_wire_zero_initial_and_zero_keyframe_base();
     test_abort_failure_and_stale_ref();
     std::puts("server_snapshot_shadow_test: ok");

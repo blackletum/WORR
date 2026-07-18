@@ -18,7 +18,7 @@ SPEC.loader.exec_module(GATE)
 
 PASS_LINE = (
     'sg_worr_rewind_canonical_rail_damage_status '
-    '"pass:1:1:1:1:1:1:1:1:1:6:50000:0:2:2:1:1:0:63:0:1:1:6:50000:65000:70000:70000:50000:6:0:6:5:80:80:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0"'
+    '"pass:1:1:1:1:1:1:1:1:1:6:50000:0:2:2:1:1:0:63:0:1:1:6:50000:65000:70000:70000:50000:6:0:6:5:80:80:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:1:1:8:1:0:0:4:2:0:1:9:1:1:1:1:1:1:7:4367:1"'
 )
 
 
@@ -249,6 +249,15 @@ class CanonicalRailDamageRuntimeGateTests(unittest.TestCase):
         self.assertEqual(GATE.GATE_MODES["blaster"]["expected_damage"], 15)
         self.assertTrue(GATE.GATE_MODES["blaster"]["require_projectile_forward"])
         self.assertTrue(GATE.GATE_MODES["blaster"]["current_authority_projectile"])
+        combined_mode = GATE.GATE_MODES["blaster-local-action-lease-combined"]
+        self.assertTrue(combined_mode["require_local_action_authority_receipt"])
+        self.assertTrue(combined_mode["require_in_session_reconnect"])
+        self.assertTrue(combined_mode["require_combined_native_shadow"])
+        presentation_mode = GATE.GATE_MODES[
+            "blaster-native-snapshot-presentation"
+        ]
+        self.assertTrue(presentation_mode["require_native_snapshot_shadow"])
+        self.assertTrue(presentation_mode["require_native_snapshot_presentation"])
         self.assertEqual(GATE.GATE_MODES["hyperblaster"]["weapon_policy"], 11)
         self.assertEqual(GATE.GATE_MODES["hyperblaster"]["expected_damage"], 15)
         self.assertTrue(GATE.GATE_MODES["hyperblaster"]["require_projectile_forward"])
@@ -298,13 +307,14 @@ class CanonicalRailDamageRuntimeGateTests(unittest.TestCase):
         self.assertEqual(GATE.GATE_MODES["shotgun"]["weapon_policy"], 3)
         self.assertLess(
             SCRIPT.read_text(encoding="utf-8").index("worr_rewind_canonical_rail_damage_arm"),
-            SCRIPT.read_text(encoding="utf-8").index("time.sleep(1.2)"),
+            SCRIPT.read_text(encoding="utf-8").index("_fixture_ready_status, fixture_ready_responses"),
         )
         self.assertIn("warmup_enabled", server)
         self.assertNotIn("worr_x86_64.exe", " ".join(server))
         self.assertEqual(client[0], str(Path("C:/stage/worr_x86_64.exe")))
         self.assertEqual(client[client.index("fs_homepath") + 1], str(Path("C:/runtime/shooter")))
-        for name, value in (("win_headless", "1"), ("in_enable", "0"), ("in_grab", "0")):
+        for name, value in (("win_headless", "1"), ("cl_headless", "1"),
+                            ("in_enable", "0"), ("in_grab", "0")):
             index = client.index(name)
             self.assertEqual(client[index + 1], value)
         self.assertEqual(client[client.index("cl_async") + 1], "1")
@@ -312,6 +322,108 @@ class CanonicalRailDamageRuntimeGateTests(unittest.TestCase):
         self.assertEqual(client[-3:], ["+set", "name", GATE.SHOOTER_NAME])
         self.assertIn("net_impair_enable", client)
         self.assertEqual(client[client.index("net_impair_latency_ms") + 1], "50")
+
+        reconnect_server = GATE.build_server_command(
+            Path("C:/stage/worr_ded_x86_64.exe"), 27960,
+            Path("C:/runtime/server"),
+            enable_reconnect_minplayer_bypass=True,
+        )
+        self.assertEqual(
+            reconnect_server[reconnect_server.index("cheats") + 1], "1",
+        )
+        self.assertIn('port, shooter_user_id, "cmd dev_ready", shooter',
+                      SCRIPT.read_text(encoding="utf-8"))
+        self.assertIn("dev_ready: warmup bypass enabled",
+                      SCRIPT.read_text(encoding="utf-8"))
+
+        combined_server = GATE.build_server_command(
+            Path("C:/stage/worr_ded_x86_64.exe"), 27960,
+            Path("C:/runtime/server"),
+            enable_local_action_authority_receipt=True,
+            enable_combined_snapshot_shadow=True,
+        )
+        combined_client = GATE.build_client_command(
+            Path("C:/stage/worr_x86_64.exe"), 27960, GATE.SHOOTER_NAME,
+            Path("C:/runtime/shooter"),
+            enable_local_action_authority_receipt=True,
+            enable_combined_snapshot_shadow=True,
+        )
+        self.assertEqual(
+            combined_server[combined_server.index(
+                "sv_worr_native_snapshot_shadow"
+            ) + 1],
+            "1",
+        )
+        self.assertEqual(
+            combined_client[combined_client.index(
+                "cl_worr_native_snapshot_shadow"
+            ) + 1],
+            "1",
+        )
+        presentation_client = GATE.build_client_command(
+            Path("C:/stage/worr_x86_64.exe"), 27960, GATE.TARGET_NAME,
+            Path("C:/runtime/target"),
+            enable_local_action_authority_receipt=True,
+            enable_combined_snapshot_shadow=True,
+            enable_native_snapshot_presentation=True,
+        )
+        headless_values = [
+            presentation_client[index + 1]
+            for index, value in enumerate(presentation_client[:-1])
+            if value == "cl_headless"
+        ]
+        self.assertEqual(headless_values, ["1", "0"])
+        self.assertEqual(
+            presentation_client[presentation_client.index(
+                "cg_snapshot_timeline_render"
+            ) + 1],
+            "3",
+        )
+        presentation_server = GATE.build_server_command(
+            Path("C:/stage/worr_ded_x86_64.exe"), 27960,
+            Path("C:/runtime/server"),
+            enable_native_snapshot_shadow=True,
+            enable_native_snapshot_presentation=True,
+        )
+        self.assertEqual(
+            presentation_server[presentation_server.index("sv_novis") + 1],
+            "1",
+        )
+        presentation_shooter = GATE.build_client_command(
+            Path("C:/stage/worr_x86_64.exe"), 27960, GATE.SHOOTER_NAME,
+            Path("C:/runtime/shooter"),
+            enable_native_snapshot_shadow=True,
+            enable_network_impairment=False,
+        )
+        self.assertNotIn("net_impair_enable", presentation_shooter)
+
+    def test_fixture_readiness_retries_real_team_choice_after_reconnect(self) -> None:
+        pending = PASS_LINE.replace(
+            '"pass:1:1:1:', '"pending:1:0:0:', 1,
+        )
+        ready = PASS_LINE.replace('"pass:', '"pending:', 1)
+        status_responses = iter((pending, ready))
+        commands: list[str] = []
+
+        def fake_rcon(_port: int, command: str, _timeout: float) -> str:
+            commands.append(command)
+            if command.startswith("cvarlist "):
+                return next(status_responses)
+            return "print\n"
+
+        with (
+            mock.patch.object(GATE, "rcon_command", side_effect=fake_rcon),
+            mock.patch.object(GATE.time, "sleep"),
+        ):
+            status, responses = GATE.wait_for_fixture_ready(
+                27960, 1.0, GATE.GATE_MODES["railgun"], 4, 7,
+            )
+
+        self.assertEqual(status["players_ready"], 1)
+        self.assertEqual(status["history_ready"], 1)
+        self.assertIn('stuff 4 "cmd team free"', commands)
+        self.assertIn('stuff 7 "cmd team free"', commands)
+        self.assertGreaterEqual(len(responses), 4)
 
     def test_status_parser_selects_the_two_admitted_real_clients(self) -> None:
         response = (
@@ -1012,6 +1124,133 @@ class CanonicalRailDamageRuntimeGateTests(unittest.TestCase):
         wrong_damage["observed_damage"] = 20
         with self.assertRaisesRegex(RuntimeError, "exact expected damage"):
             GATE.validate_status(wrong_damage, mode)
+
+    def test_blaster_local_action_lease_mode_requires_exact_join(self) -> None:
+        mode = GATE.GATE_MODES["blaster-local-action-lease"]
+        line = PASS_LINE.replace(
+            "sg_worr_rewind_canonical_rail_damage_status",
+            str(mode["status_cvar"]),
+        )
+        status = GATE.parse_status(line, str(mode["status_cvar"]))
+        status.update({
+            "canonical_historical_hit": 0,
+            "observation_weapon_policy": 11,
+            "expected_damage": 15,
+            "observed_damage": 15,
+            "projectile_forward_required": 1,
+            "projectile_forward_authenticated": 1,
+            "projectile_forward_advanced": 1,
+            "projectile_forward_blocked": 0,
+            "projectile_forward_age_us": 50_000,
+            "projectile_forward_advanced_age_us": 50_000,
+        })
+        self.assertEqual(GATE.validate_status(status, mode), status)
+
+        missing_join = dict(status)
+        missing_join["local_action_joined_record"] = 0
+        with self.assertRaisesRegex(RuntimeError, "joined_record"):
+            GATE.validate_status(missing_join, mode)
+
+        rejected = dict(status)
+        rejected["local_action_lease_rejected"] = 1
+        with self.assertRaisesRegex(RuntimeError, "observed a rejection"):
+            GATE.validate_status(rejected, mode)
+
+        wrong_catalog = dict(status)
+        wrong_catalog["local_action_shadow_catalog_id"] = 2
+        with self.assertRaisesRegex(RuntimeError, "catalog identity"):
+            GATE.validate_status(wrong_catalog, mode)
+
+        missing_base_flag = dict(status)
+        missing_base_flag["local_action_shadow_flags"] = 6
+        with self.assertRaisesRegex(RuntimeError, "base flags"):
+            GATE.validate_status(missing_base_flag, mode)
+
+        wrong_blockers = dict(status)
+        wrong_blockers["local_action_shadow_v2_blockers"] = 0
+        with self.assertRaisesRegex(RuntimeError, "blocker mask"):
+            GATE.validate_status(wrong_blockers, mode)
+
+        missing_hash = dict(status)
+        missing_hash["local_action_shadow_record_hash"] = 0
+        with self.assertRaisesRegex(RuntimeError, "record hash"):
+            GATE.validate_status(missing_hash, mode)
+
+    def test_combined_native_status_requires_both_acknowledged_snapshot_peers(self) -> None:
+        client_text = (
+            "WORR_NATIVE_CLIENT_STATUS_V1 schema=1 enabled=1 mode=2 "
+            "capability_confirmed=1 protocol=1038 private_mask=0x77 "
+            "server_active=1 failures=0 last_failure=0\n"
+        )
+        client_rows = GATE.parse_native_status_rows(
+            client_text, GATE.NATIVE_CLIENT_STATUS_MARKER,
+        )
+        self.assertEqual(len(client_rows), 1)
+        self.assertEqual(client_rows[0]["private_mask"], 0x77)
+        self.assertEqual(
+            GATE.validate_combined_native_client_status(client_rows[0]),
+            client_rows[0],
+        )
+
+        base_text = "\n".join(
+            "WORR_NATIVE_SERVER_STATUS_V1 schema=1 slot={} protocol=1038 "
+            "enabled=1 private_mask=0x77 wire_committed=1 failures=0 "
+            "rx_rejections=0 tx_ack_rejections=0 last_failure=0".format(slot)
+            for slot in (0, 1)
+        )
+        snapshot_text = "\n".join(
+            "WORR_NATIVE_SERVER_SNAPSHOT_STATUS_V1 schema=1 slot={} "
+            "snapshot_epoch={} sender=1 tx_open=1 queued=8 "
+            "queue_failures=0 acks=7 released=7 confirmed=8 rejected=0 "
+            "first_sends=8".format(slot, slot + 5)
+            for slot in (0, 1)
+        )
+        base_rows = GATE.parse_native_status_rows(
+            base_text, GATE.NATIVE_SERVER_STATUS_MARKER,
+        )
+        snapshot_rows = GATE.parse_native_status_rows(
+            snapshot_text, GATE.NATIVE_SERVER_SNAPSHOT_STATUS_MARKER,
+        )
+        evidence = GATE.validate_combined_native_server_status(
+            base_rows, snapshot_rows,
+        )
+        self.assertEqual(len(evidence["server_peers"]), 2)
+        self.assertEqual(len(evidence["snapshot_peers"]), 2)
+        target_evidence = GATE.validate_combined_native_server_status(
+            base_rows[1:], snapshot_rows[1:], 0x77, (1,),
+        )
+        self.assertEqual(len(target_evidence["server_peers"]), 1)
+        self.assertEqual(target_evidence["server_peers"][0]["slot"], 1)
+
+        snapshot_rows[1]["acks"] = 0
+        with self.assertRaisesRegex(RuntimeError, "acks traffic"):
+            GATE.validate_combined_native_server_status(
+                base_rows, snapshot_rows,
+            )
+
+    def test_native_snapshot_presentation_requires_exact_promoted_parity(self) -> None:
+        text = (
+            "cg_snapshot_timeline_render: epoch=9 mode=3 clock=120/0 "
+            "pair=119/1 align_fail=0 pair_mode=1 pair_blocks=0x0 "
+            "samples=64 fail=2 invisible=1 discontinuity=1 "
+            "parity=0/0 native=60/4 promoted=60 events=0/0/0 "
+            "max_error=0.0000/0.0000/0.0000\n"
+        )
+        rows = GATE.parse_native_snapshot_presentation(text)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(
+            GATE.validate_native_snapshot_presentation(rows[0]), rows[0],
+        )
+
+        mismatch = dict(rows[0])
+        mismatch["parity_mismatches"] = 1
+        with self.assertRaisesRegex(RuntimeError, "parity_mismatches"):
+            GATE.validate_native_snapshot_presentation(mismatch)
+
+        not_promoted = dict(rows[0])
+        not_promoted["promoted_transforms"] = 59
+        with self.assertRaisesRegex(RuntimeError, "every native sample"):
+            GATE.validate_native_snapshot_presentation(not_promoted)
 
     def test_plasma_beam_mode_requires_its_first_held_command_tick(self) -> None:
         mode = GATE.GATE_MODES["plasma-beam"]

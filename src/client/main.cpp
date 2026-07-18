@@ -48,6 +48,7 @@ cvar_t  *cl_maxfps;
 cvar_t  *cl_async;
 cvar_t  *r_maxfps;
 cvar_t  *cl_autopause;
+static cvar_t *cl_headless;
 static cvar_t *cl_weapon_bar_legacy;
 static cvar_t *cl_debug_fonts;
 static cvar_t *cl_debug_fonts_legacy;
@@ -1597,6 +1598,30 @@ static void CL_PacketEvent(void)
     if (process_result == NETCHAN_PROCESS_NO_APPLICATION)
         return;     // wasn't accepted for some reason
     if (process_result == NETCHAN_PROCESS_APPLICATION_REJECTED) {
+        cl_native_readiness_pilot_status_v1 status{};
+        if (CL_NativeReadinessPilotGetStatusV1(&status) && status.enabled) {
+            cl_cgame_event_runtime_diagnostic_v1 event_diagnostic{};
+            (void)CL_CGameEventRuntimeGetDiagnosticV1(&event_diagnostic);
+            Com_WPrintf(
+                "native application rejected: failure=%u mode=%u "
+                "readiness=%u transport=%u drains=%llu failures=%llu "
+                "event_reset=%u:%u/%u/%u status=%u/%u/%u/%u:%u/%u/0x%x\n",
+                status.last_failure, status.mode, status.readiness_phase,
+                status.transport_epoch,
+                (unsigned long long)status.drains,
+                (unsigned long long)status.failures,
+                event_diagnostic.reset_epoch,
+                event_diagnostic.reset_sequence,
+                event_diagnostic.reset_result,
+                event_diagnostic.reset_consumer_attached,
+                event_diagnostic.status_valid,
+                event_diagnostic.status_consumer_attached,
+                event_diagnostic.status_owner_failure,
+                event_diagnostic.status.authority_epoch,
+                event_diagnostic.status.next_presentation_sequence,
+                event_diagnostic.status.authority_count,
+                event_diagnostic.status.state_flags);
+        }
         Com_Error(ERR_DROP, "server sent a rejected application payload");
     }
 
@@ -2953,6 +2978,7 @@ static void CL_InitLocal(void)
     cl_async->changed = cl_sync_changed;
     r_maxfps = Cvar_Get("r_maxfps", "0", 0);
     r_maxfps->changed = cl_sync_changed;
+    cl_headless = Cvar_Get("cl_headless", "0", CVAR_NOARCHIVE);
     cl_autopause = Cvar_Get("cl_autopause", "1", 0);
     ui_download_active = Cvar_Get("ui_download_active", "0", 0);
     ui_download_file = Cvar_Get("ui_download_file", "", 0);
@@ -3758,6 +3784,20 @@ unsigned CL_Frame(unsigned msec)
 
     // predict all unacknowledged movements
     CL_PredictMovement();
+
+    /* Network-only automation still runs the complete command, packet,
+     * snapshot, cgame prediction, timeout, and console paths above.  It does
+     * not need presentation work, which can otherwise block the only client
+     * thread long enough for a valid delta base to age out.  Window/input
+     * suppression remain explicit platform/input controls; this switch owns
+     * only per-frame presentation cadence. */
+    if (cl_headless && cl_headless->integer) {
+        CL_CheckTimeout();
+        C_FRAMES++;
+        CL_MeasureStats();
+        main_extra = 0;
+        return 0;
+    }
 
     // update weapon wheel stuff
     if (cgame && cgame->Wheel_Update)

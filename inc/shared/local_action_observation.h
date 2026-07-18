@@ -30,6 +30,7 @@ extern "C" {
 #define WORR_LOCAL_ACTION_OBSERVATION_MAX_WEAPON_ID 65535u
 #define WORR_LOCAL_ACTION_OBSERVATION_MAX_AMMO_UNITS 1000000
 #define WORR_LOCAL_ACTION_OBSERVATION_MAX_TIMER_MS 60000
+#define WORR_LOCAL_ACTION_OBSERVATION_MAX_CONTINUITY_ELAPSED_MS 1000u
 
 typedef enum worr_local_action_observation_phase_v1_e {
     WORR_LOCAL_ACTION_OBSERVATION_HOLSTERED = 0,
@@ -99,6 +100,18 @@ typedef struct worr_local_action_observation_record_v1_s {
 
 bool Worr_LocalActionObservationStateValidateV1(
     const worr_local_action_observation_state_v1 *state);
+
+/*
+ * Proves that `later` is the same captured weapon state after only bounded
+ * authoritative-clock passage. Every field must remain exact; both relative
+ * weapon timers must decay by the same non-negative amount. This admits the
+ * normal command-end -> next ClientBeginServerFrame boundary without hiding
+ * an intervening weapon, inventory, input, or presentation mutation.
+ */
+bool Worr_LocalActionObservationStatesContiguousV1(
+    const worr_local_action_observation_state_v1 *earlier,
+    const worr_local_action_observation_state_v1 *later,
+    uint32_t maximum_elapsed_ms);
 
 /* output must be entirely zero; failures leave it byte-identical. */
 bool Worr_LocalActionObservationBuildV1(

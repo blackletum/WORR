@@ -87,6 +87,27 @@ bool refresh_hashes(cg_prediction_authority_candidate_v1 &candidate)
             &snapshot.snapshot_hash)) {
         return false;
     }
+    auto &receipt = candidate.timeline.receipt;
+    receipt = {};
+    receipt.struct_size = sizeof(receipt);
+    receipt.schema_version =
+        CG_CANONICAL_PREDICTION_RECEIPT_VERSION;
+    receipt.admission_generation = 5u;
+    receipt.receipt_flags =
+        WORR_CGAME_SNAPSHOT_RECEIPT_TIMELINE_ACCEPTED |
+        WORR_CGAME_SNAPSHOT_RECEIPT_EVENT_FENCE_ACCEPTED;
+    receipt.ref = candidate.timeline.ref;
+    receipt.snapshot_id = snapshot.snapshot_id;
+    receipt.snapshot_hash = snapshot.snapshot_hash;
+    receipt.consumed_command = snapshot.consumed_command;
+    receipt.server_tick = snapshot.server_tick;
+    receipt.controlled_entity_index =
+        snapshot.controlled_entity.identity.index;
+    receipt.controlled_entity_generation =
+        snapshot.controlled_entity.identity.generation;
+    receipt.controlled_entity_provenance =
+        snapshot.controlled_entity.provenance_flags;
+    receipt.server_time_us = snapshot.server_time_us;
     return true;
 }
 
@@ -243,6 +264,14 @@ int main()
     candidate.timeline.ref.generation = 0u;
     CHECK(select(exact_expectation, candidate) ==
           cg_prediction_authority_result_v1::timeline_unavailable);
+
+    candidate = exact_candidate;
+    ++candidate.timeline.receipt.admission_generation;
+    candidate.timeline.receipt.ref.generation =
+        candidate.timeline.ref.generation + 1u;
+    CHECK(select(exact_expectation, candidate) ==
+          cg_prediction_authority_result_v1::
+              admission_receipt_invalid);
 
     candidate = exact_candidate;
     candidate.timeline.snapshot.snapshot_hash ^= UINT64_C(1);

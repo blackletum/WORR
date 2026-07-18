@@ -66,6 +66,17 @@ typedef enum worr_native_codec_result_v1_e {
     WORR_NATIVE_CODEC_CORRUPT = 8,
 } worr_native_codec_result_v1;
 
+enum {
+    WORR_NATIVE_SNAPSHOT_TRANSPORT_INVALID_VIEW = 1u << 0,
+    WORR_NATIVE_SNAPSHOT_TRANSPORT_INVALID_PROJECTION = 1u << 1,
+    WORR_NATIVE_SNAPSHOT_TRANSPORT_LIMIT = 1u << 2,
+    WORR_NATIVE_SNAPSHOT_TRANSPORT_CONTROLLED_PLAYER_MISMATCH = 1u << 3,
+    WORR_NATIVE_SNAPSHOT_TRANSPORT_PLAYER_SOURCE_MISMATCH = 1u << 4,
+    WORR_NATIVE_SNAPSHOT_TRANSPORT_EVENT_RANGE_MISMATCH = 1u << 5,
+    WORR_NATIVE_SNAPSHOT_TRANSPORT_ENTITY_SOURCE_MISMATCH = 1u << 6,
+    WORR_NATIVE_SNAPSHOT_TRANSPORT_CONTROLLED_ENTITY_MISMATCH = 1u << 7,
+};
+
 /* Pointer-free inspection result for a completely framed codec payload. */
 typedef struct worr_native_codec_info_v1_s {
     uint32_t struct_size;
@@ -155,6 +166,9 @@ worr_native_codec_result_v1 Worr_NativeCodecEventStreamDecodeV1(
  * bounded number of records carried by one projection is capped by
  * WORR_NATIVE_CODEC_MAX_SNAPSHOT_ENTITIES.
  */
+uint32_t Worr_NativeCodecSnapshotTransportFailureFlagsV1(
+    const worr_snapshot_projection_view_v2 *view,
+    uint32_t max_entities);
 worr_native_codec_result_v1 Worr_NativeCodecSnapshotPreflightV1(
     const worr_snapshot_projection_view_v2 *view,
     uint32_t max_entities,

@@ -373,15 +373,13 @@ static bool test_multifragment_coalescing_and_exact_release(void)
         &sender, &ledger, 3, &tick, &packet_count));
     CHECK(packet_count + 1u == frame.fragment_count);
     CHECK(sender.tx.retained_count == 1);
-    CHECK(sender.tx_slots[0].record.object_epoch == 5);
-    CHECK(sender.pending_bank ==
+    CHECK(sender.tx_slots[0].record.object_epoch == 3);
+    CHECK(sender.pending_bank !=
           WORR_NATIVE_SNAPSHOT_SENDER_NO_BANK);
-    CHECK(sender.payload_occupied == 1);
-    newest_message = sender.tx_slots[0].message_sequence;
-    CHECK(newest_message == first_message + 1u);
-    CHECK(sender.telemetry.pending_promoted == 1);
+    CHECK(sender.payload_occupied == 2);
+    CHECK(sender.telemetry.pending_promoted == 0);
     CHECK(sender.telemetry.pending_coalesced == 1);
-    CHECK(sender.telemetry.snapshots_superseded == 1);
+    CHECK(sender.telemetry.snapshots_superseded == 0);
 
     CHECK(make_ack_packet(
         &binding, first_message, first_message,
@@ -390,8 +388,15 @@ static bool test_multifragment_coalescing_and_exact_release(void)
               &sender, ack_packet, ack_packet_bytes,
               &acknowledged) ==
           WORR_NATIVE_SNAPSHOT_SENDER_ACK_APPLIED);
-    CHECK(acknowledged == 0);
+    CHECK(acknowledged == 1);
     CHECK(sender.tx.retained_count == 1);
+    CHECK(sender.tx_slots[0].record.object_epoch == 5);
+    CHECK(sender.pending_bank ==
+          WORR_NATIVE_SNAPSHOT_SENDER_NO_BANK);
+    CHECK(sender.payload_occupied == 1);
+    newest_message = sender.tx_slots[0].message_sequence;
+    CHECK(newest_message == first_message + 1u);
+    CHECK(sender.telemetry.pending_promoted == 1);
     CHECK(sender.tx_slots[0].message_sequence == newest_message);
 
     CHECK(send_remaining_burst(
@@ -462,7 +467,7 @@ static bool test_multifragment_coalescing_and_exact_release(void)
     CHECK(Worr_NativeSnapshotSenderGetStatusV1(
         &sender, &status));
     CHECK(status.active_message_sequence == 0);
-    CHECK(status.telemetry.acknowledgements_applied == 1);
+    CHECK(status.telemetry.acknowledgements_applied == 2);
 
     CHECK(Worr_NativeSnapshotSenderQueueV1(
               &sender, &cancellation.view, ++tick) ==
@@ -524,9 +529,15 @@ static bool test_fail_closed_binding_queue_and_late_ack(void)
     CHECK(Worr_NativeSnapshotSenderInitV1(
               &sender, &combined_binding, TEST_MAX_ENTITIES,
               TEST_WNE_DATAGRAM_BYTES, tick) ==
-          WORR_NATIVE_SNAPSHOT_SENDER_INVALID_ARGUMENT);
-    CHECK(((const uint8_t *)&sender)[0] == 0x7a);
-    CHECK(((const uint8_t *)&sender)[sizeof(sender) - 1u] == 0x7a);
+          WORR_NATIVE_SNAPSHOT_SENDER_OK);
+    CHECK(Worr_NativeSnapshotSenderValidateV1(&sender));
+    CHECK(sender.tx.next_message_sequence ==
+          WORR_NATIVE_COMBINED_SNAPSHOT_MESSAGE_SEQUENCE_FIRST);
+    CHECK(Worr_NativeSnapshotSenderQueueV1(
+              &sender, &fixture.view, tick) ==
+          WORR_NATIVE_SNAPSHOT_SENDER_RETAINED);
+    CHECK(sender.tx_slots[0].message_sequence ==
+          WORR_NATIVE_COMBINED_SNAPSHOT_MESSAGE_SEQUENCE_FIRST);
 
     CHECK(Worr_NativeSnapshotSenderInitV1(
               &sender, &binding, TEST_MAX_ENTITIES,
@@ -571,10 +582,75 @@ static bool test_fail_closed_binding_queue_and_late_ack(void)
     return true;
 }
 
+static bool test_sent_snapshot_waits_for_ack_before_pending_promotion(void)
+{
+    const worr_native_session_binding_v1 binding =
+        make_binding(WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK);
+    snapshot_fixture first;
+    snapshot_fixture newest;
+    worr_native_carrier_ack_ledger_v1 ledger;
+    uint8_t packet[WORR_NATIVE_CARRIER_MAX_PACKET_BYTES];
+    uint8_t ack_packet[WORR_NATIVE_CARRIER_MAX_PACKET_BYTES];
+    size_t packet_bytes = 0;
+    size_t ack_packet_bytes = 0;
+    uint64_t token = 0;
+    uint64_t tick = 7000;
+    uint32_t first_message;
+    uint32_t acknowledged = UINT32_MAX;
+
+    CHECK(init_fixture(&first, 30));
+    CHECK(init_fixture(&newest, 31));
+    CHECK(Worr_NativeSnapshotSenderInitV1(
+              &sender, &binding, TEST_MAX_ENTITIES,
+              WORR_NATIVE_ENVELOPE_MAX_DATAGRAM_BYTES, tick) ==
+          WORR_NATIVE_SNAPSHOT_SENDER_OK);
+    CHECK(Worr_NativeCarrierAckLedgerInitV1(&ledger, &binding, 3));
+    CHECK(Worr_NativeSnapshotSenderQueueV1(
+              &sender, &first.view, ++tick) ==
+          WORR_NATIVE_SNAPSHOT_SENDER_RETAINED);
+    first_message = sender.tx_slots[0].message_sequence;
+    CHECK(Worr_NativeSnapshotSenderPrepareMixedV1(
+              &sender, &ledger, ++tick, TEST_RESEND_TICKS,
+              TEST_ACK_RETRY_TICKS,
+              WORR_NATIVE_CARRIER_MAX_PACKET_BYTES,
+              NULL, 0, packet, sizeof(packet), &packet_bytes,
+              &token) == WORR_NATIVE_SNAPSHOT_SENDER_OK);
+    CHECK(Worr_NativeSnapshotSenderConfirmMixedV1(
+              &sender, &ledger, tick, packet, packet_bytes) ==
+          WORR_NATIVE_SNAPSHOT_SENDER_OK);
+    CHECK((sender.tx_gate.state_flags &
+           WORR_NATIVE_CARRIER_TX_GATE_ACTIVE) == 0);
+    CHECK(sender.tx_slots[0].send_attempts == 1);
+
+    CHECK(Worr_NativeSnapshotSenderQueueV1(
+              &sender, &newest.view, ++tick) ==
+          WORR_NATIVE_SNAPSHOT_SENDER_PENDING);
+    CHECK(sender.tx_slots[0].message_sequence == first_message);
+    CHECK(sender.pending_bank !=
+          WORR_NATIVE_SNAPSHOT_SENDER_NO_BANK);
+    CHECK(make_ack_packet(
+        &binding, first_message, first_message,
+        ack_packet, sizeof(ack_packet), &ack_packet_bytes));
+    CHECK(Worr_NativeSnapshotSenderApplyAcksV1(
+              &sender, ack_packet, ack_packet_bytes,
+              &acknowledged) ==
+          WORR_NATIVE_SNAPSHOT_SENDER_ACK_APPLIED);
+    CHECK(acknowledged == 1);
+    CHECK(sender.pending_bank ==
+          WORR_NATIVE_SNAPSHOT_SENDER_NO_BANK);
+    CHECK(sender.tx.retained_count == 1);
+    CHECK(sender.tx_slots[0].record.object_epoch == 31);
+    CHECK(sender.tx_slots[0].message_sequence == first_message + 1u);
+    CHECK(sender.telemetry.pending_promoted == 1);
+    CHECK(Worr_NativeSnapshotSenderValidateV1(&sender));
+    return true;
+}
+
 int main(void)
 {
     if (!test_multifragment_coalescing_and_exact_release() ||
-        !test_fail_closed_binding_queue_and_late_ack())
+        !test_fail_closed_binding_queue_and_late_ack() ||
+        !test_sent_snapshot_waits_for_ack_before_pending_promotion())
         return EXIT_FAILURE;
     puts("native_snapshot_sender_test: ok");
     return EXIT_SUCCESS;

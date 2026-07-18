@@ -29,6 +29,13 @@ static_assert(WORR_EVENT_PAYLOAD_LEGACY_ENTITY_V1 == 7);
 static_assert(WORR_EVENT_PAYLOAD_LEGACY_TEMP_V1 == 8);
 static_assert(WORR_EVENT_PAYLOAD_MUZZLE_V1 == 9);
 static_assert(WORR_EVENT_PAYLOAD_SPATIAL_AUDIO_V1 == 10);
+static_assert(WORR_EVENT_PAYLOAD_LOCAL_INTERACTION_AUTHORITY_V1 == 11);
+static_assert(WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1 == 12);
+static_assert(std::is_standard_layout_v<
+              worr_local_action_shadow_authority_receipt_v1>);
+static_assert(std::is_trivially_copyable_v<
+              worr_local_action_shadow_authority_receipt_v1>);
+static_assert(sizeof(worr_local_action_shadow_authority_receipt_v1) == 64);
 static_assert(WORR_EVENT_LEGACY_TEMP_BOSSTPORT == 22);
 static_assert(WORR_EVENT_LEGACY_TEMP_BLUEHYPERBLASTER_BROKEN == 27);
 static_assert(WORR_EVENT_LEGACY_TEMP_FLAME_RESERVED == 32);

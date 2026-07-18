@@ -134,6 +134,12 @@ def build_fixture() -> bytes:
         '"message" "WORR rewind collision real-BSP parity fixture"\n}\n'
         '{\n"classname" "info_player_deathmatch"\n'
         '"origin" "128 128 64"\n}\n'
+        '{\n"classname" "info_player_deathmatch"\n'
+        '"origin" "256 128 64"\n}\n'
+        '{\n"classname" "info_player_deathmatch"\n'
+        '"origin" "128 256 64"\n}\n'
+        '{\n"classname" "info_player_deathmatch"\n'
+        '"origin" "256 256 64"\n}\n'
         '{\n"classname" "func_rotating"\n"model" "*1"\n'
         '"spawnflags" "1"\n"speed" "45"\n"dmg" "0"\n}\n'
         '{\n"classname" "func_water"\n"model" "*2"\n}\n\0'
@@ -230,11 +236,12 @@ def write_fixture(path: Path) -> dict[str, object]:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     return {
-        "schema": "worr.rewind-collision-real-bsp-fixture.v1",
+        "schema": "worr.rewind-collision-real-bsp-fixture.v2",
         "path": str(path),
         "bytes": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
         "inline_models": 2,
+        "deathmatch_spawns": 4,
     }
 
 

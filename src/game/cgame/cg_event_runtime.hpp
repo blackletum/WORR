@@ -150,6 +150,13 @@ CG_EventRuntimeResetSnapshot(std::uint32_t snapshot_epoch);
 void CG_EventRuntimeSetAuditEnabled(bool enabled);
 bool CG_EventRuntimeAuditEnabled();
 
+/* Optional diagnostics observer. Event admission remains independent of the
+ * prediction/UI translation unit so focused runtime consumers can link the
+ * production authority path without a presentation logger. */
+using cg_local_action_shadow_report_callback_v1 = void (*)();
+void CG_EventRuntimeSetLocalActionShadowReportCallback(
+    cg_local_action_shadow_report_callback_v1 callback);
+
 /* Latch an independent local-interaction reconciliation failure into the
  * private authority health domain before any further event admission or
  * presentation. The engine owner observes the normal resync status bit. */

@@ -33,6 +33,12 @@ enum {
     SV_NATIVE_SHADOW_TX_EMIT_SNAPSHOT_MIXED = 3,
 };
 
+enum {
+    SV_NATIVE_SHADOW_DATA_LANE_NONE = 0,
+    SV_NATIVE_SHADOW_DATA_LANE_EVENT = 1,
+    SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT = 2,
+};
+
 struct sv_native_shadow_event_state_v1_s {
     uint32_t current_sender_initialized;
     uint32_t retired_sender_initialized;
@@ -82,6 +88,23 @@ static void saturating_add(uint64_t *value, uint64_t amount)
         *value += amount;
 }
 
+static bool mode_has_server_data(uint32_t mode)
+{
+    return SV_NativeShadowModeHasEventV1(mode) ||
+           SV_NativeShadowModeHasSnapshotV1(mode);
+}
+
+static uint32_t mode_private_capabilities(uint32_t mode)
+{
+    if (mode == SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT)
+        return WORR_NET_CAP_NATIVE_EVENT_SNAPSHOT_PRIVATE_MASK;
+    if (SV_NativeShadowModeHasEventV1(mode))
+        return WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK;
+    if (SV_NativeShadowModeHasSnapshotV1(mode))
+        return WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK;
+    return WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK;
+}
+
 static bool allocate_owner(uint64_t *owner_out)
 {
     if (owner_out == NULL ||
@@ -119,18 +142,22 @@ static bool peer_structural_valid(const sv_native_shadow_peer_v1 *peer)
            peer->version == SV_NATIVE_SHADOW_VERSION &&
            peer->initialized == 1 && peer->netchan != NULL &&
            peer->connection_owner_id != 0 &&
-           (peer->mode == SV_NATIVE_SHADOW_MODE_COMMAND ||
-            peer->mode == SV_NATIVE_SHADOW_MODE_EVENT ||
-            peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT) &&
+            (peer->mode == SV_NATIVE_SHADOW_MODE_COMMAND ||
+             peer->mode == SV_NATIVE_SHADOW_MODE_EVENT ||
+             peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT ||
+             peer->mode == SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT) &&
            ((peer->mode == SV_NATIVE_SHADOW_MODE_COMMAND &&
              peer->event_state == NULL &&
              peer->snapshot_state == NULL) ||
             (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT &&
              peer->event_state != NULL &&
-             peer->snapshot_state == NULL) ||
-            (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT &&
-             peer->event_state == NULL &&
-             peer->snapshot_state != NULL)) &&
+              peer->snapshot_state == NULL) ||
+             (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT &&
+              peer->event_state == NULL &&
+              peer->snapshot_state != NULL) ||
+             (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT &&
+              peer->event_state != NULL &&
+              peer->snapshot_state != NULL)) &&
            peer->clock_initialized == 1 &&
            peer->reserved1 == 0 &&
            peer->lifecycle >=
@@ -176,10 +203,26 @@ static bool peer_structural_valid(const sv_native_shadow_peer_v1 *peer)
            peer->async_wake_handoff_seen <= 1 &&
            (peer->async_wake_active != 0 ||
             peer->async_wake_handoff_seen == 0) &&
-           (peer->ack_next_bank ==
-                SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT ||
-            peer->ack_next_bank ==
-                SV_NATIVE_SHADOW_TRANSPORT_BANK_RETIRED);
+            (peer->ack_next_bank ==
+                 SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT ||
+             peer->ack_next_bank ==
+                 SV_NATIVE_SHADOW_TRANSPORT_BANK_RETIRED) &&
+           ((peer->mode == SV_NATIVE_SHADOW_MODE_COMMAND &&
+             peer->data_next_lane ==
+                 SV_NATIVE_SHADOW_DATA_LANE_NONE) ||
+            (SV_NativeShadowModeHasEventV1(peer->mode) &&
+             !SV_NativeShadowModeHasSnapshotV1(peer->mode) &&
+             peer->data_next_lane ==
+                 SV_NATIVE_SHADOW_DATA_LANE_EVENT) ||
+            (!SV_NativeShadowModeHasEventV1(peer->mode) &&
+             SV_NativeShadowModeHasSnapshotV1(peer->mode) &&
+             peer->data_next_lane ==
+                 SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT) ||
+            (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT &&
+             (peer->data_next_lane ==
+                  SV_NATIVE_SHADOW_DATA_LANE_EVENT ||
+              peer->data_next_lane ==
+                  SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT)));
 }
 
 static bool event_state_valid(const sv_native_shadow_peer_v1 *peer)
@@ -188,7 +231,7 @@ static bool event_state_valid(const sv_native_shadow_peer_v1 *peer)
 
     if (!peer_structural_valid(peer))
         return false;
-    if (peer->mode != SV_NATIVE_SHADOW_MODE_EVENT)
+    if (!SV_NativeShadowModeHasEventV1(peer->mode))
         return true;
     state = peer->event_state;
     if (state->current_sender_initialized > 1 ||
@@ -219,7 +262,7 @@ static bool snapshot_state_valid(const sv_native_shadow_peer_v1 *peer)
 
     if (!peer_structural_valid(peer))
         return false;
-    if (peer->mode != SV_NATIVE_SHADOW_MODE_SNAPSHOT)
+    if (!SV_NativeShadowModeHasSnapshotV1(peer->mode))
         return true;
     state = peer->snapshot_state;
     if (state->current_sender_initialized > 1 ||
@@ -233,7 +276,8 @@ static bool snapshot_state_valid(const sv_native_shadow_peer_v1 *peer)
     if (state->current_sender_initialized &&
         (!Worr_NativeSnapshotSenderValidateV1(
              &state->current_sender) ||
-         state->current_sender.binding.negotiated_capabilities !=
+         (state->current_sender.binding.negotiated_capabilities &
+          WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK) !=
              WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK ||
          (state->current_sender.state_flags &
           WORR_NATIVE_SNAPSHOT_SENDER_RETIRED) != 0)) {
@@ -397,7 +441,7 @@ static bool cancel_prior_native_epochs(
 
     event_state = peer->event_state;
     snapshot_state = peer->snapshot_state;
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT) {
+    if (SV_NativeShadowModeHasEventV1(peer->mode)) {
         if (event_state->current_sender_initialized !=
                 peer->transport_initialized ||
             event_state->retired_sender_initialized !=
@@ -411,7 +455,7 @@ static bool cancel_prior_native_epochs(
             return false;
         }
     }
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
+    if (SV_NativeShadowModeHasSnapshotV1(peer->mode)) {
         if (snapshot_state->current_sender_initialized !=
                 peer->transport_initialized ||
             snapshot_state->retired_sender_initialized !=
@@ -457,7 +501,7 @@ static bool cancel_prior_native_epochs(
             peer->retired_transport.binding.transport_epoch);
     }
 
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT) {
+    if (SV_NativeShadowModeHasEventV1(peer->mode)) {
         if (event_state->current_sender_initialized) {
             memset(&event_report, 0, sizeof(event_report));
             event_result = Worr_NativeEventSenderCancelV1(
@@ -481,7 +525,7 @@ static bool cancel_prior_native_epochs(
             cancelled_events += event_report.backlog_candidates;
         }
     }
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
+    if (SV_NativeShadowModeHasSnapshotV1(peer->mode)) {
         if (snapshot_state->current_sender_initialized) {
             memset(&snapshot_report, 0, sizeof(snapshot_report));
             snapshot_result = Worr_NativeSnapshotSenderCancelV1(
@@ -532,7 +576,7 @@ static bool cancel_prior_native_epochs(
 
 #undef CANCEL_TRANSPORT
 
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT) {
+    if (SV_NativeShadowModeHasEventV1(peer->mode)) {
         memset(&event_state->current_sender, 0,
                sizeof(event_state->current_sender));
         memset(&event_state->retired_sender, 0,
@@ -540,7 +584,7 @@ static bool cancel_prior_native_epochs(
         event_state->current_sender_initialized = 0;
         event_state->retired_sender_initialized = 0;
     }
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
+    if (SV_NativeShadowModeHasSnapshotV1(peer->mode)) {
         memset(&snapshot_state->current_sender, 0,
                sizeof(snapshot_state->current_sender));
         memset(&snapshot_state->retired_sender, 0,
@@ -577,6 +621,16 @@ static bool record_ref_equal(worr_native_record_ref_v1 left,
            left.object_sequence == right.object_sequence;
 }
 
+static uint32_t snapshot_failure_detail(
+    sv_native_shadow_failure_detail_operation_v1 operation,
+    worr_native_snapshot_sender_result_v1 result,
+    uint32_t validation_flags)
+{
+    return ((uint32_t)operation << 24) |
+           (((uint32_t)result & UINT32_C(0xff)) << 16) |
+           (validation_flags & UINT32_C(0xffff));
+}
+
 static void enter_drain(sv_native_shadow_peer_v1 *peer,
                         sv_native_shadow_failure_v1 failure,
                         bool disable_readiness)
@@ -587,6 +641,7 @@ static void enter_drain(sv_native_shadow_peer_v1 *peer,
         saturating_increment(&peer->drain_entries);
     peer->lifecycle = SV_NATIVE_SHADOW_LIFECYCLE_DRAIN;
     peer->last_failure = (uint32_t)failure;
+    peer->last_failure_detail = 0;
     if (failure != SV_NATIVE_SHADOW_FAILURE_NONE)
         saturating_increment(&peer->failures);
     if (!disable_readiness)
@@ -705,7 +760,7 @@ static worr_native_event_sender_v1 *event_sender_for_bank(
     sv_native_shadow_event_state_v1 *state;
 
     if (!event_state_valid(peer) ||
-        peer->mode != SV_NATIVE_SHADOW_MODE_EVENT)
+        !SV_NativeShadowModeHasEventV1(peer->mode))
         return NULL;
     state = peer->event_state;
     if (bank == SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT &&
@@ -724,7 +779,7 @@ static worr_native_snapshot_sender_v1 *snapshot_sender_for_bank(
     sv_native_shadow_snapshot_state_v1 *state;
 
     if (!snapshot_state_valid(peer) ||
-        peer->mode != SV_NATIVE_SHADOW_MODE_SNAPSHOT)
+        !SV_NativeShadowModeHasSnapshotV1(peer->mode))
         return NULL;
     state = peer->snapshot_state;
     if (bank == SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT &&
@@ -780,6 +835,107 @@ static void expose_legacy(netchan_app_rx_output_v1_t *output,
     output->legacy_bytes = legacy_bytes;
 }
 
+typedef enum sv_native_shadow_data_prepare_result_e {
+    SV_NATIVE_SHADOW_DATA_PREPARE_DEFERRED = 0,
+    SV_NATIVE_SHADOW_DATA_PREPARE_PREPARED = 1,
+    SV_NATIVE_SHADOW_DATA_PREPARE_FAILED = 2,
+} sv_native_shadow_data_prepare_result;
+
+static sv_native_shadow_data_prepare_result prepare_server_data_mixed(
+    sv_native_shadow_peer_v1 *peer,
+    uint32_t lane,
+    sv_native_shadow_transport_v1 *transport,
+    uint16_t budget,
+    const byte *legacy_application,
+    uint16_t legacy_bytes,
+    byte *candidate_application,
+    netchan_app_tx_prepare_output_v1_t *output,
+    uint32_t *failure_detail_out)
+{
+    worr_native_event_sender_v1 *event_sender;
+    worr_native_snapshot_sender_v1 *snapshot_sender;
+    worr_native_event_sender_result_v1 event_result;
+    worr_native_snapshot_sender_result_v1 snapshot_result;
+    size_t packet_bytes = 0;
+    uint64_t sender_token = 0;
+    uint32_t emit_kind;
+
+    if (failure_detail_out != NULL)
+        *failure_detail_out = 0;
+
+    if (lane == SV_NATIVE_SHADOW_DATA_LANE_EVENT) {
+        event_sender = event_sender_for_bank(
+            peer, SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT);
+        if (event_sender == NULL)
+            return SV_NATIVE_SHADOW_DATA_PREPARE_FAILED;
+        event_result = Worr_NativeEventSenderPrepareMixedV1(
+            event_sender, &transport->ack_ledger, peer->clock_ticks,
+            SV_NATIVE_SHADOW_EVENT_RESEND_MS,
+            SV_NATIVE_SHADOW_ACK_RETRY_MS, budget, legacy_application,
+            legacy_bytes, candidate_application, budget, &packet_bytes,
+            &sender_token);
+        if (event_result != WORR_NATIVE_EVENT_SENDER_OK) {
+            return event_result == WORR_NATIVE_EVENT_SENDER_OUTPUT_TOO_SMALL ||
+                           event_result == WORR_NATIVE_EVENT_SENDER_CAPACITY ||
+                           event_result == WORR_NATIVE_EVENT_SENDER_NOT_DUE
+                       ? SV_NATIVE_SHADOW_DATA_PREPARE_DEFERRED
+                       : SV_NATIVE_SHADOW_DATA_PREPARE_FAILED;
+        }
+        emit_kind = SV_NATIVE_SHADOW_TX_EMIT_EVENT_MIXED;
+    } else if (lane == SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT) {
+        snapshot_sender = snapshot_sender_for_bank(
+            peer, SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT);
+        if (snapshot_sender == NULL)
+            return SV_NATIVE_SHADOW_DATA_PREPARE_FAILED;
+        snapshot_result = Worr_NativeSnapshotSenderPrepareMixedV1(
+            snapshot_sender, &transport->ack_ledger, peer->clock_ticks,
+            SV_NATIVE_SHADOW_SNAPSHOT_RESEND_MS,
+            SV_NATIVE_SHADOW_ACK_RETRY_MS, budget, legacy_application,
+            legacy_bytes, candidate_application, budget, &packet_bytes,
+            &sender_token);
+        if (snapshot_result != WORR_NATIVE_SNAPSHOT_SENDER_OK) {
+            if (failure_detail_out != NULL)
+                *failure_detail_out = snapshot_failure_detail(
+                    SV_NATIVE_SHADOW_FAILURE_DETAIL_SNAPSHOT_PREPARE,
+                    snapshot_result, 0);
+            return snapshot_result ==
+                               WORR_NATIVE_SNAPSHOT_SENDER_OUTPUT_TOO_SMALL ||
+                           snapshot_result ==
+                               WORR_NATIVE_SNAPSHOT_SENDER_CAPACITY ||
+                           snapshot_result ==
+                               WORR_NATIVE_SNAPSHOT_SENDER_NOT_DUE
+                       ? SV_NATIVE_SHADOW_DATA_PREPARE_DEFERRED
+                       : SV_NATIVE_SHADOW_DATA_PREPARE_FAILED;
+        }
+        emit_kind = SV_NATIVE_SHADOW_TX_EMIT_SNAPSHOT_MIXED;
+    } else {
+        return SV_NATIVE_SHADOW_DATA_PREPARE_FAILED;
+    }
+
+    if (packet_bytes == 0 || packet_bytes > budget ||
+        peer->next_completion_token == UINT64_MAX) {
+        return SV_NATIVE_SHADOW_DATA_PREPARE_FAILED;
+    }
+    peer->ack_emit_active = 1;
+    peer->ack_emit_bank = SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT;
+    peer->tx_emit_kind = emit_kind;
+    peer->active_completion_token = ++peer->next_completion_token;
+    peer->ack_next_bank = SV_NATIVE_SHADOW_TRANSPORT_BANK_RETIRED;
+    if (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT) {
+        peer->data_next_lane =
+            lane == SV_NATIVE_SHADOW_DATA_LANE_EVENT
+                ? SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT
+                : SV_NATIVE_SHADOW_DATA_LANE_EVENT;
+    }
+
+    memset(output, 0, sizeof(*output));
+    output->abi_version = NETCHAN_APP_TX_HOOK_ABI_V1;
+    output->struct_size = sizeof(*output);
+    output->application_bytes = (uint32_t)packet_bytes;
+    output->token = peer->active_completion_token;
+    return SV_NATIVE_SHADOW_DATA_PREPARE_PREPARED;
+}
+
 static netchan_app_tx_prepare_result_t native_shadow_tx_prepare(
     void *opaque,
     const netchan_app_tx_prepare_info_v1_t *info,
@@ -806,7 +962,11 @@ static netchan_app_tx_prepare_result_t native_shadow_tx_prepare(
     bool retired_work;
     uint16_t budget;
     size_t packet_bytes;
-    uint64_t event_token;
+    uint32_t data_lanes[2];
+    uint32_t data_lane_count;
+    uint32_t data_index;
+    uint32_t data_failure_detail;
+    sv_native_shadow_data_prepare_result data_prepare;
 
     if (!peer_structural_valid(peer) || !info || !output ||
         info->abi_version != NETCHAN_APP_TX_HOOK_ABI_V1 ||
@@ -884,6 +1044,9 @@ static netchan_app_tx_prepare_result_t native_shadow_tx_prepare(
             enter_drain(
                 peer, SV_NATIVE_SHADOW_FAILURE_SNAPSHOT_SENDER,
                 true);
+            peer->last_failure_detail = snapshot_failure_detail(
+                SV_NATIVE_SHADOW_FAILURE_DETAIL_SNAPSHOT_DUE,
+                snapshot_result, 0);
             return NETCHAN_APP_TX_PREPARE_BYPASS;
         }
     }
@@ -920,94 +1083,44 @@ static netchan_app_tx_prepare_result_t native_shadow_tx_prepare(
     packet_bytes = 0;
 
     if (bank == SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT &&
-        event_data_due && event_sender != NULL) {
-        event_token = 0;
-        event_result = Worr_NativeEventSenderPrepareMixedV1(
-            event_sender, &selected->ack_ledger, peer->clock_ticks,
-            SV_NATIVE_SHADOW_EVENT_RESEND_MS,
-            SV_NATIVE_SHADOW_ACK_RETRY_MS, budget,
-            legacy_application,
-            (uint16_t)info->legacy_application_bytes,
-            candidate_application, budget, &packet_bytes, &event_token);
-        if (event_result == WORR_NATIVE_EVENT_SENDER_OK) {
-            peer->ack_emit_active = 1;
-            peer->ack_emit_bank =
-                SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT;
-            peer->tx_emit_kind =
-                SV_NATIVE_SHADOW_TX_EMIT_EVENT_MIXED;
-            peer->active_completion_token =
-                ++peer->next_completion_token;
-            peer->ack_next_bank =
-                SV_NATIVE_SHADOW_TRANSPORT_BANK_RETIRED;
-
-            memset(output, 0, sizeof(*output));
-            output->abi_version = NETCHAN_APP_TX_HOOK_ABI_V1;
-            output->struct_size = sizeof(*output);
-            output->application_bytes = (uint32_t)packet_bytes;
-            output->token = peer->active_completion_token;
-            return NETCHAN_APP_TX_PREPARE_PREPARED;
+        (event_data_due || snapshot_data_due)) {
+        data_lane_count = 0;
+        if (event_data_due && snapshot_data_due) {
+            data_lanes[data_lane_count++] = peer->data_next_lane;
+            data_lanes[data_lane_count++] =
+                peer->data_next_lane == SV_NATIVE_SHADOW_DATA_LANE_EVENT
+                    ? SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT
+                    : SV_NATIVE_SHADOW_DATA_LANE_EVENT;
+        } else {
+            data_lanes[data_lane_count++] = event_data_due
+                ? SV_NATIVE_SHADOW_DATA_LANE_EVENT
+                : SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT;
         }
-        if (event_result != WORR_NATIVE_EVENT_SENDER_OUTPUT_TOO_SMALL &&
-            event_result != WORR_NATIVE_EVENT_SENDER_CAPACITY &&
-            event_result != WORR_NATIVE_EVENT_SENDER_NOT_DUE) {
-            saturating_increment(&peer->tx_bypass_calls);
-            enter_drain(
-                peer, SV_NATIVE_SHADOW_FAILURE_EVENT_SENDER, true);
-            return NETCHAN_APP_TX_PREPARE_BYPASS;
+        for (data_index = 0; data_index < data_lane_count; ++data_index) {
+            data_failure_detail = 0;
+            data_prepare = prepare_server_data_mixed(
+                peer, data_lanes[data_index], &peer->transport, budget,
+                legacy_application,
+                (uint16_t)info->legacy_application_bytes,
+                candidate_application, output, &data_failure_detail);
+            if (data_prepare == SV_NATIVE_SHADOW_DATA_PREPARE_PREPARED)
+                return NETCHAN_APP_TX_PREPARE_PREPARED;
+            if (data_prepare == SV_NATIVE_SHADOW_DATA_PREPARE_FAILED) {
+                saturating_increment(&peer->tx_bypass_calls);
+                enter_drain(
+                    peer,
+                    data_lanes[data_index] ==
+                            SV_NATIVE_SHADOW_DATA_LANE_EVENT
+                        ? SV_NATIVE_SHADOW_FAILURE_EVENT_SENDER
+                        : SV_NATIVE_SHADOW_FAILURE_SNAPSHOT_SENDER,
+                    true);
+                peer->last_failure_detail = data_failure_detail;
+                return NETCHAN_APP_TX_PREPARE_BYPASS;
+            }
         }
         /* A large legacy payload may leave no DATA budget.  If an old bank
-         * also needs service, use this handoff for that ACK instead; event
-         * DATA remains retained for an empty async wake. */
-        if (retired_work) {
-            bank = SV_NATIVE_SHADOW_TRANSPORT_BANK_RETIRED;
-            selected = &peer->retired_transport;
-            staged = *selected;
-        } else if (current_due != WORR_NATIVE_CARRIER_ACK_OK) {
-            saturating_increment(&peer->tx_bypass_calls);
-            return NETCHAN_APP_TX_PREPARE_BYPASS;
-        }
-    }
-
-    if (bank == SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT &&
-        snapshot_data_due && snapshot_sender != NULL) {
-        event_token = 0;
-        snapshot_result = Worr_NativeSnapshotSenderPrepareMixedV1(
-            snapshot_sender, &selected->ack_ledger,
-            peer->clock_ticks,
-            SV_NATIVE_SHADOW_SNAPSHOT_RESEND_MS,
-            SV_NATIVE_SHADOW_ACK_RETRY_MS, budget,
-            legacy_application,
-            (uint16_t)info->legacy_application_bytes,
-            candidate_application, budget, &packet_bytes,
-            &event_token);
-        if (snapshot_result == WORR_NATIVE_SNAPSHOT_SENDER_OK) {
-            peer->ack_emit_active = 1;
-            peer->ack_emit_bank =
-                SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT;
-            peer->tx_emit_kind =
-                SV_NATIVE_SHADOW_TX_EMIT_SNAPSHOT_MIXED;
-            peer->active_completion_token =
-                ++peer->next_completion_token;
-            peer->ack_next_bank =
-                SV_NATIVE_SHADOW_TRANSPORT_BANK_RETIRED;
-
-            memset(output, 0, sizeof(*output));
-            output->abi_version = NETCHAN_APP_TX_HOOK_ABI_V1;
-            output->struct_size = sizeof(*output);
-            output->application_bytes = (uint32_t)packet_bytes;
-            output->token = peer->active_completion_token;
-            return NETCHAN_APP_TX_PREPARE_PREPARED;
-        }
-        if (snapshot_result !=
-                WORR_NATIVE_SNAPSHOT_SENDER_OUTPUT_TOO_SMALL &&
-            snapshot_result != WORR_NATIVE_SNAPSHOT_SENDER_CAPACITY &&
-            snapshot_result != WORR_NATIVE_SNAPSHOT_SENDER_NOT_DUE) {
-            saturating_increment(&peer->tx_bypass_calls);
-            enter_drain(
-                peer, SV_NATIVE_SHADOW_FAILURE_SNAPSHOT_SENDER,
-                true);
-            return NETCHAN_APP_TX_PREPARE_BYPASS;
-        }
+         * also needs service, use this handoff for that ACK; semantic DATA
+         * remains retained for a later empty async wake. */
         if (retired_work) {
             bank = SV_NATIVE_SHADOW_TRANSPORT_BANK_RETIRED;
             selected = &peer->retired_transport;
@@ -1197,7 +1310,8 @@ static void native_shadow_tx_completion(
 static sv_native_shadow_failure_v1 server_data_sender_failure(
     const sv_native_shadow_peer_v1 *peer)
 {
-    return peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT
+    return SV_NativeShadowModeHasSnapshotV1(peer->mode) &&
+                   !SV_NativeShadowModeHasEventV1(peer->mode)
                ? SV_NATIVE_SHADOW_FAILURE_SNAPSHOT_SENDER
                : SV_NATIVE_SHADOW_FAILURE_EVENT_SENDER;
 }
@@ -1216,40 +1330,86 @@ static bool apply_server_data_ack_entries(
     worr_native_snapshot_sender_result_v1 snapshot_result;
     uint32_t acknowledged;
     uint32_t promoted;
+    uint32_t ack_lane = SV_NATIVE_SHADOW_DATA_LANE_NONE;
 
     if (!event_state_valid(peer) || !snapshot_state_valid(peer))
         return false;
     if (!has_ack)
         return true;
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
-        snapshot_sender = snapshot_sender_for_bank(peer, bank);
-        if (snapshot_sender == NULL)
-            return true;
-        acknowledged = 0;
-        snapshot_result = Worr_NativeSnapshotSenderApplyAcksV1(
-            snapshot_sender, packet, packet_bytes, &acknowledged);
-        return snapshot_result ==
-               WORR_NATIVE_SNAPSHOT_SENDER_ACK_APPLIED;
-    }
-    if (peer->mode != SV_NATIVE_SHADOW_MODE_EVENT)
-        return true;
-    sender = event_sender_for_bank(peer, bank);
-    if (sender == NULL)
-        return true;
-    acknowledged = 0;
-    result = Worr_NativeEventSenderApplyAcksV1(
-        sender, packet, packet_bytes, &acknowledged);
-    if (result != WORR_NATIVE_EVENT_SENDER_ACK_APPLIED)
-        return false;
-    if (bank == SV_NATIVE_SHADOW_TRANSPORT_BANK_RETIRED)
-        return true;
+    if (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT) {
+        worr_native_carrier_view_v1 view;
+        uint16_t index;
 
-    promoted = 0;
-    result = Worr_NativeEventSenderPumpV1(
-        sender, now_tick, &promoted);
-    return result == WORR_NATIVE_EVENT_SENDER_OK ||
-           result == WORR_NATIVE_EVENT_SENDER_PROMOTED ||
-           result == WORR_NATIVE_EVENT_SENDER_CAPACITY;
+        /* The ACK schema has no record-class discriminator.  The negotiated
+         * 0x77 mode therefore classifies the packet by its disjoint sequence
+         * half and applies it to exactly one semantic sender. */
+        memset(&view, 0, sizeof(view));
+        if (Worr_NativeCarrierDecodeV1(packet, packet_bytes, &view) !=
+            WORR_NATIVE_CARRIER_OK) {
+            return false;
+        }
+        for (index = 0; index < view.entry_count; ++index) {
+            const worr_native_carrier_entry_v1 *entry =
+                &view.entries[index];
+            uint32_t entry_lane;
+
+            if (entry->entry_type != WORR_NATIVE_CARRIER_ENTRY_ACK_V1)
+                continue;
+            if (entry->last_message_sequence <=
+                WORR_NATIVE_COMBINED_EVENT_MESSAGE_SEQUENCE_LAST) {
+                entry_lane = SV_NATIVE_SHADOW_DATA_LANE_EVENT;
+            } else if (entry->first_message_sequence >=
+                       WORR_NATIVE_COMBINED_SNAPSHOT_MESSAGE_SEQUENCE_FIRST) {
+                entry_lane = SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT;
+            } else {
+                return false;
+            }
+            if (ack_lane != SV_NATIVE_SHADOW_DATA_LANE_NONE &&
+                ack_lane != entry_lane) {
+                return false;
+            }
+            ack_lane = entry_lane;
+        }
+        if (ack_lane == SV_NATIVE_SHADOW_DATA_LANE_NONE)
+            return false;
+    }
+    if (SV_NativeShadowModeHasEventV1(peer->mode) &&
+        (peer->mode != SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT ||
+         ack_lane == SV_NATIVE_SHADOW_DATA_LANE_EVENT)) {
+        sender = event_sender_for_bank(peer, bank);
+        if (sender != NULL) {
+            acknowledged = 0;
+            result = Worr_NativeEventSenderApplyAcksV1(
+                sender, packet, packet_bytes, &acknowledged);
+            if (result != WORR_NATIVE_EVENT_SENDER_ACK_APPLIED)
+                return false;
+            if (bank == SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT) {
+                promoted = 0;
+                result = Worr_NativeEventSenderPumpV1(
+                    sender, now_tick, &promoted);
+                if (result != WORR_NATIVE_EVENT_SENDER_OK &&
+                    result != WORR_NATIVE_EVENT_SENDER_PROMOTED &&
+                    result != WORR_NATIVE_EVENT_SENDER_CAPACITY) {
+                    return false;
+                }
+            }
+        }
+    }
+    if (SV_NativeShadowModeHasSnapshotV1(peer->mode) &&
+        (peer->mode != SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT ||
+         ack_lane == SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT)) {
+        snapshot_sender = snapshot_sender_for_bank(peer, bank);
+        if (snapshot_sender != NULL) {
+            acknowledged = 0;
+            snapshot_result = Worr_NativeSnapshotSenderApplyAcksV1(
+                snapshot_sender, packet, packet_bytes, &acknowledged);
+            if (snapshot_result !=
+                WORR_NATIVE_SNAPSHOT_SENDER_ACK_APPLIED) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 static netchan_app_rx_result_t native_shadow_rx(
@@ -1536,21 +1696,25 @@ bool SV_NativeShadowPeerInitModeV1(
     if (peer == NULL || netchan == NULL || netchan->type != NETCHAN_NEW ||
         (mode != SV_NATIVE_SHADOW_MODE_COMMAND &&
          mode != SV_NATIVE_SHADOW_MODE_EVENT &&
-         mode != SV_NATIVE_SHADOW_MODE_SNAPSHOT) ||
+         mode != SV_NATIVE_SHADOW_MODE_SNAPSHOT &&
+         mode != SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT) ||
         netchan->app_tx_prepare != NULL ||
         netchan->app_tx_completion != NULL ||
         netchan->app_tx_opaque != NULL || netchan->app_rx != NULL ||
         netchan->app_rx_opaque != NULL || !allocate_owner(&owner)) {
         return false;
     }
-    if (mode == SV_NATIVE_SHADOW_MODE_EVENT) {
+    if (SV_NativeShadowModeHasEventV1(mode)) {
         event_state = calloc(1, sizeof(*event_state));
         if (event_state == NULL)
             return false;
-    } else if (mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
+    }
+    if (SV_NativeShadowModeHasSnapshotV1(mode)) {
         snapshot_state = calloc(1, sizeof(*snapshot_state));
-        if (snapshot_state == NULL)
+        if (snapshot_state == NULL) {
+            free(event_state);
             return false;
+        }
     }
 
     memset(peer, 0, sizeof(*peer));
@@ -1567,6 +1731,11 @@ bool SV_NativeShadowPeerInitModeV1(
     peer->clock_ticks = raw_time_ms;
     peer->lifecycle = SV_NATIVE_SHADOW_LIFECYCLE_WAIT_READINESS;
     peer->ack_next_bank = SV_NATIVE_SHADOW_TRANSPORT_BANK_CURRENT;
+    peer->data_next_lane = SV_NativeShadowModeHasEventV1(mode)
+        ? SV_NATIVE_SHADOW_DATA_LANE_EVENT
+        : (SV_NativeShadowModeHasSnapshotV1(mode)
+               ? SV_NATIVE_SHADOW_DATA_LANE_SNAPSHOT
+               : SV_NATIVE_SHADOW_DATA_LANE_NONE);
 
     if (!Netchan_SetApplicationTxHook(
             netchan, native_shadow_tx_prepare,
@@ -1655,13 +1824,12 @@ void SV_NativeShadowPeerDestroyV1(sv_native_shadow_peer_v1 *peer)
         return;
     event_state = peer->version == SV_NATIVE_SHADOW_VERSION &&
                           peer->initialized == 1 &&
-                          peer->mode == SV_NATIVE_SHADOW_MODE_EVENT
+                          SV_NativeShadowModeHasEventV1(peer->mode)
                       ? peer->event_state
                       : NULL;
     snapshot_state = peer->version == SV_NATIVE_SHADOW_VERSION &&
                              peer->initialized == 1 &&
-                             peer->mode ==
-                                 SV_NATIVE_SHADOW_MODE_SNAPSHOT
+                             SV_NativeShadowModeHasSnapshotV1(peer->mode)
                          ? peer->snapshot_state
                          : NULL;
     SV_NativeShadowPeerDetachV1(peer);
@@ -1841,7 +2009,7 @@ bool SV_NativeShadowBeginEpochBoundV1(
     if (official_connection_epoch == 0 ||
         official_supported != WORR_NET_CAP_LEGACY_STAGE_MASK ||
         official_negotiated != WORR_NET_CAP_LEGACY_STAGE_MASK ||
-        ((peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT) !=
+        (SV_NativeShadowModeHasSnapshotV1(peer->mode) !=
          (snapshot_epoch != 0))) {
         SV_NativeShadowPeerDisableV1(
             peer, SV_NATIVE_SHADOW_FAILURE_OFFICIAL_BINDING);
@@ -1857,19 +2025,14 @@ bool SV_NativeShadowBeginEpochBoundV1(
             peer, SV_NATIVE_SHADOW_FAILURE_IDENTITY_EXHAUSTED);
         return false;
     }
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT &&
+    if (SV_NativeShadowModeHasEventV1(peer->mode) &&
         !allocate_event_stream_epoch(&event_stream_epoch)) {
         SV_NativeShadowPeerDisableV1(
             peer, SV_NATIVE_SHADOW_FAILURE_IDENTITY_EXHAUSTED);
         return false;
     }
 
-    private_capabilities =
-        peer->mode == SV_NATIVE_SHADOW_MODE_EVENT
-            ? WORR_NET_CAP_NATIVE_EVENT_PRIVATE_MASK
-            : (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT
-                   ? WORR_NET_CAP_NATIVE_SNAPSHOT_PRIVATE_MASK
-                   : WORR_NET_CAP_NATIVE_COMMAND_PRIVATE_MASK);
+    private_capabilities = mode_private_capabilities(peer->mode);
     memset(&readiness, 0, sizeof(readiness));
     if (peer->readiness_initialized == 0) {
         result = Worr_NativeReadinessServerInitBoundV1(
@@ -1906,9 +2069,9 @@ bool SV_NativeShadowBeginEpochBoundV1(
             peer, SV_NATIVE_SHADOW_FAILURE_SESSION);
         return false;
     }
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT)
+    if (SV_NativeShadowModeHasEventV1(peer->mode))
         peer->event_state->stream_epoch = event_stream_epoch;
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT)
+    if (SV_NativeShadowModeHasSnapshotV1(peer->mode))
         peer->snapshot_state->snapshot_epoch = snapshot_epoch;
     memset(&peer->pending_native_id, 0,
            sizeof(peer->pending_native_id));
@@ -1984,9 +2147,7 @@ bool SV_NativeShadowServerActiveQueuedV1(
     sv_native_shadow_transport_v1 transport;
     bool readiness_phase_valid;
     const bool server_data_mode =
-        peer != NULL &&
-        (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT ||
-         peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT);
+        peer != NULL && mode_has_server_data(peer->mode);
 
     /* This API's contract says SERVER_ACTIVE is already resident in the
      * reliable queue.  From this point the client may legitimately observe
@@ -2012,10 +2173,10 @@ bool SV_NativeShadowServerActiveQueuedV1(
     if (peer->transport_initialized &&
         peer->transport.binding.transport_epoch ==
             peer->readiness.transport_epoch) {
-        if ((peer->mode == SV_NATIVE_SHADOW_MODE_EVENT &&
+        if ((SV_NativeShadowModeHasEventV1(peer->mode) &&
              (!event_state_valid(peer) ||
               !peer->event_state->current_sender_initialized)) ||
-            (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT &&
+            (SV_NativeShadowModeHasSnapshotV1(peer->mode) &&
              (!snapshot_state_valid(peer) ||
               !peer->snapshot_state->current_sender_initialized))) {
             SV_NativeShadowPeerDisableV1(
@@ -2047,7 +2208,7 @@ bool SV_NativeShadowServerActiveQueuedV1(
         return false;
     }
 
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT) {
+    if (SV_NativeShadowModeHasEventV1(peer->mode)) {
         if (!event_state_valid(peer) ||
             peer->event_state->stream_epoch == 0 ||
             peer->event_state->current_sender_initialized ||
@@ -2065,7 +2226,7 @@ bool SV_NativeShadowServerActiveQueuedV1(
         }
         peer->event_state->current_sender_initialized = 1;
     }
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
+    if (SV_NativeShadowModeHasSnapshotV1(peer->mode)) {
         if (!snapshot_state_valid(peer) ||
             peer->snapshot_state->snapshot_epoch == 0 ||
             peer->snapshot_state->snapshot_epoch !=
@@ -2195,13 +2356,12 @@ sv_native_shadow_observe_result_v1 SV_NativeShadowObserveSettingV1(
     readiness = peer->readiness;
     if (peer_record.record_kind ==
         WORR_NATIVE_READINESS_RECORD_CLIENT_ACTIVE_CONFIRM) {
-        if ((peer->mode != SV_NATIVE_SHADOW_MODE_EVENT &&
-             peer->mode != SV_NATIVE_SHADOW_MODE_SNAPSHOT) ||
+        if (!mode_has_server_data(peer->mode) ||
             !peer->transport_initialized ||
-            (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT &&
+            (SV_NativeShadowModeHasEventV1(peer->mode) &&
              (!event_state_valid(peer) ||
               !peer->event_state->current_sender_initialized)) ||
-            (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT &&
+            (SV_NativeShadowModeHasSnapshotV1(peer->mode) &&
              (!snapshot_state_valid(peer) ||
               !peer->snapshot_state->current_sender_initialized))) {
             SV_NativeShadowPeerDisableV1(
@@ -2449,7 +2609,7 @@ static bool queue_event_candidates_at_tick(
 
     if (!event_state_valid(peer) || candidates == NULL ||
         candidate_count == 0 ||
-        peer->mode != SV_NATIVE_SHADOW_MODE_EVENT ||
+        !SV_NativeShadowModeHasEventV1(peer->mode) ||
         peer->lifecycle != SV_NATIVE_SHADOW_LIFECYCLE_ACTIVE ||
         !peer->event_state->current_sender_initialized)
         return false;
@@ -2507,7 +2667,7 @@ bool SV_NativeShadowQueueSnapshotEventsV1(
     uint64_t now_tick;
 
     if (!native_shadow_hooks_exact(peer) || snapshot_shadow == NULL ||
-        peer->mode != SV_NATIVE_SHADOW_MODE_EVENT ||
+        !SV_NativeShadowModeHasEventV1(peer->mode) ||
         peer->lifecycle != SV_NATIVE_SHADOW_LIFECYCLE_ACTIVE ||
         !event_state_valid(peer) ||
         !peer->event_state->current_sender_initialized) {
@@ -2575,7 +2735,7 @@ bool SV_NativeShadowQueueSnapshotV1(
     uint64_t now_tick;
 
     if (!native_shadow_hooks_exact(peer) || snapshot_shadow == NULL ||
-        peer->mode != SV_NATIVE_SHADOW_MODE_SNAPSHOT ||
+        !SV_NativeShadowModeHasSnapshotV1(peer->mode) ||
         peer->lifecycle != SV_NATIVE_SHADOW_LIFECYCLE_ACTIVE ||
         !snapshot_state_valid(peer) ||
         !peer->snapshot_state->current_sender_initialized) {
@@ -2620,6 +2780,11 @@ bool SV_NativeShadowQueueSnapshotV1(
     saturating_increment(&state->snapshot_queue_failures);
     enter_drain(
         peer, SV_NATIVE_SHADOW_FAILURE_SNAPSHOT_SENDER, true);
+    peer->last_failure_detail = snapshot_failure_detail(
+        SV_NATIVE_SHADOW_FAILURE_DETAIL_SNAPSHOT_QUEUE,
+        queue_result,
+        Worr_NativeCodecSnapshotTransportFailureFlagsV1(
+            &view, state->current_sender.max_entities));
     return false;
 }
 
@@ -2630,34 +2795,37 @@ static bool server_data_due_at_tick(
 {
     worr_native_event_sender_result_v1 result;
     worr_native_snapshot_sender_result_v1 snapshot_result;
+    bool lane_due;
 
     if (!event_state_valid(peer) || !snapshot_state_valid(peer) ||
         due_out == NULL)
         return false;
     *due_out = false;
-    if (peer->mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
-        if (peer->snapshot_state->current_sender_initialized == 0 ||
-            peer->lifecycle !=
-                SV_NATIVE_SHADOW_LIFECYCLE_ACTIVE) {
-            return true;
-        }
+    if (peer->lifecycle != SV_NATIVE_SHADOW_LIFECYCLE_ACTIVE)
+        return true;
+    if (SV_NativeShadowModeHasSnapshotV1(peer->mode) &&
+        peer->snapshot_state->current_sender_initialized != 0) {
+        lane_due = false;
         snapshot_result = Worr_NativeSnapshotSenderDataDuePeekV1(
             &peer->snapshot_state->current_sender, now_tick,
-            SV_NATIVE_SHADOW_SNAPSHOT_RESEND_MS, due_out);
-        return snapshot_result == WORR_NATIVE_SNAPSHOT_SENDER_OK ||
-               snapshot_result ==
-                   WORR_NATIVE_SNAPSHOT_SENDER_NOT_DUE;
+            SV_NATIVE_SHADOW_SNAPSHOT_RESEND_MS, &lane_due);
+        if (snapshot_result != WORR_NATIVE_SNAPSHOT_SENDER_OK &&
+            snapshot_result != WORR_NATIVE_SNAPSHOT_SENDER_NOT_DUE)
+            return false;
+        *due_out = *due_out || lane_due;
     }
-    if (peer->mode != SV_NATIVE_SHADOW_MODE_EVENT ||
-        peer->event_state->current_sender_initialized == 0 ||
-        peer->lifecycle != SV_NATIVE_SHADOW_LIFECYCLE_ACTIVE) {
-        return true;
+    if (SV_NativeShadowModeHasEventV1(peer->mode) &&
+        peer->event_state->current_sender_initialized != 0) {
+        lane_due = false;
+        result = Worr_NativeEventSenderDataDuePeekV1(
+            &peer->event_state->current_sender, now_tick,
+            SV_NATIVE_SHADOW_EVENT_RESEND_MS, &lane_due);
+        if (result != WORR_NATIVE_EVENT_SENDER_OK &&
+            result != WORR_NATIVE_EVENT_SENDER_NOT_DUE)
+            return false;
+        *due_out = *due_out || lane_due;
     }
-    result = Worr_NativeEventSenderDataDuePeekV1(
-        &peer->event_state->current_sender, now_tick,
-        SV_NATIVE_SHADOW_EVENT_RESEND_MS, due_out);
-    return result == WORR_NATIVE_EVENT_SENDER_OK ||
-           result == WORR_NATIVE_EVENT_SENDER_NOT_DUE;
+    return true;
 }
 
 static bool pump_event_sender_at_tick(
@@ -2669,7 +2837,7 @@ static bool pump_event_sender_at_tick(
     uint32_t promoted;
 
     if (!event_state_valid(peer) ||
-        peer->mode != SV_NATIVE_SHADOW_MODE_EVENT ||
+        !SV_NativeShadowModeHasEventV1(peer->mode) ||
         !peer->event_state->current_sender_initialized)
         return false;
     promoted = 0;
@@ -2695,7 +2863,7 @@ bool SV_NativeShadowEventPumpV1(
     uint64_t now_tick;
 
     if (!native_shadow_hooks_exact(peer) || promoted_out == NULL ||
-        peer->mode != SV_NATIVE_SHADOW_MODE_EVENT ||
+        !SV_NativeShadowModeHasEventV1(peer->mode) ||
         !peer->event_state->current_sender_initialized)
         return false;
     if (!extend_clock(peer, raw_time_ms, &now_tick)) {
@@ -2736,7 +2904,7 @@ bool SV_NativeShadowOutputDueV1(
             return false;
         }
         peer->readiness = readiness;
-        if (peer->mode == SV_NATIVE_SHADOW_MODE_EVENT &&
+        if (SV_NativeShadowModeHasEventV1(peer->mode) &&
             !pump_event_sender_at_tick(peer, now_tick, NULL))
             return false;
     }
@@ -2891,6 +3059,7 @@ bool SV_NativeShadowGetStatusV1(
     status.stale_cancelled_readiness_records =
         peer->stale_cancelled_readiness_records;
     status.last_failure = peer->last_failure;
+    status.last_failure_detail = peer->last_failure_detail;
     *status_out = status;
     return true;
 }
@@ -2916,7 +3085,7 @@ bool SV_NativeShadowGetEventStatusV1(
     status.active_confirms = peer->client_active_confirm_records;
     status.output_due =
         SV_NativeShadowOutputEligiblePeekV1(peer, raw_time_ms) ? 1u : 0u;
-    if (peer->mode != SV_NATIVE_SHADOW_MODE_EVENT) {
+    if (!SV_NativeShadowModeHasEventV1(peer->mode)) {
         *status_out = status;
         return true;
     }
@@ -2991,7 +3160,7 @@ bool SV_NativeShadowGetSnapshotStatusV1(
         SV_NativeShadowOutputEligiblePeekV1(peer, raw_time_ms)
             ? 1u
             : 0u;
-    if (peer->mode != SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
+    if (!SV_NativeShadowModeHasSnapshotV1(peer->mode)) {
         *status_out = status;
         return true;
     }

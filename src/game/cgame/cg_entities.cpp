@@ -47,13 +47,18 @@ namespace {
  *
  * Mode 0 keeps legacy rendering authoritative while still advancing the
  * canonical render clock.  Mode 1 performs a live transform parity audit.
- * Mode 2 promotes a sampled transform only after the same parity checks pass;
- * every rejected/missing/discontinuous entity falls back independently.
+ * Mode 2 promotes a sampled transform only after the same parity checks pass.
+ * Mode 3 is a stricter source gate but a different time policy: it activates
+ * only while the engine reports sole native timeline ownership, selects the
+ * newest admitted native time, and promotes safe copied samples without
+ * requiring the newer legacy frame to describe that older native instant.
+ * Every rejected/missing/discontinuous entity still falls back independently.
  */
 enum canonical_snapshot_render_mode_t {
     CANONICAL_SNAPSHOT_RENDER_LEGACY = 0,
     CANONICAL_SNAPSHOT_RENDER_AUDIT = 1,
     CANONICAL_SNAPSHOT_RENDER_PROMOTE = 2,
+    CANONICAL_SNAPSHOT_RENDER_NATIVE_AUTHORITY = 3,
 };
 
 struct canonical_snapshot_render_stats_t {
@@ -73,6 +78,8 @@ struct canonical_snapshot_render_stats_t {
     std::uint64_t sample_discontinuities;
     std::uint64_t parity_matches;
     std::uint64_t parity_mismatches;
+    std::uint64_t native_authority_samples;
+    std::uint64_t native_authority_blocks;
     std::uint64_t promoted_transforms;
     std::uint64_t event_ready_records;
     std::uint64_t event_future_frames;
@@ -93,6 +100,7 @@ struct canonical_snapshot_render_frame_t {
 cvar_t *cg_snapshot_timeline_render;
 cvar_t *cg_snapshot_timeline_render_epsilon;
 cvar_t *cg_event_runtime_audit;
+cvar_t *cl_worr_native_snapshot_timeline_owned;
 canonical_snapshot_render_stats_t canonical_render_stats;
 canonical_snapshot_render_frame_t canonical_render_frame;
 
@@ -224,7 +232,8 @@ void begin_canonical_snapshot_render_frame()
     const int configured_mode = cg_snapshot_timeline_render
         ? Q_clip(cg_snapshot_timeline_render->integer,
                  static_cast<int>(CANONICAL_SNAPSHOT_RENDER_LEGACY),
-                 static_cast<int>(CANONICAL_SNAPSHOT_RENDER_PROMOTE))
+                 static_cast<int>(
+                     CANONICAL_SNAPSHOT_RENDER_NATIVE_AUTHORITY))
         : CANONICAL_SNAPSHOT_RENDER_LEGACY;
     canonical_render_frame.mode = static_cast<std::uint32_t>(configured_mode);
     const bool event_runtime_enabled =
@@ -238,11 +247,33 @@ void begin_canonical_snapshot_render_frame()
         return;
     }
 
+    const bool native_authority = configured_mode ==
+        CANONICAL_SNAPSHOT_RENDER_NATIVE_AUTHORITY;
+    if (native_authority &&
+        (!cl_worr_native_snapshot_timeline_owned ||
+         !cl_worr_native_snapshot_timeline_owned->integer)) {
+        increment_saturated(canonical_render_stats.native_authority_blocks);
+        return;
+    }
+
     std::uint64_t desired_time_us = 0;
-    if (!canonical_desired_render_time_us(&desired_time_us) ||
-        desired_time_us > clock.render_time_us ||
-        clock.render_time_us - desired_time_us >
-            WORR_SNAPSHOT_TIMELINE_MAX_INTERPOLATION_DELAY_US) {
+    if (native_authority) {
+        worr_snapshot_v2 latest{};
+        if (CG_CanonicalSnapshotTimelineCopySnapshot(
+                diagnostics.latest_ref, &latest) !=
+                WORR_SNAPSHOT_TIMELINE_OK) {
+            increment_saturated(
+                canonical_render_stats.native_authority_blocks);
+            return;
+        }
+        /* Semantic ACK pacing can make the native view older than the legacy
+         * frame received beside it. Select the newest admitted native instant
+         * rather than comparing two different points on the server clock. */
+        desired_time_us = min(clock.render_time_us, latest.server_time_us);
+    } else if (!canonical_desired_render_time_us(&desired_time_us) ||
+               desired_time_us > clock.render_time_us ||
+               clock.render_time_us - desired_time_us >
+                   WORR_SNAPSHOT_TIMELINE_MAX_INTERPOLATION_DELAY_US) {
         increment_saturated(canonical_render_stats.alignment_failures);
         return;
     }
@@ -354,7 +385,20 @@ bool sample_canonical_entity_transform(
         WORR_SNAPSHOT_TIMELINE_ENTITY_BLOCK_POLICY;
     if (sample.blocking_reasons & unsafe_blocks) {
         increment_saturated(canonical_render_stats.sample_discontinuities);
+        if (canonical_render_frame.mode ==
+            CANONICAL_SNAPSHOT_RENDER_NATIVE_AUTHORITY) {
+            increment_saturated(
+                canonical_render_stats.native_authority_blocks);
+        }
         return false;
+    }
+
+    if (canonical_render_frame.mode ==
+        CANONICAL_SNAPSHOT_RENDER_NATIVE_AUTHORITY) {
+        increment_saturated(canonical_render_stats.native_authority_samples);
+        increment_saturated(canonical_render_stats.promoted_transforms);
+        *sample_out = sample;
+        return true;
     }
 
     vec3_t legacy_origin;
@@ -419,7 +463,8 @@ void end_canonical_snapshot_render_frame()
             "cg_snapshot_timeline_render: epoch=%u mode=%u clock=%llu/%llu "
             "pair=%llu/%llu align_fail=%llu pair_mode=%u pair_blocks=0x%x "
             "samples=%llu fail=%llu invisible=%llu discontinuity=%llu "
-            "parity=%llu/%llu promoted=%llu events=%llu/%llu/%llu "
+            "parity=%llu/%llu native=%llu/%llu promoted=%llu "
+            "events=%llu/%llu/%llu "
             "max_error=%.4f/%.4f/%.4f\n",
             canonical_render_stats.epoch, canonical_render_frame.mode,
             static_cast<unsigned long long>(canonical_render_stats.clock_frames),
@@ -435,6 +480,10 @@ void end_canonical_snapshot_render_frame()
             static_cast<unsigned long long>(canonical_render_stats.sample_discontinuities),
             static_cast<unsigned long long>(canonical_render_stats.parity_matches),
             static_cast<unsigned long long>(canonical_render_stats.parity_mismatches),
+            static_cast<unsigned long long>(
+                canonical_render_stats.native_authority_samples),
+            static_cast<unsigned long long>(
+                canonical_render_stats.native_authority_blocks),
             static_cast<unsigned long long>(canonical_render_stats.promoted_transforms),
             static_cast<unsigned long long>(canonical_render_stats.event_ready_records),
             static_cast<unsigned long long>(canonical_render_stats.event_future_frames),
@@ -487,6 +536,9 @@ void CG_CanonicalSnapshotRender_InitCvars(void)
         "cg_snapshot_timeline_render_epsilon", "0.125", CVAR_NOARCHIVE);
     cg_event_runtime_audit = Cvar_Get(
         "cg_event_runtime_audit", "0", CVAR_NOARCHIVE);
+    cl_worr_native_snapshot_timeline_owned = Cvar_Get(
+        "cl_worr_native_snapshot_timeline_owned", "0",
+        CVAR_ROM | CVAR_NOARCHIVE);
     if (cg_event_runtime_audit)
         cg_event_runtime_audit->changed = event_runtime_audit_changed;
     CG_EventRuntimeSetAuditEnabled(

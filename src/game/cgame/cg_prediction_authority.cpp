@@ -41,6 +41,43 @@ bool generation_equal(worr_snapshot_entity_generation_v2 left,
            left.reserved0 == right.reserved0;
 }
 
+bool receipt_valid(
+    const cg_canonical_prediction_snapshot_v2 &timeline)
+{
+    const auto &receipt = timeline.receipt;
+    const auto &snapshot = timeline.snapshot;
+    constexpr std::uint32_t required_receipt_flags =
+        WORR_CGAME_SNAPSHOT_RECEIPT_TIMELINE_ACCEPTED |
+        WORR_CGAME_SNAPSHOT_RECEIPT_EVENT_FENCE_ACCEPTED;
+    return receipt.struct_size == sizeof(receipt) &&
+           receipt.schema_version ==
+               CG_CANONICAL_PREDICTION_RECEIPT_VERSION &&
+           receipt.admission_generation != 0 &&
+           receipt.receipt_flags == required_receipt_flags &&
+           receipt.reserved0 == 0 &&
+           receipt.ref.slot == timeline.ref.slot &&
+           receipt.ref.generation == timeline.ref.generation &&
+           receipt.snapshot_id.epoch == snapshot.snapshot_id.epoch &&
+           receipt.snapshot_id.sequence == snapshot.snapshot_id.sequence &&
+           receipt.snapshot_hash == snapshot.snapshot_hash &&
+           receipt.consumed_command.cursor.epoch ==
+               snapshot.consumed_command.cursor.epoch &&
+           receipt.consumed_command.cursor.contiguous_sequence ==
+               snapshot.consumed_command.cursor.contiguous_sequence &&
+           receipt.consumed_command.provenance ==
+               snapshot.consumed_command.provenance &&
+           receipt.consumed_command.reserved0 ==
+               snapshot.consumed_command.reserved0 &&
+           receipt.server_tick == snapshot.server_tick &&
+           receipt.server_time_us == snapshot.server_time_us &&
+           receipt.controlled_entity_index ==
+               snapshot.controlled_entity.identity.index &&
+           receipt.controlled_entity_generation ==
+               snapshot.controlled_entity.identity.generation &&
+           receipt.controlled_entity_provenance ==
+               snapshot.controlled_entity.provenance_flags;
+}
+
 bool command_valid(const worr_prediction_command_v1 &command)
 {
     return command.struct_size == sizeof(command) &&
@@ -195,6 +232,11 @@ cg_prediction_authority_result_v1 CG_PredictionAuthoritySelectV1(
             cg_prediction_authority_result_v1::consumed_cursor_mismatch,
             authority_out);
     }
+    if (!receipt_valid(timeline)) {
+        return fail(
+            cg_prediction_authority_result_v1::admission_receipt_invalid,
+            authority_out);
+    }
     if (!input_range_valid(candidate->input,
                            snapshot.consumed_command)) {
         return fail(cg_prediction_authority_result_v1::input_range_invalid,
@@ -222,6 +264,8 @@ const char *CG_PredictionAuthorityResultName(
         return "invalid_argument";
     case cg_prediction_authority_result_v1::timeline_unavailable:
         return "timeline_unavailable";
+    case cg_prediction_authority_result_v1::admission_receipt_invalid:
+        return "admission_receipt_invalid";
     case cg_prediction_authority_result_v1::snapshot_invalid:
         return "snapshot_invalid";
     case cg_prediction_authority_result_v1::snapshot_incomplete:

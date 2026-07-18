@@ -23,6 +23,37 @@ PROTOCOL = (ROOT / "inc/common/protocol.h").read_text(encoding="utf-8")
 
 
 class CanonicalRailDamageContractTests(unittest.TestCase):
+    def test_local_action_proof_is_exact_and_latched_before_ring_rotation(self) -> None:
+        state = LAG[
+            LAG.index("struct CanonicalRailProbeState") :
+            LAG.index("constexpr uint32_t kCanonicalRailProbeRequiredHistoryCaptures")
+        ]
+        publish = LAG[
+            LAG.index("void CanonicalRailProbePublish") :
+            LAG.index("void CanonicalRailProbeFail")
+        ]
+        self.assertIn("local_action_proof_ready", state)
+        self.assertIn("local_action_proof_command_id", state)
+        self.assertIn("local_action_proof_scoped", state)
+        self.assertIn("local_action_proof_leased", state)
+        self.assertIn("local_action_proof_joined", state)
+        self.assertIn("local_action_proof_shadow", state)
+        self.assertIn(
+            "SG_LocalActionObservationCopyLatestAttackShadowInRange", publish
+        )
+        self.assertIn("localActionContinuityExact", publish)
+        self.assertIn(
+            "canonicalRailProbe.local_action_proof_ready = true;", publish
+        )
+        latch = publish.index(
+            "canonicalRailProbe.local_action_proof_ready = true;"
+        )
+        self.assertLess(
+            publish.index("localActionJoinedReady && localActionShadowReady"),
+            latch,
+        )
+        self.assertNotIn("weaponThink", publish)
+
     def test_pose_history_uses_the_engine_snapshot_time_domain(self) -> None:
         self.assertIn("uint64_t (*ServerSimulationTimeUs)(void);", GAME_IMPORT_C)
         self.assertIn("uint64_t\t(*ServerSimulationTimeUs)();", GAME_IMPORT_CPP)

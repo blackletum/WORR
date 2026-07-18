@@ -72,7 +72,22 @@ typedef enum sv_native_shadow_mode_v1_e {
     SV_NATIVE_SHADOW_MODE_COMMAND = 1,
     SV_NATIVE_SHADOW_MODE_EVENT = 2,
     SV_NATIVE_SHADOW_MODE_SNAPSHOT = 3,
+    /* Negotiated private mask 0x77: one carrier with fair event/snapshot
+     * scheduling and disjoint low/high semantic message sequences. */
+    SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT = 4,
 } sv_native_shadow_mode_v1;
+
+static inline bool SV_NativeShadowModeHasEventV1(uint32_t mode)
+{
+    return mode == SV_NATIVE_SHADOW_MODE_EVENT ||
+           mode == SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT;
+}
+
+static inline bool SV_NativeShadowModeHasSnapshotV1(uint32_t mode)
+{
+    return mode == SV_NATIVE_SHADOW_MODE_SNAPSHOT ||
+           mode == SV_NATIVE_SHADOW_MODE_EVENT_SNAPSHOT;
+}
 
 typedef enum sv_native_shadow_lifecycle_v1_e {
     SV_NATIVE_SHADOW_LIFECYCLE_WAIT_READINESS = 1,
@@ -107,6 +122,15 @@ typedef enum sv_native_shadow_failure_v1_e {
     SV_NATIVE_SHADOW_FAILURE_SNAPSHOT_SENDER = 16,
     SV_NATIVE_SHADOW_FAILURE_SNAPSHOT_PROJECTION = 17,
 } sv_native_shadow_failure_v1;
+
+/* Failure detail remains zero for general adapter failures.  Snapshot sender
+ * failures encode operation/result/validation flags as 8/8/16 bits. */
+typedef enum sv_native_shadow_failure_detail_operation_v1_e {
+    SV_NATIVE_SHADOW_FAILURE_DETAIL_NONE = 0,
+    SV_NATIVE_SHADOW_FAILURE_DETAIL_SNAPSHOT_QUEUE = 1,
+    SV_NATIVE_SHADOW_FAILURE_DETAIL_SNAPSHOT_DUE = 2,
+    SV_NATIVE_SHADOW_FAILURE_DETAIL_SNAPSHOT_PREPARE = 3,
+} sv_native_shadow_failure_detail_operation_v1;
 
 typedef enum sv_native_shadow_observe_result_v1_e {
     SV_NATIVE_SHADOW_OBSERVE_NOT_SIDEBAND = 0,
@@ -184,7 +208,7 @@ typedef struct sv_native_shadow_status_v1_s {
     uint64_t stale_cancelled_carriers;
     uint64_t stale_cancelled_readiness_records;
     uint32_t last_failure;
-    uint32_t reserved2;
+    uint32_t last_failure_detail;
 } sv_native_shadow_status_v1;
 
 /* Pointer-free event-mode diagnostics.  Command-only peers report mode 1 and
@@ -325,6 +349,7 @@ typedef struct sv_native_shadow_peer_v1_s {
     uint32_t private_transport_epoch;
     uint64_t readiness_nonce;
     uint32_t last_failure;
+    uint32_t last_failure_detail;
     uint32_t cancelled_through_transport_epoch;
 
     uint32_t lifecycle;
@@ -340,6 +365,8 @@ typedef struct sv_native_shadow_peer_v1_s {
     uint32_t ack_emit_bank;
     uint32_t tx_emit_kind;
     uint32_t ack_next_bank;
+    /* Fair next choice when both 0x77 server DATA lanes are due. */
+    uint32_t data_next_lane;
     uint32_t async_wake_active;
     uint32_t async_wake_handoff_seen;
     worr_command_id_v1 pending_native_id;
@@ -390,9 +417,11 @@ typedef struct sv_native_shadow_peer_v1_s {
     worr_native_carrier_ack_emit_token_v1 ack_emit_token;
     sv_native_shadow_transport_v1 transport;
     sv_native_shadow_transport_v1 retired_transport;
-    /* Allocated only by the explicit event-mode initializer. */
+    /* Allocated by event and combined-mode initializers.  Combined event
+     * message sequences occupy 1..0x7fffffff. */
     sv_native_shadow_event_state_v1 *event_state;
-    /* Allocated only by the explicit canonical-snapshot initializer. */
+    /* Allocated by snapshot and combined-mode initializers.  Combined
+     * snapshot message sequences start at 0x80000000. */
     sv_native_shadow_snapshot_state_v1 *snapshot_state;
 } sv_native_shadow_peer_v1;
 
@@ -458,7 +487,9 @@ bool SV_NativeShadowAppendSvcReadinessV1(
  * native server TX opens.  Explicit snapshot mode binds 0x57
  * (NATIVE_ENVELOPE + CANONICAL_SNAPSHOT + NATIVE_EPOCH_CANCEL), independently
  * binds the nonzero canonical snapshot epoch, and uses the same fourth
- * confirmation barrier.  A queued fresh CHALLENGE explicitly cancels every
+ * confirmation barrier.  Combined mode binds 0x77 and services the event and
+ * snapshot lanes through independent record-class/sequence spaces under the
+ * same transport epoch.  A queued fresh CHALLENGE explicitly cancels every
  * lower private transport epoch for the same connection owner.
  */
 bool SV_NativeShadowBeginEpochV1(

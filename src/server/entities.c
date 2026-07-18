@@ -645,8 +645,8 @@ bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize)
             client->worr_snapshot_shadow, &snapshot_ref) ==
             SV_SNAPSHOT_SHADOW_OK &&
         client->worr_native_shadow) {
-        if (client->worr_native_shadow->mode ==
-            SV_NATIVE_SHADOW_MODE_EVENT) {
+        if (SV_NativeShadowModeHasEventV1(
+                client->worr_native_shadow->mode)) {
             /* The legacy frame is already complete and remains
              * authoritative.  Native queue failure drains only the opt-in
              * event shadow. */
@@ -654,8 +654,9 @@ bool SV_WriteFrameToClient_Enhanced(client_t *client, unsigned maxsize)
                 client->worr_native_shadow,
                 client->worr_snapshot_shadow, snapshot_ref,
                 svs.realtime);
-        } else if (client->worr_native_shadow->mode ==
-                   SV_NATIVE_SHADOW_MODE_SNAPSHOT) {
+        }
+        if (SV_NativeShadowModeHasSnapshotV1(
+                client->worr_native_shadow->mode)) {
             /* Snapshot DATA is copied only from this exact final projection;
              * it can never alter the already encoded legacy frame. */
             (void)SV_NativeShadowQueueSnapshotV1(

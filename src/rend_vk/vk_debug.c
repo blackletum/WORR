@@ -44,6 +44,9 @@ typedef struct {
     uint32_t world_fast_lit_no_fog_draws;
     uint32_t world_texture_replace_draws;
     uint32_t world_texture_replace_no_fog_draws;
+    uint32_t msaa_depth_resolve_elisions;
+    uint32_t msaa_single_sample_dof_scene_frames;
+    uint32_t msaa_single_sample_scaled_scene_frames;
     uint32_t entity_fast_lit_draws;
     uint32_t entity_fast_lit_no_fog_draws;
     uint32_t entity_texture_replace_draws;
@@ -500,7 +503,7 @@ static bool VK_Debug_CreatePipeline(bool depth_test, VkPipeline *out_pipeline)
     };
     VkPipelineMultisampleStateCreateInfo multisample = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .rasterizationSamples = ctx->scene_samples,
     };
     VkPipelineDepthStencilStateCreateInfo depth = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
@@ -556,6 +559,28 @@ static bool VK_Debug_CreatePipeline(bool depth_test, VkPipeline *out_pipeline)
                                   &pipeline_info, NULL, out_pipeline),
         depth_test ? "vkCreateGraphicsPipelines(depth)" :
                      "vkCreateGraphicsPipelines(no depth)");
+    if (ok && ctx->scene_single_sample_render_pass) {
+        VkPipeline single_sample_pipeline = VK_NULL_HANDLE;
+        multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        pipeline_info.renderPass = ctx->scene_single_sample_render_pass;
+        ok = VK_Debug_Check(
+            vkCreateGraphicsPipelines(ctx->device, VK_NULL_HANDLE, 1,
+                                      &pipeline_info, NULL,
+                                      &single_sample_pipeline),
+            depth_test ? "vkCreateGraphicsPipelines(depth single sample)" :
+                         "vkCreateGraphicsPipelines(no depth single sample)");
+        if (ok) {
+            ok = VK_RegisterScenePipelineVariant(
+                ctx, *out_pipeline, single_sample_pipeline);
+        }
+        if (!ok) {
+            if (single_sample_pipeline) {
+                vkDestroyPipeline(ctx->device, single_sample_pipeline, NULL);
+            }
+            vkDestroyPipeline(ctx->device, *out_pipeline, NULL);
+            *out_pipeline = VK_NULL_HANDLE;
+        }
+    }
     vkDestroyShaderModule(ctx->device, fragment_shader, NULL);
     vkDestroyShaderModule(ctx->device, vertex_shader, NULL);
     return ok;
@@ -616,7 +641,7 @@ static void VK_Debug_Stats_f(void)
         indices += stats->domains[i].indices;
         uploads += stats->domains[i].upload_bytes;
     }
-    Com_Printf("VK_STATS frame=%llu draws=%llu vertices=%llu indices=%llu uploads=%llu world_draws=%llu entity_draws=%llu ui_draws=%llu post_draws=%llu shadow_draws=%llu debug_draws=%llu world_fast_lit_draws=%u world_fast_lit_no_fog_draws=%u world_texture_replace_draws=%u world_texture_replace_no_fog_draws=%u entity_fast_lit_draws=%u entity_fast_lit_no_fog_draws=%u entity_texture_replace_draws=%u entity_texture_replace_no_fog_draws=%u world_fast_lit_candidates=%u world_fast_lit_disabled=%u world_fast_lit_fullbright=%u world_fast_lit_receiver_lighting=%u world_fast_lit_pipeline_unavailable=%u world_fast_lit_material_ineligible=%u world_uploads=%llu entity_uploads=%llu ui_uploads=%llu post_uploads=%llu shadow_uploads=%llu debug_uploads=%llu entities=%u dlights=%u particles=%u queries=%u debug_lines=%u capacity_hits=%u cpu_ms=%.3f gpu_ms=%.3f gpu_frame_ms=%.3f gpu_upload_ms=%.3f gpu_shadow_ms=%.3f gpu_opaque_world_ms=%.3f gpu_opaque_entity_ms=%.3f gpu_scene_ms=%.3f gpu_post_ms=%.3f gpu_frame_valid=%d gpu_valid=%d missing_mask=0x%02x\n",
+    Com_Printf("VK_STATS frame=%llu draws=%llu vertices=%llu indices=%llu uploads=%llu world_draws=%llu entity_draws=%llu ui_draws=%llu post_draws=%llu shadow_draws=%llu debug_draws=%llu world_fast_lit_draws=%u world_fast_lit_no_fog_draws=%u world_texture_replace_draws=%u world_texture_replace_no_fog_draws=%u msaa_depth_resolve_elisions=%u msaa_single_sample_dof_scene_frames=%u msaa_single_sample_scaled_scene_frames=%u entity_fast_lit_draws=%u entity_fast_lit_no_fog_draws=%u entity_texture_replace_draws=%u entity_texture_replace_no_fog_draws=%u world_fast_lit_candidates=%u world_fast_lit_disabled=%u world_fast_lit_fullbright=%u world_fast_lit_receiver_lighting=%u world_fast_lit_pipeline_unavailable=%u world_fast_lit_material_ineligible=%u world_uploads=%llu entity_uploads=%llu ui_uploads=%llu post_uploads=%llu shadow_uploads=%llu debug_uploads=%llu entities=%u dlights=%u particles=%u queries=%u debug_lines=%u capacity_hits=%u cpu_ms=%.3f gpu_ms=%.3f gpu_frame_ms=%.3f gpu_upload_ms=%.3f gpu_shadow_ms=%.3f gpu_opaque_world_ms=%.3f gpu_opaque_entity_ms=%.3f gpu_scene_ms=%.3f gpu_post_ms=%.3f gpu_frame_valid=%d gpu_valid=%d missing_mask=0x%02x\n",
                (unsigned long long)stats->frame_number,
                (unsigned long long)draws,
                (unsigned long long)vertices,
@@ -638,6 +663,9 @@ static void VK_Debug_Stats_f(void)
                stats->world_fast_lit_no_fog_draws,
                stats->world_texture_replace_draws,
                stats->world_texture_replace_no_fog_draws,
+               stats->msaa_depth_resolve_elisions,
+               stats->msaa_single_sample_dof_scene_frames,
+               stats->msaa_single_sample_scaled_scene_frames,
                stats->entity_fast_lit_draws,
                stats->entity_fast_lit_no_fog_draws,
                stats->entity_texture_replace_draws,
@@ -1180,6 +1208,21 @@ void VK_Debug_RecordWorldTextureReplaceDraw(bool no_fog)
     }
 }
 
+void VK_Debug_RecordMSAADepthResolveElision(void)
+{
+    vk_debug.current.msaa_depth_resolve_elisions++;
+}
+
+void VK_Debug_RecordMSAASingleSampleDofScene(void)
+{
+    vk_debug.current.msaa_single_sample_dof_scene_frames++;
+}
+
+void VK_Debug_RecordMSAASingleSampleScaledScene(void)
+{
+    vk_debug.current.msaa_single_sample_scaled_scene_frames++;
+}
+
 void VK_Debug_RecordEntityFastLitNoFogDraw(void)
 {
     vk_debug.current.entity_fast_lit_no_fog_draws++;
@@ -1307,7 +1350,8 @@ void VK_Debug_RecordShowTris(VkCommandBuffer cmd, const VkExtent2D *extent)
         viewport.maxDepth = 0.0f;
         vkCmdSetViewport(cmd, 0, 1, &viewport);
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          vk_debug.pipeline_depth);
+                          VK_SelectScenePipeline(vk_debug.ctx,
+                                                 vk_debug.pipeline_depth));
         vkCmdDraw(cmd, depth_count, 1, 0, 0);
         VK_Debug_RecordDraw(VK_DEBUG_DOMAIN_DEBUG, depth_count, 0);
     }
@@ -1315,7 +1359,8 @@ void VK_Debug_RecordShowTris(VkCommandBuffer cmd, const VkExtent2D *extent)
         viewport.maxDepth = 1.0f;
         vkCmdSetViewport(cmd, 0, 1, &viewport);
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          vk_debug.pipeline_no_depth);
+                          VK_SelectScenePipeline(vk_debug.ctx,
+                                                 vk_debug.pipeline_no_depth));
         vkCmdDraw(cmd, no_depth_count, 1, depth_count, 0);
         VK_Debug_RecordDraw(VK_DEBUG_DOMAIN_DEBUG, no_depth_count, 0);
     }
@@ -1392,13 +1437,15 @@ void VK_Debug_Record(VkCommandBuffer cmd, const VkExtent2D *extent)
     vkCmdSetScissor(cmd, 0, 1, &scissor);
     if (depth_vertices) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          vk_debug.pipeline_depth);
+                          VK_SelectScenePipeline(vk_debug.ctx,
+                                                 vk_debug.pipeline_depth));
         vkCmdDraw(cmd, depth_vertices, 1, 0, 0);
         VK_Debug_RecordDraw(VK_DEBUG_DOMAIN_DEBUG, depth_vertices, 0);
     }
     if (no_depth_vertices) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          vk_debug.pipeline_no_depth);
+                          VK_SelectScenePipeline(vk_debug.ctx,
+                                                 vk_debug.pipeline_no_depth));
         vkCmdDraw(cmd, no_depth_vertices, 1, depth_vertices, 0);
         VK_Debug_RecordDraw(VK_DEBUG_DOMAIN_DEBUG, no_depth_vertices, 0);
     }

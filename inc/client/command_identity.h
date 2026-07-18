@@ -31,6 +31,9 @@ bool CL_CommandIdentityRetainCommand(uint32_t legacy_command_number,
                                      const worr_prediction_command_v1 *command);
 bool CL_CommandIdentityRecordForNumber(uint32_t legacy_command_number,
                                        worr_command_record_v1 *record_out);
+bool CL_CommandIdentityRecordForId(worr_command_id_v1 command_id,
+                                   uint32_t *legacy_command_number_out,
+                                   worr_command_record_v1 *record_out);
 bool CL_CommandIdentityGetState(uint32_t *initial_epoch_out,
                                 uint32_t *baseline_legacy_sequence_out);
 

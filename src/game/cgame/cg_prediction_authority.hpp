@@ -18,6 +18,7 @@ enum class cg_prediction_authority_result_v1 : std::uint32_t {
     canonical = 0,
     invalid_argument,
     timeline_unavailable,
+    admission_receipt_invalid,
     snapshot_invalid,
     snapshot_incomplete,
     snapshot_misaligned,
@@ -35,13 +36,13 @@ struct cg_prediction_authority_expectation_v1 {
 };
 
 struct cg_prediction_authority_candidate_v1 {
-    cg_canonical_prediction_snapshot_v1 timeline;
+    cg_canonical_prediction_snapshot_v2 timeline;
     worr_cgame_prediction_input_range_v1 input;
 };
 
 struct cg_prediction_authority_v1 {
     cg_prediction_authority_result_v1 result;
-    cg_canonical_prediction_snapshot_v1 timeline;
+    cg_canonical_prediction_snapshot_v2 timeline;
     worr_cgame_prediction_input_range_v1 input;
     std::uint32_t history_reset_required;
 };

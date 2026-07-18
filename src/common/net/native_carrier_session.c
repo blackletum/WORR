@@ -668,7 +668,12 @@ Worr_NativeCarrierSessionDispatchPreparePacketV1(
         return WORR_NATIVE_CARRIER_SESSION_STALE_DISPATCH;
     }
     if (legacy_bytes > dispatch->legacy_bytes_reserve) {
-        return WORR_NATIVE_CARRIER_SESSION_INVALID_ARGUMENT;
+        /* A multi-fragment dispatch may begin on an async packet with a
+         * smaller legacy prefix than a later ordinary netchan packet.  The
+         * caller can retry the unchanged dispatch on another packet with a
+         * compatible prefix, so this is temporary packet capacity pressure,
+         * not an invalid API contract. */
+        return WORR_NATIVE_CARRIER_SESSION_OUTPUT_TOO_SMALL;
     }
 
     advanced = dispatch->fragmenter;

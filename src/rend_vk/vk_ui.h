@@ -19,6 +19,7 @@ void VK_UI_BeginFrame(void);
 void VK_UI_EndFrame(void);
 void VK_UI_RecordUploads(VkCommandBuffer cmd);
 void VK_UI_Record(VkCommandBuffer cmd, const VkExtent2D *extent);
+void VK_UI_RecordScene(VkCommandBuffer cmd, const VkExtent2D *extent);
 
 float VK_UI_ClampScale(cvar_t *var);
 void VK_UI_SetScale(float scale);

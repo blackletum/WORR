@@ -59,22 +59,6 @@ void CG_InitScreen();
 
 uint64_t cgame_init_time = 0;
 
-extern "C" void CG_GetPredictionConfigV1(worr_prediction_config_v1 *config)
-{
-	if (!config)
-		return;
-
-	*config = {};
-	config->struct_size = sizeof(*config);
-	config->schema_version = WORR_PREDICTION_ABI_VERSION;
-	config->movement_model_revision = WORR_PREDICTION_MODEL_REVISION;
-	config->air_acceleration = pm_config.airAccel;
-	if (pm_config.n64Physics)
-		config->flags |= WORR_PREDICTION_CONFIG_N64_PHYSICS;
-	if (pm_config.q3Overbounce)
-		config->flags |= WORR_PREDICTION_CONFIG_Q3_OVERBOUNCE;
-}
-
 static void InitCGame()
 {
 	(void)CG_CanonicalSnapshotTimelineInitialize();
@@ -91,9 +75,14 @@ static void InitCGame()
 
 static void ShutdownCGame()
 {
-	CG_PredictionInputSetImport(nullptr);
-	CG_PredictionInputSetImportV2(nullptr);
-	CG_LocalInteractionSetImport(nullptr);
+	/* The engine installs these extension tables once, when it loads the
+	 * cgame DLL and calls GetCGameAPI.  A connection-level shutdown during
+	 * reconnect is followed by InitCGame, not another GetCGameAPI call, so
+	 * clearing the tables here permanently disabled canonical prediction and
+	 * exact command-record lookup for the new connection.  Keep the immutable
+	 * engine imports for the DLL lifetime and clear only connection-scoped
+	 * reconciliation state. */
+	CG_LocalInteractionReset();
 }
 
 void CG_DrawHUD (int32_t isplit, const cg_server_data_t *data, vrect_t hud_vrect, vrect_t hud_safe, int32_t scale, int32_t playernum, const player_state_t *ps);
@@ -221,10 +210,23 @@ Q2GAME_API cgame_export_t *GetCGameAPI(cgame_import_t *import)
 			command_record_import = nullptr;
 		}
 		CG_LocalInteractionSetImport(command_record_import);
+		const worr_cgame_command_record_import_v2 *command_record_import_v2 =
+			(const worr_cgame_command_record_import_v2 *)import->GetExtension(
+				WORR_CGAME_COMMAND_RECORD_IMPORT_V2);
+		if (command_record_import_v2 &&
+			(command_record_import_v2->struct_size !=
+				 sizeof(*command_record_import_v2) ||
+			 command_record_import_v2->api_version !=
+				 WORR_CGAME_COMMAND_RECORD_API_VERSION_V2 ||
+			 !command_record_import_v2->ResolveCanonicalCommandById)) {
+			command_record_import_v2 = nullptr;
+		}
+		CG_LocalInteractionSetImportV2(command_record_import_v2);
 	} else {
 		CG_PredictionInputSetImport(nullptr);
 		CG_PredictionInputSetImportV2(nullptr);
 		CG_LocalInteractionSetImport(nullptr);
+		CG_LocalInteractionSetImportV2(nullptr);
 	}
 
 	cglobals.apiVersion = CGAME_API_VERSION;

@@ -18,6 +18,7 @@ the Free Software Foundation; either version 2 of the License, or
 #include "vk_ui.h"
 #include "vk_world.h"
 
+#include "renderer/ui_scale.h"
 #include "renderer/view_setup.h"
 
 #include <math.h>
@@ -132,7 +133,7 @@ enum {
 
 typedef struct {
     // std140 vec4 array: x is the bilinear sample offset and y is the
-    // unnormalised paired Gaussian weight. z/w remain padding.
+    // pre-normalized paired Gaussian weight. z/w remain padding.
     float offset_weight[VK_POSTPROCESS_BLUR_MAX_PAIRS][4];
     // Keep final-pass controls in the existing per-frame UBO rather than
     // expanding the already-full 128-byte push-constant block. The bloom
@@ -157,6 +158,9 @@ typedef struct {
     VkPipeline crt_pipeline;
     VkPipeline auto_exposure_pipeline;
     VkRenderPass bloom_render_pass;
+    // Compatible with bloom_render_pass, but retains the prior colour image
+    // outside of an OpenGL-style menu DOF rectangle.
+    VkRenderPass bloom_load_render_pass;
     VkDescriptorSetLayout blur_kernel_descriptor_set_layout;
     VkDescriptorPool blur_kernel_descriptor_pool;
     VkSampler auto_exposure_sampler;
@@ -215,6 +219,12 @@ typedef struct {
     bool bloom_authored_emission;
     bool dof_requested;
     bool dof_active;
+    // A virtual GL-style DOF quad is active for every 3D view. Its target can
+    // be smaller than the virtual output when resolution scaling is enabled.
+    bool dof_rect_active;
+    // Menu blur rectangles are partial updates, so unlike the normal virtual
+    // view quad they must retain previously composed target pixels.
+    bool dof_preserve_history;
     bool crt_active;
     bool bloom_resources_dirty;
     bool bloom_supported;
@@ -233,6 +243,7 @@ typedef struct {
     uint32_t bloom_active_mip_levels;
     uint32_t dof_width;
     uint32_t dof_height;
+    VkRect2D dof_composite_rect;
     vk_postprocess_frame_resources_t frame_resources[VK_MAX_FRAMES_IN_FLIGHT];
     float tint[4];
     float split_shadow[4];
@@ -608,6 +619,12 @@ static void VK_PostProcess_UpdateBlurKernel(float sigma)
            sizeof(kernel.auto_exposure));
     const int radius = min((int)(sigma * 2.0f + 0.5f), 50);
     const float inverse_sigma_squared = 1.0f / (sigma * sigma);
+    float normalization = 0.0f;
+    for (int i = -radius; i <= radius; ++i) {
+        normalization += expf(-((float)i * (float)i) *
+                              inverse_sigma_squared);
+    }
+    normalization = max(normalization, 1e-5f);
     uint32_t pair = 0;
     for (int i = -radius; i <= radius &&
                        pair < VK_POSTPROCESS_BLUR_MAX_PAIRS;
@@ -624,7 +641,9 @@ static void VK_PostProcess_UpdateBlurKernel(float sigma)
             offset += weight1 / max(weight, 1e-5f);
         }
         kernel.offset_weight[pair][0] = offset;
-        kernel.offset_weight[pair][1] = weight;
+        // GL emits normalized pair constants into its generated blur shader.
+        // Store that same form so the fragment loop can accumulate directly.
+        kernel.offset_weight[pair][1] = weight / normalization;
     }
     memcpy(frame->blur_kernel_mapped, &kernel, sizeof(kernel));
     frame->blur_kernel_sigma = sigma;
@@ -1250,12 +1269,18 @@ static bool VK_PostProcess_CreateDofImages(uint32_t width, uint32_t height)
     return true;
 }
 
-static bool VK_PostProcess_CreateBloomRenderPass(vk_context_t *ctx)
+static bool VK_PostProcess_CreateBloomRenderPass(vk_context_t *ctx,
+                                                 VkAttachmentLoadOp load_op,
+                                                 VkRenderPass *out_render_pass,
+                                                 const char *label)
 {
+    if (!ctx || !out_render_pass) {
+        return false;
+    }
     VkAttachmentDescription color_attachment = {
         .format = VK_PostProcess_WorkingFormat(),
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .loadOp = load_op,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -1279,7 +1304,8 @@ static bool VK_PostProcess_CreateBloomRenderPass(vk_context_t *ctx)
                             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
             .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             .srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         },
         {
             .srcSubpass = 0,
@@ -1301,8 +1327,8 @@ static bool VK_PostProcess_CreateBloomRenderPass(vk_context_t *ctx)
     };
     return VK_PostProcess_Check(vkCreateRenderPass(ctx->device,
                                                     &render_pass_info, NULL,
-                                                    &vk_postprocess.bloom_render_pass),
-                                "vkCreateRenderPass(bloom)");
+                                                    out_render_pass),
+                                label);
 }
 
 bool VK_PostProcess_Init(vk_context_t *ctx)
@@ -1486,6 +1512,11 @@ void VK_PostProcess_DestroySwapchainResources(vk_context_t *ctx)
                             vk_postprocess.bloom_render_pass, NULL);
         vk_postprocess.bloom_render_pass = VK_NULL_HANDLE;
     }
+    if (vk_postprocess.bloom_load_render_pass) {
+        vkDestroyRenderPass(vk_postprocess.ctx->device,
+                            vk_postprocess.bloom_load_render_pass, NULL);
+        vk_postprocess.bloom_load_render_pass = VK_NULL_HANDLE;
+    }
     vk_postprocess.descriptor_generation++;
     if (!vk_postprocess.descriptor_generation) {
         vk_postprocess.descriptor_generation = 1;
@@ -1570,10 +1601,20 @@ bool VK_PostProcess_CreateSwapchainResources(vk_context_t *ctx)
         vkDestroyShaderModule(ctx->device, frag_shader, NULL);
         return false;
     }
-    if (!VK_PostProcess_CreateBloomRenderPass(ctx)) {
+    if (!VK_PostProcess_CreateBloomRenderPass(
+            ctx, VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            &vk_postprocess.bloom_render_pass,
+            "vkCreateRenderPass(bloom)")) {
         vkDestroyShaderModule(ctx->device, vert_shader, NULL);
         vkDestroyShaderModule(ctx->device, frag_shader, NULL);
         vkDestroyShaderModule(ctx->device, bloom_frag_shader, NULL);
+        return false;
+    }
+    if (!VK_PostProcess_CreateBloomRenderPass(
+            ctx, VK_ATTACHMENT_LOAD_OP_LOAD,
+            &vk_postprocess.bloom_load_render_pass,
+            "vkCreateRenderPass(bloom load)")) {
+        VK_PostProcess_Shutdown(ctx);
         return false;
     }
     VkShaderModuleCreateInfo dof_frag_info = {
@@ -1791,6 +1832,10 @@ void VK_PostProcess_RenderFrame(const refdef_t *fd)
     memset(&vk_postprocess.dof_push, 0, sizeof(vk_postprocess.dof_push));
     vk_postprocess.dof_push.rect[2] = 1.0f;
     vk_postprocess.dof_push.rect[3] = 1.0f;
+    vk_postprocess.dof_rect_active = false;
+    vk_postprocess.dof_preserve_history = false;
+    memset(&vk_postprocess.dof_composite_rect, 0,
+           sizeof(vk_postprocess.dof_composite_rect));
     vk_postprocess.dof_requested = fd && vk_postprocess.dof &&
         vk_postprocess.dof->integer != 0 &&
         !(fd->rdflags & RDF_NOWORLDMODEL) && fd->dof_strength > 0.0f;
@@ -1814,27 +1859,61 @@ void VK_PostProcess_RenderFrame(const refdef_t *fd)
         vk_postprocess.dof_push.params[3] = view_push.proj[10];
         vk_postprocess.dof_push.projection[0] = view_push.proj[14];
 
-        if (fd->dof_rect_enabled) {
-            const float output_width = max(vk_postprocess.push.output_size[0], 1.0f);
-            const float output_height = max(vk_postprocess.push.output_size[1], 1.0f);
-            float left = max((float)fd->dof_rect.left, 0.0f);
-            float top = max((float)fd->dof_rect.top, 0.0f);
-            float right = min((float)fd->dof_rect.right, output_width);
-            float bottom = min((float)fd->dof_rect.bottom, output_height);
-            if (right <= left || bottom <= top) {
-                vk_postprocess.dof_push.rect[0] = 1.0f;
-                vk_postprocess.dof_push.rect[1] = 1.0f;
-                vk_postprocess.dof_push.rect[2] = 0.0f;
-                vk_postprocess.dof_push.rect[3] = 0.0f;
-            } else {
-                // cgame supplies top-origin pixels, while the native
-                // post-process fragment coordinates are bottom-origin.
-                // Reverse the vertical limits before vk_dof.frag rebases its
-                // samples to the clipped full-quad domain.
-                vk_postprocess.dof_push.rect[0] = left / output_width;
-                vk_postprocess.dof_push.rect[1] = 1.0f - bottom / output_height;
-                vk_postprocess.dof_push.rect[2] = right / output_width;
-                vk_postprocess.dof_push.rect[3] = 1.0f - top / output_height;
+        if (vk_postprocess.ctx) {
+            // GL_DrawDof keeps the 2D virtual-coordinate viewport while the
+            // post target tracks the reduced scene extent. Preserve that
+            // contract exactly: do not pre-scale the menu rectangle to the
+            // scene image before rasterization.
+            renderer_ui_scale_t metrics = R_UIScaleCompute(
+                r_config.width, r_config.height);
+            int view_x, view_y, view_width, view_height;
+            R_UIScalePixelRectToVirtual(fd->x, fd->y, fd->width, fd->height,
+                                        metrics.base_scale, &view_x, &view_y,
+                                        &view_width, &view_height);
+            int left = view_x;
+            int top = view_y;
+            int right = view_x + view_width;
+            int bottom = view_y + view_height;
+            if (fd->dof_rect_enabled) {
+                left = max(left, fd->dof_rect.left);
+                top = max(top, fd->dof_rect.top);
+                right = min(right, fd->dof_rect.right);
+                bottom = min(bottom, fd->dof_rect.bottom);
+                vk_postprocess.dof_preserve_history = true;
+            }
+            if (right > left && bottom > top) {
+                const float scene_width = max(
+                    (float)vk_postprocess.ctx->scene_extent.width, 1.0f);
+                const float scene_height = max(
+                    (float)vk_postprocess.ctx->scene_extent.height, 1.0f);
+                const float base_scale = max(metrics.base_scale, 1.0f);
+                const float output_height = max((float)r_config.height, 1.0f);
+                const float virtual_left = left * base_scale;
+                const float virtual_right = right * base_scale;
+                // OpenGL's 2D viewport is bottom-origin while Vulkan's
+                // negative-height scene viewport is top-origin. Rebase the
+                // virtual quad before clipping it to the reduced target.
+                const float virtual_top = top * base_scale + scene_height -
+                    output_height;
+                const float virtual_bottom = bottom * base_scale + scene_height -
+                    output_height;
+                vk_postprocess.dof_rect_active = true;
+                vk_postprocess.dof_composite_rect = (VkRect2D) {
+                    .offset = { Q_rint(virtual_left), Q_rint(virtual_top) },
+                    .extent = {
+                        .width = (uint32_t)max(1, Q_rint(virtual_right -
+                                                         virtual_left)),
+                        .height = (uint32_t)max(1, Q_rint(virtual_bottom -
+                                                          virtual_top)),
+                    },
+                };
+                // vk_dof.frag re-establishes the full scene UV range across
+                // this quad. Values may intentionally exceed one when GL's
+                // virtual target is larger than the scaled scene image.
+                vk_postprocess.dof_push.rect[0] = virtual_left / scene_width;
+                vk_postprocess.dof_push.rect[1] = virtual_top / scene_height;
+                vk_postprocess.dof_push.rect[2] = virtual_right / scene_width;
+                vk_postprocess.dof_push.rect[3] = virtual_bottom / scene_height;
             }
         }
     }
@@ -2479,13 +2558,18 @@ static void VK_PostProcess_RecordDofComposite(
         return;
     }
 
+    const bool preserve_menu_history = vk_postprocess.dof_preserve_history &&
+        target->initialized && vk_postprocess.bloom_load_render_pass;
     VK_PostProcess_ImageBarrier(
         cmd, target->image,
         target->initialized ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                             : VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         target->initialized ? VK_ACCESS_SHADER_READ_BIT : 0,
-        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        preserve_menu_history
+            ? (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+               VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+            : VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         target->initialized ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
                             : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
@@ -2493,7 +2577,9 @@ static void VK_PostProcess_RecordDofComposite(
     const VkExtent2D extent = vk_postprocess.ctx->scene_extent;
     VkRenderPassBeginInfo render_info = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = vk_postprocess.bloom_render_pass,
+        .renderPass = preserve_menu_history
+            ? vk_postprocess.bloom_load_render_pass
+            : vk_postprocess.bloom_render_pass,
         .framebuffer = target->framebuffer,
         .renderArea = {
             .extent = extent,
@@ -2510,6 +2596,39 @@ static void VK_PostProcess_RecordDofComposite(
     VkRect2D scissor = {
         .extent = extent,
     };
+    if (vk_postprocess.dof_rect_active) {
+        const VkRect2D rect = vk_postprocess.dof_composite_rect;
+        const int64_t rect_left = rect.offset.x;
+        const int64_t rect_top = rect.offset.y;
+        const int64_t rect_right = rect_left + rect.extent.width;
+        const int64_t rect_bottom = rect_top + rect.extent.height;
+        const int64_t left = max(rect_left, 0);
+        const int64_t top = max(rect_top, 0);
+        const int64_t right = min(rect_right, (int64_t)extent.width);
+        const int64_t bottom = min(rect_bottom, (int64_t)extent.height);
+        if (right <= left || bottom <= top) {
+            // GL leaves its post target unchanged when the virtual menu
+            // rectangle does not overlap the scaled image.
+            if (preserve_menu_history) {
+                VK_PostProcess_ImageBarrier(
+                    cmd, target->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            }
+            return;
+        }
+        viewport.x = (float)rect.offset.x;
+        viewport.y = (float)rect.offset.y + (float)rect.extent.height;
+        viewport.width = (float)rect.extent.width;
+        viewport.height = -(float)rect.extent.height;
+        scissor.offset.x = (int32_t)left;
+        scissor.offset.y = (int32_t)top;
+        scissor.extent.width = (uint32_t)(right - left);
+        scissor.extent.height = (uint32_t)(bottom - top);
+    }
     vkCmdBeginRenderPass(cmd, &render_info, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       vk_postprocess.dof_pipeline);
@@ -2551,6 +2670,11 @@ static bool VK_PostProcess_RecordDofBlur(
                                           1.0f, 25.0f) *
         base_height / 2160.0f * 4.0f / (float)blur_downscale;
     blur_push.params[3] = max(blur_push.params[3], 0.5f);
+    // Resolution-scaled DOF uses the scene extent, not presentation extent.
+    // Keep the paired Gaussian coefficients in lockstep with this pass's
+    // sigma; the generic bloom preparation may have updated them for the
+    // full-size presentation target earlier in the frame.
+    VK_PostProcess_UpdateBlurKernel(blur_push.params[3]);
     VK_PostProcess_RecordBloomPass(
         cmd, &frame->dof_ping, frame->dof_scene_descriptor_set,
         VK_BLOOM_MODE_COPY, vk_postprocess.dof_width,
@@ -2559,12 +2683,12 @@ static bool VK_PostProcess_RecordDofBlur(
         if (i & 1) {
             VK_PostProcess_RecordBloomPass(
                 cmd, &frame->dof_ping, frame->dof_pong_descriptor_set,
-                VK_BLOOM_MODE_BLUR_Y, vk_postprocess.dof_width,
+                VK_BLOOM_MODE_BLUR_X, vk_postprocess.dof_width,
                 vk_postprocess.dof_height, &blur_push);
         } else {
             VK_PostProcess_RecordBloomPass(
                 cmd, &frame->dof_pong, frame->dof_ping_descriptor_set,
-                VK_BLOOM_MODE_BLUR_X, vk_postprocess.dof_width,
+                VK_BLOOM_MODE_BLUR_Y, vk_postprocess.dof_width,
                 vk_postprocess.dof_height, &blur_push);
         }
     }

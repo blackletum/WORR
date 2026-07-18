@@ -23,6 +23,7 @@ namespace {
 
 worr_cgame_command_record_entry_v1 source_entries[3];
 bool corrupt_range;
+bool exact_history_missing;
 
 worr_command_record_v1 make_record(std::uint32_t sequence, bool hook_held)
 {
@@ -36,10 +37,29 @@ worr_command_record_v1 make_record(std::uint32_t sequence, bool hook_held)
     record.command.schema_version = WORR_PREDICTION_ABI_VERSION;
     record.command.duration_ms = 16;
     if (hook_held)
-        record.command.buttons = WORR_LOCAL_INTERACTION_HOOK_BUTTON;
+        record.command.buttons =
+            WORR_LOCAL_INTERACTION_HOOK_BUTTON | (1u << 0);
     record.render_watermark.struct_size = sizeof(record.render_watermark);
     record.render_watermark.schema_version = WORR_COMMAND_ABI_VERSION;
     return record;
+}
+
+std::uint32_t resolve_by_id(
+    worr_command_id_v1 command_id,
+    worr_cgame_command_record_entry_v1 *entry_out)
+{
+    if (!entry_out || !Worr_CommandIdValidV1(command_id, false))
+        return WORR_CGAME_COMMAND_RECORD_INVALID_ARGUMENT;
+    if (!exact_history_missing) {
+        for (const auto &entry : source_entries) {
+            if (entry.command.command_id.epoch == command_id.epoch &&
+                entry.command.command_id.sequence == command_id.sequence) {
+                *entry_out = entry;
+                return WORR_CGAME_COMMAND_RECORD_OK;
+            }
+        }
+    }
+    return WORR_CGAME_COMMAND_RECORD_HISTORY_MISSING;
 }
 
 std::uint32_t resolve(std::uint32_t first_legacy_sequence,
@@ -133,6 +153,44 @@ worr_local_interaction_authority_receipt_v1 authority_receipt(bool active)
     return receipt;
 }
 
+worr_local_action_shadow_authority_receipt_v1 action_shadow_receipt(
+    std::size_t command_index, bool server_packet_watermark = false)
+{
+    worr_local_action_observation_state_v1 before{};
+    before.struct_size = sizeof(before);
+    before.schema_version = WORR_LOCAL_ACTION_OBSERVATION_ABI_VERSION;
+    before.flags = WORR_LOCAL_ACTION_OBSERVATION_PLAYER_ALIVE |
+                   WORR_LOCAL_ACTION_OBSERVATION_PLAYER_ELIGIBLE;
+    before.phase = WORR_LOCAL_ACTION_OBSERVATION_READY;
+    before.active_weapon_id = 9;
+    before.presentation_frame = 7;
+    before.presentation_rate = 10;
+    auto after = before;
+    after.presentation_frame = 8;
+    worr_local_action_observation_record_v1 observation{};
+    worr_local_action_shadow_v1 shadow{};
+    worr_local_action_shadow_authority_receipt_v1 receipt{};
+    auto command = source_entries[command_index].command;
+    if (server_packet_watermark) {
+        command.render_watermark.provenance =
+            WORR_COMMAND_RENDER_PROVENANCE_LEGACY_PACKET_SHARED;
+        command.render_watermark.source_server_tick = 100;
+        command.render_watermark.tick_interval_us = 16000;
+        command.render_watermark.source_server_time_us = 1600000;
+        command.render_watermark.rendered_server_time_us = 1600000;
+    }
+    if (!Worr_LocalActionObservationBuildV1(
+            static_cast<std::uint32_t>(command_index),
+            &command, &before, &after,
+            &observation) ||
+        !Worr_LocalActionShadowBuildV1(WORR_LOCAL_ACTION_CATALOG_BLASTER,
+                                        &observation, &shadow) ||
+        !Worr_LocalActionShadowAuthorityReceiptBuildV1(&shadow, &receipt)) {
+        std::abort();
+    }
+    return receipt;
+}
+
 } // namespace
 
 int main()
@@ -146,6 +204,9 @@ int main()
 
     const worr_cgame_command_record_import_v1 import = {
         sizeof(import), WORR_CGAME_COMMAND_RECORD_API_VERSION, resolve};
+    const worr_cgame_command_record_import_v2 import_v2 = {
+        sizeof(import_v2), WORR_CGAME_COMMAND_RECORD_API_VERSION_V2,
+        resolve_by_id};
     CG_LocalInteractionSetImport(&import);
     CG_LocalInteractionPredict(prediction_range());
 
@@ -214,5 +275,79 @@ int main()
     CG_LocalInteractionGetStatus(&status);
     CHECK(status.prediction_passes == 0);
     CHECK(status.transactions == 0);
+
+    CG_LocalInteractionSetImport(&import);
+    CG_LocalActionShadowObserveCommands(prediction_range());
+    cg_local_action_shadow_status_v1 action_status{};
+    CG_LocalActionShadowGetStatus(&action_status);
+    CHECK(action_status.observation_passes == 1);
+    CHECK(action_status.canonical_commands == 2);
+    const auto action_receipt = action_shadow_receipt(0);
+    CHECK(CG_LocalActionShadowSubmitAuthorityReceipt(&action_receipt) ==
+          cg_local_action_shadow_receipt_result_v1::command_matched);
+    CHECK(CG_LocalActionShadowSubmitAuthorityReceipt(&action_receipt) ==
+          cg_local_action_shadow_receipt_result_v1::duplicate);
+    CG_LocalActionShadowGetStatus(&action_status);
+    CHECK(action_status.authority_receipts == 1);
+    CHECK(action_status.authority_duplicates == 1);
+    CHECK(action_status.command_matches == 1);
+    CHECK(action_status.requires_resync == 0);
+
+    CG_LocalInteractionSetImport(&import);
+    auto early_action_receipt = action_shadow_receipt(0);
+    CHECK(CG_LocalActionShadowSubmitAuthorityReceipt(&early_action_receipt) ==
+          cg_local_action_shadow_receipt_result_v1::accepted_unmatched);
+    CG_LocalActionShadowObserveCommands(prediction_range());
+    CG_LocalActionShadowGetStatus(&action_status);
+    CHECK(action_status.authority_unmatched == 1);
+    CHECK(action_status.command_matches == 1);
+    CHECK(action_status.requires_resync == 0);
+
+    CG_LocalInteractionSetImport(&import);
+    CG_LocalActionShadowObserveCommands(prediction_range());
+    auto mismatched_action_receipt = action_shadow_receipt(1);
+    mismatched_action_receipt.command_hash ^= UINT64_C(1);
+    CHECK(Worr_LocalActionShadowAuthorityReceiptValidateV1(
+        &mismatched_action_receipt));
+    CHECK(CG_LocalActionShadowSubmitAuthorityReceipt(
+              &mismatched_action_receipt) ==
+          cg_local_action_shadow_receipt_result_v1::command_mismatch);
+    CG_LocalActionShadowGetStatus(&action_status);
+    CHECK(action_status.command_mismatches == 1);
+    CHECK(action_status.requires_resync == 1);
+    CHECK(CG_LocalActionShadowRequiresResync());
+
+    /* Receipt-time lookup survives skipped render/prediction cadence.  The
+     * server's later packet-shared watermark is intentionally different from
+     * the client's pre-transport NONE watermark; input identity still pairs
+     * exactly because render provenance is not command input. */
+    CG_LocalInteractionSetImport(&import);
+    CG_LocalInteractionSetImportV2(&import_v2);
+    exact_history_missing = false;
+    const auto exact_receipt = action_shadow_receipt(0, true);
+    CHECK(CG_LocalActionShadowSubmitAuthorityReceipt(&exact_receipt) ==
+          cg_local_action_shadow_receipt_result_v1::command_matched);
+    CG_LocalActionShadowGetStatus(&action_status);
+    CHECK(action_status.exact_lookup_attempts == 1);
+    CHECK(action_status.exact_lookup_hits == 1);
+    CHECK(action_status.exact_lookup_misses == 0);
+    CHECK(action_status.canonical_commands == 1);
+    CHECK(action_status.command_matches == 1);
+    CHECK(action_status.authority_outstanding == 0);
+    CHECK(action_status.requires_resync == 0);
+
+    CG_LocalInteractionSetImport(&import);
+    CG_LocalInteractionSetImportV2(&import_v2);
+    exact_history_missing = true;
+    const auto missing_receipt = action_shadow_receipt(1, true);
+    CHECK(CG_LocalActionShadowSubmitAuthorityReceipt(&missing_receipt) ==
+          cg_local_action_shadow_receipt_result_v1::accepted_unmatched);
+    CG_LocalActionShadowGetStatus(&action_status);
+    CHECK(action_status.exact_lookup_attempts == 1);
+    CHECK(action_status.exact_lookup_hits == 0);
+    CHECK(action_status.exact_lookup_misses == 1);
+    CHECK(action_status.authority_outstanding == 1);
+    CHECK(action_status.requires_resync == 0);
+    CG_LocalInteractionSetImportV2(nullptr);
     return EXIT_SUCCESS;
 }

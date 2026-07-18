@@ -15,6 +15,16 @@ the Free Software Foundation; either version 2 of the License, or
 #include <cstdlib>
 #include <cstring>
 
+/* Production cgame reports receipt parity through cg_predict.cpp.  This
+ * isolated runtime harness installs a counting observer without linking the
+ * prediction/UI layer. */
+std::uint64_t local_action_shadow_report_callbacks;
+
+void CG_LocalActionShadowReportParity()
+{
+    ++local_action_shadow_report_callbacks;
+}
+
 namespace {
 
 #define CHECK(condition)                                                       \
@@ -145,6 +155,67 @@ worr_event_record_v1 make_local_interaction_authority_receipt_event(
     record.prediction_class = WORR_EVENT_PREDICTION_AUTHORITATIVE_ONLY;
     record.payload_kind =
         WORR_EVENT_PAYLOAD_LOCAL_INTERACTION_AUTHORITY_V1;
+    record.payload_size = sizeof(receipt);
+    std::memcpy(record.payload, &receipt, sizeof(receipt));
+    CHECK(Worr_EventRecordValidateV1(
+        &record, WORR_CGAME_EVENT_RANGE_MAX_ENTITIES_V2));
+    return record;
+}
+
+worr_event_record_v1 make_local_action_shadow_authority_receipt_event(
+    std::uint32_t epoch, std::uint32_t sequence)
+{
+    worr_command_record_v1 command{};
+    worr_local_action_observation_state_v1 before{};
+    worr_local_action_observation_record_v1 observation{};
+    worr_local_action_shadow_v1 shadow{};
+    worr_local_action_shadow_authority_receipt_v1 receipt{};
+    worr_event_record_v1 record{};
+
+    command.struct_size = sizeof(command);
+    command.schema_version = WORR_COMMAND_ABI_VERSION;
+    command.command_id = {91, 19};
+    command.sample_time_us = UINT64_C(304000);
+    command.movement_model_revision = WORR_PREDICTION_MODEL_REVISION;
+    command.command.struct_size = sizeof(command.command);
+    command.command.schema_version = WORR_PREDICTION_ABI_VERSION;
+    command.command.duration_ms = 16;
+    command.command.buttons = 1;
+    command.render_watermark.struct_size = sizeof(command.render_watermark);
+    command.render_watermark.schema_version = WORR_COMMAND_ABI_VERSION;
+    CHECK(Worr_CommandRecordCanonicalizeV1(
+        &command, WORR_COMMAND_MAX_NEGOTIATED_DURATION_MS));
+
+    before.struct_size = sizeof(before);
+    before.schema_version = WORR_LOCAL_ACTION_OBSERVATION_ABI_VERSION;
+    before.flags = WORR_LOCAL_ACTION_OBSERVATION_PLAYER_ALIVE |
+                   WORR_LOCAL_ACTION_OBSERVATION_PLAYER_ELIGIBLE;
+    before.phase = WORR_LOCAL_ACTION_OBSERVATION_READY;
+    before.active_weapon_id = 9;
+    before.presentation_frame = 7;
+    before.presentation_rate = 10;
+    auto after = before;
+    after.presentation_frame = 8;
+    CHECK(Worr_LocalActionObservationBuildV1(
+        0, &command, &before, &after, &observation));
+    CHECK(Worr_LocalActionShadowBuildV1(
+        WORR_LOCAL_ACTION_CATALOG_BLASTER, &observation, &shadow));
+    CHECK(Worr_LocalActionShadowAuthorityReceiptBuildV1(&shadow, &receipt));
+
+    record.struct_size = sizeof(record);
+    record.schema_version = WORR_EVENT_ABI_VERSION;
+    record.model_revision = WORR_EVENT_MODEL_REVISION;
+    record.flags = WORR_EVENT_FLAG_HAS_AUTHORITY_ID | WORR_EVENT_FLAG_CRITICAL;
+    record.event_id = {epoch, sequence};
+    record.source_tick = 701;
+    record.source_time_us = UINT64_C(7010000);
+    record.source_entity = {WORR_EVENT_NO_ENTITY, 0};
+    record.subject_entity = {WORR_EVENT_NO_ENTITY, 0};
+    record.event_type = WORR_EVENT_TYPE_AUTHORITY_RECEIPT;
+    record.delivery_class = WORR_EVENT_DELIVERY_RELIABLE_ORDERED;
+    record.prediction_class = WORR_EVENT_PREDICTION_AUTHORITATIVE_ONLY;
+    record.payload_kind =
+        WORR_EVENT_PAYLOAD_LOCAL_ACTION_SHADOW_AUTHORITY_V1;
     record.payload_size = sizeof(receipt);
     std::memcpy(record.payload, &receipt, sizeof(receipt));
     CHECK(Worr_EventRecordValidateV1(
@@ -1381,6 +1452,64 @@ void test_private_authority_receipt_bridge()
     CHECK(interaction.authority_duplicates == 1);
 }
 
+void test_private_local_action_shadow_receipt_bridge()
+{
+    CHECK(CG_EventRuntimeResetAuthority(0, 0) == CG_EVENT_RUNTIME_OK);
+    CHECK(CG_EventRuntimeResetAuthority(192, 1) == CG_EVENT_RUNTIME_OK);
+    const auto record =
+        make_local_action_shadow_authority_receipt_event(192, 1);
+    const auto callbacks_before = local_action_shadow_report_callbacks;
+    CHECK(CG_EventRuntimeSubmitAuthoritativeBatch(&record, 1) ==
+          CG_EVENT_RUNTIME_OK);
+    CHECK(local_action_shadow_report_callbacks == callbacks_before + 1);
+    cg_local_action_shadow_status_v1 action{};
+    CG_LocalActionShadowGetStatus(&action);
+    CHECK(action.authority_receipts == 1);
+    CHECK(action.authority_unmatched == 1);
+    CHECK(action.requires_resync == 0);
+    const auto before_advance = status();
+    CHECK(advance(7010000, 701, 1, 0) == CG_EVENT_RUNTIME_OK);
+    const auto after_advance = status();
+    CHECK(after_advance.authoritative_terminal_skips ==
+          before_advance.authoritative_terminal_skips + 1);
+    CHECK(after_advance.authoritative_presentations ==
+          before_advance.authoritative_presentations);
+    CHECK(CG_EventRuntimeSubmitAuthoritativeBatch(&record, 1) ==
+          CG_EVENT_RUNTIME_DUPLICATE);
+    CG_LocalActionShadowGetStatus(&action);
+    CHECK(action.authority_duplicates == 1);
+}
+
+void test_local_action_shadow_resync_latches_runtime_health()
+{
+    CHECK(CG_EventRuntimeResetAuthority(0, 0) == CG_EVENT_RUNTIME_OK);
+    CHECK(CG_EventRuntimeResetAuthority(193, 1) == CG_EVENT_RUNTIME_OK);
+
+    const auto record =
+        make_local_action_shadow_authority_receipt_event(193, 1);
+    worr_local_action_shadow_authority_receipt_v1 receipt{};
+    std::memcpy(&receipt, record.payload, sizeof(receipt));
+    CHECK(CG_LocalActionShadowSubmitAuthorityReceipt(&receipt) ==
+          cg_local_action_shadow_receipt_result_v1::accepted_unmatched);
+    auto conflicting_receipt = receipt;
+    conflicting_receipt.record_hash ^= UINT64_C(1);
+    CHECK(Worr_LocalActionShadowAuthorityReceiptValidateV1(
+        &conflicting_receipt));
+    CHECK(CG_LocalActionShadowSubmitAuthorityReceipt(&conflicting_receipt) ==
+          cg_local_action_shadow_receipt_result_v1::conflict);
+    CHECK(CG_LocalActionShadowRequiresResync());
+
+    CG_EventRuntimeSynchronizeLocalInteractionHealth();
+    const auto current = status();
+    CHECK(current.authority_requires_resync == 1);
+    CHECK(current.authority_degraded == 1);
+    CHECK(advance(7110000, 711, 1, 0) == CG_EVENT_RUNTIME_NOT_READY);
+
+    CHECK(CG_EventRuntimeResetAuthority(194, 1) == CG_EVENT_RUNTIME_OK);
+    CHECK(!CG_LocalActionShadowRequiresResync());
+    CHECK(status().authority_requires_resync == 0);
+}
+
 void test_local_interaction_resync_latches_runtime_health()
 {
     CHECK(CG_EventRuntimeResetAuthority(0, 0) == CG_EVENT_RUNTIME_OK);
@@ -1545,6 +1674,8 @@ void test_legacy_snapshot_fence_is_audit_independent_and_bounded()
 int main()
 {
     CG_EventRuntimeSetAuditEnabled(true);
+    CG_EventRuntimeSetLocalActionShadowReportCallback(
+        &CG_LocalActionShadowReportParity);
     legacy_consumer = CG_GetEventRangeAPIv2();
     CHECK(legacy_consumer != nullptr);
     CHECK(legacy_consumer->struct_size == sizeof(*legacy_consumer));
@@ -1569,7 +1700,9 @@ int main()
     test_reverse_reconciliation_binds_existing_authority_id();
     test_strict_mismatch_degradation();
     test_private_authority_receipt_bridge();
+    test_private_local_action_shadow_receipt_bridge();
     test_local_interaction_resync_latches_runtime_health();
+    test_local_action_shadow_resync_latches_runtime_health();
     test_legacy_snapshot_fence_is_audit_independent_and_bounded();
     std::puts("cgame event runtime tests passed");
     return 0;

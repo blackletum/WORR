@@ -5,11 +5,13 @@
 #include "cg_prediction_authority.hpp"
 #include "cg_event_runtime.hpp"
 #include "cg_local_interaction.hpp"
+#include "cg_prediction_config.hpp"
 #include "cg_snapshot_timeline.hpp"
 #include "shared/cgame_prediction.h"
 #include "shared/prediction_abi.h"
 
 #include <climits>
+#include <cstdio>
 #include <cstdint>
 
 #if USE_DEBUG
@@ -24,12 +26,51 @@
 #define CG_SHOWMISS(...)
 #endif
 
-extern "C" void CG_GetPredictionConfigV1(
-    worr_prediction_config_v1 *config);
-
 static const worr_cgame_prediction_input_import_v1 *prediction_input_import;
 static const worr_cgame_prediction_input_import_v2 *prediction_input_import_v2;
 static cvar_t *cg_prediction_snapshot_authority;
+static std::uint64_t local_action_shadow_reported_matches;
+static std::uint64_t local_action_shadow_reported_receipts;
+
+void CG_LocalActionShadowReportParity()
+{
+    cg_local_action_shadow_status_v1 status{};
+    CG_LocalActionShadowGetStatus(&status);
+
+    if (status.command_matches < local_action_shadow_reported_matches ||
+        status.authority_receipts < local_action_shadow_reported_receipts) {
+        local_action_shadow_reported_matches = status.command_matches;
+        local_action_shadow_reported_receipts = status.authority_receipts;
+    }
+    if ((status.command_matches == local_action_shadow_reported_matches &&
+         status.authority_receipts == local_action_shadow_reported_receipts) ||
+        !cgei) {
+        return;
+    }
+
+    char message[256];
+    std::snprintf(
+        message, sizeof(message),
+        "WORR local-action authority parity matches=%llu receipts=%llu "
+        "unmatched=%llu outstanding=%llu mismatches=%llu conflicts=%llu "
+        "passes=%llu commands=%llu lookups=%llu hits=%llu misses=%llu "
+        "resync=%u\n",
+        static_cast<unsigned long long>(status.command_matches),
+        static_cast<unsigned long long>(status.authority_receipts),
+        static_cast<unsigned long long>(status.authority_unmatched),
+        static_cast<unsigned long long>(status.authority_outstanding),
+        static_cast<unsigned long long>(status.command_mismatches),
+        static_cast<unsigned long long>(status.authority_conflicts),
+        static_cast<unsigned long long>(status.observation_passes),
+        static_cast<unsigned long long>(status.canonical_commands),
+        static_cast<unsigned long long>(status.exact_lookup_attempts),
+        static_cast<unsigned long long>(status.exact_lookup_hits),
+        static_cast<unsigned long long>(status.exact_lookup_misses),
+        status.requires_resync);
+    local_action_shadow_reported_matches = status.command_matches;
+    local_action_shadow_reported_receipts = status.authority_receipts;
+    Com_Printf("%s", message);
+}
 
 enum : std::uint32_t {
     CG_PREDICTION_SNAPSHOT_AUTHORITY_LEGACY = 0,
@@ -71,12 +112,24 @@ static worr_snapshot_id_v2 prediction_discontinuity_reset_snapshot;
 extern "C" void CG_PredictionInputSetImport(
     const worr_cgame_prediction_input_import_v1 *import)
 {
+    CG_EventRuntimeSetLocalActionShadowReportCallback(
+        &CG_LocalActionShadowReportParity);
+    if (prediction_input_import != import) {
+        local_action_shadow_reported_matches = 0;
+        local_action_shadow_reported_receipts = 0;
+    }
     prediction_input_import = import;
 }
 
 extern "C" void CG_PredictionInputSetImportV2(
     const worr_cgame_prediction_input_import_v2 *import)
 {
+    CG_EventRuntimeSetLocalActionShadowReportCallback(
+        &CG_LocalActionShadowReportParity);
+    if (prediction_input_import_v2 != import) {
+        local_action_shadow_reported_matches = 0;
+        local_action_shadow_reported_receipts = 0;
+    }
     prediction_input_import_v2 = import;
 }
 
@@ -688,6 +741,7 @@ static void CG_ClearPredictionHistory()
     memset(cl.predicted_replay_chain_hashes, 0,
            sizeof(cl.predicted_replay_chain_hashes));
     cl.predicted_step = 0;
+    cl.predicted_step_time = 0;
     cl.last_groundentity = nullptr;
     memset(&cl.last_groundplane, 0, sizeof(cl.last_groundplane));
 }
@@ -912,6 +966,18 @@ void CL_PredictMovement(void)
                 snapshot_discontinuity);
     }
 
+    /*
+     * Independent off-hand interactions consume the same immutable canonical
+     * records as movement but remain shadow-only until an authoritative
+     * lifecycle transaction can be delivered and reconciled. PMF_NO_PREDICTION
+     * suppresses movement replay only; it cannot suppress command receipt
+     * reconciliation for a joined/frozen/menu-owned player.
+     */
+    CG_LocalInteractionPredict(input_range);
+    CG_LocalActionShadowObserveCommands(input_range);
+    CG_LocalActionShadowReportParity();
+    CG_EventRuntimeSynchronizeLocalInteractionHealth();
+
     if (authority.movement.movement_flags & PMF_NO_PREDICTION) {
         CG_ApplyPredictionAuthority(authority);
         return;
@@ -923,14 +989,6 @@ void CL_PredictMovement(void)
     const uint32_t replay_count = input_range.command_count;
     const bool has_pending =
         (input_range.flags & WORR_CGAME_PREDICTION_INPUT_HAS_PENDING) != 0;
-
-    /*
-     * Independent off-hand interactions consume the same immutable canonical
-     * records as movement but remain shadow-only until an authoritative
-     * lifecycle transaction can be delivered and reconciled.
-    */
-    CG_LocalInteractionPredict(input_range);
-    CG_EventRuntimeSynchronizeLocalInteractionHealth();
 
     if (!has_pending && replay_count == 0) {
         CG_ApplyPredictionAuthority(authority);

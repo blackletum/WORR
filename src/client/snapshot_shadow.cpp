@@ -1037,15 +1037,10 @@ extern "C" bool CL_SnapshotShadowBindNativeEpoch(
     }
 
     abort_pending(true);
-    reset_snapshot_clock();
     clear_native_expectations(false);
     shadow.native_epoch_bound = false;
-    for (uint32_t i = 0; i < shadow.context.profile.max_entities; ++i) {
-        shadow.scratch_lineage[i].present =
-            shadow.baseline_present[i] ? 1u : 0u;
-    }
 
-    const auto result = Worr_SnapshotQ2ProtoResetV2(
+    const auto result = Worr_SnapshotQ2ProtoRebindEpochV2(
         &shadow.context, snapshot_epoch);
     note_result(result);
     if (result != WORR_SNAPSHOT_Q2PROTO_OK) {
@@ -1063,10 +1058,6 @@ extern "C" bool CL_SnapshotShadowBindNativeEpoch(
         return false;
     }
 
-    for (uint32_t i = 0; i < shadow.context.profile.max_entities; ++i) {
-        shadow.baseline_present[i] =
-            shadow.scratch_lineage[i].present ? 1u : 0u;
-    }
     shadow_epoch_seed = snapshot_epoch;
     shadow.native_epoch_bound = true;
     shadow.latest_ref = {};

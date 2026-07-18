@@ -6809,7 +6809,8 @@ static bool VK_Entity_CreatePipelineEx(vk_context_t *ctx, vk_entity_blend_t blen
     };
     VkPipelineMultisampleStateCreateInfo multisample = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .rasterizationSamples = (bloom_extract || bloom_depth_sample)
+            ? VK_SAMPLE_COUNT_1_BIT : ctx->scene_samples,
     };
     VkStencilOpState stencil = {
         .failOp = VK_STENCIL_OP_KEEP,
@@ -6908,6 +6909,31 @@ static bool VK_Entity_CreatePipelineEx(vk_context_t *ctx, vk_entity_blend_t blen
                                : additive ? "vkCreateGraphicsPipelines(entity additive)" :
                                alpha ? "vkCreateGraphicsPipelines(entity alpha)" :
                                        "vkCreateGraphicsPipelines(entity opaque)"));
+
+    // Build a compatible one-sample version for the native DOF scene pass.
+    // Bloom extraction already has its own single-sample render pass and is
+    // deliberately excluded from this mapping.
+    if (ok && !bloom_extract && !bloom_depth_sample &&
+        ctx->scene_single_sample_render_pass) {
+        VkPipeline single_sample_pipeline = VK_NULL_HANDLE;
+        multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        info.renderPass = ctx->scene_single_sample_render_pass;
+        ok = VK_Entity_Check(vkCreateGraphicsPipelines(
+                                 ctx->device, VK_NULL_HANDLE, 1, &info, NULL,
+                                 &single_sample_pipeline),
+                             "vkCreateGraphicsPipelines(entity single sample)");
+        if (ok) {
+            ok = VK_RegisterScenePipelineVariant(
+                ctx, *out_pipeline, single_sample_pipeline);
+        }
+        if (!ok) {
+            if (single_sample_pipeline) {
+                vkDestroyPipeline(ctx->device, single_sample_pipeline, NULL);
+            }
+            vkDestroyPipeline(ctx->device, *out_pipeline, NULL);
+            *out_pipeline = VK_NULL_HANDLE;
+        }
+    }
 
     vkDestroyShaderModule(ctx->device, vert, NULL);
     vkDestroyShaderModule(ctx->device, frag, NULL);
@@ -8738,6 +8764,8 @@ static void VK_Entity_RecordPhase(VkCommandBuffer cmd, const VkExtent2D *extent,
                     : alpha ? vk_entity.pipeline_alpha
                             : vk_entity.pipeline_opaque;
             }
+            target_pipeline = VK_SelectScenePipeline(vk_entity.ctx,
+                                                     target_pipeline);
             if (!target_pipeline) {
                 continue;
             }
@@ -8833,6 +8861,8 @@ static void VK_Entity_RecordPhase(VkCommandBuffer cmd, const VkExtent2D *extent,
                             ? vk_entity.pipeline_depthhack_alpha
                             : vk_entity.pipeline_depthhack_opaque;
                 }
+                target_pipeline = VK_SelectScenePipeline(vk_entity.ctx,
+                                                         target_pipeline);
                 if (!target_pipeline) {
                     continue;
                 }
@@ -8921,6 +8951,8 @@ static void VK_Entity_RecordPhase(VkCommandBuffer cmd, const VkExtent2D *extent,
             default:
                 break;
             }
+            target_pipeline = VK_SelectScenePipeline(vk_entity.ctx,
+                                                     target_pipeline);
             if (!target_pipeline) {
                 continue;
             }
@@ -8953,7 +8985,8 @@ static void VK_Entity_RecordPhase(VkCommandBuffer cmd, const VkExtent2D *extent,
     if (vk_entity.frame_has_flare_queries) {
         VkDescriptorSet last_set = VK_NULL_HANDLE;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          vk_entity.pipeline_occlusion);
+                          VK_SelectScenePipeline(vk_entity.ctx,
+                                                 vk_entity.pipeline_occlusion));
         for (uint32_t i = 0; i < vk_entity.batch_count; i++) {
             const vk_batch_t *batch = &vk_entity.batches[i];
             if (!VK_Entity_BatchMatchesRecordPhase(batch, phase) ||
@@ -8978,7 +9011,8 @@ static void VK_Entity_RecordPhase(VkCommandBuffer cmd, const VkExtent2D *extent,
     if (vk_entity.frame_has_flares) {
         VkDescriptorSet last_set = VK_NULL_HANDLE;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          vk_entity.pipeline_flare);
+                          VK_SelectScenePipeline(vk_entity.ctx,
+                                                 vk_entity.pipeline_flare));
         for (uint32_t i = 0; i < vk_entity.batch_count; i++) {
             const vk_batch_t *batch = &vk_entity.batches[i];
             if (!VK_Entity_BatchMatchesRecordPhase(batch, phase) ||

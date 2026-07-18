@@ -316,6 +316,11 @@ bool LagCompensation_ArmCanonicalShotgunDamageRuntimeProbe();
 void LagCompensation_PrepareCanonicalWeaponDamageCommand(gentity_t *entity,
                                                           usercmd_t *command);
 
+// Refreshes the fixture's read-only status after a post-command weapon scope
+// has appended its leased observation. It is a no-op until a canonical runtime
+// fixture is armed and never changes command, weapon, or collision authority.
+void LagCompensation_RefreshCanonicalWeaponDamageRuntimeProof();
+
 // Records a short-lived, accepted command authorization for a current-world
 // projectile that normal weapon animation emits after the command scope has
 // closed. It is called only at the real ClientThink command boundary.

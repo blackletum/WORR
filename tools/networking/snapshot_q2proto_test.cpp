@@ -393,6 +393,59 @@ void test_truncation_malformed_and_atomic_failures()
           WORR_SNAPSHOT_Q2PROTO_STALE_REF);
 }
 
+void test_epoch_rebind_preserves_refs_and_delta_bases()
+{
+    fixture_t fixture;
+    init_fixture(fixture, 3);
+
+    auto frame10 = make_frame(10, -1, true);
+    add_delta(frame10, 2, entity_delta(2, 1));
+    const auto ref10 = publish(
+        fixture, frame10, WORR_SNAPSHOT_Q2PROTO_FRAME_OBSERVER_ATTACH);
+    auto frame11 = make_frame(11, 10, false);
+    add_delta(frame11, 2, entity_delta(2, 2));
+    const auto ref11 = publish(fixture, frame11);
+    worr_snapshot_projection_hashes_v2 old_hashes{};
+    const auto old_view = view(fixture, ref11, &old_hashes);
+    CHECK(old_view.snapshot->snapshot_id.epoch == 3);
+    CHECK(old_view.snapshot->base_id.epoch == 3);
+
+    CHECK(Worr_SnapshotQ2ProtoRebindEpochV2(&fixture.context, 9) ==
+          WORR_SNAPSHOT_Q2PROTO_OK);
+    CHECK(fixture.context.profile.snapshot_epoch == 9);
+    CHECK(fixture.context.last_observed.epoch == 9);
+    const auto rebound10 = view(fixture, ref10);
+    worr_snapshot_projection_hashes_v2 rebound_hashes{};
+    const auto rebound11 = view(fixture, ref11, &rebound_hashes);
+    CHECK(rebound10.snapshot->snapshot_id.epoch == 9);
+    CHECK(rebound10.snapshot->base_id.epoch == 0);
+    CHECK(rebound11.snapshot->snapshot_id.epoch == 9);
+    CHECK(rebound11.snapshot->base_id.epoch == 9);
+    CHECK(rebound11.snapshot->discontinuity.previous.epoch == 9);
+    CHECK(rebound11.snapshot->snapshot_id.sequence ==
+          old_view.snapshot->snapshot_id.sequence);
+    CHECK(rebound_hashes.endpoint_hash != old_hashes.endpoint_hash);
+    CHECK(rebound_hashes.legacy_parity_hash !=
+          old_hashes.legacy_parity_hash);
+
+    auto frame12 = make_frame(12, 11, false);
+    add_delta(frame12, 3, entity_delta(3, 1));
+    const auto ref12 = publish(fixture, frame12);
+    const auto rebound12 = view(fixture, ref12);
+    CHECK(rebound12.snapshot->snapshot_id.epoch == 9);
+    CHECK(rebound12.snapshot->base_id.epoch == 9);
+    CHECK(rebound12.snapshot->base_id.sequence == 12);
+    CHECK(find_entity(rebound12, 2).frame == 2);
+
+    const auto before_same_epoch = fixture;
+    CHECK(Worr_SnapshotQ2ProtoRebindEpochV2(&fixture.context, 9) ==
+          WORR_SNAPSHOT_Q2PROTO_OK);
+    CHECK(std::memcmp(&fixture, &before_same_epoch, sizeof(fixture)) == 0);
+    CHECK(Worr_SnapshotQ2ProtoRebindEpochV2(&fixture.context, 0) ==
+          WORR_SNAPSHOT_Q2PROTO_INVALID_ARGUMENT);
+    CHECK(std::memcmp(&fixture, &before_same_epoch, sizeof(fixture)) == 0);
+}
+
 void test_controlled_entity_lineage_without_first_person_carrier()
 {
     fixture_t fixture;
@@ -702,6 +755,7 @@ int main()
 {
     test_reconstruction_lineage_and_branch_bases();
     test_truncation_malformed_and_atomic_failures();
+    test_epoch_rebind_preserves_refs_and_delta_bases();
     test_controlled_entity_lineage_without_first_person_carrier();
     test_initial_controlled_carrier_generation_and_timeline_acceptance();
     test_fragment_stall_discontinuity();

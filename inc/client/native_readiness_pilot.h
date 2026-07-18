@@ -136,6 +136,21 @@ typedef struct cl_native_readiness_pilot_status_v1_s {
     uint32_t reserved1;
 } cl_native_readiness_pilot_status_v1;
 
+/* Stable diagnostics for a fail-closed native-event receive rejection. */
+enum {
+    CL_NATIVE_READINESS_FAILURE_GENERIC = 1u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_CARRIER_DECODE = 101u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_ENTRY_TYPE = 102u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_DATA_COUNT = 103u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_DATA_SHAPE = 104u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_SESSION_STATE = 105u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_TRANSPORT_EPOCH = 106u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_READINESS = 107u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_ACK = 108u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_CLOCK = 109u,
+    CL_NATIVE_READINESS_FAILURE_EVENT_ADMISSION = 110u,
+};
+
 #if defined(__cplusplus)
 static_assert(sizeof(cl_native_readiness_pilot_status_v1) == 232,
               "client native readiness status V1 layout changed");
@@ -154,6 +169,10 @@ _Static_assert(offsetof(cl_native_readiness_pilot_status_v1, last_failure) == 22
 
 bool CL_NativeReadinessPilotGetStatusV1(
     cl_native_readiness_pilot_status_v1 *status_out);
+
+/* Scalar-only snapshot lane diagnostics emitted alongside the base status
+ * command; absent receivers still produce a stable zero row. */
+void CL_NativeReadinessPilotSnapshotStatus_f(void);
 
 #if defined(WORR_NATIVE_READINESS_PILOT_TESTING)
 typedef struct cl_native_readiness_pilot_test_state_s {

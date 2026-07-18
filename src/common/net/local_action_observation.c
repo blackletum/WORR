@@ -100,6 +100,44 @@ bool Worr_LocalActionObservationStateValidateV1(
     return true;
 }
 
+bool Worr_LocalActionObservationStatesContiguousV1(
+    const worr_local_action_observation_state_v1 *earlier,
+    const worr_local_action_observation_state_v1 *later,
+    uint32_t maximum_elapsed_ms)
+{
+    worr_local_action_observation_state_v1 earlier_normalized;
+    worr_local_action_observation_state_v1 later_normalized;
+    int64_t think_elapsed;
+    int64_t fire_elapsed;
+
+    if (!earlier || !later || maximum_elapsed_ms == 0 ||
+        maximum_elapsed_ms >
+            WORR_LOCAL_ACTION_OBSERVATION_MAX_CONTINUITY_ELAPSED_MS ||
+        !Worr_LocalActionObservationStateValidateV1(earlier) ||
+        !Worr_LocalActionObservationStateValidateV1(later)) {
+        return false;
+    }
+
+    think_elapsed = (int64_t)earlier->think_remaining_ms -
+                    (int64_t)later->think_remaining_ms;
+    fire_elapsed = (int64_t)earlier->fire_remaining_ms -
+                   (int64_t)later->fire_remaining_ms;
+    if (think_elapsed < 0 || fire_elapsed < 0 ||
+        think_elapsed != fire_elapsed ||
+        (uint64_t)think_elapsed > maximum_elapsed_ms) {
+        return false;
+    }
+
+    earlier_normalized = *earlier;
+    later_normalized = *later;
+    earlier_normalized.think_remaining_ms = 0;
+    earlier_normalized.fire_remaining_ms = 0;
+    later_normalized.think_remaining_ms = 0;
+    later_normalized.fire_remaining_ms = 0;
+    return memcmp(&earlier_normalized, &later_normalized,
+                  sizeof(earlier_normalized)) == 0;
+}
+
 static uint32_t difference_bits(
     const worr_local_action_observation_state_v1 *before,
     const worr_local_action_observation_state_v1 *after)

@@ -115,6 +115,8 @@ static int test_identity_duration_watermark_and_hashes(void)
     worr_command_record_v1 before;
     uint64_t semantic_hash;
     uint64_t changed_semantic_hash;
+    uint64_t input_hash;
+    uint64_t changed_input_hash;
     uint64_t content_hash;
     uint64_t changed_content_hash;
     uint64_t untouched_hash = UINT64_C(0x1122334455667788);
@@ -283,6 +285,7 @@ static int test_identity_duration_watermark_and_hashes(void)
 
     CHECK(Worr_CommandRecordSemanticHashV1(
         &record, 250, &semantic_hash));
+    CHECK(Worr_CommandRecordInputHashV1(&record, 250, &input_hash));
     CHECK(Worr_CommandRecordContentHashV1(&record, 250, &content_hash));
     CHECK(semantic_hash == UINT64_C(0xdbbfb822917044b4));
     CHECK(content_hash == UINT64_C(0xca0389fe242397cc));
@@ -292,7 +295,10 @@ static int test_identity_duration_watermark_and_hashes(void)
         &changed, 250, &changed_semantic_hash));
     CHECK(Worr_CommandRecordContentHashV1(
         &changed, 250, &changed_content_hash));
+    CHECK(Worr_CommandRecordInputHashV1(
+        &changed, 250, &changed_input_hash));
     CHECK(semantic_hash != changed_semantic_hash);
+    CHECK(input_hash == changed_input_hash);
     CHECK(content_hash != changed_content_hash);
     CHECK(!Worr_CommandRecordSemanticallyEqualV1(&record, &changed, 250));
 
@@ -309,12 +315,24 @@ static int test_identity_duration_watermark_and_hashes(void)
     CHECK(Worr_CommandRecordContentHashV1(&record, 250, &content_hash));
     CHECK(Worr_CommandRecordContentHashV1(
         &changed, 250, &changed_content_hash));
+    CHECK(Worr_CommandRecordInputHashV1(&record, 250, &input_hash));
+    CHECK(Worr_CommandRecordInputHashV1(
+        &changed, 250, &changed_input_hash));
     CHECK(semantic_hash == changed_semantic_hash);
+    CHECK(input_hash == changed_input_hash);
     CHECK(content_hash != changed_content_hash);
     CHECK(Worr_CommandRecordSemanticallyEqualV1(&record, &changed, 250));
     changed.render_watermark.provenance =
         WORR_COMMAND_RENDER_PROVENANCE_EXACT_COMMAND;
     CHECK(!Worr_CommandRecordSemanticallyEqualV1(&record, &changed, 250));
+    CHECK(Worr_CommandRecordInputHashV1(
+        &changed, 250, &changed_input_hash));
+    CHECK(input_hash == changed_input_hash);
+
+    changed.command.buttons ^= 1u;
+    CHECK(Worr_CommandRecordInputHashV1(
+        &changed, 250, &changed_input_hash));
+    CHECK(input_hash != changed_input_hash);
 
     changed.command.reserved0 = 1;
     CHECK(!Worr_CommandRecordSemanticHashV1(

@@ -9,6 +9,9 @@ g_weapon.c*/
 #include "../monsters/m_player.hpp"
 #include "../network/lag_compensation.hpp"
 #include "../network/local_action_observation.hpp"
+#include "../network/local_action_weapon_catalog.hpp"
+#include "shared/local_action_weapon_profile.h"
+#include "shared/local_action_weapon_semantics.h"
 
 
 #include <array>
@@ -452,55 +455,7 @@ constexpr std::array<item_id_t, 22> weaponPriorityList{
      IT_WEAPON_CHAINFIST}};
 
 static item_id_t weaponIndexToItemID(Weapon weaponIndex) {
-  switch (weaponIndex) {
-    using enum Weapon;
-  case Blaster:
-    return IT_WEAPON_BLASTER;
-  case Chainfist:
-    return IT_WEAPON_CHAINFIST;
-  case Shotgun:
-    return IT_WEAPON_SHOTGUN;
-  case SuperShotgun:
-    return IT_WEAPON_SSHOTGUN;
-  case Machinegun:
-    return IT_WEAPON_MACHINEGUN;
-  case ETFRifle:
-    return IT_WEAPON_ETF_RIFLE;
-  case Chaingun:
-    return IT_WEAPON_CHAINGUN;
-  case HandGrenades:
-    return IT_AMMO_GRENADES;
-  case Trap:
-    return IT_AMMO_TRAP;
-  case TeslaMine:
-    return IT_AMMO_TESLA;
-  case GrenadeLauncher:
-    return IT_WEAPON_GLAUNCHER;
-  case ProxLauncher:
-    return IT_WEAPON_PROXLAUNCHER;
-  case RocketLauncher:
-    return IT_WEAPON_RLAUNCHER;
-  case HyperBlaster:
-    return IT_WEAPON_HYPERBLASTER;
-  case IonRipper:
-    return IT_WEAPON_IONRIPPER;
-  case PlasmaGun:
-    return IT_WEAPON_PLASMAGUN;
-  case PlasmaBeam:
-    return IT_WEAPON_PLASMABEAM;
-  case Thunderbolt:
-    return IT_WEAPON_THUNDERBOLT;
-  case Railgun:
-    return IT_WEAPON_RAILGUN;
-  case Phalanx:
-    return IT_WEAPON_PHALANX;
-  case BFG10K:
-    return IT_WEAPON_BFG;
-  case Disruptor:
-    return IT_WEAPON_DISRUPTOR;
-  default:
-    return IT_NULL;
-  }
+  return SG_LocalActionItemFromWeaponIndex(weaponIndex);
 }
 
 void Client_RebuildWeaponPreferenceOrder(gclient_t &cl) {
@@ -1646,15 +1601,99 @@ void Throw_Generic(gentity_t *ent, int FRAME_FIRE_LAST, int FRAME_IDLE_LAST,
   }
 }
 
-void Weapon_HandGrenade(gentity_t *ent) {
-  constexpr int pauseFrames[] = {29, 34, 39, 48, 0};
+static bool Weapon_CopyFrameProfile(
+    worr_local_action_catalog_id_v1 catalog_id, uint32_t expected_driver,
+    worr_local_action_weapon_profile_v1 &profile)
+{
+  worr_local_action_weapon_semantics_v1 semantics{};
+  return Worr_LocalActionWeaponProfileCopyV1(catalog_id, &profile) &&
+         profile.legacy_driver == expected_driver &&
+         Worr_LocalActionWeaponSemanticsCopyV1(catalog_id, &semantics);
+}
 
-  Throw_Generic(ent, 15, 48, 5, "weapons/hgrena1b.wav", 11, 12, pauseFrames,
-                true, "weapons/hgrenc1b.wav", Weapon_HandGrenade_Fire, true);
+static void Weapon_GenericProfile(gentity_t *ent,
+                                  worr_local_action_catalog_id_v1 catalog_id,
+                                  void (*fire)(gentity_t *),
+                                  bool alternate_fire_frames = false)
+{
+  worr_local_action_weapon_profile_v1 profile{};
+  int pause_frames[WORR_LOCAL_ACTION_WEAPON_PROFILE_MAX_PAUSE_FRAMES + 1]{};
+  int fire_frames[WORR_LOCAL_ACTION_WEAPON_PROFILE_MAX_FIRE_FRAMES + 1]{};
+
+  if (!Weapon_CopyFrameProfile(
+          catalog_id, WORR_LOCAL_ACTION_CATALOG_DRIVER_GENERIC, profile))
+    return;
+  for (uint32_t index = 0; index < profile.pause_frame_count; ++index)
+    pause_frames[index] = profile.pause_frames[index];
+  const uint32_t fire_count =
+      alternate_fire_frames ? profile.alternate_fire_frame_count
+                            : profile.fire_frame_count;
+  const int32_t *source = alternate_fire_frames
+                              ? profile.alternate_fire_frames
+                              : profile.fire_frames;
+  for (uint32_t index = 0; index < fire_count; ++index)
+    fire_frames[index] = source[index];
+  Weapon_Generic(ent, profile.activate_last, profile.fire_last,
+                 profile.idle_last, profile.deactivate_last, pause_frames,
+                 fire_frames, fire);
+}
+
+static void Weapon_RepeatingProfile(
+    gentity_t *ent, worr_local_action_catalog_id_v1 catalog_id,
+    void (*fire)(gentity_t *))
+{
+  worr_local_action_weapon_profile_v1 profile{};
+  int pause_frames[WORR_LOCAL_ACTION_WEAPON_PROFILE_MAX_PAUSE_FRAMES + 1]{};
+
+  if (!Weapon_CopyFrameProfile(
+          catalog_id, WORR_LOCAL_ACTION_CATALOG_DRIVER_REPEATING, profile))
+    return;
+  for (uint32_t index = 0; index < profile.pause_frame_count; ++index)
+    pause_frames[index] = profile.pause_frames[index];
+  Weapon_Repeating(ent, profile.activate_last, profile.fire_last,
+                   profile.idle_last, profile.deactivate_last, pause_frames,
+                   fire);
+}
+
+static void Weapon_ThrowProfile(
+    gentity_t *ent, worr_local_action_catalog_id_v1 catalog_id,
+    const char *prime_sound, const char *primed_sound,
+    void (*fire)(gentity_t *, bool), item_id_t ammo_override = IT_TOTAL)
+{
+  worr_local_action_weapon_profile_v1 profile{};
+  int pause_frames[WORR_LOCAL_ACTION_WEAPON_PROFILE_MAX_PAUSE_FRAMES + 1]{};
+
+  if (!Weapon_CopyFrameProfile(
+          catalog_id, WORR_LOCAL_ACTION_CATALOG_DRIVER_THROW, profile))
+    return;
+  for (uint32_t index = 0; index < profile.pause_frame_count; ++index)
+    pause_frames[index] = profile.pause_frames[index];
+  Throw_Generic(
+      ent, profile.fire_last, profile.idle_last,
+      profile.throw_prime_sound_frame, prime_sound, profile.throw_hold_frame,
+      profile.throw_fire_frame, pause_frames,
+      (profile.flags &
+       WORR_LOCAL_ACTION_WEAPON_PROFILE_THROW_EXPLODES_IN_HAND) != 0,
+      primed_sound, fire,
+      (profile.flags &
+       WORR_LOCAL_ACTION_WEAPON_PROFILE_THROW_EXTRA_IDLE_FRAME) != 0,
+      ammo_override);
+}
+
+void Weapon_HandGrenade(gentity_t *ent) {
+  Weapon_ThrowProfile(ent, WORR_LOCAL_ACTION_CATALOG_HAND_GRENADES,
+                      "weapons/hgrena1b.wav", "weapons/hgrenc1b.wav",
+                      Weapon_HandGrenade_Fire);
 
   // [Paril-KEX] skip the duped frame
-  if (ent->client->ps.gunFrame == 1)
+  worr_local_action_weapon_profile_v1 profile{};
+  if (Worr_LocalActionWeaponProfileCopyV1(
+          WORR_LOCAL_ACTION_CATALOG_HAND_GRENADES, &profile) &&
+      (profile.flags &
+       WORR_LOCAL_ACTION_WEAPON_PROFILE_POST_DRIVER_SKIP_FRAME_ONE) != 0 &&
+      ent->client->ps.gunFrame == 1) {
     ent->client->ps.gunFrame = 2;
+  }
 }
 
 /*
@@ -1750,11 +1789,8 @@ static void Weapon_GrenadeLauncher_Fire(gentity_t *ent) {
 }
 
 void Weapon_GrenadeLauncher(gentity_t *ent) {
-  constexpr int pauseFrames[] = {34, 51, 59, 0};
-  constexpr int fireFrames[] = {6, 0};
-
-  Weapon_Generic(ent, 5, 16, 59, 64, pauseFrames, fireFrames,
-                 Weapon_GrenadeLauncher_Fire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_GRENADE_LAUNCHER,
+                        Weapon_GrenadeLauncher_Fire);
 }
 
 /*
@@ -1823,11 +1859,8 @@ static void Weapon_RocketLauncher_Fire(gentity_t *ent) {
 }
 
 void Weapon_RocketLauncher(gentity_t *ent) {
-  constexpr int pauseFrames[] = {25, 33, 42, 50, 0};
-  constexpr int fireFrames[] = {5, 0};
-
-  Weapon_Generic(ent, 4, 12, 50, 54, pauseFrames, fireFrames,
-                 Weapon_RocketLauncher_Fire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_ROCKET_LAUNCHER,
+                        Weapon_RocketLauncher_Fire);
 }
 
 /*
@@ -2266,11 +2299,8 @@ static void Weapon_Blaster_DoFire(gentity_t *ent) {
 }
 
 void Weapon_Blaster(gentity_t *ent) {
-  constexpr int pauseFrames[] = {19, 32, 0};
-  constexpr int fireFrames[] = {5, 0};
-
-  Weapon_Generic(ent, 4, 8, 52, 55, pauseFrames, fireFrames,
-                 Weapon_Blaster_DoFire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_BLASTER,
+                        Weapon_Blaster_DoFire);
 }
 
 /*
@@ -2371,9 +2401,8 @@ static void Weapon_HyperBlaster_Fire(gentity_t *ent) {
 }
 
 void Weapon_HyperBlaster(gentity_t *ent) {
-  constexpr int pauseFrames[] = {0};
-
-  Weapon_Repeating(ent, 5, 20, 49, 53, pauseFrames, Weapon_HyperBlaster_Fire);
+  Weapon_RepeatingProfile(ent, WORR_LOCAL_ACTION_CATALOG_HYPERBLASTER,
+                          Weapon_HyperBlaster_Fire);
 }
 
 /*
@@ -2466,9 +2495,8 @@ static void Weapon_Machinegun_Fire(gentity_t *ent) {
 }
 
 void Weapon_Machinegun(gentity_t *ent) {
-  constexpr int pauseFrames[] = {23, 45, 0};
-
-  Weapon_Repeating(ent, 3, 5, 45, 49, pauseFrames, Weapon_Machinegun_Fire);
+  Weapon_RepeatingProfile(ent, WORR_LOCAL_ACTION_CATALOG_MACHINEGUN,
+                          Weapon_Machinegun_Fire);
 }
 
 static void Weapon_Chaingun_Fire(gentity_t *ent) {
@@ -2582,9 +2610,8 @@ static void Weapon_Chaingun_Fire(gentity_t *ent) {
 }
 
 void Weapon_Chaingun(gentity_t *ent) {
-  constexpr int pauseFrames[] = {38, 43, 51, 61, 0};
-
-  Weapon_Repeating(ent, 4, 31, 61, 64, pauseFrames, Weapon_Chaingun_Fire);
+  Weapon_RepeatingProfile(ent, WORR_LOCAL_ACTION_CATALOG_CHAINGUN,
+                          Weapon_Chaingun_Fire);
 }
 
 /*
@@ -2645,11 +2672,8 @@ static void Weapon_Shotgun_Fire(gentity_t *ent) {
 }
 
 void Weapon_Shotgun(gentity_t *ent) {
-  constexpr int pauseFrames[] = {22, 28, 34, 0};
-  constexpr int fireFrames[] = {8, 0};
-
-  Weapon_Generic(ent, 7, 18, 36, 39, pauseFrames, fireFrames,
-                 Weapon_Shotgun_Fire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_SHOTGUN,
+                        Weapon_Shotgun_Fire);
 }
 
 /*
@@ -2712,11 +2736,8 @@ static void Weapon_SuperShotgun_Fire(gentity_t *ent) {
 }
 
 void Weapon_SuperShotgun(gentity_t *ent) {
-  constexpr int pauseFrames[] = {29, 42, 57, 0};
-  constexpr int fireFrames[] = {7, 0};
-
-  Weapon_Generic(ent, 6, 17, 57, 61, pauseFrames, fireFrames,
-                 Weapon_SuperShotgun_Fire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_SUPER_SHOTGUN,
+                        Weapon_SuperShotgun_Fire);
 }
 
 /*
@@ -2761,11 +2782,8 @@ static void Weapon_Railgun_Fire(gentity_t *ent) {
 }
 
 void Weapon_Railgun(gentity_t *ent) {
-  constexpr int pauseFrames[] = {56, 0};
-  constexpr int fireFrames[] = {4, 0};
-
-  Weapon_Generic(ent, 3, 18, 56, 61, pauseFrames, fireFrames,
-                 Weapon_Railgun_Fire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_RAILGUN,
+                        Weapon_Railgun_Fire);
 }
 
 /*
@@ -2832,12 +2850,8 @@ static void Weapon_BFG_Fire(gentity_t *ent) {
 }
 
 void Weapon_BFG(gentity_t *ent) {
-  constexpr int pauseFrames[] = {39, 45, 50, 55, 0};
-  constexpr int fireFrames[] = {9, 17, 0};
-  constexpr int fireFramesQ3A[] = {15, 17, 0};
-
-  Weapon_Generic(ent, 8, 32, 54, 58, pauseFrames,
-                 RS(Quake3Arena) ? fireFramesQ3A : fireFrames, Weapon_BFG_Fire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_BFG10K,
+                        Weapon_BFG_Fire, RS(Quake3Arena));
 }
 
 /*
@@ -2881,11 +2895,8 @@ static void Weapon_ProxLauncher_Fire(gentity_t *ent) {
 }
 
 void Weapon_ProxLauncher(gentity_t *ent) {
-  constexpr int pauseFrames[] = {34, 51, 59, 0};
-  constexpr int fireFrames[] = {6, 0};
-
-  Weapon_Generic(ent, 5, 16, 59, 64, pauseFrames, fireFrames,
-                 Weapon_ProxLauncher_Fire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_PROX_LAUNCHER,
+                        Weapon_ProxLauncher_Fire);
 }
 
 /*
@@ -2961,10 +2972,8 @@ static void Weapon_Tesla_Fire(gentity_t *ent, bool held) {
 }
 
 void Weapon_Tesla(gentity_t *ent) {
-  constexpr int pauseFrames[] = {21, 0};
-
-  Throw_Generic(ent, 8, 32, -1, nullptr, 1, 2, pauseFrames, false, nullptr,
-                Weapon_Tesla_Fire, false);
+  Weapon_ThrowProfile(ent, WORR_LOCAL_ACTION_CATALOG_TESLA_MINE, nullptr,
+                      nullptr, Weapon_Tesla_Fire);
 }
 
 /*
@@ -3098,9 +3107,8 @@ static void Weapon_ChainFist_smoke(gentity_t *ent) {
 }
 
 void Weapon_ChainFist(gentity_t *ent) {
-  constexpr int pauseFrames[] = {0};
-
-  Weapon_Repeating(ent, 4, 32, 57, 60, pauseFrames, Weapon_ChainFist_Fire);
+  Weapon_RepeatingProfile(ent, WORR_LOCAL_ACTION_CATALOG_CHAINFIST,
+                          Weapon_ChainFist_Fire);
 
   // smoke on idle sequence
   if (ent->client->ps.gunFrame == 42 && irandom(8)) {
@@ -3203,11 +3211,8 @@ static void Weapon_Disruptor_Fire(gentity_t *ent) {
 }
 
 void Weapon_Disruptor(gentity_t *ent) {
-  constexpr int pauseFrames[] = {14, 19, 23, 0};
-  constexpr int fireFrames[] = {5, 0};
-
-  Weapon_Generic(ent, 4, 9, 29, 34, pauseFrames, fireFrames,
-                 Weapon_Disruptor_Fire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_DISRUPTOR,
+                        Weapon_Disruptor_Fire);
 }
 
 /*
@@ -3294,9 +3299,8 @@ static void Weapon_ETF_Rifle_Fire(gentity_t *ent) {
 }
 
 void Weapon_ETF_Rifle(gentity_t *ent) {
-  constexpr int pauseFrames[] = {18, 28, 0};
-
-  Weapon_Repeating(ent, 4, 7, 37, 41, pauseFrames, Weapon_ETF_Rifle_Fire);
+  Weapon_RepeatingProfile(ent, WORR_LOCAL_ACTION_CATALOG_ETF_RIFLE,
+                          Weapon_ETF_Rifle_Fire);
 }
 
 /*
@@ -3309,13 +3313,10 @@ PLASMA GUN
 
 // v_plasmr.md2 has 52 frames (0..51): activate 0-8, fire 9-42, idle 43-49,
 // deactivate 50-51.
-constexpr int PLASMAGUN_FRAME_ACTIVATE_LAST = 8;
 constexpr int PLASMAGUN_FRAME_FIRE_FIRST = 9;
 constexpr int PLASMAGUN_FRAME_FIRE_LAST = 42;
 constexpr int PLASMAGUN_FRAME_IDLE_FIRST = 43;
-constexpr int PLASMAGUN_FRAME_IDLE_LAST = 49;
 [[maybe_unused]] constexpr int PLASMAGUN_FRAME_DEACTIVATE_FIRST = 50;
-constexpr int PLASMAGUN_FRAME_DEACTIVATE_LAST = 51;
 
 static void Weapon_PlasmaGun_Fire(gentity_t *ent) {
   if (!ent || !ent->client)
@@ -3385,11 +3386,8 @@ static void Weapon_PlasmaGun_Fire(gentity_t *ent) {
 }
 
 void Weapon_PlasmaGun(gentity_t *ent) {
-  constexpr int pauseFrames[] = {0};
-  Weapon_Repeating(ent, PLASMAGUN_FRAME_ACTIVATE_LAST,
-                   PLASMAGUN_FRAME_FIRE_LAST, PLASMAGUN_FRAME_IDLE_LAST,
-                   PLASMAGUN_FRAME_DEACTIVATE_LAST, pauseFrames,
-                   Weapon_PlasmaGun_Fire);
+  Weapon_RepeatingProfile(ent, WORR_LOCAL_ACTION_CATALOG_PLASMA_GUN,
+                          Weapon_PlasmaGun_Fire);
 }
 
 /*
@@ -3492,9 +3490,8 @@ static void Weapon_PlasmaBeam_Fire(gentity_t *ent) {
 }
 
 void Weapon_PlasmaBeam(gentity_t *ent) {
-  constexpr int pauseFrames[] = {35, 0};
-
-  Weapon_Repeating(ent, 8, 12, 42, 47, pauseFrames, Weapon_PlasmaBeam_Fire);
+  Weapon_RepeatingProfile(ent, WORR_LOCAL_ACTION_CATALOG_PLASMA_BEAM,
+                          Weapon_PlasmaBeam_Fire);
 }
 
 /*
@@ -3508,8 +3505,6 @@ THUNDERBOLT
 // v_light.md2 has 5 frames (shot1..shot5); use a compact fire loop.
 constexpr int TB_FRAME_ACTIVATE_LAST = 0;
 constexpr int TB_FRAME_FIRE_LAST = 2;
-constexpr int TB_FRAME_IDLE_LAST = 3;
-constexpr int TB_FRAME_DEACTIVATE_LAST = 4;
 constexpr int TB_FRAME_FIRE_FIRST = TB_FRAME_ACTIVATE_LAST + 1;
 constexpr int TB_FRAME_IDLE_FIRST = TB_FRAME_FIRE_LAST + 1;
 
@@ -3632,11 +3627,8 @@ Weapon_Thunderbolt
 ==========================
 */
 void Weapon_Thunderbolt(gentity_t *ent) {
-  constexpr int pauseFrames[] = {0};
-
-  Weapon_Repeating(ent, TB_FRAME_ACTIVATE_LAST, TB_FRAME_FIRE_LAST,
-                   TB_FRAME_IDLE_LAST, TB_FRAME_DEACTIVATE_LAST, pauseFrames,
-                   Weapon_Thunderbolt_Fire);
+  Weapon_RepeatingProfile(ent, WORR_LOCAL_ACTION_CATALOG_THUNDERBOLT,
+                          Weapon_Thunderbolt_Fire);
 }
 
 /*
@@ -3710,9 +3702,21 @@ static void Weapon_IonRipper_Fire(gentity_t *ent) {
   RemoveAmmo(ent, ammoNeeded);
 }
 
+static void Weapon_IonRipper_ProfileFire(gentity_t *ent)
+{
+  worr_local_action_weapon_profile_v1 profile{};
+  if (!Worr_LocalActionWeaponProfileCopyV1(
+          WORR_LOCAL_ACTION_CATALOG_ION_RIPPER, &profile) ||
+      !(profile.flags &
+        WORR_LOCAL_ACTION_WEAPON_PROFILE_CUSTOM_MIN_REFIRE)) {
+    return;
+  }
+  ent->client->weapon.thinkTime =
+      level.time + GameTime::from_ms(profile.custom_min_refire_ms);
+  Weapon_IonRipper_Fire(ent);
+}
+
 void Weapon_IonRipper(gentity_t *ent) {
-  constexpr int pauseFrames[] = {36, 0};
-  constexpr int fireFrames[] = {6, 0};
 
   if (!ent || !ent->client)
     return;
@@ -3723,11 +3727,8 @@ void Weapon_IonRipper(gentity_t *ent) {
   if (cl->weapon.thinkTime > level.time)
     return;
 
-  Weapon_Generic(
-      ent, 5, 7, 36, 39, pauseFrames, fireFrames, [](gentity_t *ent) {
-        ent->client->weapon.thinkTime = level.time + 1_sec; // Custom cooldown
-        Weapon_IonRipper_Fire(ent);
-      });
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_ION_RIPPER,
+                        Weapon_IonRipper_ProfileFire);
 }
 
 /*
@@ -3800,11 +3801,8 @@ static void Weapon_Phalanx_Fire(gentity_t *ent) {
 }
 
 void Weapon_Phalanx(gentity_t *ent) {
-  constexpr int pauseFrames[] = {29, 42, 55, 0};
-  constexpr int fireFrames[] = {7, 8, 0};
-
-  Weapon_Generic(ent, 5, 20, 58, 63, pauseFrames, fireFrames,
-                 Weapon_Phalanx_Fire);
+  Weapon_GenericProfile(ent, WORR_LOCAL_ACTION_CATALOG_PHALANX,
+                        Weapon_Phalanx_Fire);
 }
 
 /*
@@ -3884,8 +3882,7 @@ static void Weapon_Trap_Fire(gentity_t *ent, bool held) {
 }
 
 void Weapon_Trap(gentity_t *ent) {
-  constexpr int pauseFrames[] = {29, 34, 39, 48, 0};
-
-  Throw_Generic(ent, 15, 48, 5, "weapons/trapcock.wav", 11, 12, pauseFrames,
-                false, "weapons/traploop.wav", Weapon_Trap_Fire, false);
+  Weapon_ThrowProfile(ent, WORR_LOCAL_ACTION_CATALOG_TRAP,
+                      "weapons/trapcock.wav", "weapons/traploop.wav",
+                      Weapon_Trap_Fire);
 }

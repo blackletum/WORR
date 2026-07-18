@@ -11,6 +11,7 @@ the Free Software Foundation; either version 2 of the License, or
 
 #include "shared/cgame_prediction.h"
 #include "shared/local_interaction_abi.h"
+#include "shared/local_action_shadow.h"
 
 #include <cstdint>
 
@@ -23,6 +24,8 @@ the Free Software Foundation; either version 2 of the License, or
  */
 void CG_LocalInteractionSetImport(
     const worr_cgame_command_record_import_v1 *import);
+void CG_LocalInteractionSetImportV2(
+    const worr_cgame_command_record_import_v2 *import);
 void CG_LocalInteractionReset();
 void CG_LocalInteractionPredict(
     const worr_cgame_prediction_input_range_v1 &prediction_range);
@@ -70,3 +73,48 @@ struct cg_local_interaction_shadow_status_v1 {
 
 void CG_LocalInteractionGetStatus(
     cg_local_interaction_shadow_status_v1 *status_out);
+
+/*
+ * Descriptor-complete weapon receipts currently reconcile only against the
+ * exact canonical command cgame retained. They do not construct a local V2
+ * weapon transaction or present an event while all 22 blocker masks are set.
+ */
+enum class cg_local_action_shadow_receipt_result_v1 : std::uint32_t {
+    accepted_unmatched = 0,
+    duplicate = 1,
+    command_matched = 2,
+    command_mismatch = 3,
+    invalid = 4,
+    conflict = 5,
+    capacity = 6,
+    requires_resync = 7,
+};
+
+void CG_LocalActionShadowObserveCommands(
+    const worr_cgame_prediction_input_range_v1 &prediction_range);
+cg_local_action_shadow_receipt_result_v1
+CG_LocalActionShadowSubmitAuthorityReceipt(
+    const worr_local_action_shadow_authority_receipt_v1 *receipt);
+bool CG_LocalActionShadowRequiresResync();
+
+struct cg_local_action_shadow_status_v1 {
+    std::uint64_t observation_passes;
+    std::uint64_t canonical_commands;
+    std::uint64_t authority_receipts;
+    std::uint64_t authority_duplicates;
+    std::uint64_t authority_unmatched;
+    std::uint64_t command_matches;
+    std::uint64_t command_mismatches;
+    std::uint64_t authority_conflicts;
+    std::uint64_t authority_expirations;
+    std::uint64_t capacity_failures;
+    std::uint64_t authority_outstanding;
+    std::uint64_t exact_lookup_attempts;
+    std::uint64_t exact_lookup_hits;
+    std::uint64_t exact_lookup_misses;
+    std::uint32_t requires_resync;
+};
+
+void CG_LocalActionShadowGetStatus(
+    cg_local_action_shadow_status_v1 *status_out);
+void CG_LocalActionShadowReportParity();

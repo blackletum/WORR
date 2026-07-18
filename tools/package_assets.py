@@ -36,6 +36,7 @@ DEFAULT_LOOSE_ASSET_PATHS = (
     'maps/worr_fr01_global_fog.bsp',
     'maps/worr_fr01_flare_fog.bsp',
     'maps/worr_fr01_glowmap.bsp',
+    'maps/worr_fr01_lightmap_saturation.bsp',
     'maps/worr_fr01_model_glowmap.bsp',
     'maps/worr_fr01_model_shell.bsp',
     'maps/worr_fr01_model_rim.bsp',
