@@ -5022,7 +5022,10 @@ test(
       'fr10_t09_acceptance.json',
   ],
   suite: 'networking',
-  timeout: 900,
+  # Two ~445 s deterministic probe repetitions (debugoptimized) plus the
+  # compiled gate executables.  Sized to the measured runtime with headroom so
+  # the outer gate never fires before the inner per-probe guard reports.
+  timeout: 2700,
   is_parallel: false,
 )
 

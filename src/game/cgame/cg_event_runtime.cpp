@@ -1790,7 +1790,8 @@ cg_event_runtime_result_v1 present_predictions(
     std::uint32_t now_tick, std::uint32_t max_presentations,
     std::uint32_t &advanced)
 {
-    while (advanced < max_presentations) {
+    std::uint32_t processed = 0;
+    while (advanced < max_presentations && processed < max_presentations) {
         worr_event_journal_slot_v1 *best = nullptr;
         std::uint32_t best_index = 0;
         for (std::uint32_t index = 0; index < state.journal.capacity;
@@ -1814,6 +1815,7 @@ cg_event_runtime_result_v1 present_predictions(
         }
         if (!best)
             return CG_EVENT_RUNTIME_OK;
+        ++processed;
         if (best->record.source_time_us > render_time_us ||
             !tick_reached(now_tick, best->record.source_tick)) {
             increment_saturated(state.status.future_time_stalls);
@@ -1822,6 +1824,22 @@ cg_event_runtime_result_v1 present_predictions(
         worr_event_slot_ref_v1 ref{best_index, best->generation};
         if (!Worr_EventJournalNeedsPresentationV1(
                 &state.journal, ref, now_tick)) {
+            /* Defensive: for a slot passing the COMMAND_IMMEDIATE filter above,
+             * NeedsPresentation can only return false for a transient whose
+             * expiry_tick has been reached.  Today expire_runtime_journal
+             * retires that exact case with the same now_tick before this loop
+             * runs (and event_abi.c forbids SNAPSHOT_FENCED on non-authoritative
+             * records, so the fenced sweep divergence cannot apply here), so
+             * this branch is not currently reachable.  Retire the slot rather
+             * than re-selecting it forever, so a future producer/ABI change can
+             * never turn this into a hang.  The processed bound below is the
+             * matching unconditional termination guard from present_authority. */
+            best->state |= WORR_EVENT_SLOT_EXPIRED;
+            if (auto *tombstone = find_prediction_tombstone(
+                    state, best->record.prediction_key)) {
+                tombstone->terminal = true;
+            }
+            increment_saturated(state.status.prediction_expirations);
             continue;
         }
         const auto context = presentation_context(

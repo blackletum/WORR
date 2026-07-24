@@ -1305,9 +1305,14 @@ void RecordLegacyFrame(PoseTrack &track, uint32_t serverFrame,
     fallbackReason = WORR_REWIND_OBSERVATION_FALLBACK_POLICY_REJECTED;
     return false;
   }
-  const uint64_t rewindUs = std::min(rawAgeUs, maximumUs);
+  uint64_t rewindUs = std::min(rawAgeUs, maximumUs);
   if (rewindUs != rawAgeUs)
     ++diagnostics.capped;
+  /* Never rewind past the start of the simulation clock.  Early in a map the
+   * interpolation bias can push the raw age above currentTimeUs, and
+   * currentTimeUs - rewindUs would underflow into a far-future timestamp. */
+  if (rewindUs > currentTimeUs)
+    rewindUs = currentTimeUs;
 
   target.timeUs = currentTimeUs - rewindUs;
   target.mapEpoch = historyMapEpoch;

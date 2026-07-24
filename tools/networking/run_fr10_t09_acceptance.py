@@ -25,7 +25,12 @@ REQUIRED_GATES = {
     "native-event-production-link",
     "native-snapshot-production-link",
 }
-PROBE_TIMEOUT_SECONDS = 420
+# The 1,000,000-command probe runs ~445 s per repetition on a debugoptimized
+# build (asserts enabled) and is invoked twice for determinism.  The guard is
+# sized to that measured runtime with ~2x headroom for loaded CI hosts; the
+# release build (LTO, asserts off) is roughly twice as fast.  The probe count
+# is a ratified acceptance floor and must not be reduced to fit a tighter guard.
+PROBE_TIMEOUT_SECONDS = 900
 GATE_TIMEOUT_SECONDS = 240
 
 

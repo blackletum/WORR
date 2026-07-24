@@ -45,7 +45,11 @@ def run_probe(probe: Path, manifest: dict[str, Any]) -> dict[str, Any]:
         check=False,
         capture_output=True,
         text=True,
-        timeout=180,
+        # The 100k-snapshot parity probe runs ~98 s idle but is short enough
+        # that host contention easily doubles it (measured 180-215 s under a
+        # busy machine).  Size the guard for a loaded host; the probe is
+        # deterministic and a genuine hang is still caught well under this.
+        timeout=480,
     )
     if completed.returncode != 0:
         raise RuntimeError(
